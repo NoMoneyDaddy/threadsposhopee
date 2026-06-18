@@ -36,7 +36,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               </div>
               <nav className="flex items-center gap-1 text-sm">
                 {user &&
-                  nav.map((n) => (
+                  nav
+                    .filter((n) => n.href !== "/sources" || user.isOwner)
+                    .map((n) => (
                     <Link
                       key={n.href}
                       href={n.href}

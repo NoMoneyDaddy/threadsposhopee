@@ -1,11 +1,14 @@
 import MaterialCreateForm from "@/components/MaterialCreateForm";
 import RepostButton from "@/components/RepostButton";
 import { listMaterials, listThreadsAccounts } from "@/lib/store";
+import { getCurrentUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function MaterialsPage() {
-  const [materials, accounts] = await Promise.all([listMaterials(), listThreadsAccounts()]);
+  const user = await getCurrentUser();
+  const ownerId = user?.id ?? "demo-user";
+  const [materials, accounts] = await Promise.all([listMaterials(ownerId), listThreadsAccounts(ownerId)]);
 
   return (
     <div className="space-y-4">

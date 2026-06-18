@@ -1,6 +1,6 @@
 // 為單一商品建立素材的共用邏輯：換分潤連結(帶追蹤 subId) → 商品名 → 媒體中轉 →
 // (可選)AI 文案 → 存素材。自動爬取流程與手動建立流程共用此函式。
-import { env, isDemoMode } from "@/lib/env";
+import { isDemoMode } from "@/lib/env";
 import { generateAffiliateLink, getProductName, buildSubIds } from "@/services/shopee/affiliate";
 import { generateCopy } from "@/services/ai/provider";
 import { uploadToCloudinary } from "@/services/media/cloudinary";
@@ -20,6 +20,10 @@ export interface BuildMaterialInput {
 
 export async function buildMaterialForProduct(
   input: BuildMaterialInput,
+  ownerId: string,
+  // 該使用者要用的 Shopee 分潤金鑰；null = 不轉換（直接用貼上的連結）。
+  // owner 傳入環境變數金鑰；member 傳入自己的金鑰或 null。
+  shopeeCreds: { appId: string; secret: string; subId: string } | null,
   notes: string[] = []
 ): Promise<Material> {
   const media = input.media ?? { url: null, type: "none" as const };
@@ -27,18 +31,18 @@ export async function buildMaterialForProduct(
   let subId: string | null = null;
   let productName: string | null = null;
 
-  if (!isDemoMode && env.shopeeAppId && env.shopeeSecret) {
+  if (!isDemoMode && shopeeCreds) {
     try {
-      const subIds = buildSubIds(env.shopeeDefaultSubId, input.subIdTag ?? "manual", input.itemId);
+      const subIds = buildSubIds(shopeeCreds.subId, input.subIdTag ?? "manual", input.itemId);
       subId = subIds.join(",");
-      shortLink = await generateAffiliateLink(env.shopeeAppId, env.shopeeSecret, input.cleanUrl, subIds);
-      productName = await getProductName(env.shopeeAppId, env.shopeeSecret, input.shopId, input.itemId);
+      shortLink = await generateAffiliateLink(shopeeCreds.appId, shopeeCreds.secret, input.cleanUrl, subIds);
+      productName = await getProductName(shopeeCreds.appId, shopeeCreds.secret, input.shopId, input.itemId);
     } catch (e) {
       notes.push(`Shopee API 失敗（用原連結）：${e instanceof Error ? e.message : String(e)}`);
     }
   } else {
     productName = `商品 ${input.itemId}`;
-    notes.push("Demo / 未設定 Shopee 金鑰：用原連結與假商品名");
+    notes.push(isDemoMode ? "Demo 模式：用原連結與假商品名" : "未提供 Shopee 金鑰：直接用貼上的分潤連結");
   }
 
   let cloudinaryMediaUrl = media.url;
@@ -85,5 +89,5 @@ export async function buildMaterialForProduct(
     reply_text: replyText,
     ai_raw: aiRaw,
     ai_generated_at: aiAt
-  });
+  }, ownerId);
 }

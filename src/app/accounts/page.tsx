@@ -1,11 +1,14 @@
 import { listShopeeAccounts, listThreadsAccounts } from "@/lib/store";
+import { getCurrentUser } from "@/lib/auth";
 import ThreadsAccountForm from "@/components/ThreadsAccountForm";
 import ShopeeAccountForm from "@/components/ShopeeAccountForm";
 
 export const dynamic = "force-dynamic";
 
 export default async function AccountsPage() {
-  const [threads, shopee] = await Promise.all([listThreadsAccounts(), listShopeeAccounts()]);
+  const user = await getCurrentUser();
+  const ownerId = user?.id ?? "demo-user";
+  const [threads, shopee] = await Promise.all([listThreadsAccounts(ownerId), listShopeeAccounts(ownerId)]);
 
   return (
     <div className="space-y-6">

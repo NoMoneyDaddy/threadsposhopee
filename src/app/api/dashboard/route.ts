@@ -25,15 +25,16 @@ export async function GET() {
     ai_provider: env.aiProvider
   };
 
-  const stats = await getDashboardStats();
+  const ownerId = user?.id ?? "demo-user";
+  const stats = await getDashboardStats(ownerId);
 
-  // 以下為 owner 限定的即時外部查詢
+  // Threads 額度查每個登入者自己的帳號；Cloudinary 用量僅 owner（共用帳號）
   let threadsQuota: { label: string; used: number; limit: number }[] = [];
   let cloudinary = null;
-  if (isOwner) {
+  {
     const [creds, usage] = await Promise.all([
-      listActiveThreadsCredentials().catch(() => []),
-      getCloudinaryUsage().catch(() => null)
+      listActiveThreadsCredentials(ownerId).catch(() => []),
+      isOwner ? getCloudinaryUsage().catch(() => null) : Promise.resolve(null)
     ]);
     cloudinary = usage;
     threadsQuota = (

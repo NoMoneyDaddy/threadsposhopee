@@ -48,6 +48,12 @@ export async function listMaterials(): Promise<Material[]> {
 
 export async function createMaterial(input: Partial<Material>): Promise<Material> {
   if (isDemoMode) {
+    // demo：同商品已存在則覆寫（對應 upsert 行為）
+    const existing = demo.materials.find((m) => m.shop_id === input.shop_id && m.item_id === input.item_id);
+    if (existing) {
+      Object.assign(existing, input);
+      return existing;
+    }
     const material = {
       id: randomUUID(),
       affiliate_valid: true,
@@ -58,9 +64,10 @@ export async function createMaterial(input: Partial<Material>): Promise<Material
     return material;
   }
   const sb = getServiceClient()!;
+  // upsert on (shop_id,item_id)：連結失效重產時不會撞唯一鍵
   const { data, error } = await sb
     .from("materials")
-    .insert({ affiliate_valid: true, ...input })
+    .upsert({ affiliate_valid: true, ...input }, { onConflict: "shop_id,item_id" })
     .select()
     .single();
   if (error) throw error;
@@ -75,7 +82,8 @@ export async function markAffiliateInvalid(materialId: string): Promise<void> {
     return;
   }
   const sb = getServiceClient()!;
-  await sb.from("materials").update({ affiliate_valid: false }).eq("id", materialId);
+  const { error } = await sb.from("materials").update({ affiliate_valid: false }).eq("id", materialId);
+  if (error) throw error;
 }
 
 // 從素材快照產生一篇草稿（重用文案/連結/媒體，不重燒 token）

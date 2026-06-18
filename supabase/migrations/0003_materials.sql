@@ -27,10 +27,8 @@ create table if not exists materials (
 
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  unique (shop_id, item_id)
+  unique (shop_id, item_id)  -- 此唯一約束已自動建立索引，不需另建 lookup 索引
 );
-
-create index if not exists idx_materials_lookup on materials (shop_id, item_id);
 
 drop trigger if exists trg_materials_updated on materials;
 create trigger trg_materials_updated before update on materials

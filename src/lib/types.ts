@@ -30,6 +30,7 @@ export interface Source {
 // 素材庫：以商品為鍵，綁定分潤連結＋AI 文案＋媒體，供重用/重發
 export interface Material {
   id: string;
+  owner_id?: string | null;
   shop_id: string;
   item_id: string;
   product_name?: string | null;

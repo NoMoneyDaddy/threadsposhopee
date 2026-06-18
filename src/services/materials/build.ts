@@ -1,0 +1,89 @@
+// 為單一商品建立素材的共用邏輯：換分潤連結(帶追蹤 subId) → 商品名 → 媒體中轉 →
+// (可選)AI 文案 → 存素材。自動爬取流程與手動建立流程共用此函式。
+import { env, isDemoMode } from "@/lib/env";
+import { generateAffiliateLink, getProductName, buildSubIds } from "@/services/shopee/affiliate";
+import { generateCopy } from "@/services/ai/provider";
+import { uploadToCloudinary } from "@/services/media/cloudinary";
+import { createMaterial } from "@/lib/store";
+import type { Material } from "@/lib/types";
+
+export interface BuildMaterialInput {
+  shopId: string;
+  itemId: string;
+  cleanUrl: string;
+  originalShortLink: string;
+  media?: { url: string | null; type: "image" | "video" | "none" };
+  sourceText?: string;
+  subIdTag?: string; // 追蹤用：來源帳號或 "manual"
+  withCopy?: boolean; // 是否生成 AI 文案（手動建立可先不生成，之後再補）
+}
+
+export async function buildMaterialForProduct(
+  input: BuildMaterialInput,
+  notes: string[] = []
+): Promise<Material> {
+  const media = input.media ?? { url: null, type: "none" as const };
+  let shortLink = input.originalShortLink;
+  let subId: string | null = null;
+  let productName: string | null = null;
+
+  if (!isDemoMode && env.shopeeAppId && env.shopeeSecret) {
+    try {
+      const subIds = buildSubIds(env.shopeeDefaultSubId, input.subIdTag ?? "manual", input.itemId);
+      subId = subIds.join(",");
+      shortLink = await generateAffiliateLink(env.shopeeAppId, env.shopeeSecret, input.cleanUrl, subIds);
+      productName = await getProductName(env.shopeeAppId, env.shopeeSecret, input.shopId, input.itemId);
+    } catch (e) {
+      notes.push(`Shopee API 失敗（用原連結）：${e instanceof Error ? e.message : String(e)}`);
+    }
+  } else {
+    productName = `商品 ${input.itemId}`;
+    notes.push("Demo / 未設定 Shopee 金鑰：用原連結與假商品名");
+  }
+
+  let cloudinaryMediaUrl = media.url;
+  if (!isDemoMode && media.url && media.type !== "none") {
+    try {
+      cloudinaryMediaUrl = await uploadToCloudinary(media.url, media.type);
+    } catch (e) {
+      notes.push(`Cloudinary 上傳失敗（暫用原連結）：${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  let mainText: string | null = null;
+  let replyText: string | null = null;
+  let aiRaw: string | null = null;
+  let aiAt: string | null = null;
+  if (input.withCopy !== false) {
+    const copy = await generateCopy({
+      productName: productName ?? "這個好物",
+      shopeeShortLink: shortLink,
+      sourceText: input.sourceText,
+      mediaUrl: media.url,
+      mediaType: media.type
+    });
+    mainText = copy.mainText;
+    replyText = copy.replyText;
+    aiRaw = copy.raw;
+    aiAt = new Date().toISOString();
+  }
+
+  const now = new Date().toISOString();
+  return createMaterial({
+    shop_id: input.shopId,
+    item_id: input.itemId,
+    product_name: productName,
+    clean_product_url: input.cleanUrl,
+    affiliate_short_link: shortLink,
+    affiliate_sub_id: subId,
+    affiliate_generated_at: now,
+    affiliate_valid: true,
+    media_type: media.type,
+    source_media_url: media.url,
+    cloudinary_media_url: cloudinaryMediaUrl,
+    main_text: mainText,
+    reply_text: replyText,
+    ai_raw: aiRaw,
+    ai_generated_at: aiAt
+  });
+}

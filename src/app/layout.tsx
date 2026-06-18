@@ -11,6 +11,7 @@ export const metadata: Metadata = {
 const nav = [
   { href: "/", label: "儀表板" },
   { href: "/sources", label: "監看來源" },
+  { href: "/materials", label: "素材庫" },
   { href: "/drafts", label: "文案佇列" },
   { href: "/accounts", label: "帳號管理" }
 ];

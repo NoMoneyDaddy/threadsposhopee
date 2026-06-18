@@ -50,8 +50,23 @@ npm run pipeline:demo
 ## 上線設定
 
 1. 建 Supabase 專案，跑 `supabase/migrations/0001_init.sql`
-2. 填 `.env.local`（Supabase、`APP_ENCRYPTION_KEY`、Apify、Shopee、Gemini、Cloudinary、`CRON_SECRET`）
-3. 部署到 Vercel，Cron 會定時打 `/api/cron`
+2. 填環境變數（Supabase、`APP_ENCRYPTION_KEY`、Apify、Shopee、Gemini、Cloudinary、`CRON_SECRET`）
+3. 部署（擇一）：
+
+### A. Vercel
+直接連 repo 部署，`vercel.json` 的 Cron 會每 15 分自動打 `/api/cron`。
+
+### B. Zeabur（推薦給已有 Zeabur 帳號者）
+1. Zeabur → New Service → Git，選此 repo。Zeabur 會**自動偵測 Next.js**（免 Dockerfile），自動 `next build` / `next start`。
+2. 在該服務的 **Variables** 填上所有環境變數（同 `.env.example`）。
+3. 排程：`vercel.json` 在 Zeabur 不會生效，改用 **Zeabur Cron Job** 定時呼叫 `/api/cron`：
+   - 新增一個 Cron Job 服務，排程設 `*/15 * * * *`，執行：
+     ```bash
+     curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<你的網域>/api/cron
+     ```
+   - `CRON_SECRET` 兩邊要一致；生產環境若沒設，`/api/cron` 會直接回 500 擋掉（安全保護）。
+
+> 備註：原 n8n 依賴的 Zeabur「蝦皮簽名服務」已不再需要——簽名邏輯已內建進 `src/services/shopee/sign.ts`，可以把那個舊服務停掉。
 
 ## 目錄結構
 

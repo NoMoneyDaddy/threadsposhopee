@@ -209,32 +209,19 @@ export async function upsertThreadsAccountFromOAuth(
     demo.threadsAccounts.unshift(acc);
     return acc;
   }
+  // 用 upsert 確保原子性、避免併發競態（依 migration 0006 的 (owner_id, threads_user_id) 唯一索引）
   const sb = getServiceClient()!;
-  const { data: found } = await sb
-    .from("threads_accounts")
-    .select("id")
-    .eq("owner_id", ownerId)
-    .eq("threads_user_id", input.threads_user_id)
-    .maybeSingle();
   const payload = {
+    owner_id: ownerId,
+    threads_user_id: input.threads_user_id,
     label: input.label,
     access_token_enc: encrypt(input.access_token),
     token_expires_at: input.token_expires_at,
     status: "active"
   };
-  if (found?.id) {
-    const { data, error } = await sb
-      .from("threads_accounts")
-      .update(payload)
-      .eq("id", found.id)
-      .select("id,label,threads_user_id,token_expires_at,status")
-      .single();
-    if (error) throw error;
-    return data as ThreadsAccount;
-  }
   const { data, error } = await sb
     .from("threads_accounts")
-    .insert({ owner_id: ownerId, threads_user_id: input.threads_user_id, ...payload })
+    .upsert(payload, { onConflict: "owner_id,threads_user_id" })
     .select("id,label,threads_user_id,token_expires_at,status")
     .single();
   if (error) throw error;

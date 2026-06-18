@@ -61,6 +61,8 @@ export async function connectThreadsAccount(input: {
   const { accessToken: shortToken, userId } = await exchangeCodeForToken(input);
   const { accessToken, expiresInSec } = await exchangeForLongLivedToken(shortToken, input.clientSecret);
   const username = await getThreadsUsername(accessToken).catch(() => "");
-  const expiresAt = new Date(Date.now() + expiresInSec * 1000).toISOString();
+  // 防禦：API 若回傳缺失/非數值的 expires_in，避免 new Date(NaN).toISOString() 拋 RangeError；預設 60 天
+  const seconds = typeof expiresInSec === "number" && !Number.isNaN(expiresInSec) ? expiresInSec : 60 * 24 * 60 * 60;
+  const expiresAt = new Date(Date.now() + seconds * 1000).toISOString();
   return { userId, username: username || `threads_${userId}`, accessToken, expiresAt };
 }

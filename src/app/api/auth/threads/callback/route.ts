@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { connectThreadsAccount } from "@/services/threads/oauth";
 import { upsertThreadsAccountFromOAuth } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
@@ -24,12 +25,7 @@ export async function GET(req: Request) {
 
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
-  const savedState = req.headers
-    .get("cookie")
-    ?.split(";")
-    .map((c) => c.trim())
-    .find((c) => c.startsWith("threads_oauth_state="))
-    ?.slice("threads_oauth_state=".length);
+  const savedState = cookies().get("threads_oauth_state")?.value;
   if (!code) return back("缺少授權碼");
   if (!state || !savedState || state !== savedState) return back("state 驗證失敗，請重試");
 

@@ -1,0 +1,20 @@
+# Gemini Code Assist for GitHub 設定
+# 文件：https://developers.google.com/gemini-code-assist/docs/customize-gemini-behavior-github
+code_review:
+  disable: false
+  # 只留 MEDIUM 以上的問題，減少雜訊（可改 HIGH）
+  comment_severity_threshold: MEDIUM
+  # -1 = 不限制留言數
+  max_review_comments: -1
+  pull_request_opened:
+    # 開 PR 時自動產生摘要
+    summary: true
+    # 開 PR 時自動進行程式碼審查
+    code_review: true
+    help: false
+
+# 忽略不需審查的路徑
+ignore_patterns:
+  - "package-lock.json"
+  - "src/fixtures/**"
+  - "**/*.md"

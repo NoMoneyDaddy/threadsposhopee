@@ -49,8 +49,8 @@ npm run pipeline:demo
 
 ## 上線設定
 
-1. 建 Supabase 專案，跑 `supabase/migrations/0001_init.sql`
-2. 填環境變數（Supabase、`APP_ENCRYPTION_KEY`、Apify、Shopee、Gemini、Cloudinary、`CRON_SECRET`）
+1. 建 Supabase 專案，**依序**跑 `supabase/migrations/` 下所有 SQL（`0001_init.sql` → `0006_threads_oauth_unique.sql`）
+2. 填環境變數（Supabase、`APP_ENCRYPTION_KEY`、`OWNER_EMAIL`、Apify、Shopee、Gemini、Cloudinary、`CRON_SECRET`，以及 Threads OAuth 的 `THREADS_APP_ID/SECRET/REDIRECT_URI`）
 3. 部署（擇一）：
 
 ### A. Vercel
@@ -68,7 +68,16 @@ npm run pipeline:demo
      ```bash
      curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<你的網域>/api/cron/publish
      ```
-   - `CRON_SECRET` 兩邊要一致；生產環境若沒設，兩個端點都會回 500 擋掉（安全保護）。
+   - **Token 展期**（每日一次 `0 3 * * *`）：自動續期即將到期的 Threads 長期 token，過期前 7 天內展期，失敗則把帳號標為 `error`。
+     ```bash
+     curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<你的網域>/api/cron/refresh-tokens
+     ```
+   - `CRON_SECRET` 三邊要一致；生產環境若沒設，這些端點都會回 500 擋掉（安全保護）。
+
+### 連 Threads 發文帳號（OAuth，免手貼 token）
+1. 在 [Meta 開發者後台](https://developers.facebook.com/) 建立含 **Threads API** 的 App，取得 App ID / Secret。
+2. 把 `https://<你的網域>/api/auth/threads/callback` 設為 **Valid OAuth Redirect URI**，並填好 `THREADS_APP_ID/SECRET/REDIRECT_URI`。
+3. 登入網站 → 帳號管理 → 「用 Threads 連結帳號」一鍵授權；系統自動換 60 天長期 token 並由上面的展期 cron 自動續期。
 
 ### 兩條流程的分工
 - **爬取** `/api/cron` → `runAllSources()`：爬來源 → 換分潤連結 → AI 文案 → 存草稿（來源設「全自動」直接 approved，否則待人工核准）。**絕不發文**。
@@ -89,12 +98,15 @@ src/
     shopee/affiliate.ts  分潤連結 + 商品名
     ai/humanizer.ts      humanizer-zh 規則 + prompt
     ai/gemini.ts         Gemini 多模態呼叫
-    media/cloudinary.ts  媒體中轉
+    media/cloudinary.ts  媒體中轉（內建 SSRF 防護）
     threads/publish.ts   發文（容器→發布→留言）
+    threads/oauth.ts     OAuth 一鍵連帳號
     threads/token.ts     長期 token 展期
+    threads/refresh.ts   到期 token 自動展期 worker
+    publish/queue.ts     發文佇列（防封節奏 + 跳過失效帳號）
     pipeline/run.ts      端到端編排
-  lib/                 env / 加密 / 資料層 / 型別
-supabase/migrations/   資料庫 schema
+  lib/                 env / 加密 / 資料層 / cron 驗證 / SSRF 防護 / 型別
+supabase/migrations/   資料庫 schema（0001–0006）
 ```
 
 ## ⚠️ 安全
@@ -103,11 +115,20 @@ supabase/migrations/   資料庫 schema
 - 所有憑證只放伺服器端；存 DB 的 token／secret 一律 AES-256-GCM 加密。
 - 全自動發布有封號風險，建議用審核佇列模式。
 
-## Roadmap
+## 功能總覽
 
-- [ ] Supabase Auth 登入 + 前端 CRUD（新增帳號／來源）
-- [ ] 接上真實發布（解密 token → Cloudinary 中轉 → `publishToThreads`）
+- [x] Supabase Auth 登入（Google OAuth）+ 全站保護 + 多租戶資料隔離（owner／member）
+- [x] 前端 CRUD：帳號／來源／素材／草稿的新增、編輯、刪除、停用
+- [x] Threads OAuth 一鍵連帳號（免手貼 token）+ 長期 token 每日自動展期
+- [x] 真實發布（解密 token → Cloudinary 中轉 → `publishToThreads`，連結放留言）
+- [x] 爬取／發文兩條獨立排程 + 防封節奏（間隔／每日上限／批次）
+- [x] 審核佇列：草稿審核、AI 重寫、排程、卡住可重試
+- [x] 即時儀表板（服務健康、Threads 額度、Cloudinary 用量、需要注意提醒）
+- [x] 排程總覽（依日期分組）
+- [x] 安全：AES-256-GCM 入庫加密、Cron 定時安全驗證、外部 fetch SSRF 防護
+
+### 後續可選增強
 - [ ] 影片走 Gemini Files API（大檔）
 - [ ] 成效儀表板接 Shopee 報表 / Threads insights
-- [ ] 發文時段分散 + 速率限制（防封）
+- [ ] 素材分潤連結到期自動偵測重產
 ```

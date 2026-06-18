@@ -6,6 +6,8 @@ import { getCurrentUser } from "@/lib/auth";
 import { env } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
+// Shopee 還原 + 分潤 + Cloudinary 中轉 + Gemini 文案的多 API 串接，放寬逾時上限
+export const maxDuration = 60;
 
 // 手動建立素材：貼蝦皮商品連結 → 還原商品 → 換分潤連結 →（可選）AI 文案 → 存素材。
 // owner 用環境變數的 Shopee 金鑰；member 只能用自己的金鑰（沒設則直接用貼上的連結）。

@@ -23,7 +23,8 @@ export default async function CalendarPage() {
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
-      weekday: "short"
+      weekday: "short",
+      timeZone: "Asia/Taipei"
     });
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(d);
@@ -52,7 +53,11 @@ export default async function CalendarPage() {
             {items.map((d) => (
               <div key={d.id} className="flex items-center gap-3 rounded-lg border bg-white p-3">
                 <div className="shrink-0 text-sm font-medium tabular-nums text-shopee">
-                  {new Date(d.scheduled_at!).toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit" })}
+                  {new Date(d.scheduled_at!).toLocaleTimeString("zh-TW", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    timeZone: "Asia/Taipei"
+                  })}
                 </div>
                 {d.cloudinary_media_url && d.media_type !== "none" && (
                   // eslint-disable-next-line @next/next/no-img-element

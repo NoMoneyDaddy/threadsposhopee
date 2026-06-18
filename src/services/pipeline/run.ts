@@ -6,6 +6,8 @@
 import { scrapeLatestPosts } from "@/services/scraper/threads";
 import { expandShopeeLink } from "@/services/shopee/expand";
 import { buildMaterialForProduct } from "@/services/materials/build";
+import { env } from "@/lib/env";
+import { getOwnerUserId } from "@/lib/auth";
 import {
   isPostProcessed,
   markPostProcessed,
@@ -14,6 +16,14 @@ import {
   createDraftFromMaterial
 } from "@/lib/store";
 import type { Source } from "@/lib/types";
+
+// 爬蟲是 owner 專屬，一律用 owner 的環境變數 Shopee 金鑰
+function ownerShopeeCreds(): { appId: string; secret: string; subId: string } | null {
+  if (env.shopeeAppId && env.shopeeSecret) {
+    return { appId: env.shopeeAppId, secret: env.shopeeSecret, subId: env.shopeeDefaultSubId };
+  }
+  return null;
+}
 
 export interface PipelineResult {
   sourceId: string;
@@ -26,7 +36,7 @@ export interface PipelineResult {
   notes: string[];
 }
 
-export async function runSourcePipeline(source: Source): Promise<PipelineResult> {
+export async function runSourcePipeline(source: Source, ownerId: string): Promise<PipelineResult> {
   const result: PipelineResult = {
     sourceId: source.id,
     sourceUsername: source.source_username,
@@ -63,7 +73,7 @@ export async function runSourcePipeline(source: Source): Promise<PipelineResult>
       }
 
       // 查素材庫：命中且連結有效且有文案 → 重用（省 token / API）
-      let material = await findMaterial(expanded.shopId, expanded.itemId);
+      let material = await findMaterial(expanded.shopId, expanded.itemId, ownerId);
       if (material && material.affiliate_valid && material.main_text && material.affiliate_short_link) {
         result.reusedMaterial++;
         result.notes.push(`商品 ${expanded.itemId} 重用既有素材（未燒 token）`);
@@ -79,11 +89,14 @@ export async function runSourcePipeline(source: Source): Promise<PipelineResult>
             subIdTag: source.source_username,
             withCopy: true
           },
+          ownerId,
+          ownerShopeeCreds(),
           result.notes
         );
       }
 
       const draft = await createDraftFromMaterial(material, {
+        owner_id: ownerId,
         source_id: source.id,
         threads_account_id: source.threads_account_id,
         source_post_id: post.postId,
@@ -102,12 +115,13 @@ export async function runSourcePipeline(source: Source): Promise<PipelineResult>
   return result;
 }
 
-// 跑所有啟用中的來源（給排程 / 手動觸發用）
+// 跑所有啟用中的來源（給排程 / 手動觸發用）。爬蟲是 owner 專屬，產出掛在 owner 名下。
 export async function runAllSources(): Promise<PipelineResult[]> {
+  const ownerId = (await getOwnerUserId()) ?? "demo-user";
   const sources = (await listSources()).filter((s) => s.enabled);
   const results: PipelineResult[] = [];
   for (const s of sources) {
-    results.push(await runSourcePipeline(s));
+    results.push(await runSourcePipeline(s, ownerId));
   }
   return results;
 }

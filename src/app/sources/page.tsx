@@ -1,13 +1,26 @@
 import { listShopeeAccounts, listSources, listThreadsAccounts } from "@/lib/store";
+import { getCurrentUser } from "@/lib/auth";
 import SourceForm from "@/components/SourceForm";
 
 export const dynamic = "force-dynamic";
 
 export default async function SourcesPage() {
+  const user = await getCurrentUser();
+  const ownerId = user?.id ?? "demo-user";
+
+  // 爬蟲是管理者專屬功能
+  if (user && !user.isOwner) {
+    return (
+      <div className="rounded-lg border border-dashed p-10 text-center text-neutral-500">
+        監看來源（爬蟲）僅限管理者使用。你可以到「素材庫」手動貼分潤連結建立內容。
+      </div>
+    );
+  }
+
   const [sources, accounts, shopee] = await Promise.all([
-    listSources(),
-    listThreadsAccounts(),
-    listShopeeAccounts()
+    listSources(ownerId),
+    listThreadsAccounts(ownerId),
+    listShopeeAccounts(ownerId)
   ]);
   const accLabel = (id: string) => accounts.find((a) => a.id === id)?.label ?? id;
 

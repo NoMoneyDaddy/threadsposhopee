@@ -1,10 +1,12 @@
 import DraftActions from "@/components/DraftActions";
 import { listDrafts } from "@/lib/store";
+import { getCurrentUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function DraftsPage() {
-  const drafts = await listDrafts();
+  const user = await getCurrentUser();
+  const drafts = await listDrafts(user?.id ?? "demo-user");
 
   return (
     <div className="space-y-4">

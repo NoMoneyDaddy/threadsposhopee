@@ -1,6 +1,6 @@
 // 統一資料存取層。
-// - 有設定 Supabase → 走 Supabase。
-// - 沒設定（Demo 模式）→ 用記憶體 + fixtures，讓 `npm run dev` 不需任何金鑰即可跑。
+// - 有設定 Supabase → 走 Supabase（service-role），並以 ownerId 在應用層過濾，達成多租戶隔離。
+// - 沒設定（Demo 模式）→ 用記憶體 + fixtures（單人，忽略 ownerId）。
 import { randomUUID } from "node:crypto";
 import { getServiceClient } from "./supabase/server";
 import { isDemoMode } from "./env";
@@ -17,8 +17,8 @@ const demo = {
   materials: [] as Material[]
 };
 
-// ── 素材庫：以 (shop_id, item_id) 為鍵，重用分潤連結＋AI 文案＋媒體 ──────────
-export async function findMaterial(shopId: string, itemId: string): Promise<Material | null> {
+// ── 素材庫：以 (owner_id, shop_id, item_id) 為鍵，重用分潤連結＋AI 文案＋媒體 ──────
+export async function findMaterial(shopId: string, itemId: string, ownerId: string): Promise<Material | null> {
   if (isDemoMode) {
     return demo.materials.find((m) => m.shop_id === shopId && m.item_id === itemId) ?? null;
   }
@@ -26,48 +26,48 @@ export async function findMaterial(shopId: string, itemId: string): Promise<Mate
   const { data } = await sb
     .from("materials")
     .select("*")
+    .eq("owner_id", ownerId)
     .eq("shop_id", shopId)
     .eq("item_id", itemId)
     .maybeSingle();
   return (data as Material) ?? null;
 }
 
-export async function getMaterial(id: string): Promise<Material | null> {
+export async function getMaterial(id: string, ownerId: string): Promise<Material | null> {
   if (isDemoMode) return demo.materials.find((m) => m.id === id) ?? null;
   const sb = getServiceClient()!;
-  const { data } = await sb.from("materials").select("*").eq("id", id).maybeSingle();
+  const { data } = await sb.from("materials").select("*").eq("id", id).eq("owner_id", ownerId).maybeSingle();
   return (data as Material) ?? null;
 }
 
-export async function listMaterials(): Promise<Material[]> {
+export async function listMaterials(ownerId: string): Promise<Material[]> {
   if (isDemoMode) return [...demo.materials];
   const sb = getServiceClient()!;
-  const { data } = await sb.from("materials").select("*").order("created_at", { ascending: false }).limit(200);
+  const { data } = await sb
+    .from("materials")
+    .select("*")
+    .eq("owner_id", ownerId)
+    .order("created_at", { ascending: false })
+    .limit(200);
   return (data ?? []) as Material[];
 }
 
-export async function createMaterial(input: Partial<Material>): Promise<Material> {
+export async function createMaterial(input: Partial<Material>, ownerId: string): Promise<Material> {
   if (isDemoMode) {
-    // demo：同商品已存在則覆寫（對應 upsert 行為）
     const existing = demo.materials.find((m) => m.shop_id === input.shop_id && m.item_id === input.item_id);
     if (existing) {
       Object.assign(existing, input);
       return existing;
     }
-    const material = {
-      id: randomUUID(),
-      affiliate_valid: true,
-      created_at: new Date().toISOString(),
-      ...input
-    } as Material;
+    const material = { id: randomUUID(), affiliate_valid: true, created_at: new Date().toISOString(), ...input } as Material;
     demo.materials.unshift(material);
     return material;
   }
   const sb = getServiceClient()!;
-  // upsert on (shop_id,item_id)：連結失效重產時不會撞唯一鍵
+  // upsert on (owner_id,shop_id,item_id)：連結失效重產時不會撞唯一鍵，且不跨使用者
   const { data, error } = await sb
     .from("materials")
-    .upsert({ affiliate_valid: true, ...input }, { onConflict: "shop_id,item_id" })
+    .upsert({ affiliate_valid: true, ...input, owner_id: ownerId }, { onConflict: "owner_id,shop_id,item_id" })
     .select()
     .single();
   if (error) throw error;
@@ -90,6 +90,7 @@ export async function markAffiliateInvalid(materialId: string): Promise<void> {
 export async function createDraftFromMaterial(
   material: Material,
   opts: {
+    owner_id: string;
     source_id?: string | null;
     threads_account_id?: string | null;
     source_post_id?: string | null;
@@ -97,6 +98,7 @@ export async function createDraftFromMaterial(
   }
 ): Promise<Draft> {
   return createDraft({
+    owner_id: opts.owner_id,
     material_id: material.id,
     source_id: opts.source_id ?? null,
     threads_account_id: opts.threads_account_id ?? null,
@@ -114,10 +116,13 @@ export async function createDraftFromMaterial(
   });
 }
 
-export async function listThreadsAccounts(): Promise<ThreadsAccount[]> {
+export async function listThreadsAccounts(ownerId: string): Promise<ThreadsAccount[]> {
   if (isDemoMode) return demo.threadsAccounts;
   const sb = getServiceClient()!;
-  const { data } = await sb.from("threads_accounts").select("id,label,threads_user_id,token_expires_at,status");
+  const { data } = await sb
+    .from("threads_accounts")
+    .select("id,label,threads_user_id,token_expires_at,status")
+    .eq("owner_id", ownerId);
   return (data ?? []) as ThreadsAccount[];
 }
 
@@ -137,13 +142,16 @@ export async function getThreadsCredentials(
 }
 
 // 新增 Threads 發文帳號（access token / client secret 加密後存放）
-export async function createThreadsAccount(input: {
-  label: string;
-  threads_user_id: string;
-  access_token?: string;
-  client_secret?: string;
-  token_expires_at?: string | null;
-}): Promise<ThreadsAccount> {
+export async function createThreadsAccount(
+  input: {
+    label: string;
+    threads_user_id: string;
+    access_token?: string;
+    client_secret?: string;
+    token_expires_at?: string | null;
+  },
+  ownerId: string
+): Promise<ThreadsAccount> {
   if (isDemoMode) {
     const acc: ThreadsAccount = {
       id: randomUUID(),
@@ -159,6 +167,7 @@ export async function createThreadsAccount(input: {
   const { data, error } = await sb
     .from("threads_accounts")
     .insert({
+      owner_id: ownerId,
       label: input.label,
       threads_user_id: input.threads_user_id,
       access_token_enc: input.access_token ? encrypt(input.access_token) : null,
@@ -172,63 +181,74 @@ export async function createThreadsAccount(input: {
   return data as ThreadsAccount;
 }
 
-export async function listShopeeAccounts(): Promise<ShopeeAccount[]> {
+export async function listShopeeAccounts(ownerId: string): Promise<ShopeeAccount[]> {
   if (isDemoMode) return demo.shopeeAccounts;
   const sb = getServiceClient()!;
-  const { data } = await sb.from("shopee_accounts").select("id,label,app_id,default_sub_id");
+  const { data } = await sb.from("shopee_accounts").select("id,label,app_id,default_sub_id").eq("owner_id", ownerId);
   return (data ?? []) as ShopeeAccount[];
 }
 
+// 取出某使用者的 Shopee 分潤憑證（解密）。member 用自己的金鑰轉連結。
+export async function getShopeeCredentials(
+  ownerId: string
+): Promise<{ appId: string; secret: string; subId: string } | null> {
+  if (isDemoMode) return null;
+  const sb = getServiceClient()!;
+  const { data } = await sb
+    .from("shopee_accounts")
+    .select("app_id, secret_enc, default_sub_id")
+    .eq("owner_id", ownerId)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (!data?.secret_enc) return null;
+  return { appId: data.app_id, secret: decrypt(data.secret_enc), subId: data.default_sub_id };
+}
+
 // 新增 Shopee 分潤帳號（secret 加密後存放）
-export async function createShopeeAccount(input: {
-  label: string;
-  app_id: string;
-  secret: string;
-  default_sub_id?: string;
-}): Promise<ShopeeAccount> {
+export async function createShopeeAccount(
+  input: { label: string; app_id: string; secret: string; default_sub_id?: string },
+  ownerId: string
+): Promise<ShopeeAccount> {
   const default_sub_id = input.default_sub_id || "threadspo";
   if (isDemoMode) {
-    const acc: ShopeeAccount = {
-      id: randomUUID(),
-      label: input.label,
-      app_id: input.app_id,
-      default_sub_id
-    };
+    const acc: ShopeeAccount = { id: randomUUID(), label: input.label, app_id: input.app_id, default_sub_id };
     demo.shopeeAccounts.unshift(acc);
     return acc;
   }
   const sb = getServiceClient()!;
   const { data, error } = await sb
     .from("shopee_accounts")
-    .insert({
-      label: input.label,
-      app_id: input.app_id,
-      secret_enc: encrypt(input.secret),
-      default_sub_id
-    })
+    .insert({ owner_id: ownerId, label: input.label, app_id: input.app_id, secret_enc: encrypt(input.secret), default_sub_id })
     .select("id,label,app_id,default_sub_id")
     .single();
   if (error) throw error;
   return data as ShopeeAccount;
 }
 
-export async function listSources(): Promise<Source[]> {
+// 監看來源是 owner 專屬。listSources 無參數版供背景排程（取全部啟用來源 = owner 的）。
+export async function listSources(ownerId?: string): Promise<Source[]> {
   if (isDemoMode) return demo.sources;
   const sb = getServiceClient()!;
-  const { data } = await sb.from("sources").select("*");
+  let q = sb.from("sources").select("*");
+  if (ownerId) q = q.eq("owner_id", ownerId);
+  const { data } = await q;
   return (data ?? []) as Source[];
 }
 
-// 新增監看來源
-export async function createSource(input: {
-  threads_account_id: string;
-  shopee_account_id?: string | null;
-  source_username: string;
-  poll_interval_minutes?: number;
-  auto_publish?: boolean;
-  posts_limit?: number;
-}): Promise<Source> {
+export async function createSource(
+  input: {
+    threads_account_id: string;
+    shopee_account_id?: string | null;
+    source_username: string;
+    poll_interval_minutes?: number;
+    auto_publish?: boolean;
+    posts_limit?: number;
+  },
+  ownerId: string
+): Promise<Source> {
   const row = {
+    owner_id: ownerId,
     threads_account_id: input.threads_account_id,
     shopee_account_id: input.shopee_account_id ?? null,
     source_username: input.source_username.trim().replace(/^@/, ""),
@@ -248,30 +268,27 @@ export async function createSource(input: {
   return data as Source;
 }
 
-export async function listDrafts(): Promise<Draft[]> {
-  if (isDemoMode) {
-    return [...demo.drafts].sort((a, b) => b.created_at.localeCompare(a.created_at));
-  }
+export async function listDrafts(ownerId: string): Promise<Draft[]> {
+  if (isDemoMode) return [...demo.drafts].sort((a, b) => b.created_at.localeCompare(a.created_at));
   const sb = getServiceClient()!;
-  const { data } = await sb.from("drafts").select("*").order("created_at", { ascending: false }).limit(100);
+  const { data } = await sb
+    .from("drafts")
+    .select("*")
+    .eq("owner_id", ownerId)
+    .order("created_at", { ascending: false })
+    .limit(100);
   return (data ?? []) as Draft[];
 }
 
-export async function getDraft(id: string): Promise<Draft | null> {
+export async function getDraft(id: string, ownerId: string): Promise<Draft | null> {
   if (isDemoMode) return demo.drafts.find((d) => d.id === id) ?? null;
   const sb = getServiceClient()!;
-  const { data } = await sb.from("drafts").select("*").eq("id", id).maybeSingle();
+  const { data } = await sb.from("drafts").select("*").eq("id", id).eq("owner_id", ownerId).maybeSingle();
   return (data as Draft) ?? null;
 }
 
 export async function createDraft(input: Partial<Draft>): Promise<Draft> {
-  const draft: Draft = {
-    id: randomUUID(),
-    status: "draft",
-    created_at: new Date().toISOString(),
-    ...input
-  } as Draft;
-
+  const draft: Draft = { id: randomUUID(), status: "draft", created_at: new Date().toISOString(), ...input } as Draft;
   if (isDemoMode) {
     demo.drafts.unshift(draft);
     return draft;
@@ -294,7 +311,6 @@ export async function updateDraftStatus(id: string, status: Draft["status"], pat
 }
 
 // 原子性狀態更新（compare-and-swap）：只有當目前狀態 == expectedStatus 才更新。
-// 用於發文 worker 鎖定草稿，避免多個排程實例同時抓到同一篇而重複發文。
 export async function updateDraftStatusAtomic(
   id: string,
   status: Draft["status"],
@@ -320,7 +336,7 @@ export async function updateDraftStatusAtomic(
   return (data as Draft) ?? null;
 }
 
-// 發文佇列：取出可發布的草稿（已核准、且排程時間到了或未排程）
+// 發文佇列：取出可發布的草稿（全租戶，發到各自綁定的 Threads 帳號）。背景 worker 用。
 export async function listApprovedDrafts(): Promise<Draft[]> {
   const nowIso = new Date().toISOString();
   if (isDemoMode) {
@@ -338,26 +354,20 @@ export async function listApprovedDrafts(): Promise<Draft[]> {
   return (data ?? []) as Draft[];
 }
 
-// 某 Threads 帳號的發文節奏狀態：最後一次發文時間、近 24h 已發數（用於防封閘門）
+// 某 Threads 帳號的發文節奏狀態（背景 worker 用）。
 export async function getAccountPublishState(
   threadsAccountId: string
 ): Promise<{ lastPublishedAt: string | null; publishedLast24h: number }> {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   if (isDemoMode) {
-    const published = demo.drafts.filter(
-      (d) => d.threads_account_id === threadsAccountId && d.status === "published"
-    );
-    const last = published
-      .map((d) => d.published_at ?? d.created_at)
-      .sort()
-      .pop();
+    const published = demo.drafts.filter((d) => d.threads_account_id === threadsAccountId && d.status === "published");
+    const last = published.map((d) => d.published_at ?? d.created_at).sort().pop();
     return {
       lastPublishedAt: last ?? null,
       publishedLast24h: published.filter((d) => (d.published_at ?? d.created_at) >= since).length
     };
   }
   const sb = getServiceClient()!;
-  // 只取最後一筆發文時間（不拉全量歷史）
   const { data: latest } = await sb
     .from("drafts")
     .select("published_at")
@@ -365,21 +375,17 @@ export async function getAccountPublishState(
     .eq("status", "published")
     .order("published_at", { ascending: false })
     .limit(1);
-  // 近 24h 已發數用 count 聚合（head:true 不拉資料列）
   const { count } = await sb
     .from("drafts")
     .select("*", { count: "exact", head: true })
     .eq("threads_account_id", threadsAccountId)
     .eq("status", "published")
     .gte("published_at", since);
-  return {
-    lastPublishedAt: latest?.[0]?.published_at ?? null,
-    publishedLast24h: count ?? 0
-  };
+  return { lastPublishedAt: latest?.[0]?.published_at ?? null, publishedLast24h: count ?? 0 };
 }
 
-// 儀表板統計：各表數量 + 草稿狀態漏斗 + 近24h已發
-export async function getDashboardStats(): Promise<{
+// 儀表板統計（依登入者隔離）
+export async function getDashboardStats(ownerId: string): Promise<{
   threadsAccounts: number;
   sources: number;
   materials: number;
@@ -399,7 +405,7 @@ export async function getDashboardStats(): Promise<{
   }
   const sb = getServiceClient()!;
   const count = async (table: string, build: (q: any) => any = (q) => q): Promise<number> => {
-    const { count: c } = await build(sb.from(table).select("*", { count: "exact", head: true }));
+    const { count: c } = await build(sb.from(table).select("*", { count: "exact", head: true }).eq("owner_id", ownerId));
     return c ?? 0;
   };
   const [threadsAccounts, sources, materials, draft, approved, published, failed, publishedLast24h] =
@@ -413,24 +419,19 @@ export async function getDashboardStats(): Promise<{
       count("drafts", (q) => q.eq("status", "failed")),
       count("drafts", (q) => q.eq("status", "published").gte("published_at", since))
     ]);
-  return {
-    threadsAccounts,
-    sources,
-    materials,
-    drafts: { draft, approved, published, failed },
-    publishedLast24h
-  };
+  return { threadsAccounts, sources, materials, drafts: { draft, approved, published, failed }, publishedLast24h };
 }
 
-// 取所有啟用中的 Threads 帳號 + 解密 token（給儀表板查 Threads 額度用，owner only）
-export async function listActiveThreadsCredentials(): Promise<
-  { label: string; threadsUserId: string; accessToken: string }[]
-> {
+// 取某使用者啟用中的 Threads 帳號 + 解密 token（儀表板查額度用）
+export async function listActiveThreadsCredentials(
+  ownerId: string
+): Promise<{ label: string; threadsUserId: string; accessToken: string }[]> {
   if (isDemoMode) return [];
   const sb = getServiceClient()!;
   const { data } = await sb
     .from("threads_accounts")
     .select("label, threads_user_id, access_token_enc, status")
+    .eq("owner_id", ownerId)
     .eq("status", "active");
   return (data ?? [])
     .filter((r) => r.access_token_enc)
@@ -447,9 +448,7 @@ export async function listActiveThreadsCredentials(): Promise<
 
 // 去重：來源貼文是否已處理過
 export async function isPostProcessed(sourceId: string, postId: string): Promise<boolean> {
-  if (isDemoMode) {
-    return demo.drafts.some((d) => d.source_id === sourceId && d.source_post_id === postId);
-  }
+  if (isDemoMode) return demo.drafts.some((d) => d.source_id === sourceId && d.source_post_id === postId);
   const sb = getServiceClient()!;
   const { data } = await sb
     .from("processed_posts")

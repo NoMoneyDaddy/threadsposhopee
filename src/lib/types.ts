@@ -59,6 +59,7 @@ export type DraftStatus =
 
 export interface Draft {
   id: string;
+  owner_id?: string | null;
   material_id?: string | null;
   source_id?: string | null;
   threads_account_id?: string | null;

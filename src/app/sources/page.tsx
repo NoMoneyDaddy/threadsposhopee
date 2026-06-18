@@ -1,6 +1,7 @@
 import { listShopeeAccounts, listSources, listThreadsAccounts } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
 import SourceForm from "@/components/SourceForm";
+import { DeleteButton, ToggleButton } from "@/components/RowActions";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +43,7 @@ export default async function SourcesPage() {
               <th className="px-4 py-2">頻率</th>
               <th className="px-4 py-2">模式</th>
               <th className="px-4 py-2">狀態</th>
+              <th className="px-4 py-2">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -58,11 +60,21 @@ export default async function SourcesPage() {
                   )}
                 </td>
                 <td className="px-4 py-2">{s.enabled ? "✅ 啟用" : "⏸ 停用"}</td>
+                <td className="px-4 py-2">
+                  <div className="flex items-center gap-3">
+                    <ToggleButton
+                      endpoint={`/api/sources/${s.id}`}
+                      body={{ enabled: !s.enabled }}
+                      label={s.enabled ? "⏸ 停用" : "▶ 啟用"}
+                    />
+                    <DeleteButton endpoint={`/api/sources/${s.id}`} />
+                  </div>
+                </td>
               </tr>
             ))}
             {sources.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-neutral-400">
+                <td colSpan={6} className="px-4 py-6 text-center text-neutral-400">
                   尚無來源。連接 Supabase 後可在此新增。
                 </td>
               </tr>

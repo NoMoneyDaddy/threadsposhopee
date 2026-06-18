@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { env, isDemoMode } from "@/lib/env";
 import ThreadsAccountForm from "@/components/ThreadsAccountForm";
 import ShopeeAccountForm from "@/components/ShopeeAccountForm";
+import { DeleteButton, ToggleButton } from "@/components/RowActions";
 
 export const dynamic = "force-dynamic";
 
@@ -74,6 +75,14 @@ export default async function AccountsPage({
                   token 到期：{new Date(a.token_expires_at).toLocaleDateString("zh-TW")}（自動展期）
                 </div>
               )}
+              <div className="mt-2 flex items-center gap-3 border-t pt-2">
+                {a.status === "paused" ? (
+                  <ToggleButton endpoint={`/api/accounts/threads/${a.id}`} body={{ status: "active" }} label="▶ 恢復排程" />
+                ) : (
+                  <ToggleButton endpoint={`/api/accounts/threads/${a.id}`} body={{ status: "paused" }} label="⏸ 暫停排程" />
+                )}
+                <DeleteButton endpoint={`/api/accounts/threads/${a.id}`} />
+              </div>
             </div>
           ))}
         </div>
@@ -87,6 +96,9 @@ export default async function AccountsPage({
               <div className="font-medium">{a.label}</div>
               <div className="mt-1 text-sm text-neutral-500">app id: {a.app_id}</div>
               <div className="text-sm text-neutral-500">預設 subId: {a.default_sub_id}</div>
+              <div className="mt-2 border-t pt-2">
+                <DeleteButton endpoint={`/api/accounts/shopee/${a.id}`} />
+              </div>
             </div>
           ))}
         </div>

@@ -315,6 +315,96 @@ export async function createSource(
   return data as Source;
 }
 
+// 啟用／停用來源（回傳是否有命中該 owner 的 row，達成擁有權檢查）
+export async function setSourceEnabled(id: string, ownerId: string, enabled: boolean): Promise<boolean> {
+  if (isDemoMode) {
+    const s = demo.sources.find((x) => x.id === id);
+    if (!s) return false;
+    s.enabled = enabled;
+    return true;
+  }
+  const sb = getServiceClient()!;
+  const { data } = await sb
+    .from("sources")
+    .update({ enabled })
+    .eq("id", id)
+    .eq("owner_id", ownerId)
+    .select("id")
+    .maybeSingle();
+  return Boolean(data);
+}
+
+export async function deleteSource(id: string, ownerId: string): Promise<boolean> {
+  if (isDemoMode) {
+    const i = demo.sources.findIndex((x) => x.id === id);
+    if (i < 0) return false;
+    demo.sources.splice(i, 1);
+    return true;
+  }
+  const sb = getServiceClient()!;
+  const { data } = await sb.from("sources").delete().eq("id", id).eq("owner_id", ownerId).select("id").maybeSingle();
+  return Boolean(data);
+}
+
+// 設定 Threads 帳號狀態（active=啟用、paused=暫停排程）
+export async function setThreadsAccountStatus(
+  id: string,
+  ownerId: string,
+  status: "active" | "paused"
+): Promise<boolean> {
+  if (isDemoMode) {
+    const a = demo.threadsAccounts.find((x) => x.id === id);
+    if (!a) return false;
+    a.status = status;
+    return true;
+  }
+  const sb = getServiceClient()!;
+  const { data } = await sb
+    .from("threads_accounts")
+    .update({ status })
+    .eq("id", id)
+    .eq("owner_id", ownerId)
+    .select("id")
+    .maybeSingle();
+  return Boolean(data);
+}
+
+export async function deleteThreadsAccount(id: string, ownerId: string): Promise<boolean> {
+  if (isDemoMode) {
+    const i = demo.threadsAccounts.findIndex((x) => x.id === id);
+    if (i < 0) return false;
+    demo.threadsAccounts.splice(i, 1);
+    return true;
+  }
+  const sb = getServiceClient()!;
+  const { data } = await sb
+    .from("threads_accounts")
+    .delete()
+    .eq("id", id)
+    .eq("owner_id", ownerId)
+    .select("id")
+    .maybeSingle();
+  return Boolean(data);
+}
+
+export async function deleteShopeeAccount(id: string, ownerId: string): Promise<boolean> {
+  if (isDemoMode) {
+    const i = demo.shopeeAccounts.findIndex((x) => x.id === id);
+    if (i < 0) return false;
+    demo.shopeeAccounts.splice(i, 1);
+    return true;
+  }
+  const sb = getServiceClient()!;
+  const { data } = await sb
+    .from("shopee_accounts")
+    .delete()
+    .eq("id", id)
+    .eq("owner_id", ownerId)
+    .select("id")
+    .maybeSingle();
+  return Boolean(data);
+}
+
 export async function listDrafts(ownerId: string): Promise<Draft[]> {
   if (isDemoMode) return [...demo.drafts].sort((a, b) => b.created_at.localeCompare(a.created_at));
   const sb = getServiceClient()!;

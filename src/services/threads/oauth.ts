@@ -1,6 +1,7 @@
 // Threads OAuth：一鍵連發文帳號，取代手貼 access token。
 // 流程：authorize → 拿 code → 換短期 token（含 user_id）→ 換 60 天長期 token → 取 username。
 import { exchangeForLongLivedToken } from "./token";
+import { fetchWithTimeout } from "@/lib/http";
 
 const GRAPH = "https://graph.threads.net";
 const AUTHORIZE = "https://threads.net/oauth/authorize";
@@ -32,7 +33,7 @@ export async function exchangeCodeForToken(input: {
     redirect_uri: input.redirectUri,
     code: input.code
   });
-  const res = await fetch(`${GRAPH}/oauth/access_token`, {
+  const res = await fetchWithTimeout(`${GRAPH}/oauth/access_token`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body
@@ -45,7 +46,7 @@ export async function exchangeCodeForToken(input: {
 // 取得 Threads 使用者名稱（顯示用 label）。
 export async function getThreadsUsername(accessToken: string): Promise<string> {
   const url = `${GRAPH}/v1.0/me?fields=username&access_token=${accessToken}`;
-  const res = await fetch(url);
+  const res = await fetchWithTimeout(url);
   if (!res.ok) throw new Error(`取 username 失敗 ${res.status}: ${await res.text()}`);
   const json = await res.json();
   return json.username ?? "";

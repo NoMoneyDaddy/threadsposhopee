@@ -492,6 +492,8 @@ export async function deleteDraft(id: string, ownerId: string): Promise<boolean>
 }
 
 export async function updateDraftStatus(id: string, status: Draft["status"], patch: Partial<Draft> = {}) {
+  // error 訊息截斷到 500 字，避免外部 API 巨量錯誤撐爆欄位
+  if (typeof patch.error === "string") patch = { ...patch, error: patch.error.slice(0, 500) };
   if (isDemoMode) {
     const d = demo.drafts.find((x) => x.id === id);
     if (d) Object.assign(d, { status, ...patch });

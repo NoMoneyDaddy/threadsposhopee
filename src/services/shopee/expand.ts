@@ -1,6 +1,7 @@
 // 還原蝦皮短網址 → 取出 shop_id / item_id → 組乾淨商品網址
 // （對應 n8n「還原短網址」+「提取商品網址」節點）
 import { isDemoMode } from "@/lib/env";
+import { fetchWithTimeout } from "@/lib/http";
 
 export interface ExpandedProduct {
   expandedUrl: string;
@@ -23,7 +24,7 @@ export async function expandShopeeLink(shortLink: string): Promise<ExpandedProdu
   // 不自動跟隨重導，讀 Location header
   let location = shortLink;
   try {
-    const res = await fetch(shortLink, { method: "GET", redirect: "manual" });
+    const res = await fetchWithTimeout(shortLink, { method: "GET", redirect: "manual" });
     location = res.headers.get("location") ?? shortLink;
   } catch {
     // 網路失敗時退回原連結，仍嘗試從中解析

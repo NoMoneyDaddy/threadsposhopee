@@ -4,7 +4,7 @@
 import { randomUUID } from "node:crypto";
 import { getServiceClient } from "./supabase/server";
 import { isDemoMode } from "./env";
-import { decrypt } from "./crypto";
+import { decrypt, encrypt } from "./crypto";
 import type { Draft, Source, ThreadsAccount, ShopeeAccount } from "./types";
 import demoData from "@/fixtures/demo-data.json";
 
@@ -38,6 +38,42 @@ export async function getThreadsCredentials(
   return { threadsUserId: data.threads_user_id, accessToken: decrypt(data.access_token_enc) };
 }
 
+// 新增 Threads 發文帳號（access token / client secret 加密後存放）
+export async function createThreadsAccount(input: {
+  label: string;
+  threads_user_id: string;
+  access_token?: string;
+  client_secret?: string;
+  token_expires_at?: string | null;
+}): Promise<ThreadsAccount> {
+  if (isDemoMode) {
+    const acc: ThreadsAccount = {
+      id: randomUUID(),
+      label: input.label,
+      threads_user_id: input.threads_user_id,
+      token_expires_at: input.token_expires_at ?? null,
+      status: "active"
+    };
+    demo.threadsAccounts.unshift(acc);
+    return acc;
+  }
+  const sb = getServiceClient()!;
+  const { data, error } = await sb
+    .from("threads_accounts")
+    .insert({
+      label: input.label,
+      threads_user_id: input.threads_user_id,
+      access_token_enc: input.access_token ? encrypt(input.access_token) : null,
+      client_secret_enc: input.client_secret ? encrypt(input.client_secret) : null,
+      token_expires_at: input.token_expires_at ?? null,
+      status: "active"
+    })
+    .select("id,label,threads_user_id,token_expires_at,status")
+    .single();
+  if (error) throw error;
+  return data as ThreadsAccount;
+}
+
 export async function listShopeeAccounts(): Promise<ShopeeAccount[]> {
   if (isDemoMode) return demo.shopeeAccounts;
   const sb = getServiceClient()!;
@@ -45,11 +81,73 @@ export async function listShopeeAccounts(): Promise<ShopeeAccount[]> {
   return (data ?? []) as ShopeeAccount[];
 }
 
+// 新增 Shopee 分潤帳號（secret 加密後存放）
+export async function createShopeeAccount(input: {
+  label: string;
+  app_id: string;
+  secret: string;
+  default_sub_id?: string;
+}): Promise<ShopeeAccount> {
+  const default_sub_id = input.default_sub_id || "threadspo";
+  if (isDemoMode) {
+    const acc: ShopeeAccount = {
+      id: randomUUID(),
+      label: input.label,
+      app_id: input.app_id,
+      default_sub_id
+    };
+    demo.shopeeAccounts.unshift(acc);
+    return acc;
+  }
+  const sb = getServiceClient()!;
+  const { data, error } = await sb
+    .from("shopee_accounts")
+    .insert({
+      label: input.label,
+      app_id: input.app_id,
+      secret_enc: encrypt(input.secret),
+      default_sub_id
+    })
+    .select("id,label,app_id,default_sub_id")
+    .single();
+  if (error) throw error;
+  return data as ShopeeAccount;
+}
+
 export async function listSources(): Promise<Source[]> {
   if (isDemoMode) return demo.sources;
   const sb = getServiceClient()!;
   const { data } = await sb.from("sources").select("*");
   return (data ?? []) as Source[];
+}
+
+// 新增監看來源
+export async function createSource(input: {
+  threads_account_id: string;
+  shopee_account_id?: string | null;
+  source_username: string;
+  poll_interval_minutes?: number;
+  auto_publish?: boolean;
+  posts_limit?: number;
+}): Promise<Source> {
+  const row = {
+    threads_account_id: input.threads_account_id,
+    shopee_account_id: input.shopee_account_id ?? null,
+    source_username: input.source_username.replace(/^@/, ""),
+    enabled: true,
+    poll_interval_minutes: input.poll_interval_minutes ?? 15,
+    auto_publish: input.auto_publish ?? false,
+    posts_limit: input.posts_limit ?? 1
+  };
+  if (isDemoMode) {
+    const src: Source = { id: randomUUID(), last_polled_at: null, ...row };
+    demo.sources.unshift(src);
+    return src;
+  }
+  const sb = getServiceClient()!;
+  const { data, error } = await sb.from("sources").insert(row).select("*").single();
+  if (error) throw error;
+  return data as Source;
 }
 
 export async function listDrafts(): Promise<Draft[]> {

@@ -1,4 +1,6 @@
 import { listShopeeAccounts, listThreadsAccounts } from "@/lib/store";
+import ThreadsAccountForm from "@/components/ThreadsAccountForm";
+import ShopeeAccountForm from "@/components/ShopeeAccountForm";
 
 export const dynamic = "force-dynamic";
 
@@ -8,6 +10,11 @@ export default async function AccountsPage() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">帳號管理</h1>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <ThreadsAccountForm />
+        <ShopeeAccountForm />
+      </div>
 
       <section>
         <h2 className="mb-2 font-semibold">Threads 發文帳號</h2>

@@ -1,0 +1,51 @@
+{
+  "threadsAccounts": [
+    {
+      "id": "ta_demo_1",
+      "label": "我的主帳號 @threadspo",
+      "threads_user_id": "1606286800552627",
+      "token_expires_at": "2026-08-01T00:00:00.000Z",
+      "status": "active"
+    }
+  ],
+  "shopeeAccounts": [
+    {
+      "id": "sa_demo_1",
+      "label": "蝦皮分潤主帳號",
+      "app_id": "demo-app-id",
+      "default_sub_id": "threadspo"
+    }
+  ],
+  "sources": [
+    {
+      "id": "src_demo_1",
+      "threads_account_id": "ta_demo_1",
+      "shopee_account_id": "sa_demo_1",
+      "source_username": "oxox78789",
+      "enabled": true,
+      "poll_interval_minutes": 15,
+      "auto_publish": false,
+      "posts_limit": 1,
+      "last_polled_at": null
+    }
+  ],
+  "drafts": [
+    {
+      "id": "draft_demo_1",
+      "source_id": "src_demo_1",
+      "threads_account_id": "ta_demo_1",
+      "source_post_id": "seed_post_001",
+      "product_name": "無線藍牙耳機 降噪入耳式",
+      "clean_product_url": "https://shopee.tw/product/123456/7891011",
+      "shopee_short_link": "https://s.shopee.tw/abc123XYZ",
+      "media_type": "image",
+      "source_media_url": "https://picsum.photos/seed/earbuds/600/600",
+      "cloudinary_media_url": "https://picsum.photos/seed/earbuds/600/600",
+      "main_text": "通勤戴一週的心得：降噪比想像中誇張，捷運廣播直接消失\n但講電話對方說我像在山洞裡，這點要先講",
+      "reply_text": "怕你找不到，連結放這 🔗 https://s.shopee.tw/abc123XYZ 有人也踩過通話的雷嗎",
+      "status": "draft",
+      "scheduled_at": null,
+      "created_at": "2026-06-18T02:00:00.000Z"
+    }
+  ]
+}

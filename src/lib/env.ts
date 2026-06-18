@@ -20,6 +20,9 @@ export const env = {
 
   cloudinaryCloud: process.env.CLOUDINARY_CLOUD_NAME ?? "",
   cloudinaryPreset: process.env.CLOUDINARY_UPLOAD_PRESET ?? "threads_media",
+  // 選填：填了才能在儀表板顯示 Cloudinary 用量
+  cloudinaryApiKey: process.env.CLOUDINARY_API_KEY ?? "",
+  cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET ?? "",
 
   cronSecret: process.env.CRON_SECRET ?? "",
 

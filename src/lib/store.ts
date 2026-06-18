@@ -195,6 +195,57 @@ export async function updateDraftStatus(id: string, status: Draft["status"], pat
   return data as Draft;
 }
 
+// 發文佇列：取出可發布的草稿（已核准、且排程時間到了或未排程）
+export async function listApprovedDrafts(): Promise<Draft[]> {
+  const nowIso = new Date().toISOString();
+  if (isDemoMode) {
+    return demo.drafts
+      .filter((d) => d.status === "approved" && (!d.scheduled_at || d.scheduled_at <= nowIso))
+      .sort((a, b) => a.created_at.localeCompare(b.created_at));
+  }
+  const sb = getServiceClient()!;
+  const { data } = await sb
+    .from("drafts")
+    .select("*")
+    .eq("status", "approved")
+    .or(`scheduled_at.is.null,scheduled_at.lte.${nowIso}`)
+    .order("created_at", { ascending: true });
+  return (data ?? []) as Draft[];
+}
+
+// 某 Threads 帳號的發文節奏狀態：最後一次發文時間、近 24h 已發數（用於防封閘門）
+export async function getAccountPublishState(
+  threadsAccountId: string
+): Promise<{ lastPublishedAt: string | null; publishedLast24h: number }> {
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  if (isDemoMode) {
+    const published = demo.drafts.filter(
+      (d) => d.threads_account_id === threadsAccountId && d.status === "published"
+    );
+    const last = published
+      .map((d) => d.published_at ?? d.created_at)
+      .sort()
+      .pop();
+    return {
+      lastPublishedAt: last ?? null,
+      publishedLast24h: published.filter((d) => (d.published_at ?? d.created_at) >= since).length
+    };
+  }
+  const sb = getServiceClient()!;
+  const { data } = await sb
+    .from("drafts")
+    .select("published_at")
+    .eq("threads_account_id", threadsAccountId)
+    .eq("status", "published")
+    .order("published_at", { ascending: false });
+  const rows = (data ?? []) as { published_at: string | null }[];
+  const times = rows.map((r) => r.published_at).filter(Boolean) as string[];
+  return {
+    lastPublishedAt: times[0] ?? null,
+    publishedLast24h: times.filter((t) => t >= since).length
+  };
+}
+
 // 去重：來源貼文是否已處理過
 export async function isPostProcessed(sourceId: string, postId: string): Promise<boolean> {
   if (isDemoMode) {

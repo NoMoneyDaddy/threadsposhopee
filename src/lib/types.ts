@@ -52,6 +52,7 @@ export interface Draft {
   status: DraftStatus;
   scheduled_at?: string | null;
   published_post_id?: string | null;
+  published_at?: string | null;
   error?: string | null;
   created_at: string;
 }

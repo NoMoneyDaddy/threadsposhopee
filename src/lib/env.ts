@@ -22,6 +22,11 @@ export const env = {
   cloudinaryPreset: process.env.CLOUDINARY_UPLOAD_PRESET ?? "threads_media",
 
   cronSecret: process.env.CRON_SECRET ?? "",
+
+  // 發文流程的防封設定（保守預設，可用環境變數覆寫）
+  publishMinGapMinutes: Number(process.env.PUBLISH_MIN_GAP_MINUTES ?? 240), // 每帳號每篇至少間隔（分）
+  publishMaxPerDay: Number(process.env.PUBLISH_MAX_PER_DAY ?? 5), // 每帳號每 24h 上限（遠低於 Threads 250）
+  publishBatchPerRun: Number(process.env.PUBLISH_BATCH_PER_RUN ?? 1), // 每次 cron 每帳號最多發幾篇
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN ?? "",
   telegramChatId: process.env.TELEGRAM_CHAT_ID ?? ""
 };

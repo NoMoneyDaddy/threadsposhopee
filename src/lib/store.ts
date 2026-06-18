@@ -181,6 +181,53 @@ export async function createThreadsAccount(
   return data as ThreadsAccount;
 }
 
+// OAuth 連帳號：依 (owner_id, threads_user_id) upsert。已存在則更新 token，否則新增。
+export async function upsertThreadsAccountFromOAuth(
+  input: {
+    label: string;
+    threads_user_id: string;
+    access_token: string;
+    token_expires_at: string;
+  },
+  ownerId: string
+): Promise<ThreadsAccount> {
+  if (isDemoMode) {
+    const existing = demo.threadsAccounts.find((a) => a.threads_user_id === input.threads_user_id);
+    if (existing) {
+      existing.label = input.label;
+      existing.token_expires_at = input.token_expires_at;
+      existing.status = "active";
+      return existing;
+    }
+    const acc: ThreadsAccount = {
+      id: randomUUID(),
+      label: input.label,
+      threads_user_id: input.threads_user_id,
+      token_expires_at: input.token_expires_at,
+      status: "active"
+    };
+    demo.threadsAccounts.unshift(acc);
+    return acc;
+  }
+  // 用 upsert 確保原子性、避免併發競態（依 migration 0006 的 (owner_id, threads_user_id) 唯一索引）
+  const sb = getServiceClient()!;
+  const payload = {
+    owner_id: ownerId,
+    threads_user_id: input.threads_user_id,
+    label: input.label,
+    access_token_enc: encrypt(input.access_token),
+    token_expires_at: input.token_expires_at,
+    status: "active"
+  };
+  const { data, error } = await sb
+    .from("threads_accounts")
+    .upsert(payload, { onConflict: "owner_id,threads_user_id" })
+    .select("id,label,threads_user_id,token_expires_at,status")
+    .single();
+  if (error) throw error;
+  return data as ThreadsAccount;
+}
+
 export async function listShopeeAccounts(ownerId: string): Promise<ShopeeAccount[]> {
   if (isDemoMode) return demo.shopeeAccounts;
   const sb = getServiceClient()!;

@@ -10,7 +10,10 @@ export interface PublishingLimit {
 export async function getPublishingLimit(userId: string, token: string): Promise<PublishingLimit | null> {
   try {
     const url = `${GRAPH}/${userId}/threads_publishing_limit?fields=quota_usage,config,reply_quota_usage,reply_config&access_token=${token}`;
-    const res = await fetch(url, { cache: "no-store" });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch(url, { cache: "no-store", signal: controller.signal });
+    clearTimeout(timeoutId);
     if (!res.ok) return null;
     const json = await res.json();
     const row = Array.isArray(json.data) ? json.data[0] : json.data ?? json;

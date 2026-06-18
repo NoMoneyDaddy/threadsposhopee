@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface DashboardData {
   at: string;
@@ -56,8 +56,11 @@ export default function LiveDashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const loadingRef = useRef(false);
 
   const load = useCallback(async () => {
+    if (loadingRef.current) return; // 同時間只允許一個請求，避免重複並行
+    loadingRef.current = true;
     setLoading(true);
     try {
       const res = await fetch("/api/dashboard", { cache: "no-store" });
@@ -69,6 +72,7 @@ export default function LiveDashboard() {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
+      loadingRef.current = false;
     }
   }, []);
 

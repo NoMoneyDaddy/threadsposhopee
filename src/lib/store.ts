@@ -434,7 +434,15 @@ export async function listActiveThreadsCredentials(): Promise<
     .eq("status", "active");
   return (data ?? [])
     .filter((r) => r.access_token_enc)
-    .map((r) => ({ label: r.label, threadsUserId: r.threads_user_id, accessToken: decrypt(r.access_token_enc) }));
+    .map((r) => {
+      try {
+        return { label: r.label, threadsUserId: r.threads_user_id, accessToken: decrypt(r.access_token_enc) };
+      } catch (e) {
+        console.error(`解密帳號 ${r.label} 的 token 失敗:`, e);
+        return null;
+      }
+    })
+    .filter((x): x is { label: string; threadsUserId: string; accessToken: string } => x !== null);
 }
 
 // 去重：來源貼文是否已處理過

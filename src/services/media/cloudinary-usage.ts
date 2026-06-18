@@ -11,11 +11,15 @@ export interface CloudinaryUsage {
 export async function getCloudinaryUsage(): Promise<CloudinaryUsage | null> {
   if (!env.cloudinaryCloud || !env.cloudinaryApiKey || !env.cloudinaryApiSecret) return null;
   try {
-    const auth = Buffer.from(`${env.cloudinaryApiKey}:${env.cloudinaryApiSecret}`).toString("base64");
+    const auth = btoa(`${env.cloudinaryApiKey}:${env.cloudinaryApiSecret}`);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
     const res = await fetch(`https://api.cloudinary.com/v1_1/${env.cloudinaryCloud}/usage`, {
       headers: { Authorization: `Basic ${auth}` },
-      cache: "no-store"
+      cache: "no-store",
+      signal: controller.signal
     });
+    clearTimeout(timeoutId);
     if (!res.ok) return null;
     const d = await res.json();
     return {

@@ -13,6 +13,7 @@ interface DashboardData {
     materials: number;
     drafts: { draft: number; approved: number; published: number; failed: number };
     publishedLast24h: number;
+    accountIssues: { error: number; paused: number };
   };
   threadsQuota: { label: string; used: number; limit: number }[];
   cloudinary: { creditsUsed: number; creditsLimit: number; storageBytes: number; resources: number } | null;
@@ -87,8 +88,28 @@ export default function LiveDashboard() {
   if (!data) return null;
 
   const d = data.stats;
+  const issues = d.accountIssues ?? { error: 0, paused: 0 };
+  const needsAttention = issues.error > 0 || d.drafts.failed > 0 || issues.paused > 0;
   return (
     <div className="space-y-6">
+      {needsAttention && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          <span className="font-semibold">⚠️ 需要注意</span>
+          <span className="ml-2 inline-flex flex-wrap gap-x-4 gap-y-1">
+            {issues.error > 0 && (
+              <a href="/accounts" className="underline hover:opacity-80">
+                {issues.error} 個帳號 token 異常（展期失敗）
+              </a>
+            )}
+            {issues.paused > 0 && <span>{issues.paused} 個帳號已暫停</span>}
+            {d.drafts.failed > 0 && (
+              <a href="/drafts" className="underline hover:opacity-80">
+                {d.drafts.failed} 則草稿發布失敗（可重試）
+              </a>
+            )}
+          </span>
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-2">
         <Chip label="Supabase" on={Boolean(data.services.supabase)} />
         <Chip label={`AI (${data.services.ai_provider})`} on={Boolean(data.services.gemini)} />

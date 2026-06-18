@@ -577,16 +577,20 @@ export async function getDashboardStats(ownerId: string): Promise<{
   materials: number;
   drafts: { draft: number; approved: number; published: number; failed: number };
   publishedLast24h: number;
+  // 需要注意：token 展期失敗(error)、手動暫停(paused) 的帳號數
+  accountIssues: { error: number; paused: number };
 }> {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   if (isDemoMode) {
     const by = (s: string) => demo.drafts.filter((d) => d.status === s).length;
+    const accBy = (s: string) => demo.threadsAccounts.filter((a) => a.status === s).length;
     return {
       threadsAccounts: demo.threadsAccounts.length,
       sources: demo.sources.filter((s) => s.enabled).length,
       materials: demo.materials.length,
       drafts: { draft: by("draft"), approved: by("approved"), published: by("published"), failed: by("failed") },
-      publishedLast24h: demo.drafts.filter((d) => d.status === "published").length
+      publishedLast24h: demo.drafts.filter((d) => d.status === "published").length,
+      accountIssues: { error: accBy("error"), paused: accBy("paused") }
     };
   }
   const sb = getServiceClient()!;
@@ -594,7 +598,7 @@ export async function getDashboardStats(ownerId: string): Promise<{
     const { count: c } = await build(sb.from(table).select("*", { count: "exact", head: true }).eq("owner_id", ownerId));
     return c ?? 0;
   };
-  const [threadsAccounts, sources, materials, draft, approved, published, failed, publishedLast24h] =
+  const [threadsAccounts, sources, materials, draft, approved, published, failed, publishedLast24h, accError, accPaused] =
     await Promise.all([
       count("threads_accounts"),
       count("sources", (q) => q.eq("enabled", true)),
@@ -603,9 +607,18 @@ export async function getDashboardStats(ownerId: string): Promise<{
       count("drafts", (q) => q.eq("status", "approved")),
       count("drafts", (q) => q.eq("status", "published")),
       count("drafts", (q) => q.eq("status", "failed")),
-      count("drafts", (q) => q.eq("status", "published").gte("published_at", since))
+      count("drafts", (q) => q.eq("status", "published").gte("published_at", since)),
+      count("threads_accounts", (q) => q.eq("status", "error")),
+      count("threads_accounts", (q) => q.eq("status", "paused"))
     ]);
-  return { threadsAccounts, sources, materials, drafts: { draft, approved, published, failed }, publishedLast24h };
+  return {
+    threadsAccounts,
+    sources,
+    materials,
+    drafts: { draft, approved, published, failed },
+    publishedLast24h,
+    accountIssues: { error: accError, paused: accPaused }
+  };
 }
 
 // 取某使用者啟用中的 Threads 帳號 + 解密 token（儀表板查額度用）

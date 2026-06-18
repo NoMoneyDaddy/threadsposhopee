@@ -15,6 +15,7 @@ const nav = [
   { href: "/sources", label: "監看來源" },
   { href: "/materials", label: "素材庫" },
   { href: "/drafts", label: "文案佇列" },
+  { href: "/calendar", label: "排程總覽" },
   { href: "/accounts", label: "帳號管理" }
 ];
 

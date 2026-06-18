@@ -12,36 +12,39 @@ export default function RepostButton({
   threadsAccounts: ThreadsAccount[];
 }) {
   const router = useRouter();
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
   const [accId, setAccId] = useState(threadsAccounts[0]?.id ?? "");
   const [msg, setMsg] = useState<string | null>(null);
 
-  async function repost() {
+  async function repost(action: "draft" | "queue") {
     if (!accId) {
       setMsg("請先建立 Threads 帳號");
       return;
     }
-    setBusy(true);
+    setBusy(action);
     setMsg(null);
     try {
       const res = await fetch("/api/materials/repost", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ material_id: materialId, threads_account_id: accId })
+        body: JSON.stringify({ material_id: materialId, threads_account_id: accId, action })
       });
       const json = await res.json();
       if (!json.ok) throw new Error(json.error);
-      setMsg("✅ 已產生草稿");
+      const slot = json.scheduledAt
+        ? new Date(json.scheduledAt).toLocaleString("zh-TW", { timeZone: "Asia/Taipei", dateStyle: "short", timeStyle: "short" })
+        : "";
+      setMsg(action === "queue" ? `✅ 已排入佇列（${slot}）` : "✅ 已產生草稿");
       router.refresh();
     } catch (e) {
       setMsg(`❌ ${e instanceof Error ? e.message : String(e)}`);
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   }
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       {threadsAccounts.length > 1 && (
         <select className="rounded border px-2 py-1 text-xs" value={accId} onChange={(e) => setAccId(e.target.value)}>
           {threadsAccounts.map((a) => (
@@ -52,11 +55,18 @@ export default function RepostButton({
         </select>
       )}
       <button
-        onClick={repost}
-        disabled={busy}
-        className="rounded border px-3 py-1 text-xs text-shopee hover:bg-orange-50 disabled:opacity-50"
+        onClick={() => repost("queue")}
+        disabled={!!busy}
+        className="rounded border border-shopee/40 px-3 py-1 text-xs text-shopee hover:bg-orange-50 disabled:opacity-50"
       >
-        {busy ? "…" : "再排一篇"}
+        {busy === "queue" ? "…" : "再排一篇（進佇列）"}
+      </button>
+      <button
+        onClick={() => repost("draft")}
+        disabled={!!busy}
+        className="rounded border px-3 py-1 text-xs text-neutral-600 hover:bg-neutral-50 disabled:opacity-50"
+      >
+        {busy === "draft" ? "…" : "存草稿"}
       </button>
       {msg && <span className="text-xs text-neutral-500">{msg}</span>}
     </div>

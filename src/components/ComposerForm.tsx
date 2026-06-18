@@ -3,8 +3,10 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ThreadsAccount, Material } from "@/lib/types";
+import ThreadsPreview, { CharCount } from "@/components/ThreadsPreview";
 
 const input = "w-full rounded-md border px-3 py-2 text-sm";
+const THREADS_LIMIT = 500;
 
 export default function ComposerForm({ threadsAccounts }: { threadsAccounts: ThreadsAccount[] }) {
   const router = useRouter();
@@ -43,6 +45,11 @@ export default function ComposerForm({ threadsAccounts }: { threadsAccounts: Thr
 
   async function submit(action: "publish" | "schedule" | "draft") {
     if (!material) return;
+    // 超過 Threads 500 字上限時，發布/排程會被 API 拒；存草稿仍允許讓使用者之後修
+    if (action !== "draft" && [...mainText].length > THREADS_LIMIT) {
+      setMsg(`正文超過 ${THREADS_LIMIT} 字上限，請先精簡`);
+      return;
+    }
     const targetAccountId = accountId || threadsAccounts[0]?.id;
     if (!targetAccountId) {
       setMsg("請先選擇發文帳號（或到帳號管理新增）");
@@ -136,13 +143,26 @@ export default function ComposerForm({ threadsAccounts }: { threadsAccounts: Thr
             </div>
           </div>
 
-          <textarea className={input} rows={3} value={mainText} onChange={(e) => setMainText(e.target.value)} placeholder="正文" />
+          <div>
+            <textarea className={input} rows={3} value={mainText} onChange={(e) => setMainText(e.target.value)} placeholder="正文" />
+            <div className="mt-1 flex justify-end">
+              <CharCount text={mainText} limit={THREADS_LIMIT} />
+            </div>
+          </div>
           <textarea
             className={input + " text-xs"}
             rows={2}
             value={replyText}
             onChange={(e) => setReplyText(e.target.value)}
             placeholder="留言區（含分潤連結）"
+          />
+
+          <ThreadsPreview
+            accountLabel={threadsAccounts.find((a) => a.id === (accountId || threadsAccounts[0]?.id))?.label}
+            mainText={mainText}
+            replyText={replyText}
+            mediaUrl={material.cloudinary_media_url}
+            mediaType={material.media_type}
           />
 
           <div className="flex flex-wrap items-center gap-2">

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { updateDraftStatus, getDraft } from "@/lib/store";
+import { updateDraftStatus, getDraft, getThreadsCredentials } from "@/lib/store";
+import { publishToThreads } from "@/services/threads/publish";
 import { isDemoMode } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
@@ -28,15 +29,27 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, demo: true });
     }
 
-    // 正式模式：交給發布服務（需要解密 token、Cloudinary 中轉等）
+    // 正式模式：解密 token → 用已中轉的 Cloudinary 媒體發到 Threads（連結放留言）
     await updateDraftStatus(id, "publishing");
     try {
       const draft = await getDraft(id);
       if (!draft) throw new Error("找不到草稿");
-      // TODO: 取出 threads_account token、Cloudinary 中轉媒體後呼叫 publishToThreads()
-      // 這裡先保守標記，待帳號憑證接上後啟用真實發布。
-      await updateDraftStatus(id, "approved");
-      return NextResponse.json({ ok: true, note: "已核准，待接上 Threads 憑證後自動發布" });
+      if (!draft.threads_account_id) throw new Error("草稿未綁定 Threads 帳號");
+
+      const creds = await getThreadsCredentials(draft.threads_account_id);
+      if (!creds) throw new Error("找不到 Threads 帳號憑證（請先設定 access token）");
+
+      const { postId } = await publishToThreads({
+        threadsUserId: creds.threadsUserId,
+        accessToken: creds.accessToken,
+        text: draft.main_text ?? "",
+        mediaUrl: draft.cloudinary_media_url,
+        mediaType: (draft.media_type as "image" | "video" | "none") ?? "none",
+        replyText: draft.reply_text
+      });
+
+      await updateDraftStatus(id, "published", { published_post_id: postId });
+      return NextResponse.json({ ok: true, postId });
     } catch (e: any) {
       await updateDraftStatus(id, "failed", { error: e.message });
       return NextResponse.json({ ok: false, error: e.message }, { status: 500 });

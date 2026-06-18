@@ -4,6 +4,7 @@
 import { randomUUID } from "node:crypto";
 import { getServiceClient } from "./supabase/server";
 import { isDemoMode } from "./env";
+import { decrypt } from "./crypto";
 import type { Draft, Source, ThreadsAccount, ShopeeAccount } from "./types";
 import demoData from "@/fixtures/demo-data.json";
 
@@ -20,6 +21,21 @@ export async function listThreadsAccounts(): Promise<ThreadsAccount[]> {
   const sb = getServiceClient()!;
   const { data } = await sb.from("threads_accounts").select("id,label,threads_user_id,token_expires_at,status");
   return (data ?? []) as ThreadsAccount[];
+}
+
+// 取出 Threads 帳號的發文憑證（解密後）。僅伺服器端使用，Demo 模式回 null。
+export async function getThreadsCredentials(
+  id: string
+): Promise<{ threadsUserId: string; accessToken: string } | null> {
+  if (isDemoMode) return null;
+  const sb = getServiceClient()!;
+  const { data } = await sb
+    .from("threads_accounts")
+    .select("threads_user_id, access_token_enc")
+    .eq("id", id)
+    .maybeSingle();
+  if (!data?.access_token_enc) return null;
+  return { threadsUserId: data.threads_user_id, accessToken: decrypt(data.access_token_enc) };
 }
 
 export async function listShopeeAccounts(): Promise<ShopeeAccount[]> {

@@ -26,6 +26,11 @@ export const env = {
 
   cronSecret: process.env.CRON_SECRET ?? "",
 
+  // Threads OAuth（一鍵連發文帳號，取代手貼 token）
+  threadsAppId: process.env.THREADS_APP_ID ?? "",
+  threadsAppSecret: process.env.THREADS_APP_SECRET ?? "",
+  threadsRedirectUri: process.env.THREADS_REDIRECT_URI ?? "",
+
   // owner（管理者）email：只有此帳號能用爬蟲 + 你的 Shopee 分潤金鑰；其他人是 member
   ownerEmail: (process.env.OWNER_EMAIL ?? "").toLowerCase(),
 

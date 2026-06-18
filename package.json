@@ -9,6 +9,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test $(find src -name '*.test.ts')",
     "pipeline:demo": "tsx scripts/run-pipeline.ts"
   },
   "dependencies": {

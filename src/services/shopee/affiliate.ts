@@ -16,6 +16,15 @@ async function callShopee(appId: string, secret: string, body: object): Promise<
   return json.data;
 }
 
+// 組出帶追蹤識別的 subIds（最多 5 個）：base + 來源帳號 + 商品 item_id。
+// 蝦皮分潤報表會依 subId 分流統計，可看出哪個來源/商品帶來收益。
+// subId 僅允許英數，需清洗（來源含 @、商品名含中文/空白都不適合）。
+export function buildSubIds(base: string, sourceUsername: string, itemId: string): string[] {
+  const san = (s: string) => s.replace(/[^a-zA-Z0-9]/g, "").slice(0, 50);
+  const parts = [san(base) || "threadspo", san(sourceUsername), san(itemId)];
+  return parts.filter((p) => p.length > 0);
+}
+
 // 產生帶自己 subId 的分潤短連結（對應 n8n「取得分潤連結」）
 export async function generateAffiliateLink(
   appId: string,

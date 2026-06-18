@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 
 interface DashboardData {
   at: string;
@@ -97,15 +98,15 @@ export default function LiveDashboard() {
           <span className="font-semibold">⚠️ 需要注意</span>
           <span className="ml-2 inline-flex flex-wrap gap-x-4 gap-y-1">
             {issues.error > 0 && (
-              <a href="/accounts" className="underline hover:opacity-80">
+              <Link href="/accounts" className="underline hover:opacity-80">
                 {issues.error} 個帳號 token 異常（展期失敗）
-              </a>
+              </Link>
             )}
             {issues.paused > 0 && <span>{issues.paused} 個帳號已暫停</span>}
             {d.drafts.failed > 0 && (
-              <a href="/drafts" className="underline hover:opacity-80">
+              <Link href="/drafts" className="underline hover:opacity-80">
                 {d.drafts.failed} 則草稿發布失敗（可重試）
-              </a>
+              </Link>
             )}
           </span>
         </div>

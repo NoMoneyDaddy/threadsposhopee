@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { updateDraftStatus, listDrafts } from "@/lib/store";
+import { updateDraftStatus, getDraft } from "@/lib/store";
 import { isDemoMode } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
@@ -31,7 +31,7 @@ export async function POST(req: Request) {
     // 正式模式：交給發布服務（需要解密 token、Cloudinary 中轉等）
     await updateDraftStatus(id, "publishing");
     try {
-      const draft = (await listDrafts()).find((d) => d.id === id);
+      const draft = await getDraft(id);
       if (!draft) throw new Error("找不到草稿");
       // TODO: 取出 threads_account token、Cloudinary 中轉媒體後呼叫 publishToThreads()
       // 這裡先保守標記，待帳號憑證接上後啟用真實發布。

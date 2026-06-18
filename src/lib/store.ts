@@ -45,6 +45,13 @@ export async function listDrafts(): Promise<Draft[]> {
   return (data ?? []) as Draft[];
 }
 
+export async function getDraft(id: string): Promise<Draft | null> {
+  if (isDemoMode) return demo.drafts.find((d) => d.id === id) ?? null;
+  const sb = getServiceClient()!;
+  const { data } = await sb.from("drafts").select("*").eq("id", id).maybeSingle();
+  return (data as Draft) ?? null;
+}
+
 export async function createDraft(input: Partial<Draft>): Promise<Draft> {
   const draft: Draft = {
     id: randomUUID(),

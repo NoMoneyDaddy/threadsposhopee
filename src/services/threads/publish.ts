@@ -27,8 +27,28 @@ async function createContainer(input: PublishInput): Promise<string> {
   return (await res.json()).id;
 }
 
-async function publishContainer(userId: string, token: string, creationId: string): Promise<string> {
-  // 影片容器需要時間處理，正式環境應 poll status；此處簡化。
+// 影片容器是異步處理，必須等狀態 FINISHED 才能 publish，否則 API 會報錯。
+async function waitForContainerReady(creationId: string, token: string): Promise<void> {
+  const maxAttempts = 30;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const res = await fetch(`${GRAPH}/${creationId}?fields=status,error_message&access_token=${token}`);
+    if (res.ok) {
+      const json = await res.json();
+      if (json.status === "FINISHED") return;
+      if (json.status === "ERROR") throw new Error(`影片處理失敗: ${json.error_message ?? "unknown"}`);
+    }
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+  throw new Error("影片處理逾時");
+}
+
+async function publishContainer(
+  userId: string,
+  token: string,
+  creationId: string,
+  mediaType?: "image" | "video" | "none"
+): Promise<string> {
+  if (mediaType === "video") await waitForContainerReady(creationId, token);
   const params = new URLSearchParams({ access_token: token, creation_id: creationId });
   const res = await fetch(`${GRAPH}/${userId}/threads_publish`, { method: "POST", body: params });
   if (!res.ok) throw new Error(`發布失敗 ${res.status}: ${await res.text()}`);
@@ -37,7 +57,7 @@ async function publishContainer(userId: string, token: string, creationId: strin
 
 export async function publishToThreads(input: PublishInput): Promise<{ postId: string }> {
   const creationId = await createContainer(input);
-  const postId = await publishContainer(input.threadsUserId, input.accessToken, creationId);
+  const postId = await publishContainer(input.threadsUserId, input.accessToken, creationId, input.mediaType);
 
   // 自動在貼文下留言放分潤連結（提高觸及，連結不放正文）
   if (input.replyText) {

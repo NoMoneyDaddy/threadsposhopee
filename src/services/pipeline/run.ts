@@ -4,6 +4,7 @@ import { scrapeLatestPosts } from "@/services/scraper/threads";
 import { expandShopeeLink } from "@/services/shopee/expand";
 import { generateAffiliateLink, getProductName } from "@/services/shopee/affiliate";
 import { generateCopy } from "@/services/ai/provider";
+import { uploadToCloudinary } from "@/services/media/cloudinary";
 import { env, isDemoMode } from "@/lib/env";
 import { createDraft, isPostProcessed, markPostProcessed, listSources } from "@/lib/store";
 import type { Source } from "@/lib/types";
@@ -80,7 +81,17 @@ export async function runSourcePipeline(source: Source): Promise<PipelineResult>
       mediaType: post.mediaType
     });
 
-    // 4) 存草稿（進審核佇列；auto_publish 由排程另行處理）
+    // 4) 媒體立即中轉到 Cloudinary（Threads CDN 連結約 24h 失效，審核拖延會發布失敗）
+    let cloudinaryMediaUrl = post.mediaUrl;
+    if (!isDemoMode && post.mediaUrl && post.mediaType !== "none") {
+      try {
+        cloudinaryMediaUrl = await uploadToCloudinary(post.mediaUrl, post.mediaType);
+      } catch (e: any) {
+        result.notes.push(`Cloudinary 上傳失敗（暫用原連結）：${e.message}`);
+      }
+    }
+
+    // 5) 存草稿（進審核佇列；auto_publish 由排程另行處理）
     const draft = await createDraft({
       source_id: source.id,
       threads_account_id: source.threads_account_id,
@@ -90,7 +101,7 @@ export async function runSourcePipeline(source: Source): Promise<PipelineResult>
       shopee_short_link: shortLink,
       media_type: post.mediaType,
       source_media_url: post.mediaUrl,
-      cloudinary_media_url: post.mediaUrl, // Demo 先直接沿用；正式接 Cloudinary 中轉
+      cloudinary_media_url: cloudinaryMediaUrl,
       main_text: copy.mainText,
       reply_text: copy.replyText,
       ai_raw: copy.raw,

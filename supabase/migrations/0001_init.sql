@@ -119,11 +119,18 @@ create trigger trg_drafts_updated before update on drafts
   for each row execute function set_updated_at();
 
 -- ── Row Level Security：每個使用者只能看自己的資料 ──────────────
+-- processed_posts / metrics 僅後端 service-role 使用：啟用 RLS 但不建 policy，
+-- 即可完全阻斷 anon key 存取，且不影響後端（service role 繞過 RLS）。
+alter table profiles enable row level security;
 alter table threads_accounts enable row level security;
 alter table shopee_accounts enable row level security;
 alter table sources enable row level security;
 alter table drafts enable row level security;
+alter table processed_posts enable row level security;
+alter table metrics enable row level security;
 
+create policy "own_profiles" on profiles
+  using (id = auth.uid()) with check (id = auth.uid());
 create policy "own_threads_accounts" on threads_accounts
   using (owner_id = auth.uid()) with check (owner_id = auth.uid());
 create policy "own_shopee_accounts" on shopee_accounts

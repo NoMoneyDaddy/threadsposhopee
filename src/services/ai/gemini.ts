@@ -31,5 +31,13 @@ export async function generateWithGemini(
   });
   if (!res.ok) throw new Error(`Gemini ${res.status}: ${await res.text()}`);
   const json = await res.json();
-  return json?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+  const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) {
+    const finishReason = json?.candidates?.[0]?.finishReason;
+    if (finishReason && finishReason !== "STOP") {
+      throw new Error(`Gemini 生成中止，原因: ${finishReason}`);
+    }
+    throw new Error("Gemini 回傳空內容（可能被安全過濾器攔截）");
+  }
+  return text;
 }

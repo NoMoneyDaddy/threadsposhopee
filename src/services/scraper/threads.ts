@@ -10,8 +10,9 @@ export interface ScrapedPost {
   shopeeLinks: string[];
 }
 
-// 抓取蝦皮短連結（s.shopee.tw / shope.ee）
-const SHOPEE_SHORT_RE = /(https?:\/\/(?:s\.shopee\.tw|shope\.ee)\/[a-zA-Z0-9]+)/g;
+// 抓取蝦皮連結：短連結（s.shopee.tw / shope.ee）或完整商品網址（shopee.tw/...）
+const SHOPEE_SHORT_RE =
+  /(https?:\/\/(?:s\.shopee\.tw|shope\.ee)\/[a-zA-Z0-9]+|https?:\/\/shopee\.tw\/[^\s"'()]+)/g;
 
 // 把 Apify/Threads 巢狀 JSON 攤平成 ScrapedPost[]（對應 n8n「結構化資料」節點）
 export function parseThreadPayload(payload: any): ScrapedPost[] {

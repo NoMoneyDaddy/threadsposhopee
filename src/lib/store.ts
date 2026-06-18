@@ -378,6 +378,73 @@ export async function getAccountPublishState(
   };
 }
 
+// 儀表板統計：各表數量 + 草稿狀態漏斗 + 近24h已發
+export async function getDashboardStats(): Promise<{
+  threadsAccounts: number;
+  sources: number;
+  materials: number;
+  drafts: { draft: number; approved: number; published: number; failed: number };
+  publishedLast24h: number;
+}> {
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  if (isDemoMode) {
+    const by = (s: string) => demo.drafts.filter((d) => d.status === s).length;
+    return {
+      threadsAccounts: demo.threadsAccounts.length,
+      sources: demo.sources.filter((s) => s.enabled).length,
+      materials: demo.materials.length,
+      drafts: { draft: by("draft"), approved: by("approved"), published: by("published"), failed: by("failed") },
+      publishedLast24h: demo.drafts.filter((d) => d.status === "published").length
+    };
+  }
+  const sb = getServiceClient()!;
+  const count = async (table: string, build: (q: any) => any = (q) => q): Promise<number> => {
+    const { count: c } = await build(sb.from(table).select("*", { count: "exact", head: true }));
+    return c ?? 0;
+  };
+  const [threadsAccounts, sources, materials, draft, approved, published, failed, publishedLast24h] =
+    await Promise.all([
+      count("threads_accounts"),
+      count("sources", (q) => q.eq("enabled", true)),
+      count("materials"),
+      count("drafts", (q) => q.eq("status", "draft")),
+      count("drafts", (q) => q.eq("status", "approved")),
+      count("drafts", (q) => q.eq("status", "published")),
+      count("drafts", (q) => q.eq("status", "failed")),
+      count("drafts", (q) => q.eq("status", "published").gte("published_at", since))
+    ]);
+  return {
+    threadsAccounts,
+    sources,
+    materials,
+    drafts: { draft, approved, published, failed },
+    publishedLast24h
+  };
+}
+
+// 取所有啟用中的 Threads 帳號 + 解密 token（給儀表板查 Threads 額度用，owner only）
+export async function listActiveThreadsCredentials(): Promise<
+  { label: string; threadsUserId: string; accessToken: string }[]
+> {
+  if (isDemoMode) return [];
+  const sb = getServiceClient()!;
+  const { data } = await sb
+    .from("threads_accounts")
+    .select("label, threads_user_id, access_token_enc, status")
+    .eq("status", "active");
+  return (data ?? [])
+    .filter((r) => r.access_token_enc)
+    .map((r) => {
+      try {
+        return { label: r.label, threadsUserId: r.threads_user_id, accessToken: decrypt(r.access_token_enc) };
+      } catch (e) {
+        console.error(`解密帳號 ${r.label} 的 token 失敗:`, e);
+        return null;
+      }
+    })
+    .filter((x): x is { label: string; threadsUserId: string; accessToken: string } => x !== null);
+}
+
 // 去重：來源貼文是否已處理過
 export async function isPostProcessed(sourceId: string, postId: string): Promise<boolean> {
   if (isDemoMode) {

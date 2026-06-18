@@ -1,4 +1,5 @@
 import DraftCard from "@/components/DraftCard";
+import BulkDraftBar from "@/components/BulkDraftBar";
 import { listDrafts } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
 
@@ -7,6 +8,7 @@ export const dynamic = "force-dynamic";
 export default async function DraftsPage() {
   const user = await getCurrentUser();
   const drafts = await listDrafts(user?.id ?? "demo-user");
+  const pendingIds = drafts.filter((d) => d.status === "draft").map((d) => d.id);
 
   return (
     <div className="space-y-4">
@@ -14,6 +16,8 @@ export default async function DraftsPage() {
       <p className="text-sm text-neutral-500">
         AI 生成的草稿在此審核。可直接編輯文案、AI 重寫、核准發布或刪除。分潤連結會自動放留言區。
       </p>
+
+      <BulkDraftBar draftIds={pendingIds} />
 
       <div className="grid gap-4 md:grid-cols-2">
         {drafts.map((d) => (

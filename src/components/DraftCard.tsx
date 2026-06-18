@@ -110,6 +110,15 @@ export default function DraftCard({ draft }: { draft: Draft }) {
           >
             {busy === "publish" ? "發布中…" : "核准並發布"}
           </button>
+          {(draft.status === "failed" || draft.status === "publishing") && (
+            <button
+              disabled={!!busy}
+              onClick={() => call("retry")}
+              className="rounded border border-amber-300 px-3 py-1 text-xs text-amber-700 hover:bg-amber-50 disabled:opacity-50"
+            >
+              {busy === "retry" ? "重置中…" : "重試（重排）"}
+            </button>
+          )}
           <button disabled={!!busy} onClick={() => setEditing(true)} className="rounded border px-3 py-1 text-xs hover:bg-neutral-50">
             編輯
           </button>
@@ -133,6 +142,9 @@ export default function DraftCard({ draft }: { draft: Draft }) {
             刪除
           </button>
         </div>
+      )}
+      {draft.status === "failed" && draft.error && (
+        <p className="mt-2 rounded bg-red-50 p-2 text-xs text-red-600">發布失敗：{draft.error}</p>
       )}
       {msg && <p className="mt-2 text-xs text-red-500">❌ {msg}</p>}
     </div>

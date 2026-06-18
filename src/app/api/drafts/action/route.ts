@@ -91,5 +91,14 @@ export async function POST(req: Request) {
     }
   }
 
+  // 重試：把卡在 publishing（程序中斷）或 failed 的草稿重置回 approved，重新進發文佇列
+  if (action === "retry") {
+    if (draft.status !== "failed" && draft.status !== "publishing") {
+      return NextResponse.json({ ok: false, error: "只有失敗或卡住的草稿可重試" }, { status: 400 });
+    }
+    await updateDraftStatus(id, "approved", { error: null });
+    return NextResponse.json({ ok: true });
+  }
+
   return NextResponse.json({ ok: false, error: "未知動作" }, { status: 400 });
 }

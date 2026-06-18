@@ -10,6 +10,7 @@ export const metadata: Metadata = {
 };
 
 const nav = [
+  { href: "/compose", label: "快速發文" },
   { href: "/", label: "儀表板" },
   { href: "/sources", label: "監看來源" },
   { href: "/materials", label: "素材庫" },

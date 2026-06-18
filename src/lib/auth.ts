@@ -38,9 +38,19 @@ export async function getOwnerUserId(): Promise<string | null> {
   if (!env.ownerEmail) return null;
   const sb = getServiceClient();
   if (!sb) return null;
-  // 用 admin API 依 email 找 owner
-  const { data } = await sb.auth.admin.listUsers();
-  const owner = data?.users.find((u) => u.email?.toLowerCase() === env.ownerEmail);
-  cachedOwnerId = owner?.id ?? null;
-  return cachedOwnerId;
+  // 用 admin API 依 email 找 owner；分頁處理避免 owner 不在第一頁
+  for (let page = 1; page <= 20; page++) {
+    const { data, error } = await sb.auth.admin.listUsers({ page, perPage: 200 });
+    if (error) {
+      console.error("getOwnerUserId listUsers 失敗:", error.message);
+      return null;
+    }
+    const owner = data.users.find((u) => u.email?.toLowerCase() === env.ownerEmail);
+    if (owner) {
+      cachedOwnerId = owner.id;
+      return cachedOwnerId;
+    }
+    if (data.users.length < 200) break; // 最後一頁
+  }
+  return null;
 }

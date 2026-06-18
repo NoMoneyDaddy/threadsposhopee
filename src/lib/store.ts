@@ -442,11 +442,13 @@ export async function getAccountPublishState(
     };
   }
   const sb = getServiceClient()!;
-  const { data: acc } = await sb
+  const { data: acc, error: accError } = await sb
     .from("threads_accounts")
     .select("status")
     .eq("id", threadsAccountId)
     .maybeSingle();
+  if (accError) throw accError;
+  if (!acc) throw new Error(`找不到 ID 為 ${threadsAccountId} 的 Threads 帳號`);
   const { data: latest } = await sb
     .from("drafts")
     .select("published_at")
@@ -463,7 +465,7 @@ export async function getAccountPublishState(
   return {
     lastPublishedAt: latest?.[0]?.published_at ?? null,
     publishedLast24h: count ?? 0,
-    accountStatus: acc?.status ?? "active"
+    accountStatus: acc.status
   };
 }
 

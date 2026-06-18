@@ -11,26 +11,30 @@ export async function refreshExpiringTokens(): Promise<{
   details: { label: string; ok: boolean; error?: string }[];
 }> {
   const accounts = await listThreadsTokensToRefresh();
-  const details: { label: string; ok: boolean; error?: string }[] = [];
-  let refreshed = 0;
-  let failed = 0;
 
-  for (const acc of accounts) {
-    try {
-      const { accessToken, expiresInSec } = await refreshLongLivedToken(acc.accessToken);
-      // 防禦 expires_in 缺失/NaN，預設 60 天
-      const seconds = typeof expiresInSec === "number" && !Number.isNaN(expiresInSec) ? expiresInSec : 60 * 24 * 60 * 60;
-      const expiresAt = new Date(Date.now() + seconds * 1000).toISOString();
-      await updateThreadsToken(acc.id, accessToken, expiresAt);
-      refreshed++;
-      details.push({ label: acc.label, ok: true });
-    } catch (e) {
-      failed++;
-      const error = e instanceof Error ? e.message : String(e);
-      await markThreadsAccountError(acc.id).catch(() => {});
-      details.push({ label: acc.label, ok: false, error });
-    }
-  }
+  // 並行展期，避免帳號多時序列累加超過 maxDuration(60s)
+  const details = await Promise.all(
+    accounts.map(async (acc) => {
+      try {
+        const { accessToken, expiresInSec } = await refreshLongLivedToken(acc.accessToken);
+        if (!accessToken) throw new Error("API 回傳的 accessToken 為空");
+        // 防禦 expires_in 缺失/NaN/非正數，預設 60 天
+        const seconds =
+          typeof expiresInSec === "number" && !Number.isNaN(expiresInSec) && expiresInSec > 0
+            ? expiresInSec
+            : 60 * 24 * 60 * 60;
+        const expiresAt = new Date(Date.now() + seconds * 1000).toISOString();
+        await updateThreadsToken(acc.id, accessToken, expiresAt);
+        return { label: acc.label, ok: true as const };
+      } catch (e) {
+        const error = e instanceof Error ? e.message : String(e);
+        await markThreadsAccountError(acc.id).catch(() => {});
+        return { label: acc.label, ok: false as const, error };
+      }
+    })
+  );
 
+  const refreshed = details.filter((d) => d.ok).length;
+  const failed = details.length - refreshed;
   return { checked: accounts.length, refreshed, failed, details };
 }

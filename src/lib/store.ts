@@ -324,13 +324,14 @@ export async function setSourceEnabled(id: string, ownerId: string, enabled: boo
     return true;
   }
   const sb = getServiceClient()!;
-  const { data } = await sb
+  const { data, error } = await sb
     .from("sources")
     .update({ enabled })
     .eq("id", id)
     .eq("owner_id", ownerId)
     .select("id")
     .maybeSingle();
+  if (error) throw error;
   return Boolean(data);
 }
 
@@ -342,7 +343,14 @@ export async function deleteSource(id: string, ownerId: string): Promise<boolean
     return true;
   }
   const sb = getServiceClient()!;
-  const { data } = await sb.from("sources").delete().eq("id", id).eq("owner_id", ownerId).select("id").maybeSingle();
+  const { data, error } = await sb
+    .from("sources")
+    .delete()
+    .eq("id", id)
+    .eq("owner_id", ownerId)
+    .select("id")
+    .maybeSingle();
+  if (error) throw error;
   return Boolean(data);
 }
 
@@ -359,13 +367,14 @@ export async function setThreadsAccountStatus(
     return true;
   }
   const sb = getServiceClient()!;
-  const { data } = await sb
+  const { data, error } = await sb
     .from("threads_accounts")
     .update({ status })
     .eq("id", id)
     .eq("owner_id", ownerId)
     .select("id")
     .maybeSingle();
+  if (error) throw error;
   return Boolean(data);
 }
 
@@ -377,13 +386,14 @@ export async function deleteThreadsAccount(id: string, ownerId: string): Promise
     return true;
   }
   const sb = getServiceClient()!;
-  const { data } = await sb
+  const { data, error } = await sb
     .from("threads_accounts")
     .delete()
     .eq("id", id)
     .eq("owner_id", ownerId)
     .select("id")
     .maybeSingle();
+  if (error) throw error;
   return Boolean(data);
 }
 
@@ -395,13 +405,14 @@ export async function deleteShopeeAccount(id: string, ownerId: string): Promise<
     return true;
   }
   const sb = getServiceClient()!;
-  const { data } = await sb
+  const { data, error } = await sb
     .from("shopee_accounts")
     .delete()
     .eq("id", id)
     .eq("owner_id", ownerId)
     .select("id")
     .maybeSingle();
+  if (error) throw error;
   return Boolean(data);
 }
 

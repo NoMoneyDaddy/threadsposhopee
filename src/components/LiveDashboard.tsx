@@ -91,8 +91,39 @@ export default function LiveDashboard() {
   const d = data.stats;
   const issues = d.accountIssues ?? { error: 0, paused: 0 };
   const needsAttention = issues.error > 0 || d.drafts.failed > 0 || issues.paused > 0;
+  // 核心流程未走完（沒帳號、沒素材、或未曾發布）時，顯示上手引導，直到三步都完成才隱藏
+  const setupIncomplete = d.threadsAccounts === 0 || d.materials === 0 || d.drafts.published === 0;
+  const steps = [
+    { done: d.threadsAccounts > 0, label: "連結 Threads 發文帳號", href: "/accounts", cta: "去連結" },
+    { done: d.materials > 0, label: "貼蝦皮連結，產生第一則文案", href: "/compose", cta: "去發文" },
+    { done: d.drafts.published > 0, label: "審核並發布（或排程）", href: "/drafts", cta: "看佇列" }
+  ];
   return (
     <div className="space-y-6">
+      {setupIncomplete && (
+        <div className="rounded-lg border border-shopee/30 bg-orange-50 p-5">
+          <h2 className="mb-3 font-semibold text-neutral-800">🚀 開始使用（3 步驟）</h2>
+          <ol className="space-y-2">
+            {steps.map((s, i) => (
+              <li key={s.href} className="flex items-center gap-3 text-sm">
+                <span
+                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs ${
+                    s.done ? "bg-green-500 text-white" : "bg-white text-neutral-500 ring-1 ring-neutral-300"
+                  }`}
+                >
+                  {s.done ? "✓" : i + 1}
+                </span>
+                <span className={s.done ? "text-neutral-400 line-through" : "text-neutral-700"}>{s.label}</span>
+                {!s.done && (
+                  <Link href={s.href} className="ml-auto rounded-md bg-shopee px-3 py-1 text-xs font-medium text-white hover:opacity-90">
+                    {s.cta}
+                  </Link>
+                )}
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
       {needsAttention && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
           <span className="font-semibold">⚠️ 需要注意</span>

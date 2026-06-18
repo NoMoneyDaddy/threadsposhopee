@@ -72,7 +72,7 @@ npm run pipeline:demo
      ```bash
      curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<你的網域>/api/cron/refresh-tokens
      ```
-   - `CRON_SECRET` 三邊要一致；生產環境若沒設，這些端點都會回 500 擋掉（安全保護）。
+   - `CRON_SECRET` 呼叫端與伺服器端要一致；生產環境若沒設，這些端點都會回 500 擋掉（安全保護）。
 
 ### 連 Threads 發文帳號（OAuth，免手貼 token）
 1. 在 [Meta 開發者後台](https://developers.facebook.com/) 建立含 **Threads API** 的 App，取得 App ID / Secret。

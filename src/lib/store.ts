@@ -299,6 +299,30 @@ export async function createDraft(input: Partial<Draft>): Promise<Draft> {
   return data as Draft;
 }
 
+// 編輯草稿（人工修改文案等），限本人
+export async function updateDraft(id: string, ownerId: string, patch: Partial<Draft>): Promise<Draft | null> {
+  if (isDemoMode) {
+    const d = demo.drafts.find((x) => x.id === id);
+    if (d) Object.assign(d, patch);
+    return d ?? null;
+  }
+  const sb = getServiceClient()!;
+  const { data } = await sb.from("drafts").update(patch).eq("id", id).eq("owner_id", ownerId).select().maybeSingle();
+  return (data as Draft) ?? null;
+}
+
+// 刪除草稿，限本人
+export async function deleteDraft(id: string, ownerId: string): Promise<boolean> {
+  if (isDemoMode) {
+    const i = demo.drafts.findIndex((x) => x.id === id);
+    if (i >= 0) demo.drafts.splice(i, 1);
+    return i >= 0;
+  }
+  const sb = getServiceClient()!;
+  const { error } = await sb.from("drafts").delete().eq("id", id).eq("owner_id", ownerId);
+  return !error;
+}
+
 export async function updateDraftStatus(id: string, status: Draft["status"], patch: Partial<Draft> = {}) {
   if (isDemoMode) {
     const d = demo.drafts.find((x) => x.id === id);

@@ -2,7 +2,8 @@
 # 預設只審「目標為預設分支」的 PR；本 repo 預設分支是舊的 claude/... 分支，
 # 但實際主線是 main，因此明確指定要自動審 base 為 main（與 claude/*）的 PR。
 # 文件：https://docs.coderabbit.ai/getting-started/configure-coderabbit
-language: zh-TW
+# 注意：CodeRabbit 的 language 只支援 zh / zh-CN（無繁中選項）
+language: zh
 reviews:
   profile: chill
   request_changes_workflow: false

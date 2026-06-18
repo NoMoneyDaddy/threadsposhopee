@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import { getServiceClient } from "./supabase/server";
 import { isDemoMode } from "./env";
 import { decrypt, encrypt } from "./crypto";
-import type { Draft, Source, ThreadsAccount, ShopeeAccount } from "./types";
+import type { Draft, Material, Source, ThreadsAccount, ShopeeAccount } from "./types";
 import demoData from "@/fixtures/demo-data.json";
 
 // ── Demo 記憶體狀態（程序重啟即清空）──────────────────────────
@@ -13,8 +13,106 @@ const demo = {
   threadsAccounts: demoData.threadsAccounts as ThreadsAccount[],
   shopeeAccounts: demoData.shopeeAccounts as ShopeeAccount[],
   sources: demoData.sources as Source[],
-  drafts: [...(demoData.drafts as Draft[])]
+  drafts: [...(demoData.drafts as Draft[])],
+  materials: [] as Material[]
 };
+
+// ── 素材庫：以 (shop_id, item_id) 為鍵，重用分潤連結＋AI 文案＋媒體 ──────────
+export async function findMaterial(shopId: string, itemId: string): Promise<Material | null> {
+  if (isDemoMode) {
+    return demo.materials.find((m) => m.shop_id === shopId && m.item_id === itemId) ?? null;
+  }
+  const sb = getServiceClient()!;
+  const { data } = await sb
+    .from("materials")
+    .select("*")
+    .eq("shop_id", shopId)
+    .eq("item_id", itemId)
+    .maybeSingle();
+  return (data as Material) ?? null;
+}
+
+export async function getMaterial(id: string): Promise<Material | null> {
+  if (isDemoMode) return demo.materials.find((m) => m.id === id) ?? null;
+  const sb = getServiceClient()!;
+  const { data } = await sb.from("materials").select("*").eq("id", id).maybeSingle();
+  return (data as Material) ?? null;
+}
+
+export async function listMaterials(): Promise<Material[]> {
+  if (isDemoMode) return [...demo.materials];
+  const sb = getServiceClient()!;
+  const { data } = await sb.from("materials").select("*").order("created_at", { ascending: false }).limit(200);
+  return (data ?? []) as Material[];
+}
+
+export async function createMaterial(input: Partial<Material>): Promise<Material> {
+  if (isDemoMode) {
+    // demo：同商品已存在則覆寫（對應 upsert 行為）
+    const existing = demo.materials.find((m) => m.shop_id === input.shop_id && m.item_id === input.item_id);
+    if (existing) {
+      Object.assign(existing, input);
+      return existing;
+    }
+    const material = {
+      id: randomUUID(),
+      affiliate_valid: true,
+      created_at: new Date().toISOString(),
+      ...input
+    } as Material;
+    demo.materials.unshift(material);
+    return material;
+  }
+  const sb = getServiceClient()!;
+  // upsert on (shop_id,item_id)：連結失效重產時不會撞唯一鍵
+  const { data, error } = await sb
+    .from("materials")
+    .upsert({ affiliate_valid: true, ...input }, { onConflict: "shop_id,item_id" })
+    .select()
+    .single();
+  if (error) throw error;
+  return data as Material;
+}
+
+// 標記某素材的分潤連結失效（下次會重產）
+export async function markAffiliateInvalid(materialId: string): Promise<void> {
+  if (isDemoMode) {
+    const m = demo.materials.find((x) => x.id === materialId);
+    if (m) m.affiliate_valid = false;
+    return;
+  }
+  const sb = getServiceClient()!;
+  const { error } = await sb.from("materials").update({ affiliate_valid: false }).eq("id", materialId);
+  if (error) throw error;
+}
+
+// 從素材快照產生一篇草稿（重用文案/連結/媒體，不重燒 token）
+export async function createDraftFromMaterial(
+  material: Material,
+  opts: {
+    source_id?: string | null;
+    threads_account_id?: string | null;
+    source_post_id?: string | null;
+    status: Draft["status"];
+  }
+): Promise<Draft> {
+  return createDraft({
+    material_id: material.id,
+    source_id: opts.source_id ?? null,
+    threads_account_id: opts.threads_account_id ?? null,
+    source_post_id: opts.source_post_id ?? null,
+    product_name: material.product_name,
+    clean_product_url: material.clean_product_url,
+    shopee_short_link: material.affiliate_short_link,
+    media_type: material.media_type,
+    source_media_url: material.source_media_url,
+    cloudinary_media_url: material.cloudinary_media_url,
+    main_text: material.main_text,
+    reply_text: material.reply_text,
+    ai_raw: material.ai_raw,
+    status: opts.status
+  });
+}
 
 export async function listThreadsAccounts(): Promise<ThreadsAccount[]> {
   if (isDemoMode) return demo.threadsAccounts;

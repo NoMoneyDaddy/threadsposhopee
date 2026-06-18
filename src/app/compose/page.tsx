@@ -6,7 +6,12 @@ export const dynamic = "force-dynamic";
 
 export default async function ComposePage() {
   const user = await getCurrentUser();
-  const accounts = await listThreadsAccounts(user?.id ?? "demo-user");
+  if (!user) {
+    return (
+      <div className="mx-auto max-w-2xl p-4 text-center text-sm text-red-500">請先登入以使用快速發文功能。</div>
+    );
+  }
+  const accounts = await listThreadsAccounts(user.id);
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">

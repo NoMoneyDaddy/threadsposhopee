@@ -43,13 +43,20 @@ export default function ComposerForm({ threadsAccounts }: { threadsAccounts: Thr
 
   async function submit(action: "publish" | "schedule" | "draft") {
     if (!material) return;
-    if (!accountId) {
+    const targetAccountId = accountId || threadsAccounts[0]?.id;
+    if (!targetAccountId) {
       setMsg("請先選擇發文帳號（或到帳號管理新增）");
       return;
     }
-    if (action === "schedule" && !scheduledAt) {
-      setMsg("請選擇排程時間");
-      return;
+    if (action === "schedule") {
+      if (!scheduledAt) {
+        setMsg("請選擇排程時間");
+        return;
+      }
+      if (new Date(scheduledAt) <= new Date()) {
+        setMsg("排程時間必須是未來的時間");
+        return;
+      }
     }
     setBusy(action);
     setMsg(null);
@@ -59,7 +66,7 @@ export default function ComposerForm({ threadsAccounts }: { threadsAccounts: Thr
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           material_id: material.id,
-          threads_account_id: accountId,
+          threads_account_id: targetAccountId,
           main_text: mainText,
           reply_text: replyText,
           action,
@@ -109,9 +116,12 @@ export default function ComposerForm({ threadsAccounts }: { threadsAccounts: Thr
       {material && (
         <div className="space-y-3 rounded-lg border bg-white p-4">
           <div className="flex items-center gap-3">
-            {material.cloudinary_media_url && material.media_type !== "none" && (
+            {material.cloudinary_media_url && material.media_type === "image" && (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={material.cloudinary_media_url} alt="" className="h-16 w-16 rounded object-cover" />
+            )}
+            {material.cloudinary_media_url && material.media_type === "video" && (
+              <video src={material.cloudinary_media_url} className="h-16 w-16 rounded object-cover" controls />
             )}
             <div className="min-w-0">
               <div className="truncate text-sm font-medium">{material.product_name ?? "（商品）"}</div>
@@ -136,7 +146,11 @@ export default function ComposerForm({ threadsAccounts }: { threadsAccounts: Thr
           />
 
           <div className="flex flex-wrap items-center gap-2">
-            <select className="rounded-md border px-2 py-2 text-sm" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+            <select
+              className="rounded-md border px-2 py-2 text-sm"
+              value={accountId || threadsAccounts[0]?.id || ""}
+              onChange={(e) => setAccountId(e.target.value)}
+            >
               {threadsAccounts.length === 0 && <option value="">（尚無發文帳號）</option>}
               {threadsAccounts.map((a) => (
                 <option key={a.id} value={a.id}>

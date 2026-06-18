@@ -95,6 +95,7 @@ export async function createDraftFromMaterial(
     threads_account_id?: string | null;
     source_post_id?: string | null;
     status: Draft["status"];
+    scheduled_at?: string | null;
   }
 ): Promise<Draft> {
   return createDraft({
@@ -112,7 +113,8 @@ export async function createDraftFromMaterial(
     main_text: material.main_text,
     reply_text: material.reply_text,
     ai_raw: material.ai_raw,
-    status: opts.status
+    status: opts.status,
+    scheduled_at: opts.scheduled_at ?? null
   });
 }
 

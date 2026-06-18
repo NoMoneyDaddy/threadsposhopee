@@ -23,6 +23,9 @@ export const env = {
 
   cronSecret: process.env.CRON_SECRET ?? "",
 
+  // owner（管理者）email：只有此帳號能用爬蟲 + 你的 Shopee 分潤金鑰；其他人是 member
+  ownerEmail: (process.env.OWNER_EMAIL ?? "").toLowerCase(),
+
   // 發文流程的防封設定（保守預設，可用環境變數覆寫）
   // 注意：用 parseInt(x || 預設) 而非 Number()，避免空字串被解析成 0 導致防封失效
   publishMinGapMinutes: parseInt(process.env.PUBLISH_MIN_GAP_MINUTES || "240", 10), // 每帳號每篇至少間隔（分）

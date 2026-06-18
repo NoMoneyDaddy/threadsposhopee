@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import "./globals.css";
 import { isDemoMode } from "@/lib/env";
+import { getCurrentUser } from "@/lib/auth";
 
 export const metadata: Metadata = {
   title: "ThreadsPoShopee 控制台",
@@ -16,7 +17,8 @@ const nav = [
   { href: "/accounts", label: "帳號管理" }
 ];
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const user = await getCurrentUser();
   return (
     <html lang="zh-Hant">
       <body>
@@ -32,16 +34,26 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   </span>
                 )}
               </div>
-              <nav className="flex gap-1 text-sm">
-                {nav.map((n) => (
-                  <Link
-                    key={n.href}
-                    href={n.href}
-                    className="rounded-md px-3 py-1.5 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900"
-                  >
-                    {n.label}
-                  </Link>
-                ))}
+              <nav className="flex items-center gap-1 text-sm">
+                {user &&
+                  nav.map((n) => (
+                    <Link
+                      key={n.href}
+                      href={n.href}
+                      className="rounded-md px-3 py-1.5 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900"
+                    >
+                      {n.label}
+                    </Link>
+                  ))}
+                {user && (
+                  <span className="ml-2 flex items-center gap-2 border-l pl-3 text-xs text-neutral-500">
+                    {user.email}
+                    {user.isOwner && <span className="rounded bg-green-100 px-1.5 py-0.5 text-green-700">owner</span>}
+                    <form action="/auth/signout" method="post">
+                      <button className="rounded px-2 py-1 text-neutral-500 hover:bg-neutral-100">登出</button>
+                    </form>
+                  </span>
+                )}
               </nav>
             </div>
           </header>

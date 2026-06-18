@@ -425,20 +425,28 @@ export async function listApprovedDrafts(): Promise<Draft[]> {
   return (data ?? []) as Draft[];
 }
 
-// 某 Threads 帳號的發文節奏狀態（背景 worker 用）。
+// 某 Threads 帳號的發文節奏狀態 + 帳號狀態（背景 worker 用）。
+// accountStatus：active 才會被發文；error/paused（如展期失敗）會被佇列跳過。
 export async function getAccountPublishState(
   threadsAccountId: string
-): Promise<{ lastPublishedAt: string | null; publishedLast24h: number }> {
+): Promise<{ lastPublishedAt: string | null; publishedLast24h: number; accountStatus: string }> {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   if (isDemoMode) {
+    const acc = demo.threadsAccounts.find((a) => a.id === threadsAccountId);
     const published = demo.drafts.filter((d) => d.threads_account_id === threadsAccountId && d.status === "published");
     const last = published.map((d) => d.published_at ?? d.created_at).sort().pop();
     return {
       lastPublishedAt: last ?? null,
-      publishedLast24h: published.filter((d) => (d.published_at ?? d.created_at) >= since).length
+      publishedLast24h: published.filter((d) => (d.published_at ?? d.created_at) >= since).length,
+      accountStatus: acc?.status ?? "active"
     };
   }
   const sb = getServiceClient()!;
+  const { data: acc } = await sb
+    .from("threads_accounts")
+    .select("status")
+    .eq("id", threadsAccountId)
+    .maybeSingle();
   const { data: latest } = await sb
     .from("drafts")
     .select("published_at")
@@ -452,7 +460,11 @@ export async function getAccountPublishState(
     .eq("threads_account_id", threadsAccountId)
     .eq("status", "published")
     .gte("published_at", since);
-  return { lastPublishedAt: latest?.[0]?.published_at ?? null, publishedLast24h: count ?? 0 };
+  return {
+    lastPublishedAt: latest?.[0]?.published_at ?? null,
+    publishedLast24h: count ?? 0,
+    accountStatus: acc?.status ?? "active"
+  };
 }
 
 // 儀表板統計（依登入者隔離）
@@ -515,6 +527,50 @@ export async function listActiveThreadsCredentials(
       }
     })
     .filter((x): x is { label: string; threadsUserId: string; accessToken: string } => x !== null);
+}
+
+// 全域取出「即將到期」的 Threads 長期 token（worker 用，跨租戶）。
+// thresholdDays：到期前幾天內就先展期（預設 7 天）。
+export async function listThreadsTokensToRefresh(
+  thresholdDays = 7
+): Promise<{ id: string; label: string; accessToken: string }[]> {
+  if (isDemoMode) return [];
+  const sb = getServiceClient()!;
+  const cutoff = new Date(Date.now() + thresholdDays * 24 * 60 * 60 * 1000).toISOString();
+  const { data } = await sb
+    .from("threads_accounts")
+    .select("id, label, access_token_enc, token_expires_at")
+    .eq("status", "active")
+    .not("access_token_enc", "is", null)
+    .lte("token_expires_at", cutoff);
+  return (data ?? [])
+    .map((r) => {
+      try {
+        return { id: r.id, label: r.label, accessToken: decrypt(r.access_token_enc) };
+      } catch (e) {
+        console.error(`解密帳號 ${r.label} 的 token 失敗:`, e);
+        return null;
+      }
+    })
+    .filter((x): x is { id: string; label: string; accessToken: string } => x !== null);
+}
+
+// 更新某帳號的長期 token + 到期日（展期後寫回，加密存放）。
+export async function updateThreadsToken(id: string, accessToken: string, expiresAt: string): Promise<void> {
+  if (isDemoMode) return;
+  const sb = getServiceClient()!;
+  const { error } = await sb
+    .from("threads_accounts")
+    .update({ access_token_enc: encrypt(accessToken), token_expires_at: expiresAt, status: "active" })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+// 展期失敗時標記帳號為 error，讓前端看得到、停止排程它。
+export async function markThreadsAccountError(id: string): Promise<void> {
+  if (isDemoMode) return;
+  const sb = getServiceClient()!;
+  await sb.from("threads_accounts").update({ status: "error" }).eq("id", id);
 }
 
 // 去重：來源貼文是否已處理過

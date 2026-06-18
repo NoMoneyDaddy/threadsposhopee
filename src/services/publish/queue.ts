@@ -25,7 +25,7 @@ export async function runPublishQueue(): Promise<PublishResult> {
   // 以 Threads 帳號為單位控制節奏；同一次執行內累積計數
   const startTime = Date.now();
   const publishedThisRun: Record<string, number> = {};
-  const stateCache: Record<string, { lastPublishedAt: string | null; publishedLast24h: number }> = {};
+  const stateCache: Record<string, { lastPublishedAt: string | null; publishedLast24h: number; accountStatus: string }> = {};
 
   for (const draft of drafts) {
     // 接近 maxDuration(60s) 上限就停手，避免草稿卡在 publishing 狀態，留待下次排程
@@ -37,8 +37,21 @@ export async function runPublishQueue(): Promise<PublishResult> {
       continue;
     }
 
-    if (!stateCache[accId]) stateCache[accId] = await getAccountPublishState(accId);
+    // 取帳號狀態若失敗（暫時性 DB 問題、帳號不存在）→ 跳過該草稿，不讓整個佇列崩潰
+    try {
+      if (!stateCache[accId]) stateCache[accId] = await getAccountPublishState(accId);
+    } catch (e) {
+      result.skipped.push({ id: draft.id, reason: `取帳號狀態失敗：${e instanceof Error ? e.message : e}` });
+      continue;
+    }
     const state = stateCache[accId];
+
+    // 帳號非 active（如 token 展期失敗被標 error）→ 跳過，避免發文時崩潰
+    if (state.accountStatus !== "active") {
+      result.skipped.push({ id: draft.id, reason: `帳號狀態為 ${state.accountStatus}` });
+      continue;
+    }
+
     const doneThisRun = publishedThisRun[accId] ?? 0;
 
     if (doneThisRun >= env.publishBatchPerRun) {

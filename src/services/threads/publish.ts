@@ -71,8 +71,9 @@ export async function publishToThreads(input: PublishInput): Promise<{ postId: s
       const c = await fetch(`${GRAPH}/${input.threadsUserId}/threads`, { method: "POST", body: replyParams });
       const replyCreation = (await c.json()).id;
       await publishContainer(input.threadsUserId, input.accessToken, replyCreation);
-    } catch {
-      // 留言失敗不影響主貼文
+    } catch (e) {
+      // 留言失敗不影響主貼文，但記錄下來以便排查（分潤連結沒留成會少觸及）
+      console.warn(`貼文 ${postId} 的留言發布失敗:`, e instanceof Error ? e.message : e);
     }
   }
   return { postId };

@@ -105,7 +105,8 @@ export async function runSourcePipeline(source: Source): Promise<PipelineResult>
       main_text: copy.mainText,
       reply_text: copy.replyText,
       ai_raw: copy.raw,
-      status: "draft"
+      // 來源設「全自動」→ 直接 approved 進發文佇列；否則 draft 等人工核准
+      status: source.auto_publish ? "approved" : "draft"
     });
 
     await markPostProcessed(source.id, post.postId);

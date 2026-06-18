@@ -195,6 +195,91 @@ export async function updateDraftStatus(id: string, status: Draft["status"], pat
   return data as Draft;
 }
 
+// 原子性狀態更新（compare-and-swap）：只有當目前狀態 == expectedStatus 才更新。
+// 用於發文 worker 鎖定草稿，避免多個排程實例同時抓到同一篇而重複發文。
+export async function updateDraftStatusAtomic(
+  id: string,
+  status: Draft["status"],
+  expectedStatus: Draft["status"],
+  patch: Partial<Draft> = {}
+): Promise<Draft | null> {
+  if (isDemoMode) {
+    const d = demo.drafts.find((x) => x.id === id);
+    if (d && d.status === expectedStatus) {
+      Object.assign(d, { status, ...patch });
+      return d;
+    }
+    return null;
+  }
+  const sb = getServiceClient()!;
+  const { data } = await sb
+    .from("drafts")
+    .update({ status, ...patch })
+    .eq("id", id)
+    .eq("status", expectedStatus)
+    .select()
+    .maybeSingle();
+  return (data as Draft) ?? null;
+}
+
+// 發文佇列：取出可發布的草稿（已核准、且排程時間到了或未排程）
+export async function listApprovedDrafts(): Promise<Draft[]> {
+  const nowIso = new Date().toISOString();
+  if (isDemoMode) {
+    return demo.drafts
+      .filter((d) => d.status === "approved" && (!d.scheduled_at || d.scheduled_at <= nowIso))
+      .sort((a, b) => a.created_at.localeCompare(b.created_at));
+  }
+  const sb = getServiceClient()!;
+  const { data } = await sb
+    .from("drafts")
+    .select("*")
+    .eq("status", "approved")
+    .or(`scheduled_at.is.null,scheduled_at.lte.${nowIso}`)
+    .order("created_at", { ascending: true });
+  return (data ?? []) as Draft[];
+}
+
+// 某 Threads 帳號的發文節奏狀態：最後一次發文時間、近 24h 已發數（用於防封閘門）
+export async function getAccountPublishState(
+  threadsAccountId: string
+): Promise<{ lastPublishedAt: string | null; publishedLast24h: number }> {
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  if (isDemoMode) {
+    const published = demo.drafts.filter(
+      (d) => d.threads_account_id === threadsAccountId && d.status === "published"
+    );
+    const last = published
+      .map((d) => d.published_at ?? d.created_at)
+      .sort()
+      .pop();
+    return {
+      lastPublishedAt: last ?? null,
+      publishedLast24h: published.filter((d) => (d.published_at ?? d.created_at) >= since).length
+    };
+  }
+  const sb = getServiceClient()!;
+  // 只取最後一筆發文時間（不拉全量歷史）
+  const { data: latest } = await sb
+    .from("drafts")
+    .select("published_at")
+    .eq("threads_account_id", threadsAccountId)
+    .eq("status", "published")
+    .order("published_at", { ascending: false })
+    .limit(1);
+  // 近 24h 已發數用 count 聚合（head:true 不拉資料列）
+  const { count } = await sb
+    .from("drafts")
+    .select("*", { count: "exact", head: true })
+    .eq("threads_account_id", threadsAccountId)
+    .eq("status", "published")
+    .gte("published_at", since);
+  return {
+    lastPublishedAt: latest?.[0]?.published_at ?? null,
+    publishedLast24h: count ?? 0
+  };
+}
+
 // 去重：來源貼文是否已處理過
 export async function isPostProcessed(sourceId: string, postId: string): Promise<boolean> {
   if (isDemoMode) {

@@ -59,12 +59,20 @@ npm run pipeline:demo
 ### B. Zeabur（推薦給已有 Zeabur 帳號者）
 1. Zeabur → New Service → Git，選此 repo。Zeabur 會**自動偵測 Next.js**（免 Dockerfile），自動 `next build` / `next start`。
 2. 在該服務的 **Variables** 填上所有環境變數（同 `.env.example`）。
-3. 排程：`vercel.json` 在 Zeabur 不會生效，改用 **Zeabur Cron Job** 定時呼叫 `/api/cron`：
-   - 新增一個 Cron Job 服務，排程設 `*/15 * * * *`，執行：
+3. 排程：`vercel.json` 在 Zeabur 不會生效，改用 **Zeabur Cron Job**。爬取與發文是**兩條獨立排程**，各開一個 Cron Job：
+   - **爬取／產草稿**（建議每 15 分 `*/15 * * * *`）：
      ```bash
      curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<你的網域>/api/cron
      ```
-   - `CRON_SECRET` 兩邊要一致；生產環境若沒設，`/api/cron` 會直接回 500 擋掉（安全保護）。
+   - **發文**（建議每 30 分 `*/30 * * * *`，實際發幾篇由防封節奏決定）：
+     ```bash
+     curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<你的網域>/api/cron/publish
+     ```
+   - `CRON_SECRET` 兩邊要一致；生產環境若沒設，兩個端點都會回 500 擋掉（安全保護）。
+
+### 兩條流程的分工
+- **爬取** `/api/cron` → `runAllSources()`：爬來源 → 換分潤連結 → AI 文案 → 存草稿（來源設「全自動」直接 approved，否則待人工核准）。**絕不發文**。
+- **發文** `/api/cron/publish` → `runPublishQueue()`：挑「已核准」草稿，依防封節奏（`PUBLISH_MIN_GAP_MINUTES` / `PUBLISH_MAX_PER_DAY` / `PUBLISH_BATCH_PER_RUN`）逐篇發到 Threads。
 
 > 備註：原 n8n 依賴的 Zeabur「蝦皮簽名服務」已不再需要——簽名邏輯已內建進 `src/services/shopee/sign.ts`，可以把那個舊服務停掉。
 

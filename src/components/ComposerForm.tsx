@@ -43,7 +43,7 @@ export default function ComposerForm({ threadsAccounts }: { threadsAccounts: Thr
     }
   }
 
-  async function submit(action: "publish" | "schedule" | "draft") {
+  async function submit(action: "publish" | "schedule" | "draft" | "queue") {
     if (!material) return;
     // 超過 Threads 500 字上限時，發布/排程會被 API 拒；存草稿仍允許讓使用者之後修
     if (action !== "draft" && [...mainText].length > THREADS_LIMIT) {
@@ -82,7 +82,17 @@ export default function ComposerForm({ threadsAccounts }: { threadsAccounts: Thr
       });
       const json = await res.json();
       if (!json.ok) throw new Error(json.error);
-      const done = action === "publish" ? "✅ 已發布！" : action === "schedule" ? "✅ 已排程" : "✅ 已存草稿";
+      const slotTxt = json.queuedSlot
+        ? new Date(json.queuedSlot).toLocaleString("zh-TW", { timeZone: "Asia/Taipei", dateStyle: "short", timeStyle: "short" })
+        : "";
+      const done =
+        action === "publish"
+          ? "✅ 已發布！"
+          : action === "schedule"
+            ? "✅ 已排程"
+            : action === "queue"
+              ? `✅ 已加入佇列（${slotTxt}）`
+              : "✅ 已存草稿";
       setMsg(done);
       // 重置以便再發下一個
       setMaterial(null);
@@ -191,8 +201,16 @@ export default function ComposerForm({ threadsAccounts }: { threadsAccounts: Thr
             <button onClick={() => submit("publish")} disabled={!!busy} className="rounded-md bg-shopee px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
               {busy === "publish" ? "發布中…" : "立即發布"}
             </button>
+            <button
+              onClick={() => submit("queue")}
+              disabled={!!busy}
+              title="自動排進下一個空的每日發文時段"
+              className="rounded-md border border-shopee/40 px-4 py-2 text-sm text-shopee hover:bg-orange-50 disabled:opacity-50"
+            >
+              {busy === "queue" ? "排入中…" : "加入佇列"}
+            </button>
             <button onClick={() => submit("schedule")} disabled={!!busy} className="rounded-md border px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50">
-              排程發布
+              指定時間
             </button>
             <button onClick={() => submit("draft")} disabled={!!busy} className="rounded-md border px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50">
               存草稿

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { Draft } from "@/lib/types";
+import { CharCount } from "@/components/ThreadsPreview";
 
 export default function DraftCard({ draft }: { draft: Draft }) {
   const router = useRouter();
@@ -65,6 +66,9 @@ export default function DraftCard({ draft }: { draft: Draft }) {
             onChange={(e) => setMainText(e.target.value)}
             placeholder="正文"
           />
+          <div className="-mt-1 flex justify-end">
+            <CharCount text={mainText} limit={500} />
+          </div>
           <textarea
             className="w-full rounded border px-2 py-1 text-xs"
             rows={2}

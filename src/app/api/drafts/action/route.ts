@@ -42,6 +42,7 @@ export async function POST(req: Request) {
       main_text: typeof body.main_text === "string" ? body.main_text : draft.main_text,
       reply_text: typeof body.reply_text === "string" ? body.reply_text : draft.reply_text
     });
+    if (!updated) return NextResponse.json({ ok: false, error: "更新草稿失敗" }, { status: 400 });
     return NextResponse.json({ ok: true, draft: updated });
   }
   if (action === "regenerate") {

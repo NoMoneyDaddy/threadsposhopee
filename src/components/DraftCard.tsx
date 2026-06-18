@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { Draft } from "@/lib/types";
 
@@ -11,6 +11,12 @@ export default function DraftCard({ draft }: { draft: Draft }) {
   const [mainText, setMainText] = useState(draft.main_text ?? "");
   const [replyText, setReplyText] = useState(draft.reply_text ?? "");
   const [msg, setMsg] = useState<string | null>(null);
+
+  // 父層資料（router.refresh / 背景更新）變動時同步本地狀態
+  useEffect(() => {
+    setMainText(draft.main_text ?? "");
+    setReplyText(draft.reply_text ?? "");
+  }, [draft.main_text, draft.reply_text]);
 
   async function call(action: string, extra: Record<string, unknown> = {}) {
     setBusy(action);
@@ -23,7 +29,7 @@ export default function DraftCard({ draft }: { draft: Draft }) {
       });
       const json = await res.json();
       if (!json.ok) throw new Error(json.error);
-      if (action === "regenerate" && json.draft) {
+      if ((action === "regenerate" || action === "edit") && json.draft) {
         setMainText(json.draft.main_text ?? "");
         setReplyText(json.draft.reply_text ?? "");
       }

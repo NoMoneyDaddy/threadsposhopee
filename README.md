@@ -49,7 +49,7 @@ npm run pipeline:demo
 
 ## 上線設定
 
-1. 建 Supabase 專案，**依序**跑 `supabase/migrations/` 下所有 SQL（`0001_init.sql` → `0006_threads_oauth_unique.sql`）
+1. 建 Supabase 專案，**依序**跑 `supabase/migrations/` 下所有 SQL（`0001_init.sql` → `0007_db_hardening.sql`）
 2. 填環境變數（Supabase、`APP_ENCRYPTION_KEY`、`OWNER_EMAIL`、Apify、Shopee、Gemini、Cloudinary、`CRON_SECRET`，以及 Threads OAuth 的 `THREADS_APP_ID/SECRET/REDIRECT_URI`）
 3. 部署（擇一）：
 
@@ -106,7 +106,7 @@ src/
     publish/queue.ts     發文佇列（防封節奏 + 跳過失效帳號）
     pipeline/run.ts      端到端編排
   lib/                 env / 加密 / 資料層 / cron 驗證 / SSRF 防護 / 型別
-supabase/migrations/   資料庫 schema（0001–0006）
+supabase/migrations/   資料庫 schema（0001–0007）
 ```
 
 ## ⚠️ 安全

@@ -504,6 +504,31 @@ export async function updateDraftStatus(id: string, status: Draft["status"], pat
   return data as Draft;
 }
 
+// 回收卡住的草稿：publishing 超過 staleMinutes（多半是程序中斷）→ 標 failed 待人工重試。
+// 保守不自動改回 approved，避免「其實已發出但 DB 沒寫到」時被重發造成雙貼。
+export async function reclaimStalePublishing(staleMinutes = 15): Promise<number> {
+  const cutoff = new Date(Date.now() - staleMinutes * 60_000).toISOString();
+  if (isDemoMode) {
+    let n = 0;
+    for (const d of demo.drafts) {
+      if (d.status === "publishing" && d.created_at < cutoff) {
+        d.status = "failed";
+        d.error = "發文程序中斷，請確認後重試";
+        n++;
+      }
+    }
+    return n;
+  }
+  const sb = getServiceClient()!;
+  const { data } = await sb
+    .from("drafts")
+    .update({ status: "failed", error: "發文程序中斷，請確認後重試" })
+    .eq("status", "publishing")
+    .lt("updated_at", cutoff)
+    .select("id");
+  return (data ?? []).length;
+}
+
 // 原子性狀態更新（compare-and-swap）：只有當目前狀態 == expectedStatus 才更新。
 export async function updateDraftStatusAtomic(
   id: string,

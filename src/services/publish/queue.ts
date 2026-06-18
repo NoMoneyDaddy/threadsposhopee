@@ -6,7 +6,8 @@ import {
   getAccountPublishState,
   getThreadsCredentials,
   updateDraftStatus,
-  updateDraftStatusAtomic
+  updateDraftStatusAtomic,
+  reclaimStalePublishing
 } from "@/lib/store";
 import { publishToThreads } from "@/services/threads/publish";
 
@@ -15,10 +16,13 @@ export interface PublishResult {
   published: { id: string; postId: string }[];
   skipped: { id: string; reason: string }[];
   failed: { id: string; error: string }[];
+  reclaimed: number;
 }
 
 export async function runPublishQueue(): Promise<PublishResult> {
-  const result: PublishResult = { considered: 0, published: [], skipped: [], failed: [] };
+  const result: PublishResult = { considered: 0, published: [], skipped: [], failed: [], reclaimed: 0 };
+  // 先回收上次中斷卡在 publishing 的草稿（標 failed 待人工重試）
+  result.reclaimed = await reclaimStalePublishing();
   const drafts = await listApprovedDrafts();
   result.considered = drafts.length;
 

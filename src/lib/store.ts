@@ -428,6 +428,26 @@ export async function listDrafts(ownerId: string): Promise<Draft[]> {
   return (data ?? []) as Draft[];
 }
 
+// 取出某使用者已占用的未來排程時刻（給「加入佇列」找下一個空時段）
+export async function listTakenScheduledSlots(ownerId: string): Promise<Set<string>> {
+  const nowIso = new Date().toISOString();
+  if (isDemoMode) {
+    return new Set(
+      demo.drafts
+        .filter((d) => d.owner_id === ownerId && d.scheduled_at && d.scheduled_at > nowIso)
+        .map((d) => d.scheduled_at as string)
+    );
+  }
+  const sb = getServiceClient()!;
+  const { data } = await sb
+    .from("drafts")
+    .select("scheduled_at")
+    .eq("owner_id", ownerId)
+    .not("scheduled_at", "is", null)
+    .gt("scheduled_at", nowIso);
+  return new Set((data ?? []).map((r) => new Date(r.scheduled_at as string).toISOString()));
+}
+
 export async function getDraft(id: string, ownerId: string): Promise<Draft | null> {
   if (isDemoMode) return demo.drafts.find((d) => d.id === id) ?? null;
   const sb = getServiceClient()!;

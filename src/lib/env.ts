@@ -39,6 +39,11 @@ export const env = {
   publishMinGapMinutes: parseInt(process.env.PUBLISH_MIN_GAP_MINUTES || "240", 10), // 每帳號每篇至少間隔（分）
   publishMaxPerDay: parseInt(process.env.PUBLISH_MAX_PER_DAY || "5", 10), // 每帳號每 24h 上限（遠低於 Threads 250）
   publishBatchPerRun: parseInt(process.env.PUBLISH_BATCH_PER_RUN || "1", 10), // 每次 cron 每帳號最多發幾篇
+  // 「加入佇列」用的每日發文時段（Asia/Taipei，HH:MM，逗號分隔）
+  publishSlots: (process.env.PUBLISH_SLOTS || "09:00,12:30,20:00")
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => /^\d{1,2}:\d{2}$/.test(s)),
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN ?? "",
   telegramChatId: process.env.TELEGRAM_CHAT_ID ?? ""
 };

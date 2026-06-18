@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
-import { getMaterial, createDraft, getThreadsCredentials, updateDraftStatus } from "@/lib/store";
+import {
+  getMaterial,
+  createDraft,
+  getThreadsCredentials,
+  updateDraftStatus,
+  listTakenScheduledSlots
+} from "@/lib/store";
 import { publishToThreads } from "@/services/threads/publish";
+import { nextOpenSlot } from "@/services/publish/slots";
 import { getCurrentUser } from "@/lib/auth";
 import { isDemoMode } from "@/lib/env";
 
@@ -19,7 +26,7 @@ export async function POST(req: Request) {
     if (!material_id || !threads_account_id) {
       return NextResponse.json({ ok: false, error: "缺少素材或發文帳號" }, { status: 400 });
     }
-    if (!["publish", "schedule", "draft"].includes(action)) {
+    if (!["publish", "schedule", "draft", "queue"].includes(action)) {
       return NextResponse.json({ ok: false, error: "不支援的發文動作" }, { status: 400 });
     }
     if (action === "schedule" && !body.scheduled_at) {
@@ -29,9 +36,18 @@ export async function POST(req: Request) {
     const material = await getMaterial(material_id, user.id);
     if (!material) return NextResponse.json({ ok: false, error: "找不到素材" }, { status: 404 });
 
-    // draft = 待審；schedule = 已核准 + 排定時間（發文 worker 到時發）；publish = 立即發
+    // queue = 自動排進下一個空時段；draft = 待審；schedule = 指定時間；publish = 立即發
+    let queuedSlot: string | null = null;
+    if (action === "queue") {
+      const taken = await listTakenScheduledSlots(user.id);
+      queuedSlot = nextOpenSlot(taken);
+      if (!queuedSlot) {
+        return NextResponse.json({ ok: false, error: "未來 30 天的時段都排滿了" }, { status: 409 });
+      }
+    }
+    // draft 待審；其餘（publish/schedule/queue）已核准
     const status = action === "draft" ? "draft" : "approved";
-    const scheduled_at = action === "schedule" ? body.scheduled_at || null : null;
+    const scheduled_at = action === "schedule" ? body.scheduled_at || null : action === "queue" ? queuedSlot : null;
 
     const draft = await createDraft({
       owner_id: user.id,
@@ -79,7 +95,7 @@ export async function POST(req: Request) {
       }
     }
 
-    return NextResponse.json({ ok: true, draft, posted: false });
+    return NextResponse.json({ ok: true, draft, posted: false, queuedSlot });
   } catch (e) {
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 500 });
   }

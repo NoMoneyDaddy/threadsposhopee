@@ -91,8 +91,8 @@ export default function LiveDashboard() {
   const d = data.stats;
   const issues = d.accountIssues ?? { error: 0, paused: 0 };
   const needsAttention = issues.error > 0 || d.drafts.failed > 0 || issues.paused > 0;
-  // 核心設定未完成（沒帳號或沒素材）時，顯示上手引導
-  const setupIncomplete = d.threadsAccounts === 0 || d.materials === 0;
+  // 核心流程未走完（沒帳號、沒素材、或未曾發布）時，顯示上手引導，直到三步都完成才隱藏
+  const setupIncomplete = d.threadsAccounts === 0 || d.materials === 0 || d.drafts.published === 0;
   const steps = [
     { done: d.threadsAccounts > 0, label: "連結 Threads 發文帳號", href: "/accounts", cta: "去連結" },
     { done: d.materials > 0, label: "貼蝦皮連結，產生第一則文案", href: "/compose", cta: "去發文" },

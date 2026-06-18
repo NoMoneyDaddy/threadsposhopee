@@ -16,7 +16,7 @@ export async function POST(req: Request) {
       default_sub_id: body.default_sub_id || undefined
     });
     return NextResponse.json({ ok: true, account });
-  } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e.message }, { status: 500 });
+  } catch (e) {
+    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 500 });
   }
 }

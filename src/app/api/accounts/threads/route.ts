@@ -17,7 +17,7 @@ export async function POST(req: Request) {
       token_expires_at: body.token_expires_at || null
     });
     return NextResponse.json({ ok: true, account });
-  } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e.message }, { status: 500 });
+  } catch (e) {
+    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 500 });
   }
 }

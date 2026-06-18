@@ -19,7 +19,7 @@ export default function SourceForm({
   const [form, setForm] = useState({
     source_username: "",
     threads_account_id: threadsAccounts[0]?.id ?? "",
-    shopee_account_id: shopeeAccounts[0]?.id ?? "",
+    shopee_account_id: "",
     poll_interval_minutes: "15",
     posts_limit: "1",
     auto_publish: false

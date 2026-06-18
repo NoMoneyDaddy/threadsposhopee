@@ -13,12 +13,15 @@ export async function POST(req: Request) {
       threads_account_id: body.threads_account_id,
       shopee_account_id: body.shopee_account_id || null,
       source_username: String(body.source_username),
-      poll_interval_minutes: body.poll_interval_minutes ? Number(body.poll_interval_minutes) : undefined,
+      poll_interval_minutes:
+        body.poll_interval_minutes && Number(body.poll_interval_minutes) > 0
+          ? Number(body.poll_interval_minutes)
+          : undefined,
       auto_publish: Boolean(body.auto_publish),
-      posts_limit: body.posts_limit ? Number(body.posts_limit) : undefined
+      posts_limit: body.posts_limit && Number(body.posts_limit) > 0 ? Number(body.posts_limit) : undefined
     });
     return NextResponse.json({ ok: true, source });
-  } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e.message }, { status: 500 });
+  } catch (e) {
+    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 500 });
   }
 }

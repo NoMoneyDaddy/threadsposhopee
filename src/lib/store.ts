@@ -133,7 +133,7 @@ export async function createSource(input: {
   const row = {
     threads_account_id: input.threads_account_id,
     shopee_account_id: input.shopee_account_id ?? null,
-    source_username: input.source_username.replace(/^@/, ""),
+    source_username: input.source_username.trim().replace(/^@/, ""),
     enabled: true,
     poll_interval_minutes: input.poll_interval_minutes ?? 15,
     auto_publish: input.auto_publish ?? false,

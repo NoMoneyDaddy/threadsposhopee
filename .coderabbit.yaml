@@ -1,0 +1,14 @@
+# CodeRabbit 設定
+# 預設只審「目標為預設分支」的 PR；本 repo 預設分支是舊的 claude/... 分支，
+# 但實際主線是 main，因此明確指定要自動審 base 為 main（與 claude/*）的 PR。
+# 文件：https://docs.coderabbit.ai/getting-started/configure-coderabbit
+language: zh-TW
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - main
+      - "claude/.*"

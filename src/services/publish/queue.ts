@@ -5,7 +5,8 @@ import {
   listApprovedDrafts,
   getAccountPublishState,
   getThreadsCredentials,
-  updateDraftStatus
+  updateDraftStatus,
+  updateDraftStatusAtomic
 } from "@/lib/store";
 import { publishToThreads } from "@/services/threads/publish";
 
@@ -22,10 +23,14 @@ export async function runPublishQueue(): Promise<PublishResult> {
   result.considered = drafts.length;
 
   // 以 Threads 帳號為單位控制節奏；同一次執行內累積計數
+  const startTime = Date.now();
   const publishedThisRun: Record<string, number> = {};
   const stateCache: Record<string, { lastPublishedAt: string | null; publishedLast24h: number }> = {};
 
   for (const draft of drafts) {
+    // 接近 maxDuration(60s) 上限就停手，避免草稿卡在 publishing 狀態，留待下次排程
+    if (Date.now() - startTime > 50000) break;
+
     const accId = draft.threads_account_id;
     if (!accId) {
       result.skipped.push({ id: draft.id, reason: "未綁定 Threads 帳號" });
@@ -55,8 +60,14 @@ export async function runPublishQueue(): Promise<PublishResult> {
       }
     }
 
+    // 原子鎖定：只有狀態仍是 approved 才搶得到；搶不到代表已被其他排程處理 → 跳過
+    const locked = await updateDraftStatusAtomic(draft.id, "publishing", "approved");
+    if (!locked) {
+      result.skipped.push({ id: draft.id, reason: "草稿已被其他程序處理" });
+      continue;
+    }
+
     try {
-      await updateDraftStatus(draft.id, "publishing");
       const nowIso = new Date().toISOString();
       let postId = "demo_" + Date.now();
 

@@ -1,5 +1,6 @@
 import { env } from "@/lib/env";
 import { assertSafePublicUrl } from "@/lib/url-guard";
+import { fetchWithTimeout } from "@/lib/http";
 
 // 直接呼叫 Gemini REST API（不額外裝 SDK）。支援把圖片/影片 URL 當多模態輸入。
 export async function generateWithGemini(
@@ -14,7 +15,7 @@ export async function generateWithGemini(
     try {
       // SSRF 防護：媒體 URL 可能來自外部來源/使用者貼上，先擋內網位址，並用正規化 href fetch（防解析歧異）
       const safeUrl = assertSafePublicUrl(mediaUrl);
-      const res = await fetch(safeUrl.href);
+      const res = await fetchWithTimeout(safeUrl.href, {}, 10000);
       const buf = Buffer.from(await res.arrayBuffer());
       const mime = res.headers.get("content-type") ?? (mediaType === "video" ? "video/mp4" : "image/jpeg");
       parts.push({ inlineData: { mimeType: mime, data: buf.toString("base64") } });
@@ -24,14 +25,14 @@ export async function generateWithGemini(
   }
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${env.geminiModel}:generateContent?key=${env.geminiApiKey}`;
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       contents: [{ role: "user", parts }],
       generationConfig: { temperature: 0.9, maxOutputTokens: 512 }
     })
-  });
+  }, 30000); // 生成較慢，放寬到 30s
   if (!res.ok) throw new Error(`Gemini ${res.status}: ${await res.text()}`);
   const json = await res.json();
   const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;

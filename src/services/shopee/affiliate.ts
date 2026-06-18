@@ -1,11 +1,12 @@
 import { buildShopeeAuth } from "./sign";
+import { fetchWithTimeout } from "@/lib/http";
 
 const SHOPEE_GQL = "https://open-api.affiliate.shopee.tw/graphql";
 
 async function callShopee(appId: string, secret: string, body: object): Promise<any> {
   const payload = JSON.stringify(body);
   const auth = buildShopeeAuth(appId, secret, payload);
-  const res = await fetch(SHOPEE_GQL, {
+  const res = await fetchWithTimeout(SHOPEE_GQL, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: auth.authorization },
     body: payload

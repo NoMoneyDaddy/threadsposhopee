@@ -1,5 +1,6 @@
 import { env, isDemoMode } from "@/lib/env";
 import sampleThread from "@/fixtures/sample-thread.json";
+import { fetchWithTimeout } from "@/lib/http";
 
 export interface ScrapedPost {
   postId: string;
@@ -62,7 +63,7 @@ export async function scrapeLatestPosts(username: string, postsLimit = 1): Promi
   }
 
   const url = `https://api.apify.com/v2/acts/${env.apifyActor.replace("/", "~")}/run-sync-get-dataset-items?token=${env.apifyToken}`;
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -73,7 +74,7 @@ export async function scrapeLatestPosts(username: string, postsLimit = 1): Promi
       search_enabled: false,
       fetch_detail_with_biolink: false
     })
-  });
+  }, 45000); // run-sync 會等爬蟲跑完，放寬到 45s
   if (!res.ok) throw new Error(`Apify 失敗: ${res.status} ${await res.text()}`);
   const dataset = await res.json();
   // Apify 回傳是 dataset items 陣列；逐筆解析後攤平

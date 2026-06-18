@@ -1,9 +1,14 @@
-import { listSources, listThreadsAccounts } from "@/lib/store";
+import { listShopeeAccounts, listSources, listThreadsAccounts } from "@/lib/store";
+import SourceForm from "@/components/SourceForm";
 
 export const dynamic = "force-dynamic";
 
 export default async function SourcesPage() {
-  const [sources, accounts] = await Promise.all([listSources(), listThreadsAccounts()]);
+  const [sources, accounts, shopee] = await Promise.all([
+    listSources(),
+    listThreadsAccounts(),
+    listShopeeAccounts()
+  ]);
   const accLabel = (id: string) => accounts.find((a) => a.id === id)?.label ?? id;
 
   return (
@@ -12,6 +17,8 @@ export default async function SourcesPage() {
       <p className="text-sm text-neutral-500">
         每個來源 = 監看一個 Threads 帳號的貼文，自動換成你的分潤連結後產出文案到指定發文帳號。
       </p>
+
+      <SourceForm threadsAccounts={accounts} shopeeAccounts={shopee} />
 
       <div className="overflow-hidden rounded-lg border bg-white">
         <table className="w-full text-sm">

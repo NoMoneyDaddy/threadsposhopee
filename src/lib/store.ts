@@ -407,9 +407,11 @@ export async function getUserCloudinary(ownerId: string): Promise<{ cloud: strin
     .maybeSingle();
   if (error) throw new Error(`讀取 Cloudinary 設定失敗：${error.message}`);
   const cloud = data?.cloudinary_cloud?.trim();
-  if (!cloud) return null; // 沒填 cloud name 視為未綁
-  // preset 沒填就用 env 預設（仍中轉到使用者自己的 cloud）
-  return { cloud, preset: data?.cloudinary_preset?.trim() || env.cloudinaryPreset };
+  const preset = data?.cloudinary_preset?.trim();
+  // cloud 與 preset 必須成對才算綁定。不可用 env 預設 preset 補：系統 preset 多半不存在於
+  // 使用者帳號，會造成「使用者 cloud + 系統 preset」上傳失敗、靜默降級回原始短效 URL。
+  if (!cloud || !preset) return null; // 視為未綁，退回 env 共用設定
+  return { cloud, preset };
 }
 
 export async function setUserCloudinary(ownerId: string, cloud: string | null, preset: string | null): Promise<void> {

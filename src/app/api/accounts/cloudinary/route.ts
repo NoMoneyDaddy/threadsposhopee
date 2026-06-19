@@ -35,8 +35,24 @@ export async function POST(req: Request) {
     if (preset && !/^[a-zA-Z0-9_-]{1,64}$/.test(preset)) {
       return NextResponse.json({ ok: false, error: "upload preset 格式不正確（僅限英數、_、-）" }, { status: 400 });
     }
-    // 清除 cloud 時 preset 也一併清掉，避免殘留半套設定
-    await setUserCloudinary(user.id, cloud || null, cloud ? preset || null : null);
+    // cloud 與 preset 必須成對：缺一就是半套設定，會造成上傳錯配或 UI 誤顯示「已清除」。
+    // 綁自己的 cloud 一定要一起填 preset：系統預設 preset 多半不存在於使用者帳號，
+    // 否則會用「使用者 cloud + 系統 preset」上傳失敗，靜默降級回原始短效 URL。
+    if (cloud && !preset) {
+      return NextResponse.json(
+        { ok: false, error: "綁定自己的 Cloudinary 需一併填 upload preset（unsigned）" },
+        { status: 400 }
+      );
+    }
+    // 只填 preset 沒填 cloud：別當成清除（會讓 UI 誤顯示「已清除」），明確擋下。
+    if (preset && !cloud) {
+      return NextResponse.json(
+        { ok: false, error: "設定 upload preset 時必須一併提供 cloud name" },
+        { status: 400 }
+      );
+    }
+    // 走到這 cloud 與 preset 同空（清除）或同非空（綁定）
+    await setUserCloudinary(user.id, cloud || null, preset || null);
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error("儲存 Cloudinary 設定失敗", e);

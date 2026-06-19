@@ -43,7 +43,7 @@ export default function CloudinaryForm({
       <div className="mb-1 font-medium">媒體雲端（Cloudinary，選填）</div>
       <p className="mb-2 text-xs text-neutral-500">
         綁你自己的 Cloudinary，素材就中轉進你的雲端（不佔共用額度）。到 Cloudinary 後台建一個 <b>unsigned</b> upload
-        preset 即可；不填則用系統共用設定。
+        preset，cloud name 與 preset <b>兩者都要填</b>；全部留空則用系統共用設定。
       </p>
       <div className="flex flex-wrap gap-2">
         <input

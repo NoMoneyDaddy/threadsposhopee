@@ -41,6 +41,7 @@ export default function AffiliateIdForm({ initial }: { initial: string | null })
         <input
           className="min-w-0 flex-1 rounded-md border px-3 py-2 text-sm"
           inputMode="numeric"
+          aria-label="Shopee affiliate_id"
           placeholder="affiliate_id（純數字，如 16308730014）"
           value={id}
           onChange={(e) => setId(e.target.value)}

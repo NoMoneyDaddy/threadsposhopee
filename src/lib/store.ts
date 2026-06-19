@@ -340,7 +340,7 @@ export async function getShopeeAffiliateId(ownerId: string): Promise<string | nu
   if (isDemoMode) return null;
   const sb = getServiceClient()!;
   const { data, error } = await sb.from("profiles").select("shopee_affiliate_id").eq("id", ownerId).maybeSingle();
-  if (error) throw error;
+  if (error) throw new Error(`讀取 shopee_affiliate_id 失敗：${error.message}`);
   return data?.shopee_affiliate_id ?? null;
 }
 
@@ -350,7 +350,7 @@ export async function setShopeeAffiliateId(ownerId: string, affiliateId: string 
   const { error } = await sb
     .from("profiles")
     .upsert({ id: ownerId, shopee_affiliate_id: affiliateId || null }, { onConflict: "id" });
-  if (error) throw error;
+  if (error) throw new Error(`儲存 shopee_affiliate_id 失敗：${error.message}`);
 }
 
 // AI 文案客製化偏好（非機密，明文 jsonb）。讀取一律經 normalizeCopyPrefs 夾成合法值。

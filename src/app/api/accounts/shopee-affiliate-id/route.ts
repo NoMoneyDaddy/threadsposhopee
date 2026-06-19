@@ -17,9 +17,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "請求格式錯誤（非合法 JSON）" }, { status: 400 });
     }
     const raw = (body as { affiliate_id?: unknown })?.affiliate_id;
-    // 容錯：複製常夾空白（如 "1630 8730 014"）→ 去掉所有空白；也接受 JSON 數字型態
-    const affiliateId = typeof raw === "string" ? raw.replace(/\s+/g, "") : typeof raw === "number" ? String(raw) : "";
-    // affiliate_id 為純數字字串；非數字直接擋下，避免組出壞連結
+    // 型別必須是 string 或 number；缺欄位/錯型別（如 {}、null）一律 400，
+    // 不可悄悄當成空字串而把既有 affiliate_id 清掉。要清除請明確傳 affiliate_id: ""。
+    if (typeof raw !== "string" && typeof raw !== "number") {
+      return NextResponse.json({ ok: false, error: "缺少或型別錯誤的 affiliate_id" }, { status: 400 });
+    }
+    // 容錯：複製常夾空白（如 "1630 8730 014"）→ 去掉所有空白
+    const affiliateId = String(raw).replace(/\s+/g, "");
+    // 純數字才放行（空字串＝明確清除）；非數字擋下，避免組出壞連結
     if (affiliateId && !/^\d{3,20}$/.test(affiliateId)) {
       return NextResponse.json({ ok: false, error: "affiliate_id 應為純數字" }, { status: 400 });
     }

@@ -17,7 +17,8 @@ import {
   getApifyCredentials,
   getShopeeCredentials,
   getGeminiKey,
-  getCopyPrefs
+  getCopyPrefs,
+  getShopeeAffiliateId
 } from "@/lib/store";
 import type { Source } from "@/lib/types";
 
@@ -59,6 +60,8 @@ export async function runSourcePipeline(source: Source, ownerId: string): Promis
   const shopeeCreds = await ownerShopeeCreds(ownerId);
   const geminiKey = await getGeminiKey(ownerId);
   const copyPrefs = await getCopyPrefs(ownerId); // 一次取出，整個迴圈重用，避免每篇重查
+  // 沒綁 Shopee API 時的後備：用 affiliate_id 自組追蹤連結
+  const affiliateId = shopeeCreds ? null : await getShopeeAffiliateId(ownerId);
   const posts = await scrapeLatestPosts(source.source_username, source.posts_limit, apify);
   result.scanned = posts.length;
 
@@ -104,7 +107,8 @@ export async function runSourcePipeline(source: Source, ownerId: string): Promis
           shopeeCreds,
           result.notes,
           geminiKey,
-          copyPrefs
+          copyPrefs,
+          affiliateId
         );
       }
 

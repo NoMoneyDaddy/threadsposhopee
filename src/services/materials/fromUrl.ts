@@ -1,7 +1,7 @@
 // 從一個蝦皮連結解析並建立素材（單筆 /api/materials 與批次共用）。
 import { expandShopeeLink } from "@/services/shopee/expand";
 import { buildMaterialForProduct } from "@/services/materials/build";
-import { findMaterial, getShopeeCredentials, getGeminiKey } from "@/lib/store";
+import { findMaterial, getShopeeCredentials, getGeminiKey, getShopeeAffiliateId } from "@/lib/store";
 import { env } from "@/lib/env";
 import type { AppUser } from "@/lib/auth";
 import type { Material } from "@/lib/types";
@@ -27,6 +27,8 @@ export async function resolveMaterialFromUrl(
   }
   // Gemini key：自綁優先，沒綁退回 env（在 generateCopy 內處理）
   const geminiKey = await getGeminiKey(ownerId);
+  // 沒綁 Shopee API 時的後備：用 affiliate_id 自組追蹤連結
+  const affiliateId = shopeeCreds ? null : await getShopeeAffiliateId(ownerId);
 
   const notes: string[] = [];
   const material = await buildMaterialForProduct(
@@ -41,7 +43,9 @@ export async function resolveMaterialFromUrl(
     ownerId,
     shopeeCreds,
     notes,
-    geminiKey
+    geminiKey,
+    undefined,
+    affiliateId
   );
   return { material, reused: false, notes };
 }

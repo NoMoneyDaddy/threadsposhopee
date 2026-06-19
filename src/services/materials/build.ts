@@ -1,7 +1,7 @@
 // 為單一商品建立素材的共用邏輯：換分潤連結(帶追蹤 subId) → 商品名 → 媒體中轉 →
 // (可選)AI 文案 → 存素材。自動爬取流程與手動建立流程共用此函式。
 import { isDemoMode } from "@/lib/env";
-import { generateAffiliateLink, getProductName, buildSubIds } from "@/services/shopee/affiliate";
+import { generateAffiliateLink, getProductName, buildSubIds, buildAffiliateRedirectLink } from "@/services/shopee/affiliate";
 import { generateCopy } from "@/services/ai/provider";
 import { uploadToCloudinary } from "@/services/media/cloudinary";
 import { createMaterial, getCopyPrefs } from "@/lib/store";
@@ -27,7 +27,8 @@ export async function buildMaterialForProduct(
   shopeeCreds: { appId: string; secret: string; subId: string } | null,
   notes: string[] = [],
   geminiKey?: string | null, // 使用者自綁的 Gemini key；沒傳則退回 env
-  copyPrefs?: CopyPrefs // 文案偏好；上層（pipeline 迴圈）先取好傳入，避免每篇重查
+  copyPrefs?: CopyPrefs, // 文案偏好；上層（pipeline 迴圈）先取好傳入，避免每篇重查
+  affiliateId?: string | null // 無 API 時的後備：用 affiliate_id 組 an_redir 追蹤連結
 ): Promise<Material> {
   const media = input.media ?? { url: null, type: "none" as const };
   let shortLink = input.originalShortLink;
@@ -43,6 +44,13 @@ export async function buildMaterialForProduct(
     } catch (e) {
       notes.push(`Shopee API 失敗（用原連結）：${e instanceof Error ? e.message : String(e)}`);
     }
+  } else if (!isDemoMode && affiliateId) {
+    // 無 Open API，但有 affiliate_id：用官方 an_redir 做法自組追蹤連結（仍可分潤＋subId 分流）
+    const subIds = buildSubIds(null, input.subIdTag ?? "manual", input.itemId);
+    subId = subIds.join("-");
+    shortLink = buildAffiliateRedirectLink(input.cleanUrl, affiliateId, subIds);
+    productName = `商品 ${input.itemId}`;
+    notes.push("未綁 Shopee API：用 affiliate_id 自組 an_redir 追蹤連結");
   } else {
     productName = `商品 ${input.itemId}`;
     notes.push(isDemoMode ? "Demo 模式：用原連結與假商品名" : "未提供 Shopee 金鑰：直接用貼上的分潤連結");

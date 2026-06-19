@@ -1,4 +1,11 @@
-import { listShopeeAccounts, listThreadsAccounts, hasApifyCredentials, hasGeminiKey, getCopyPrefs } from "@/lib/store";
+import {
+  listShopeeAccounts,
+  listThreadsAccounts,
+  hasApifyCredentials,
+  hasGeminiKey,
+  getCopyPrefs,
+  getShopeeAffiliateId
+} from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
 import { env, isDemoMode } from "@/lib/env";
 import ThreadsAccountForm from "@/components/ThreadsAccountForm";
@@ -6,6 +13,7 @@ import ShopeeAccountForm from "@/components/ShopeeAccountForm";
 import ApifyForm from "@/components/ApifyForm";
 import GeminiForm from "@/components/GeminiForm";
 import CopyPrefsForm from "@/components/CopyPrefsForm";
+import AffiliateIdForm from "@/components/AffiliateIdForm";
 import { DeleteButton, ToggleButton } from "@/components/RowActions";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +31,7 @@ export default async function AccountsPage({
   const apify = user?.isOwner ? await hasApifyCredentials(ownerId) : { bound: false, actor: null };
   const geminiBound = user ? await hasGeminiKey(user.id) : false;
   const copyPrefs = await getCopyPrefs(ownerId);
+  const affiliateId = await getShopeeAffiliateId(ownerId);
 
   return (
     <div className="space-y-6">
@@ -66,6 +75,8 @@ export default async function AccountsPage({
         <ThreadsAccountForm />
         <ShopeeAccountForm />
       </div>
+
+      {user && <AffiliateIdForm initial={affiliateId} />}
 
       <div className="grid gap-4 md:grid-cols-2">
         {/* 爬蟲僅 owner；AI 文案每人各綁各的 */}

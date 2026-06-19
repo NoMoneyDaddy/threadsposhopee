@@ -56,13 +56,20 @@ export async function GET() {
 
   const lastCronAt = await getHeartbeat().catch(() => null);
 
-  // owner 的金鑰自綁狀態（沒綁則退回 env；提示用）
+  // 金鑰自綁狀態（提示用）。owner 與 member 規則不同：
+  // - Apify（爬蟲）只有 owner 需要；member 不適用 → 視為 OK 不嘮叨。
+  // - Gemini（AI）每人都需要，自綁或 env 後備皆可。
+  // - Shopee（分潤）owner 需要（自綁或 env）；member 為選填（可貼現成分潤連結）→ 視為 OK。
   let binds: { apify: boolean; gemini: boolean; shopee: boolean } | null = null;
-  if (isOwner && !isDemoMode && user) {
+  if (!isDemoMode && user) {
     const [apify, gemini, shopee] = await Promise.all([
-      hasApifyCredentials(user.id).then((r) => r.bound || Boolean(env.apifyToken)).catch(() => false),
+      isOwner
+        ? hasApifyCredentials(user.id).then((r) => r.bound || Boolean(env.apifyToken)).catch(() => false)
+        : Promise.resolve(true),
       hasGeminiKey(user.id).then((b) => b || Boolean(env.geminiApiKey)).catch(() => false),
-      getShopeeCredentials(user.id).then((c) => Boolean(c) || Boolean(env.shopeeAppId && env.shopeeSecret)).catch(() => false)
+      isOwner
+        ? getShopeeCredentials(user.id).then((c) => Boolean(c) || Boolean(env.shopeeAppId && env.shopeeSecret)).catch(() => false)
+        : Promise.resolve(true)
     ]);
     binds = { apify, gemini, shopee };
   }

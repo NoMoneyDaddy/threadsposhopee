@@ -18,7 +18,8 @@ import {
   getShopeeCredentials,
   getGeminiKey,
   getCopyPrefs,
-  getShopeeAffiliateId
+  getShopeeAffiliateId,
+  getUserCloudinary
 } from "@/lib/store";
 import type { Source } from "@/lib/types";
 
@@ -62,6 +63,8 @@ export async function runSourcePipeline(source: Source, ownerId: string): Promis
   const copyPrefs = await getCopyPrefs(ownerId); // 一次取出，整個迴圈重用，避免每篇重查
   // 沒綁 Shopee API 時的後備：用 affiliate_id 自組追蹤連結
   const affiliateId = shopeeCreds ? null : await getShopeeAffiliateId(ownerId);
+  // 各人自綁 Cloudinary（素材進自己雲端）；一次取出整迴圈重用
+  const cloudinaryCreds = await getUserCloudinary(ownerId);
   const posts = await scrapeLatestPosts(source.source_username, source.posts_limit, apify);
   result.scanned = posts.length;
 
@@ -108,7 +111,8 @@ export async function runSourcePipeline(source: Source, ownerId: string): Promis
           result.notes,
           geminiKey,
           copyPrefs,
-          affiliateId
+          affiliateId,
+          cloudinaryCreds
         );
       }
 

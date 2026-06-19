@@ -354,6 +354,35 @@ export async function setShopeeAffiliateId(ownerId: string, affiliateId: string 
   if (error) throw new Error(`儲存 shopee_affiliate_id 失敗：${error.message}`);
 }
 
+// 各使用者自綁的 Cloudinary（cloud name + unsigned upload preset，皆非機密，明文存）。
+// 沒綁則回 null，呼叫端退回 env 共用設定。
+export async function getUserCloudinary(ownerId: string): Promise<{ cloud: string; preset: string } | null> {
+  if (isDemoMode) return null;
+  const sb = getServiceClient()!;
+  const { data, error } = await sb
+    .from("profiles")
+    .select("cloudinary_cloud, cloudinary_preset")
+    .eq("id", ownerId)
+    .maybeSingle();
+  if (error) throw new Error(`讀取 Cloudinary 設定失敗：${error.message}`);
+  const cloud = data?.cloudinary_cloud?.trim();
+  if (!cloud) return null; // 沒填 cloud name 視為未綁
+  // preset 沒填就用 env 預設（仍中轉到使用者自己的 cloud）
+  return { cloud, preset: data?.cloudinary_preset?.trim() || env.cloudinaryPreset };
+}
+
+export async function setUserCloudinary(ownerId: string, cloud: string | null, preset: string | null): Promise<void> {
+  if (isDemoMode) return;
+  const sb = getServiceClient()!;
+  const { error } = await sb
+    .from("profiles")
+    .upsert(
+      { id: ownerId, cloudinary_cloud: cloud || null, cloudinary_preset: preset || null },
+      { onConflict: "id" }
+    );
+  if (error) throw new Error(`儲存 Cloudinary 設定失敗：${error.message}`);
+}
+
 // AI 文案客製化偏好（非機密，明文 jsonb）。讀取一律經 normalizeCopyPrefs 夾成合法值。
 export async function getCopyPrefs(ownerId: string): Promise<CopyPrefs> {
   if (isDemoMode) return DEFAULT_COPY_PREFS;

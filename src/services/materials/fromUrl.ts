@@ -1,7 +1,7 @@
 // 從一個蝦皮連結解析並建立素材（單筆 /api/materials 與批次共用）。
 import { expandShopeeLink } from "@/services/shopee/expand";
 import { buildMaterialForProduct } from "@/services/materials/build";
-import { findMaterial, getShopeeCredentials, getGeminiKey, getShopeeAffiliateId } from "@/lib/store";
+import { findMaterial, getShopeeCredentials, getGeminiKey, getShopeeAffiliateId, getUserCloudinary } from "@/lib/store";
 import { env } from "@/lib/env";
 import type { AppUser } from "@/lib/auth";
 import type { Material } from "@/lib/types";
@@ -29,6 +29,8 @@ export async function resolveMaterialFromUrl(
   const geminiKey = await getGeminiKey(ownerId);
   // 沒綁 Shopee API 時的後備：用 affiliate_id 自組追蹤連結
   const affiliateId = shopeeCreds ? null : await getShopeeAffiliateId(ownerId);
+  // 各人自綁 Cloudinary（素材進自己雲端）；沒綁退回 env 共用
+  const cloudinaryCreds = await getUserCloudinary(ownerId);
 
   const notes: string[] = [];
   const material = await buildMaterialForProduct(
@@ -45,7 +47,8 @@ export async function resolveMaterialFromUrl(
     notes,
     geminiKey,
     undefined,
-    affiliateId
+    affiliateId,
+    cloudinaryCreds
   );
   return { material, reused: false, notes };
 }

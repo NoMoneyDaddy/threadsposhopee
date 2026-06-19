@@ -111,7 +111,7 @@ async function runPublishQueueLocked(result: PublishResult): Promise<PublishResu
       let postId = "demo_" + Date.now();
 
       if (!isDemoMode) {
-        const creds = await getThreadsCredentials(accId);
+        const creds = await getThreadsCredentials(accId, draft.owner_id ?? "");
         if (!creds) throw new Error("找不到 Threads 帳號憑證");
         const res = await publishToThreads({
           threadsUserId: creds.threadsUserId,

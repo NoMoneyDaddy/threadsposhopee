@@ -84,7 +84,7 @@ export async function POST(req: Request) {
     await updateDraftStatus(id, "publishing");
     try {
       if (!draft.threads_account_id) throw new Error("草稿未綁定 Threads 帳號");
-      const creds = await getThreadsCredentials(draft.threads_account_id);
+      const creds = await getThreadsCredentials(draft.threads_account_id, user.id);
       if (!creds) throw new Error("找不到 Threads 帳號憑證（請先設定 access token）");
       const { postId } = await publishToThreads({
         threadsUserId: creds.threadsUserId,

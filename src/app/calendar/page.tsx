@@ -59,10 +59,12 @@ export default async function CalendarPage() {
                     timeZone: "Asia/Taipei"
                   })}
                 </div>
-                {d.cloudinary_media_url && d.media_type !== "none" && (
+                {d.cloudinary_media_url && d.media_type === "video" ? (
+                  <video src={d.cloudinary_media_url} muted playsInline className="h-10 w-10 shrink-0 rounded object-cover" />
+                ) : d.cloudinary_media_url && d.media_type !== "none" ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={d.cloudinary_media_url} alt="" className="h-10 w-10 shrink-0 rounded object-cover" />
-                )}
+                ) : null}
                 <div className="min-w-0">
                   <div className="truncate text-sm font-medium">{d.product_name ?? "（商品）"}</div>
                   <div className="truncate text-xs text-neutral-500">{d.main_text}</div>

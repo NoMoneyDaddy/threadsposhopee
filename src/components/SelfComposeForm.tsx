@@ -9,6 +9,9 @@ import { fetchWithTimeout } from "@/lib/http";
 const input = "w-full rounded-md border px-3 py-2 text-sm";
 const THREADS_LIMIT = 500;
 
+// datetime-local 是「無時區的牆上時間」；本服務一律以台北時區解讀，避免不同瀏覽器時區算出不同 UTC。
+const parseTaipeiDateTimeLocal = (value: string) => new Date(`${value}:00+08:00`);
+
 // 自寫一則直推：不靠蝦皮連結／AI，直接打字發到 Threads（可選一張圖或影片網址）。
 export default function SelfComposeForm({ threadsAccounts }: { threadsAccounts: ThreadsAccount[] }) {
   const router = useRouter();
@@ -26,9 +29,16 @@ export default function SelfComposeForm({ threadsAccounts }: { threadsAccounts: 
       setMsg("請先輸入正文");
       return;
     }
-    if (action !== "draft" && [...mainText].length > THREADS_LIMIT) {
-      setMsg(`正文超過 ${THREADS_LIMIT} 字上限，請先精簡`);
-      return;
+    // 正文與留言（＝串文 2/2）在 Threads 都有 500 字上限；非草稿先擋，避免發布時才失敗
+    if (action !== "draft") {
+      if ([...mainText].length > THREADS_LIMIT) {
+        setMsg(`正文超過 ${THREADS_LIMIT} 字上限，請先精簡`);
+        return;
+      }
+      if ([...replyText].length > THREADS_LIMIT) {
+        setMsg(`留言區超過 ${THREADS_LIMIT} 字上限，請先精簡`);
+        return;
+      }
     }
     const targetAccountId = accountId || threadsAccounts[0]?.id;
     if (!targetAccountId) {
@@ -40,7 +50,12 @@ export default function SelfComposeForm({ threadsAccounts }: { threadsAccounts: 
         setMsg("請選擇排程時間");
         return;
       }
-      if (new Date(scheduledAt) <= new Date()) {
+      const when = parseTaipeiDateTimeLocal(scheduledAt);
+      if (Number.isNaN(when.getTime())) {
+        setMsg("排程時間格式不正確");
+        return;
+      }
+      if (when.getTime() <= Date.now()) {
         setMsg("排程時間必須是未來的時間");
         return;
       }
@@ -60,7 +75,7 @@ export default function SelfComposeForm({ threadsAccounts }: { threadsAccounts: 
             media_url: mediaUrl.trim() || null,
             media_type: mediaType,
             action,
-            scheduled_at: scheduledAt ? new Date(scheduledAt).toISOString() : null
+            scheduled_at: scheduledAt ? parseTaipeiDateTimeLocal(scheduledAt).toISOString() : null
           })
         },
         30000
@@ -93,18 +108,34 @@ export default function SelfComposeForm({ threadsAccounts }: { threadsAccounts: 
   return (
     <div className="space-y-3 rounded-lg border bg-white p-4">
       <div>
-        <textarea className={input} rows={3} value={mainText} onChange={(e) => setMainText(e.target.value)} placeholder="正文（直接打字）" />
+        <label htmlFor="self-compose-main" className="mb-1 block text-sm font-medium text-neutral-700">
+          正文
+        </label>
+        <textarea
+          id="self-compose-main"
+          className={input}
+          rows={3}
+          value={mainText}
+          onChange={(e) => setMainText(e.target.value)}
+          placeholder="正文（直接打字）"
+        />
         <div className="mt-1 flex justify-end">
           <CharCount text={mainText} limit={THREADS_LIMIT} />
         </div>
       </div>
-      <textarea
-        className={input + " text-xs"}
-        rows={2}
-        value={replyText}
-        onChange={(e) => setReplyText(e.target.value)}
-        placeholder="留言區（選填，例如分潤連結）"
-      />
+      <div>
+        <label htmlFor="self-compose-reply" className="mb-1 block text-sm font-medium text-neutral-700">
+          留言區（接續貼文 2/2，選填）
+        </label>
+        <textarea
+          id="self-compose-reply"
+          className={input + " text-xs"}
+          rows={2}
+          value={replyText}
+          onChange={(e) => setReplyText(e.target.value)}
+          placeholder="留言區（選填，例如分潤連結）"
+        />
+      </div>
       <div className="flex flex-wrap items-center gap-2">
         <input
           className={input + " flex-1"}
@@ -153,6 +184,7 @@ export default function SelfComposeForm({ threadsAccounts }: { threadsAccounts: 
           value={scheduledAt}
           onChange={(e) => setScheduledAt(e.target.value)}
           title="排程時間（選「指定時間」時使用）"
+          aria-label="排程時間"
         />
       </div>
 

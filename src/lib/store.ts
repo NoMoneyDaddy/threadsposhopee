@@ -829,6 +829,46 @@ export async function reclaimStalePublishing(staleMinutes = 15): Promise<number>
   return (data ?? []).length;
 }
 
+// 延遲留言 worker 用：撈「主文已發、留言待補且到期」的草稿（跨租戶）。
+export async function listRepliesDue(limit = 20): Promise<Draft[]> {
+  const nowIso = new Date().toISOString();
+  if (isDemoMode) {
+    return demo.drafts
+      .filter((d) => d.reply_status === "pending" && d.reply_due_at && d.reply_due_at <= nowIso)
+      .slice(0, limit);
+  }
+  const sb = getServiceClient()!;
+  const { data } = await sb
+    .from("drafts")
+    .select("id, owner_id, threads_account_id, published_post_id, reply_text")
+    .eq("reply_status", "pending")
+    .not("reply_due_at", "is", null)
+    .lte("reply_due_at", nowIso)
+    .order("reply_due_at", { ascending: true })
+    .limit(limit);
+  return (data ?? []) as Draft[];
+}
+
+export async function markReplyPublished(id: string, replyPostId: string): Promise<void> {
+  if (isDemoMode) {
+    const d = demo.drafts.find((x) => x.id === id);
+    if (d) Object.assign(d, { reply_status: "published", reply_post_id: replyPostId });
+    return;
+  }
+  const sb = getServiceClient()!;
+  await sb.from("drafts").update({ reply_status: "published", reply_post_id: replyPostId }).eq("id", id);
+}
+
+export async function markReplyFailed(id: string, err: string): Promise<void> {
+  if (isDemoMode) {
+    const d = demo.drafts.find((x) => x.id === id);
+    if (d) Object.assign(d, { reply_status: "failed", error: err.slice(0, 500) });
+    return;
+  }
+  const sb = getServiceClient()!;
+  await sb.from("drafts").update({ reply_status: "failed", error: err.slice(0, 500) }).eq("id", id);
+}
+
 // 原子性狀態更新（compare-and-swap）：只有當目前狀態 == expectedStatus 才更新。
 export async function updateDraftStatusAtomic(
   id: string,

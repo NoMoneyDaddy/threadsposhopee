@@ -11,9 +11,10 @@ import { publishToThreads } from "@/services/threads/publish";
 import { uploadToCloudinary } from "@/services/media/cloudinary";
 import { normalizeDraftMedia } from "@/lib/media";
 import { withNextSlot } from "@/services/publish/slots";
+import { replyDelayMinutes } from "@/services/publish/reply-timing";
 import { assertSafePublicUrl } from "@/lib/url-guard";
 import { getCurrentUser } from "@/lib/auth";
-import { isDemoMode } from "@/lib/env";
+import { env, isDemoMode } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -97,6 +98,16 @@ export async function POST(req: Request) {
       }
     }
 
+    // 留言延遲逐則覆寫（分）：選填非負整數（0=立即）；未填則用全域預設
+    let replyDelayOverride: number | null = null;
+    if (body.reply_delay_minutes !== undefined && body.reply_delay_minutes !== null && body.reply_delay_minutes !== "") {
+      const n = Number(body.reply_delay_minutes);
+      if (!Number.isFinite(n) || n < 0 || n > 1440) {
+        return NextResponse.json({ ok: false, error: "留言延遲需為 0–1440 的分鐘數" }, { status: 400 });
+      }
+      replyDelayOverride = Math.floor(n);
+    }
+
     // draft 待審；其餘（publish/schedule/queue）已核准
     const status = action === "draft" ? "draft" : "approved";
     const make = (scheduled_at: string | null) =>
@@ -112,6 +123,7 @@ export async function POST(req: Request) {
         cloudinary_media_url: material ? material.cloudinary_media_url : selfCloudUrl,
         main_text: material ? (typeof body.main_text === "string" ? body.main_text : material.main_text) : freeMain,
         reply_text: typeof body.reply_text === "string" ? body.reply_text : material?.reply_text ?? null,
+        reply_delay_minutes: replyDelayOverride,
         ai_raw: material?.ai_raw ?? null,
         status,
         scheduled_at
@@ -147,18 +159,31 @@ export async function POST(req: Request) {
       try {
         const creds = await getThreadsCredentials(threads_account_id, user.id);
         if (!creds) throw new Error("找不到 Threads 帳號憑證");
+        // 留言延遲：>0 表示主文先發、留言之後由 cron 補（防「秒留言」）
+        const replyDelay = draft.reply_text
+          ? replyDelayMinutes(draft.id, env.replyDelayFloorMinutes, env.replyDelayJitterMinutes, draft.reply_delay_minutes)
+          : 0;
+        const deferReply = Boolean(draft.reply_text) && replyDelay > 0;
         const { postId } = await publishToThreads({
           threadsUserId: creds.threadsUserId,
           accessToken: creds.accessToken,
           text: draft.main_text ?? "",
           media: normalizeDraftMedia(draft),
-          replyText: draft.reply_text
+          replyText: draft.reply_text,
+          deferReply
         });
+        const nowMs = Date.now();
+        const replyPatch = deferReply
+          ? { reply_status: "pending" as const, reply_due_at: new Date(nowMs + replyDelay * 60000).toISOString() }
+          : draft.reply_text
+            ? { reply_status: "published" as const }
+            : {};
         await updateDraftStatus(draft.id, "published", {
           published_post_id: postId,
-          published_at: new Date().toISOString()
+          published_at: new Date(nowMs).toISOString(),
+          ...replyPatch
         });
-        return NextResponse.json({ ok: true, draft, posted: true, postId });
+        return NextResponse.json({ ok: true, draft, posted: true, postId, replyDeferred: deferReply });
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         await updateDraftStatus(draft.id, "failed", { error: msg });

@@ -17,6 +17,7 @@ export default function SelfComposeForm({ threadsAccounts }: { threadsAccounts: 
   const router = useRouter();
   const [mainText, setMainText] = useState("");
   const [replyText, setReplyText] = useState("");
+  const [replyDelay, setReplyDelay] = useState(""); // 留言延遲（分），空=用全域預設
   const [mediaUrl, setMediaUrl] = useState("");
   const [mediaType, setMediaType] = useState<"image" | "video">("image");
   const [accountId, setAccountId] = useState(threadsAccounts[0]?.id ?? "");
@@ -72,6 +73,7 @@ export default function SelfComposeForm({ threadsAccounts }: { threadsAccounts: 
             threads_account_id: targetAccountId,
             main_text: mainText,
             reply_text: replyText,
+            reply_delay_minutes: replyDelay.trim() === "" ? null : Number(replyDelay),
             media_url: mediaUrl.trim() || null,
             media_type: mediaType,
             action,
@@ -96,6 +98,7 @@ export default function SelfComposeForm({ threadsAccounts }: { threadsAccounts: 
       setMsg(done);
       setMainText("");
       setReplyText("");
+      setReplyDelay("");
       setMediaUrl("");
       router.refresh();
     } catch (e) {
@@ -135,6 +138,21 @@ export default function SelfComposeForm({ threadsAccounts }: { threadsAccounts: 
           onChange={(e) => setReplyText(e.target.value)}
           placeholder="留言區（選填，例如分潤連結）"
         />
+        {replyText.trim() && (
+          <div className="mt-1 flex items-center gap-2">
+            <label htmlFor="self-compose-reply-delay" className="text-xs text-neutral-500">
+              留言延遲（分，空＝用預設）
+            </label>
+            <input
+              id="self-compose-reply-delay"
+              className="w-24 rounded-md border px-2 py-1 text-xs"
+              inputMode="numeric"
+              placeholder="如 15"
+              value={replyDelay}
+              onChange={(e) => setReplyDelay(e.target.value)}
+            />
+          </div>
+        )}
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <input

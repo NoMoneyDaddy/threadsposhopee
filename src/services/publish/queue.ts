@@ -9,11 +9,15 @@ import {
   updateDraftStatusAtomic,
   reclaimStalePublishing,
   acquirePublishLock,
-  releasePublishLock
+  releasePublishLock,
+  listRepliesDue,
+  markReplyPublished,
+  markReplyFailed
 } from "@/lib/store";
-import { publishToThreads } from "@/services/threads/publish";
+import { publishToThreads, publishReply } from "@/services/threads/publish";
 import { normalizeDraftMedia } from "@/lib/media";
 import { effectiveGapMinutes } from "@/services/publish/cadence";
+import { replyDelayMinutes } from "@/services/publish/reply-timing";
 
 export interface PublishResult {
   considered: number;
@@ -21,6 +25,7 @@ export interface PublishResult {
   skipped: { id: string; reason: string }[];
   failed: { id: string; error: string }[];
   reclaimed: number;
+  replies?: { published: number; failed: number }; // 延遲留言補發結果
   lockBusy?: boolean; // true 表示另一輪（cron 或手動）正在跑，本次未執行
 }
 
@@ -106,9 +111,16 @@ async function runPublishQueueLocked(result: PublishResult): Promise<PublishResu
       continue;
     }
 
+    // 留言延遲：>0 表示主文先發、留言之後補（防「秒留言」固定行為）。逐則可覆寫。
+    const replyDelay = draft.reply_text
+      ? replyDelayMinutes(draft.id, env.replyDelayFloorMinutes, env.replyDelayJitterMinutes, draft.reply_delay_minutes)
+      : 0;
+    const deferReply = Boolean(draft.reply_text) && replyDelay > 0;
+
     try {
-      const nowIso = new Date().toISOString();
-      let postId = "demo_" + Date.now();
+      const nowMs = Date.now();
+      const nowIso = new Date(nowMs).toISOString();
+      let postId = "demo_" + nowMs;
 
       if (!isDemoMode) {
         const creds = await getThreadsCredentials(accId, draft.owner_id ?? "");
@@ -118,12 +130,19 @@ async function runPublishQueueLocked(result: PublishResult): Promise<PublishResu
           accessToken: creds.accessToken,
           text: draft.main_text ?? "",
           media: normalizeDraftMedia(draft),
-          replyText: draft.reply_text
+          replyText: draft.reply_text,
+          deferReply
         });
         postId = res.postId;
       }
 
-      await updateDraftStatus(draft.id, "published", { published_post_id: postId, published_at: nowIso });
+      // 延遲留言：標 pending + 到期時間，交給下方的補留言 pass；否則本次已隨主文發完
+      const replyPatch = deferReply
+        ? { reply_status: "pending" as const, reply_due_at: new Date(nowMs + replyDelay * 60000).toISOString() }
+        : draft.reply_text
+          ? { reply_status: "published" as const }
+          : {};
+      await updateDraftStatus(draft.id, "published", { published_post_id: postId, published_at: nowIso, ...replyPatch });
       // 更新本地節奏狀態，讓同帳號的下一篇遵守間隔/上限
       publishedThisRun[accId] = doneThisRun + 1;
       state.lastPublishedAt = nowIso;
@@ -135,5 +154,39 @@ async function runPublishQueueLocked(result: PublishResult): Promise<PublishResu
     }
   }
 
+  // 延遲留言補發：撈「到期待補」的，逐則補上 2/2 留言。整個 run 在分布式鎖內，無併發。
+  result.replies = await publishDueReplies(startTime);
   return result;
+}
+
+// 補發到期的延遲留言（串文 2/2）。回傳補發/失敗數。
+async function publishDueReplies(startTime: number): Promise<{ published: number; failed: number }> {
+  const out = { published: 0, failed: 0 };
+  if (isDemoMode) return out;
+  let due;
+  try {
+    due = await listRepliesDue();
+  } catch (e) {
+    console.warn("撈待補留言失敗：", e instanceof Error ? e.message : e);
+    return out;
+  }
+  for (const d of due) {
+    if (Date.now() - startTime > 50000) break; // 守住 maxDuration，剩下的下輪再補
+    if (!d.threads_account_id || !d.published_post_id || !d.reply_text) {
+      await markReplyFailed(d.id, "缺帳號/主貼文/留言內容，無法補留言");
+      out.failed++;
+      continue;
+    }
+    try {
+      const creds = await getThreadsCredentials(d.threads_account_id, d.owner_id ?? "");
+      if (!creds) throw new Error("找不到 Threads 帳號憑證");
+      const replyPostId = await publishReply(creds.threadsUserId, creds.accessToken, d.published_post_id, d.reply_text);
+      await markReplyPublished(d.id, replyPostId);
+      out.published++;
+    } catch (e) {
+      await markReplyFailed(d.id, e instanceof Error ? e.message : String(e));
+      out.failed++;
+    }
+  }
+  return out;
 }

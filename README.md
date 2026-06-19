@@ -49,7 +49,7 @@ npm run pipeline:demo
 
 ## 上線設定
 
-1. 建 Supabase 專案，**依序**跑 `supabase/migrations/` 下所有 SQL（`0001_init.sql` → `0016_profile_cloudinary.sql`）
+1. 建 Supabase 專案，**依序**跑 `supabase/migrations/` 下所有 SQL（`0001_init.sql` → `0017_reply_delay.sql`）
 2. 填環境變數（Supabase、`APP_ENCRYPTION_KEY`、`OWNER_EMAIL`、Apify、Shopee、Gemini、Cloudinary、`CRON_SECRET`，以及 Threads OAuth 的 `THREADS_APP_ID/SECRET/REDIRECT_URI`）
 3. 部署（擇一）：
 
@@ -109,11 +109,12 @@ src/
     threads/oauth.ts     OAuth 一鍵連帳號
     threads/token.ts     長期 token 展期
     threads/refresh.ts   到期 token 自動展期 worker
-    publish/queue.ts     發文佇列（防封節奏 + 分布式鎖 + 跳過失效帳號）
-    publish/cadence.ts   節奏：保底間隔 + 隨機抖動 + ETA 規劃
+    publish/queue.ts     發文佇列（防封節奏 + 分布式鎖 + 帳號分片並行 + 延遲補留言）
+    publish/cadence.ts   節奏：保底間隔 + 隨機抖動 + ETA 規劃 + 帳號分片
+    publish/reply-timing.ts  留言延遲（保底 + 抖動 + 逐則覆寫）
     pipeline/run.ts      端到端編排
   lib/                 env / 加密 / 資料層 / cron 驗證 / SSRF 防護 / 型別
-supabase/migrations/   資料庫 schema（0001–0016）
+supabase/migrations/   資料庫 schema（0001–0017）
 ```
 
 ## ⚠️ 安全
@@ -138,11 +139,12 @@ supabase/migrations/   資料庫 schema（0001–0016）
 - [x] 手動推送：一鍵「立即跑一輪佇列」、自寫一則直推（free-form，可附媒體）
 - [x] 各人自綁 Cloudinary（素材中轉進自己雲端，不佔共用額度）
 - [x] 發文預覽對齊 Threads 串文（主文 1/2 + 接續貼文 2/2）
+- [x] 延遲留言：串文 2/2 分潤連結延後補發（保底 + 隨機抖動 + 逐則覆寫），避免「秒留言」固定行為
+- [x] 帳號分片並行：多條 cron 各跑一片帳號（`?shards=N&shard=i`），高量時擴展吞吐
 - [x] 安全：AES-256-GCM 入庫加密、Cron 安全驗證、SSRF 防護、發文佇列分布式鎖、發文憑證 owner 過濾防越權
 
 ### 後續可選增強
 - [ ] 影片走 Gemini Files API（大檔）
 - [ ] 成效儀表板接 Shopee 報表 / Threads insights
 - [ ] 素材分潤連結到期自動偵測重產
-- [ ] 佇列分片／多帳號並行（高頻發文擴展性）
 ```

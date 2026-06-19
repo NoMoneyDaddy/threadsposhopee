@@ -53,11 +53,7 @@ export default async function SourcesPage() {
                 <td className="px-4 py-2">{accLabel(s.threads_account_id)}</td>
                 <td className="px-4 py-2">每 {s.poll_interval_minutes} 分</td>
                 <td className="px-4 py-2">
-                  {s.auto_publish ? (
-                    <span className="rounded bg-red-50 px-2 py-0.5 text-red-600">全自動發布</span>
-                  ) : (
-                    <span className="rounded bg-blue-50 px-2 py-0.5 text-blue-600">進審核佇列</span>
-                  )}
+                  <span className="rounded bg-blue-50 px-2 py-0.5 text-blue-600">進審核佇列</span>
                 </td>
                 <td className="px-4 py-2">{s.enabled ? "✅ 啟用" : "⏸ 停用"}</td>
                 <td className="px-4 py-2">

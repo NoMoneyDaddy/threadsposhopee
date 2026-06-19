@@ -16,7 +16,8 @@ import {
   createDraftFromMaterial,
   getApifyCredentials,
   getShopeeCredentials,
-  getGeminiKey
+  getGeminiKey,
+  getCopyPrefs
 } from "@/lib/store";
 import type { Source } from "@/lib/types";
 
@@ -57,6 +58,7 @@ export async function runSourcePipeline(source: Source, ownerId: string): Promis
   const apify = await getApifyCredentials(ownerId);
   const shopeeCreds = await ownerShopeeCreds(ownerId);
   const geminiKey = await getGeminiKey(ownerId);
+  const copyPrefs = await getCopyPrefs(ownerId); // 一次取出，整個迴圈重用，避免每篇重查
   const posts = await scrapeLatestPosts(source.source_username, source.posts_limit, apify);
   result.scanned = posts.length;
 
@@ -101,7 +103,8 @@ export async function runSourcePipeline(source: Source, ownerId: string): Promis
           ownerId,
           shopeeCreds,
           result.notes,
-          geminiKey
+          geminiKey,
+          copyPrefs
         );
       }
 

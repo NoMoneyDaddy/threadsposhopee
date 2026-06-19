@@ -339,7 +339,9 @@ export async function hasGeminiKey(ownerId: string): Promise<boolean> {
 export async function getCopyPrefs(ownerId: string): Promise<CopyPrefs> {
   if (isDemoMode) return DEFAULT_COPY_PREFS;
   const sb = getServiceClient()!;
-  const { data } = await sb.from("profiles").select("copy_prefs").eq("id", ownerId).maybeSingle();
+  const { data, error } = await sb.from("profiles").select("copy_prefs").eq("id", ownerId).maybeSingle();
+  // 查詢失敗（DB 異常）與「無此列」分開：前者記 log 以利診斷，再退回預設不擋住文案生成
+  if (error) console.error("讀取 copy_prefs 失敗，改用預設：", error.message);
   return normalizeCopyPrefs(data?.copy_prefs);
 }
 

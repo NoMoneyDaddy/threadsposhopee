@@ -21,8 +21,14 @@ export async function POST(req: Request) {
   try {
     const user = await getCurrentUser();
     if (!user) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
-    const body = await req.json().catch(() => ({}));
-    const prefs = await setCopyPrefs(user.id, body.prefs ?? body);
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ ok: false, error: "請求格式錯誤（非合法 JSON）" }, { status: 400 });
+    }
+    const payload = body && typeof body === "object" && "prefs" in body ? (body as { prefs: unknown }).prefs : body;
+    const prefs = await setCopyPrefs(user.id, payload);
     return NextResponse.json({ ok: true, prefs });
   } catch (e) {
     console.error("儲存文案偏好失敗", e);

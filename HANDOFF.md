@@ -25,9 +25,8 @@ DB 遷移目前到 `supabase/migrations/0017_reply_delay.sql`。
 
 ## 守則（見 CLAUDE.md，務必遵守）
 
-- 每個任務開 `claude/<topic>` 分支，**不直推 main**。
-- 動工前後跑綠：`npx tsc --noEmit`、`node --import tsx --test $(find src -name '*.test.ts')`、`npm run build`。
-- 流程：draft PR → mark ready → 等 GitHub Actions `build` 綠 → 採納 CodeRabbit/Qodo/Gemini 合理建議（誤報用具體理由駁回）→ squash merge → 刪本地分支。
+- **直接在 `main` 上開發、提交、推送**（不開 feature 分支、不走 PR）。
+- 因為沒有 PR 審查把關，**本機綠燈是唯一閘門**：每次提交前 `npx tsc --noEmit`、`node --import tsx --test $(find src -name '*.test.ts')`、`npm run build` 都要綠，務必嚴格。推 main 後 GitHub Actions `build` 仍會跑，紅燈立刻修並補推。
 - commit 結尾加 `Co-Authored-By` 與 `Claude-Session` trailer（照既有 commit）。
 - **多租戶鐵則**：所有使用者資料函式吃 `ownerId` 並過濾；`getThreadsCredentials(id, ownerId)` 必帶 owner 過濾；建草稿/發文前先 `userOwnsThreadsAccount`。
 - 安全：金鑰永不入庫（env 或 AES-256-GCM）；外部 fetch 走 `fetchWithTimeout`、URL 先過 `assertSafePublicUrl`（SSRF）；時區一律 `Asia/Taipei`。

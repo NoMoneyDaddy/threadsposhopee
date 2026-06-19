@@ -17,13 +17,16 @@
 - **但絕不**簡化掉：輸入驗證、錯誤處理、安全、無障礙。
 - 非平凡邏輯留一個可跑的檢查（`npm test`，Node 內建 test runner）。
 
-## 開發流程
+## 開發流程（直接在 main）
 
-1. 每個任務開 feature 分支（`claude/<topic>`），**不要**直接推 main。
-2. 動工前後跑：`npx tsc --noEmit`、`npm test`、`npm run build` 都要綠。
-3. 開 **draft PR** → 等 CI（GitHub Actions `build`）綠 → 採納 Gemini／CodeRabbit 合理建議 → mark ready → squash merge。
+1. **直接在 `main` 上開發、提交、推送**（不開 feature 分支、不走 PR）。
+2. 因為沒有 PR 審查把關，**本機綠燈是唯一閘門**：每次提交前 `npx tsc --noEmit`、`npm test`、`npm run build` 都要綠，務必嚴格。
+3. 推 `main` 後 GitHub Actions `build` 仍會跑；若紅燈立刻修並補推。
 4. commit 結尾固定加 `Co-Authored-By` 與 `Claude-Session`（見既有 commit）。
 5. 金鑰**永不入庫**：只放環境變數或 AES-256-GCM 加密存 DB。
+
+> 註：先前採「feature 分支 → draft PR → CI/審查 → squash merge」流程；現改為直接在 main 開發。
+> 取捨：少了 CodeRabbit/Qodo/Gemini 的自動審查，安全/多租戶/併發等細節要靠下面「注意」段自我把關。
 
 ## 架構速覽
 

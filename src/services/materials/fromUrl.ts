@@ -1,7 +1,7 @@
 // 從一個蝦皮連結解析並建立素材（單筆 /api/materials 與批次共用）。
 import { expandShopeeLink } from "@/services/shopee/expand";
 import { buildMaterialForProduct } from "@/services/materials/build";
-import { findMaterial, getShopeeCredentials } from "@/lib/store";
+import { findMaterial, getShopeeCredentials, getGeminiKey } from "@/lib/store";
 import { env } from "@/lib/env";
 import type { AppUser } from "@/lib/auth";
 import type { Material } from "@/lib/types";
@@ -20,13 +20,13 @@ export async function resolveMaterialFromUrl(
     return { material: existing, reused: true, notes: [] };
   }
 
-  // owner 用環境變數金鑰；member 用自己的金鑰（可能為 null → 直接用貼上的連結）
-  let shopeeCreds: { appId: string; secret: string; subId: string } | null = null;
-  if (user.isOwner && env.shopeeAppId && env.shopeeSecret) {
+  // Shopee 金鑰：優先用自綁（shopee_accounts），owner 沒綁則退回環境變數
+  let shopeeCreds = await getShopeeCredentials(ownerId);
+  if (!shopeeCreds && user.isOwner && env.shopeeAppId && env.shopeeSecret) {
     shopeeCreds = { appId: env.shopeeAppId, secret: env.shopeeSecret, subId: env.shopeeDefaultSubId };
-  } else {
-    shopeeCreds = await getShopeeCredentials(ownerId);
   }
+  // Gemini key：自綁優先，沒綁退回 env（在 generateCopy 內處理）
+  const geminiKey = await getGeminiKey(ownerId);
 
   const notes: string[] = [];
   const material = await buildMaterialForProduct(
@@ -40,7 +40,8 @@ export async function resolveMaterialFromUrl(
     },
     ownerId,
     shopeeCreds,
-    notes
+    notes,
+    geminiKey
   );
   return { material, reused: false, notes };
 }

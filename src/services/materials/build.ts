@@ -24,7 +24,8 @@ export async function buildMaterialForProduct(
   // 該使用者要用的 Shopee 分潤金鑰；null = 不轉換（直接用貼上的連結）。
   // owner 傳入環境變數金鑰；member 傳入自己的金鑰或 null。
   shopeeCreds: { appId: string; secret: string; subId: string } | null,
-  notes: string[] = []
+  notes: string[] = [],
+  geminiKey?: string | null // 使用者自綁的 Gemini key；沒傳則退回 env
 ): Promise<Material> {
   const media = input.media ?? { url: null, type: "none" as const };
   let shortLink = input.originalShortLink;
@@ -59,13 +60,16 @@ export async function buildMaterialForProduct(
   let aiRaw: string | null = null;
   let aiAt: string | null = null;
   if (input.withCopy !== false) {
-    const copy = await generateCopy({
-      productName: productName ?? "這個好物",
-      shopeeShortLink: shortLink,
-      sourceText: input.sourceText,
-      mediaUrl: media.url,
-      mediaType: media.type
-    });
+    const copy = await generateCopy(
+      {
+        productName: productName ?? "這個好物",
+        shopeeShortLink: shortLink,
+        sourceText: input.sourceText,
+        mediaUrl: media.url,
+        mediaType: media.type
+      },
+      geminiKey
+    );
     mainText = copy.mainText;
     replyText = copy.replyText;
     aiRaw = copy.raw;

@@ -28,27 +28,30 @@ export default function ThreadsPreview({
         ? [{ url: mediaUrl, type: mediaType }]
         : [];
   const carousel = items.length > 1;
+  // 留言＝串文接續貼文（Threads 上會顯示成 1/2、2/2 的串文鏈，非一般留言）
+  const hasReply = Boolean(replyText && replyText.trim());
+  const total = hasReply ? 2 : 1;
   return (
     <div className="rounded-xl border bg-white p-4">
-      <div className="mb-2 text-xs font-medium text-neutral-400">預覽</div>
+      <div className="mb-2 text-xs font-medium text-neutral-400">預覽（Threads 串文）</div>
+
+      {/* 主文 1/2 */}
       <div className="flex gap-3">
-        <div className="h-9 w-9 shrink-0 rounded-full bg-gradient-to-br from-neutral-300 to-neutral-400" />
-        <div className="min-w-0 flex-1">
+        <div className="flex shrink-0 flex-col items-center">
+          <div className="h-9 w-9 rounded-full bg-gradient-to-br from-neutral-300 to-neutral-400" />
+          {hasReply && <div className="mt-1 w-px flex-1 bg-neutral-200" />}
+        </div>
+        <div className="min-w-0 flex-1 pb-3">
           <div className="flex items-center gap-1 text-sm">
             <span className="font-semibold text-neutral-900">{handle}</span>
+            {total > 1 && <span className="text-neutral-400">{`1/${total}`}</span>}
             <span className="text-neutral-400">· 現在</span>
           </div>
           <div className="mt-0.5 whitespace-pre-wrap break-words text-sm text-neutral-800">
             {mainText || <span className="text-neutral-300">正文預覽…</span>}
           </div>
           {items.length > 0 && (
-            <div
-              className={
-                carousel
-                  ? "mt-2 flex gap-2 overflow-x-auto pb-1"
-                  : "mt-2"
-              }
-            >
+            <div className={carousel ? "mt-2 flex gap-2 overflow-x-auto pb-1" : "mt-2"}>
               {items.map((m, i) => {
                 const cls = carousel
                   ? "h-44 w-44 shrink-0 rounded-lg border object-cover"
@@ -68,17 +71,23 @@ export default function ThreadsPreview({
             <span className="text-xs">💬 留言</span>
             <span className="text-xs">↻ 轉發</span>
           </div>
-          {replyText && (
-            <div className="mt-3 border-l-2 border-neutral-200 pl-3">
-              <div className="flex items-center gap-1 text-sm">
-                <span className="font-semibold text-neutral-900">{handle}</span>
-                <span className="text-neutral-400">· 留言</span>
-              </div>
-              <div className="mt-0.5 whitespace-pre-wrap break-words text-sm text-shopee">{replyText}</div>
-            </div>
-          )}
         </div>
       </div>
+
+      {/* 接續貼文 2/2（分潤連結 CTA） */}
+      {hasReply && (
+        <div className="flex gap-3">
+          <div className="h-9 w-9 shrink-0 rounded-full bg-gradient-to-br from-neutral-300 to-neutral-400" />
+          <div className="min-w-0 flex-1 pt-1">
+            <div className="flex items-center gap-1 text-sm">
+              <span className="font-semibold text-neutral-900">{handle}</span>
+              <span className="text-neutral-400">{`2/${total}`}</span>
+              <span className="text-neutral-400">· 接續</span>
+            </div>
+            <div className="mt-0.5 whitespace-pre-wrap break-words text-sm text-shopee">{replyText}</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

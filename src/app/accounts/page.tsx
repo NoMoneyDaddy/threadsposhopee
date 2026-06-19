@@ -20,7 +20,7 @@ export default async function AccountsPage({
   const oauthReady = !isDemoMode && Boolean(env.threadsAppId && env.threadsRedirectUri);
   // 爬蟲（Apify）owner 限定；AI（Gemini）每人各綁各的
   const apify = user?.isOwner ? await hasApifyCredentials(ownerId) : { bound: false, actor: null };
-  const geminiBound = user ? await hasGeminiKey(ownerId) : false;
+  const geminiBound = user ? await hasGeminiKey(user.id) : false;
 
   return (
     <div className="space-y-6">

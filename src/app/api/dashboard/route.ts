@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { getDashboardStats, listActiveThreadsCredentials, getHeartbeat } from "@/lib/store";
+import {
+  getDashboardStats,
+  listActiveThreadsCredentials,
+  getHeartbeat,
+  hasApifyCredentials,
+  hasGeminiKey,
+  getShopeeCredentials
+} from "@/lib/store";
 import { getPublishingLimit } from "@/services/threads/limit";
 import { getCloudinaryUsage } from "@/services/media/cloudinary-usage";
 import { env, isDemoMode } from "@/lib/env";
@@ -49,6 +56,17 @@ export async function GET() {
 
   const lastCronAt = await getHeartbeat().catch(() => null);
 
+  // owner 的金鑰自綁狀態（沒綁則退回 env；提示用）
+  let binds: { apify: boolean; gemini: boolean; shopee: boolean } | null = null;
+  if (isOwner && !isDemoMode && user) {
+    const [apify, gemini, shopee] = await Promise.all([
+      hasApifyCredentials(user.id).then((r) => r.bound || Boolean(env.apifyToken)).catch(() => false),
+      hasGeminiKey(user.id).then((b) => b || Boolean(env.geminiApiKey)).catch(() => false),
+      getShopeeCredentials(user.id).then((c) => Boolean(c) || Boolean(env.shopeeAppId && env.shopeeSecret)).catch(() => false)
+    ]);
+    binds = { apify, gemini, shopee };
+  }
+
   return NextResponse.json({
     ok: true,
     at: new Date().toISOString(),
@@ -58,6 +76,7 @@ export async function GET() {
     stats,
     threadsQuota,
     cloudinary,
-    lastCronAt
+    lastCronAt,
+    binds
   });
 }

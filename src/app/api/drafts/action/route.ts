@@ -8,6 +8,7 @@ import {
   getGeminiKey
 } from "@/lib/store";
 import { publishToThreads } from "@/services/threads/publish";
+import { normalizeDraftMedia } from "@/lib/media";
 import { generateCopy } from "@/services/ai/provider";
 import { getCurrentUser } from "@/lib/auth";
 import { isDemoMode } from "@/lib/env";
@@ -70,6 +71,10 @@ export async function POST(req: Request) {
   }
 
   if (action === "publish") {
+    // 人工按「核准並發布」即視為核准；但已發布／發布中／已退回的不可再次發布，避免重複貼文
+    if (draft.status === "published" || draft.status === "publishing" || draft.status === "rejected") {
+      return NextResponse.json({ ok: false, error: `草稿狀態為「${draft.status}」，無法發布` }, { status: 400 });
+    }
     if (isDemoMode) {
       await updateDraftStatus(id, "published", { published_post_id: "demo_" + Date.now() });
       return NextResponse.json({ ok: true, demo: true });
@@ -83,8 +88,7 @@ export async function POST(req: Request) {
         threadsUserId: creds.threadsUserId,
         accessToken: creds.accessToken,
         text: draft.main_text ?? "",
-        mediaUrl: draft.cloudinary_media_url,
-        mediaType: (draft.media_type as "image" | "video" | "none") ?? "none",
+        media: normalizeDraftMedia(draft),
         replyText: draft.reply_text
       });
       await updateDraftStatus(id, "published", { published_post_id: postId, published_at: new Date().toISOString() });

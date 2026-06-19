@@ -58,6 +58,11 @@ export type DraftStatus =
   | "failed"
   | "rejected";
 
+export interface DraftMedia {
+  url: string;
+  type: "image" | "video";
+}
+
 export interface Draft {
   id: string;
   owner_id?: string | null;
@@ -71,6 +76,9 @@ export interface Draft {
   media_type?: "image" | "video" | "none" | null;
   source_media_url?: string | null;
   cloudinary_media_url?: string | null;
+  // 多媒體（輪播）：人工拖拉上傳/排序後存這裡；空陣列時退回上面單一 media 欄位（向後相容）。
+  // DB 為 jsonb NOT NULL default '[]'，讀取一律是陣列，故型別不含 null。
+  media?: DraftMedia[];
   main_text?: string | null;
   reply_text?: string | null;
   ai_raw?: string | null;

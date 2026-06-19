@@ -878,7 +878,9 @@ export async function claimReplyForPublish(id: string, ownerId: string): Promise
   return Boolean(data);
 }
 
-// 回收卡在 publishing-reply（程序中斷）的留言：到期時間已過 staleMinutes → 標 failed，避免永久卡住。
+// 回收卡在 publishing-reply（程序中斷）的留言 → 標 failed，避免永久卡住。
+// 以 updated_at（＝認領時間，trg_drafts_updated 觸發器維護）判斷逾期，而非 reply_due_at——
+// 否則分片並行下，另一片剛認領（reply_due_at 可能很舊的積壓件）會被本片誤判逾期回收成 failed。
 export async function reclaimStaleReplies(staleMinutes = 15): Promise<number> {
   if (isDemoMode) return 0;
   const cutoff = new Date(Date.now() - staleMinutes * 60_000).toISOString();
@@ -887,7 +889,7 @@ export async function reclaimStaleReplies(staleMinutes = 15): Promise<number> {
     .from("drafts")
     .update({ reply_status: "failed", error: "補留言程序中斷" })
     .eq("reply_status", "publishing-reply")
-    .lt("reply_due_at", cutoff)
+    .lt("updated_at", cutoff)
     .select("id");
   return (data ?? []).length;
 }

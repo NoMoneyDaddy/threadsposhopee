@@ -38,7 +38,7 @@ export interface ShardOpts {
   total: number;
 }
 
-function inShard(accountId: string | null | undefined, shard?: ShardOpts): boolean {
+export function inShard(accountId: string | null | undefined, shard?: ShardOpts): boolean {
   if (!shard) return true;
   // 未綁帳號的草稿歸片 0，確保仍有一片會記錄其「未綁定」略過（不會在每片都消失）
   if (!accountId) return shard.index === 0;
@@ -188,7 +188,10 @@ async function publishDueReplies(startTime: number, shard?: ShardOpts): Promise<
   await reclaimStaleReplies().catch((e) => console.warn("回收卡住留言失敗：", e instanceof Error ? e.message : e));
   let due;
   try {
-    due = (await listRepliesDue()).filter((d) => inShard(d.threads_account_id, shard));
+    // 分片模式下，前 N 筆到期留言可能都屬其他片 → 本片過濾後變空而「餓死」。
+    // 撈大一點再記憶體過濾（迴圈有 50s budget 保護，量大也安全）。
+    const limit = shard ? 20 * shard.total : 20;
+    due = (await listRepliesDue(limit)).filter((d) => inShard(d.threads_account_id, shard));
   } catch (e) {
     console.warn("撈待補留言失敗：", e instanceof Error ? e.message : e);
     return out;

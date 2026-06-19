@@ -18,9 +18,9 @@ export default async function AccountsPage({
   const ownerId = user?.id ?? "demo-user";
   const [threads, shopee] = await Promise.all([listThreadsAccounts(ownerId), listShopeeAccounts(ownerId)]);
   const oauthReady = !isDemoMode && Boolean(env.threadsAppId && env.threadsRedirectUri);
-  // 子系統綁定狀態（owner 限定）
+  // 爬蟲（Apify）owner 限定；AI（Gemini）每人各綁各的
   const apify = user?.isOwner ? await hasApifyCredentials(ownerId) : { bound: false, actor: null };
-  const geminiBound = user?.isOwner ? await hasGeminiKey(ownerId) : false;
+  const geminiBound = user ? await hasGeminiKey(ownerId) : false;
 
   return (
     <div className="space-y-6">
@@ -65,12 +65,11 @@ export default async function AccountsPage({
         <ShopeeAccountForm />
       </div>
 
-      {user?.isOwner && (
-        <div className="grid gap-4 md:grid-cols-2">
-          <ApifyForm bound={apify.bound} actor={apify.actor} />
-          <GeminiForm bound={geminiBound} />
-        </div>
-      )}
+      <div className="grid gap-4 md:grid-cols-2">
+        {/* 爬蟲僅 owner；AI 文案每人各綁各的 */}
+        {user?.isOwner && <ApifyForm bound={apify.bound} actor={apify.actor} />}
+        {user && <GeminiForm bound={geminiBound} />}
+      </div>
 
       <section>
         <h2 className="mb-2 font-semibold">Threads 發文帳號</h2>

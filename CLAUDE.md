@@ -30,9 +30,9 @@
 - **Next.js 14 App Router + Supabase**（Postgres + Auth + RLS）。Demo 模式（未設金鑰）用 `src/fixtures` 跑。
 - 兩個獨立子系統：
   - **爬蟲**（owner 限定）：owner 綁自己的 Apify → 監看來源 → AI 文案 → 草稿（**一律待人工核准**）。
-  - **發文**：各自 Threads 帳號 → 只發**核准過**的草稿，依防封節奏（間隔／每日上限／批次）。
-- 憑證自綁（加密存 `profiles`／各帳號表）：Apify、Shopee、Gemini、Threads OAuth。
-- 排程：一條總排程 `/api/cron/all`（爬取＋發文＋每日展期 token＋每週健檢連結）。
+  - **發文**：各自 Threads 帳號 → 只發**核准過**的草稿，依防封節奏（間隔＋隨機抖動／每日上限／批次）。留言（串文 2/2 分潤連結）可延遲補發（保底＋抖動＋逐則覆寫）。
+- 憑證自綁（加密存 `profiles`／各帳號表）：Apify、Shopee、Gemini、Threads OAuth、Cloudinary（各人素材進自己雲端）。
+- 排程：一條總排程 `/api/cron/all`（爬取＋發文＋每日展期 token＋每週健檢連結）。量大時發文可分片並行：多條 `/api/cron/publish?shards=N&shard=i`（同帳號穩定落同片，全域與分片擇一）。
 - 資料層集中在 `src/lib/store.ts`（service-role + 以 `owner_id` 應用層隔離；demo 走記憶體）。
 - 時區一律 `Asia/Taipei`。外部 fetch 一律走 `fetchWithTimeout`，URL 先過 `assertSafePublicUrl`（SSRF）。
 
@@ -41,4 +41,5 @@
 - 多租戶：所有使用者資料函式都要吃 `ownerId` 並過濾。**含發文憑證**：`getThreadsCredentials(id, ownerId)` 必帶 owner 過濾（service-role 繞 RLS，只用 id 查＝跨租戶越權）；建草稿/發文前先 `userOwnsThreadsAccount` 驗證帳號歸屬。
 - 佇列時段唯一性靠 migration 0008 索引 + `withNextSlot` 重試。
 - 發文佇列用 `app_state` 分布式鎖（`acquirePublishLock`/`releasePublishLock`）序列化，避免 cron 與手動觸發同跑而繞過防封間隔。
-- 遷移檔依序累加（目前到 `supabase/migrations/0016_*`）。
+- 遷移檔依序累加（目前到 `supabase/migrations/0017_*`）。
+- 延遲留言用 `reply_status`（pending→publishing-reply→published/failed）原子認領＋`reclaimStaleReplies`（以 `updated_at` 判逾期）防中斷重複補。

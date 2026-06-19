@@ -54,25 +54,17 @@ npm run pipeline:demo
 3. 部署（擇一）：
 
 ### A. Vercel
-直接連 repo 部署，`vercel.json` 的 Cron 會每 15 分自動打 `/api/cron`。
+直接連 repo 部署，`vercel.json` 已設一條總排程，每 15 分自動打 `/api/cron/all`，全自動。
 
 ### B. Zeabur（推薦給已有 Zeabur 帳號者）
 1. Zeabur → New Service → Git，選此 repo。Zeabur 會**自動偵測 Next.js**（免 Dockerfile），自動 `next build` / `next start`。
 2. 在該服務的 **Variables** 填上所有環境變數（同 `.env.example`）。
-3. 排程：`vercel.json` 在 Zeabur 不會生效，改用 **Zeabur Cron Job**。爬取與發文是**兩條獨立排程**，各開一個 Cron Job：
-   - **爬取／產草稿**（建議每 15 分 `*/15 * * * *`）：
-     ```bash
-     curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<你的網域>/api/cron
-     ```
-   - **發文**（建議每 30 分 `*/30 * * * *`，實際發幾篇由防封節奏決定）：
-     ```bash
-     curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<你的網域>/api/cron/publish
-     ```
-   - **Token 展期**（每日一次 `0 3 * * *`）：自動續期即將到期的 Threads 長期 token，過期前 7 天內展期，失敗則把帳號標為 `error`。
-     ```bash
-     curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<你的網域>/api/cron/refresh-tokens
-     ```
-   - `CRON_SECRET` 呼叫端與伺服器端要一致；生產環境若沒設，這些端點都會回 500 擋掉（安全保護）。
+3. 排程（**全傻瓜：只要一條**）：`vercel.json` 在 Zeabur 不生效，改開**一個** Zeabur Cron Job，每 15 分打總排程即可——它會自己跑爬取＋發文，並在每天 03 點展期 token、每週一 04 點健檢連結：
+   ```bash
+   curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<你的網域>/api/cron/all
+   ```
+   - `CRON_SECRET` 呼叫端與伺服器端要一致；生產環境若沒設，端點會回 500 擋掉（安全保護）。
+   - 進階：仍保留 `/api/cron`、`/api/cron/publish`、`/api/cron/refresh-tokens`、`/api/cron/check-links` 可各自獨立排程。
 
 ### 連 Threads 發文帳號（OAuth，免手貼 token）
 1. 在 [Meta 開發者後台](https://developers.facebook.com/) 建立含 **Threads API** 的 App，取得 App ID / Secret。

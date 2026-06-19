@@ -14,49 +14,67 @@ function stubFetch(impl: () => Promise<{ status: number }>) {
 test("Apify 401/403 → 擋下（ok:false）", async () => {
   for (const status of [401, 403]) {
     const restore = stubFetch(async () => ({ status }));
-    const r = await validateApifyToken("bad");
-    restore();
-    assert.equal(r.ok, false);
+    try {
+      const r = await validateApifyToken("bad");
+      assert.equal(r.ok, false);
+    } finally {
+      restore();
+    }
   }
 });
 
 test("Apify 200 → 放行（ok:true）", async () => {
   const restore = stubFetch(async () => ({ status: 200 }));
-  const r = await validateApifyToken("good");
-  restore();
-  assert.equal(r.ok, true);
+  try {
+    const r = await validateApifyToken("good");
+    assert.equal(r.ok, true);
+  } finally {
+    restore();
+  }
 });
 
 test("Apify 網路錯誤 → 無法確認，放行", async () => {
   const restore = stubFetch(async () => {
     throw new Error("network down");
   });
-  const r = await validateApifyToken("whatever");
-  restore();
-  assert.equal(r.ok, true);
+  try {
+    const r = await validateApifyToken("whatever");
+    assert.equal(r.ok, true);
+  } finally {
+    restore();
+  }
 });
 
 test("Gemini 400/401/403 → 擋下（ok:false）", async () => {
   for (const status of [400, 401, 403]) {
     const restore = stubFetch(async () => ({ status }));
-    const r = await validateGeminiKey("bad");
-    restore();
-    assert.equal(r.ok, false);
+    try {
+      const r = await validateGeminiKey("bad");
+      assert.equal(r.ok, false);
+    } finally {
+      restore();
+    }
   }
 });
 
 test("Gemini 200 → 放行（ok:true）", async () => {
   const restore = stubFetch(async () => ({ status: 200 }));
-  const r = await validateGeminiKey("good");
-  restore();
-  assert.equal(r.ok, true);
+  try {
+    const r = await validateGeminiKey("good");
+    assert.equal(r.ok, true);
+  } finally {
+    restore();
+  }
 });
 
 test("Gemini 逾時拋錯 → 放行", async () => {
   const restore = stubFetch(async () => {
     throw new Error("timeout");
   });
-  const r = await validateGeminiKey("whatever");
-  restore();
-  assert.equal(r.ok, true);
+  try {
+    const r = await validateGeminiKey("whatever");
+    assert.equal(r.ok, true);
+  } finally {
+    restore();
+  }
 });

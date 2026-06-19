@@ -21,6 +21,7 @@ export async function POST(req: Request) {
     await setGeminiKey(user.id, key);
     return NextResponse.json({ ok: true });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 500 });
+    console.error("gemini credential bind failed", e);
+    return NextResponse.json({ ok: false, error: "伺服器暫時無法處理，請稍後再試" }, { status: 500 });
   }
 }

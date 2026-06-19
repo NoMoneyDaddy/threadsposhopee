@@ -41,7 +41,7 @@ export default function ThreadsPreview({
           <div className="h-9 w-9 rounded-full bg-gradient-to-br from-neutral-300 to-neutral-400" />
           {hasReply && <div className="mt-1 w-px flex-1 bg-neutral-200" />}
         </div>
-        <div className="min-w-0 flex-1 pb-1">
+        <div className="min-w-0 flex-1 pb-3">
           <div className="flex items-center gap-1 text-sm">
             <span className="font-semibold text-neutral-900">{handle}</span>
             {total > 1 && <span className="text-neutral-400">{`1/${total}`}</span>}

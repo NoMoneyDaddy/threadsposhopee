@@ -22,7 +22,7 @@ export default function SourceForm({
     shopee_account_id: "",
     poll_interval_minutes: "15",
     posts_limit: "1",
-    auto_publish: false
+    auto_publish: true
   });
 
   function set<K extends keyof typeof form>(k: K, v: (typeof form)[K]) {

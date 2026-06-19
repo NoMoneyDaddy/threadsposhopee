@@ -5,6 +5,7 @@ import { runAllSources } from "@/services/pipeline/run";
 import { runPublishQueue } from "@/services/publish/queue";
 import { refreshExpiringTokens } from "@/services/threads/refresh";
 import { checkAffiliateLinks } from "@/services/materials/linkcheck";
+import { setHeartbeat } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -54,6 +55,7 @@ export async function GET(req: Request) {
     }
   }
 
+  await setHeartbeat().catch(() => {});
   if (alerts.length) await sendAlert(`自動排程：${alerts.join("；")}`);
   return NextResponse.json({ ok: true, ...out });
 }

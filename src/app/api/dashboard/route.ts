@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { getDashboardStats, listActiveThreadsCredentials } from "@/lib/store";
+import { getDashboardStats, listActiveThreadsCredentials, getHeartbeat } from "@/lib/store";
 import { getPublishingLimit } from "@/services/threads/limit";
 import { getCloudinaryUsage } from "@/services/media/cloudinary-usage";
 import { env, isDemoMode } from "@/lib/env";
@@ -47,6 +47,8 @@ export async function GET() {
     ).filter((x): x is { label: string; used: number; limit: number } => x !== null);
   }
 
+  const lastCronAt = await getHeartbeat().catch(() => null);
+
   return NextResponse.json({
     ok: true,
     at: new Date().toISOString(),
@@ -55,6 +57,7 @@ export async function GET() {
     services,
     stats,
     threadsQuota,
-    cloudinary
+    cloudinary,
+    lastCronAt
   });
 }

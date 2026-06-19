@@ -18,6 +18,32 @@ interface DashboardData {
   };
   threadsQuota: { label: string; used: number; limit: number }[];
   cloudinary: { creditsUsed: number; creditsLimit: number; storageBytes: number; resources: number } | null;
+  lastCronAt?: string | null;
+}
+
+// 自動駕駛心跳：依上次排程執行時間判斷是否運轉中（demo 模式不顯示）。
+function Autopilot({ lastCronAt, demo }: { lastCronAt?: string | null; demo: boolean }) {
+  if (demo) return null;
+  if (!lastCronAt) {
+    return (
+      <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-sm text-neutral-500">
+        🅿️ 自動駕駛尚未啟動 — 請到 Zeabur 設一條 Cron 打 <code>/api/cron/all</code>（每 15 分）。
+      </div>
+    );
+  }
+  const mins = Math.round((Date.now() - new Date(lastCronAt).getTime()) / 60000);
+  const stale = mins > 30;
+  const ago = mins < 1 ? "剛剛" : mins < 60 ? `${mins} 分鐘前` : `${Math.round(mins / 60)} 小時前`;
+  return (
+    <div
+      className={`flex items-center gap-2 rounded-lg border p-3 text-sm ${
+        stale ? "border-amber-200 bg-amber-50 text-amber-700" : "border-green-200 bg-green-50 text-green-700"
+      }`}
+    >
+      <span className={`h-2 w-2 rounded-full ${stale ? "bg-amber-500" : "animate-pulse bg-green-500"}`} />
+      {stale ? `⚠️ 排程似乎停了（上次執行 ${ago}）` : `🚀 自動駕駛運轉中 — 上次執行 ${ago}`}
+    </div>
+  );
 }
 
 const REFRESH_MS = 20000;
@@ -100,6 +126,7 @@ export default function LiveDashboard() {
   ];
   return (
     <div className="space-y-6">
+      <Autopilot lastCronAt={data.lastCronAt} demo={data.demo} />
       {setupIncomplete && (
         <div className="rounded-lg border border-shopee/30 bg-orange-50 p-5">
           <h2 className="mb-3 font-semibold text-neutral-800">🚀 開始使用（3 步驟）</h2>

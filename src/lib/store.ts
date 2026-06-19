@@ -17,6 +17,29 @@ const demo = {
   materials: [] as Material[]
 };
 
+// 排程心跳（demo 用記憶體）
+let demoHeartbeat: string | null = null;
+
+// 寫入排程心跳（任一 cron 成功時呼叫），給儀表板顯示自動駕駛是否運轉。
+export async function setHeartbeat(): Promise<void> {
+  const nowIso = new Date().toISOString();
+  if (isDemoMode) {
+    demoHeartbeat = nowIso;
+    return;
+  }
+  const sb = getServiceClient()!;
+  await sb
+    .from("app_state")
+    .upsert({ key: "cron_heartbeat", value: nowIso, updated_at: nowIso }, { onConflict: "key" });
+}
+
+export async function getHeartbeat(): Promise<string | null> {
+  if (isDemoMode) return demoHeartbeat;
+  const sb = getServiceClient()!;
+  const { data } = await sb.from("app_state").select("value").eq("key", "cron_heartbeat").maybeSingle();
+  return data?.value ?? null;
+}
+
 // ── 素材庫：以 (owner_id, shop_id, item_id) 為鍵，重用分潤連結＋AI 文案＋媒體 ──────
 export async function findMaterial(shopId: string, itemId: string, ownerId: string): Promise<Material | null> {
   if (isDemoMode) {

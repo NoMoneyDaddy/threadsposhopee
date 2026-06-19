@@ -268,6 +268,42 @@ export async function upsertThreadsAccountFromOAuth(
   return data as ThreadsAccount;
 }
 
+// ── 爬蟲子系統：每個使用者自己綁的 Apify 憑證（owner 用）──────────
+// 取出某使用者的 Apify token + actor（解密）。沒綁則回 null（呼叫端可退回全域 env）。
+export async function getApifyCredentials(ownerId: string): Promise<{ token: string; actor: string | null } | null> {
+  if (isDemoMode) return null;
+  const sb = getServiceClient()!;
+  const { data } = await sb.from("profiles").select("apify_token_enc, apify_actor").eq("id", ownerId).maybeSingle();
+  if (!data?.apify_token_enc) return null;
+  try {
+    return { token: decrypt(data.apify_token_enc), actor: data.apify_actor ?? null };
+  } catch (e) {
+    console.error("解密 Apify token 失敗:", e);
+    return null;
+  }
+}
+
+// 綁定／更新 Apify 憑證（token 加密）。actor 可選。
+export async function setApifyCredentials(ownerId: string, token: string, actor?: string | null): Promise<void> {
+  if (isDemoMode) return;
+  const sb = getServiceClient()!;
+  const { error } = await sb
+    .from("profiles")
+    .upsert(
+      { id: ownerId, apify_token_enc: encrypt(token), apify_actor: actor || null },
+      { onConflict: "id" }
+    );
+  if (error) throw error;
+}
+
+// 是否已綁 Apify（給帳號管理頁顯示狀態，不回傳明文）。
+export async function hasApifyCredentials(ownerId: string): Promise<{ bound: boolean; actor: string | null }> {
+  if (isDemoMode) return { bound: false, actor: null };
+  const sb = getServiceClient()!;
+  const { data } = await sb.from("profiles").select("apify_token_enc, apify_actor").eq("id", ownerId).maybeSingle();
+  return { bound: Boolean(data?.apify_token_enc), actor: data?.apify_actor ?? null };
+}
+
 export async function listShopeeAccounts(ownerId: string): Promise<ShopeeAccount[]> {
   if (isDemoMode) return demo.shopeeAccounts;
   const sb = getServiceClient()!;

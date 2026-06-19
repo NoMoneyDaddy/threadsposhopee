@@ -47,6 +47,20 @@ export default function DraftCard({ draft }: { draft: Draft }) {
 
   const done = draft.status === "published" || draft.status === "rejected";
 
+  // 延遲留言（串文 2/2）狀態：主文已發、留言由 cron 之後補。只在有設定留言時提示。
+  const rs = draft.reply_status;
+  const showReply = draft.status === "published" && rs && rs !== "none";
+  const fmtEta = (iso?: string | null) =>
+    iso
+      ? new Date(iso).toLocaleString("zh-TW", {
+          timeZone: "Asia/Taipei",
+          month: "numeric",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit"
+        })
+      : "—";
+
   return (
     <div className="flex flex-col rounded-lg border bg-white p-4">
       <div className="mb-2 flex items-center justify-between">
@@ -151,6 +165,28 @@ export default function DraftCard({ draft }: { draft: Draft }) {
       )}
       {draft.status === "failed" && draft.error && (
         <p className="mt-2 rounded bg-red-50 p-2 text-xs text-red-600">發布失敗：{draft.error}</p>
+      )}
+
+      {showReply && rs === "pending" && (
+        <p className="mt-2 rounded bg-amber-50 p-2 text-xs text-amber-700">🕒 留言補發排隊中（預計 {fmtEta(draft.reply_due_at)}）</p>
+      )}
+      {showReply && rs === "publishing-reply" && (
+        <p className="mt-2 rounded bg-amber-50 p-2 text-xs text-amber-700">⏳ 留言補發中…</p>
+      )}
+      {showReply && rs === "published" && (
+        <p className="mt-2 rounded bg-emerald-50 p-2 text-xs text-emerald-700">✅ 留言已補發</p>
+      )}
+      {showReply && rs === "failed" && (
+        <div className="mt-2 rounded bg-red-50 p-2 text-xs text-red-600">
+          <p>⚠️ 留言補發失敗{draft.error ? `：${draft.error}` : ""}</p>
+          <button
+            disabled={!!busy}
+            onClick={() => call("retry-reply")}
+            className="mt-1.5 rounded border border-amber-300 px-3 py-1 text-amber-700 hover:bg-amber-50 disabled:opacity-50"
+          >
+            {busy === "retry-reply" ? "重排中…" : "重試補留言"}
+          </button>
+        </div>
       )}
       {msg && <p className="mt-2 text-xs text-red-500">❌ {msg}</p>}
     </div>

@@ -924,6 +924,31 @@ export async function markReplyFailed(id: string, ownerId: string, err: string):
   if (error) throw new Error(`標記留言失敗失敗：${error.message}`);
 }
 
+// 人工重試「補留言失敗」：reply_status failed → pending、reply_due_at 設為現在，下輪 cron 立即重補。
+// 原子守門（只認 failed），避免與正在補發的狀態打架；回傳是否搶到。
+export async function requeueReply(id: string, ownerId: string): Promise<boolean> {
+  const nowIso = new Date().toISOString();
+  if (isDemoMode) {
+    const d = demo.drafts.find((x) => x.id === id);
+    if (d && d.reply_status === "failed") {
+      Object.assign(d, { reply_status: "pending", reply_due_at: nowIso, error: null });
+      return true;
+    }
+    return false;
+  }
+  const sb = getServiceClient()!;
+  const { data, error } = await sb
+    .from("drafts")
+    .update({ reply_status: "pending", reply_due_at: nowIso, error: null })
+    .eq("id", id)
+    .eq("owner_id", ownerId)
+    .eq("reply_status", "failed")
+    .select("id")
+    .maybeSingle();
+  if (error) throw new Error(`重排補留言失敗：${error.message}`);
+  return Boolean(data);
+}
+
 // 原子性狀態更新（compare-and-swap）：只有當目前狀態 == expectedStatus 才更新。
 export async function updateDraftStatusAtomic(
   id: string,

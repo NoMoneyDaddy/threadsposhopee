@@ -36,7 +36,8 @@ export const env = {
 
   // 發文流程的防封設定（保守預設，可用環境變數覆寫）
   // 注意：用 parseInt(x || 預設) 而非 Number()，避免空字串被解析成 0 導致防封失效
-  publishMinGapMinutes: parseInt(process.env.PUBLISH_MIN_GAP_MINUTES || "240", 10), // 每帳號每篇至少間隔（分）
+  publishMinGapMinutes: parseInt(process.env.PUBLISH_MIN_GAP_MINUTES || "240", 10), // 每帳號每篇「保底」最小間隔（分）
+  publishGapJitterMinutes: parseInt(process.env.PUBLISH_GAP_JITTER_MINUTES || "0", 10), // 保底之上的隨機抖動上限（分），防固定節奏
   publishMaxPerDay: parseInt(process.env.PUBLISH_MAX_PER_DAY || "5", 10), // 每帳號每 24h 上限（遠低於 Threads 250）
   publishBatchPerRun: parseInt(process.env.PUBLISH_BATCH_PER_RUN || "1", 10), // 每次 cron 每帳號最多發幾篇
   // 「加入佇列」用的每日發文時段（Asia/Taipei，HH:MM，逗號分隔）

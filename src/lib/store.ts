@@ -3,10 +3,11 @@
 // - 沒設定（Demo 模式）→ 用記憶體 + fixtures（單人，忽略 ownerId）。
 import { randomUUID } from "node:crypto";
 import { getServiceClient } from "./supabase/server";
-import { isDemoMode } from "./env";
+import { env, isDemoMode } from "./env";
 import { decrypt, encrypt } from "./crypto";
 import type { Draft, Material, Source, ThreadsAccount, ShopeeAccount } from "./types";
 import { DEFAULT_COPY_PREFS, normalizeCopyPrefs, type CopyPrefs } from "@/services/ai/prefs";
+import { planAccountQueue } from "@/services/publish/cadence";
 import demoData from "@/fixtures/demo-data.json";
 
 // ── Demo 記憶體狀態（程序重啟即清空）──────────────────────────
@@ -778,10 +779,103 @@ export async function listApprovedDrafts(): Promise<Draft[]> {
   return (data ?? []) as Draft[];
 }
 
+export interface PublishPlanRow {
+  id: string;
+  productName: string | null;
+  accountLabel: string;
+  etaIso: string | null;
+  reason: string;
+}
+
+// 規劃用：owner 自己「已核准」的草稿（含未來排程），不受 listDrafts 的 100 列上限影響。
+async function listApprovedDraftsForPlan(ownerId: string, limit = 200): Promise<Draft[]> {
+  if (isDemoMode) {
+    // demo 為單人，忽略 ownerId（與其他 demo 查詢一致）
+    return demo.drafts
+      .filter((d) => d.status === "approved")
+      .sort((a, b) => a.created_at.localeCompare(b.created_at))
+      .slice(0, limit);
+  }
+  const sb = getServiceClient()!;
+  const { data } = await sb
+    .from("drafts")
+    .select("id, product_name, threads_account_id, scheduled_at, created_at, status")
+    .eq("owner_id", ownerId)
+    .eq("status", "approved")
+    .order("created_at", { ascending: true })
+    .limit(limit);
+  return (data ?? []) as Draft[];
+}
+
+// 發文進度/ETA（給使用者看「排隊中／下次預計幾點／塞車」）。
+// 乾跑佇列節奏：依帳號分組，套用保底+抖動間隔與每日上限，算出每篇預計發文時間。
+export async function getPublishPlan(ownerId: string): Promise<PublishPlanRow[]> {
+  const [drafts, accounts] = await Promise.all([listApprovedDraftsForPlan(ownerId), listThreadsAccounts(ownerId)]);
+  const labelOf = new Map(accounts.map((a) => [a.id, a.label] as const));
+  // 多租戶：只規劃 owner 自己擁有的帳號（即使草稿異常引用他人帳號也不跨租戶讀狀態）
+  const approved = drafts.filter((d) => d.threads_account_id && labelOf.has(d.threads_account_id));
+  if (approved.length === 0) return [];
+  const now = Date.now();
+
+  // 依帳號分組，組內依 created_at 排序（與發文 worker 的處理順序一致）
+  const byAccount = new Map<string, Draft[]>();
+  for (const d of approved) {
+    const arr = byAccount.get(d.threads_account_id!) ?? [];
+    arr.push(d);
+    byAccount.set(d.threads_account_id!, arr);
+  }
+
+  // 各帳號狀態並行抓，避免迴圈內序列化查詢（N+1）
+  const stateEntries = await Promise.all(
+    Array.from(byAccount.keys()).map(async (accId) => [accId, await getAccountPublishState(accId, ownerId).catch(() => null)] as const)
+  );
+  const stateMap = new Map(stateEntries);
+
+  const rows: PublishPlanRow[] = [];
+  for (const [accId, list] of byAccount) {
+    list.sort((a, b) => a.created_at.localeCompare(b.created_at)); // 對齊 worker（listApprovedDrafts 依 created_at）
+    const state = stateMap.get(accId);
+    if (!state) continue;
+    if (state.accountStatus !== "active") {
+      for (const d of list) {
+        rows.push({ id: d.id, productName: d.product_name ?? null, accountLabel: labelOf.get(accId) ?? "帳號", etaIso: null, reason: `帳號${state.accountStatus}，暫停發文` });
+      }
+      continue;
+    }
+    const plan = planAccountQueue({
+      drafts: list.map((d) => ({ id: d.id, scheduledAt: d.scheduled_at ?? null })),
+      lastPublishedAt: state.lastPublishedAt,
+      publishedLast24h: state.publishedLast24h,
+      floorMin: env.publishMinGapMinutes,
+      jitterMax: env.publishGapJitterMinutes,
+      dailyCap: env.publishMaxPerDay,
+      accountId: accId,
+      now
+    });
+    const planById = new Map(plan.map((p) => [p.id, p] as const));
+    for (const d of list) {
+      const p = planById.get(d.id);
+      rows.push({
+        id: d.id,
+        productName: d.product_name ?? null,
+        accountLabel: labelOf.get(accId) ?? "帳號",
+        etaIso: p?.etaIso ?? null,
+        reason: p?.reason ?? "排隊中"
+      });
+    }
+  }
+  // 依預計時間排序（null 殿後）
+  rows.sort((a, b) => (a.etaIso ?? "9999").localeCompare(b.etaIso ?? "9999"));
+  return rows;
+}
+
 // 某 Threads 帳號的發文節奏狀態 + 帳號狀態（背景 worker 用）。
 // accountStatus：active 才會被發文；error/paused（如展期失敗）會被佇列跳過。
+// ownerId（選填）：傳入則對 drafts 查詢加 owner_id 過濾，強化多租戶隔離；
+// 背景 worker 跨租戶處理時可不傳。
 export async function getAccountPublishState(
-  threadsAccountId: string
+  threadsAccountId: string,
+  ownerId?: string
 ): Promise<{ lastPublishedAt: string | null; publishedLast24h: number; accountStatus: string }> {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   if (isDemoMode) {
@@ -802,19 +896,21 @@ export async function getAccountPublishState(
     .maybeSingle();
   if (accError) throw accError;
   if (!acc) throw new Error(`找不到 ID 為 ${threadsAccountId} 的 Threads 帳號`);
-  const { data: latest } = await sb
+  let latestQ = sb
     .from("drafts")
     .select("published_at")
     .eq("threads_account_id", threadsAccountId)
-    .eq("status", "published")
-    .order("published_at", { ascending: false })
-    .limit(1);
-  const { count } = await sb
+    .eq("status", "published");
+  if (ownerId) latestQ = latestQ.eq("owner_id", ownerId);
+  const { data: latest } = await latestQ.order("published_at", { ascending: false }).limit(1);
+  let countQ = sb
     .from("drafts")
     .select("*", { count: "exact", head: true })
     .eq("threads_account_id", threadsAccountId)
     .eq("status", "published")
     .gte("published_at", since);
+  if (ownerId) countQ = countQ.eq("owner_id", ownerId);
+  const { count } = await countQ;
   return {
     lastPublishedAt: latest?.[0]?.published_at ?? null,
     publishedLast24h: count ?? 0,

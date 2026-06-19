@@ -11,6 +11,7 @@ import {
 } from "@/lib/store";
 import { publishToThreads } from "@/services/threads/publish";
 import { normalizeDraftMedia } from "@/lib/media";
+import { effectiveGapMinutes } from "@/services/publish/cadence";
 
 export interface PublishResult {
   considered: number;
@@ -69,11 +70,14 @@ export async function runPublishQueue(): Promise<PublishResult> {
     }
     if (state.lastPublishedAt) {
       const gapMin = (Date.now() - new Date(state.lastPublishedAt).getTime()) / 60000;
-      if (gapMin < env.publishMinGapMinutes) {
-        result.skipped.push({
-          id: draft.id,
-          reason: `未達最小間隔（${Math.round(gapMin)}/${env.publishMinGapMinutes} 分）`
-        });
+      // 有效間隔 = 保底 + 隨機抖動（以帳號+上次發文時間為穩定 seed，與前端 ETA 估算一致）
+      const required = effectiveGapMinutes(
+        env.publishMinGapMinutes,
+        env.publishGapJitterMinutes,
+        `${accId}:${new Date(state.lastPublishedAt).getTime()}`
+      );
+      if (gapMin < required) {
+        result.skipped.push({ id: draft.id, reason: `未達最小間隔（${Math.round(gapMin)}/${required} 分）` });
         continue;
       }
     }

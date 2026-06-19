@@ -6,7 +6,8 @@ import {
   getHeartbeat,
   hasApifyCredentials,
   hasGeminiKey,
-  getShopeeCredentials
+  getShopeeCredentials,
+  getPublishPlan
 } from "@/lib/store";
 import { getPublishingLimit } from "@/services/threads/limit";
 import { getCloudinaryUsage } from "@/services/media/cloudinary-usage";
@@ -56,6 +57,15 @@ export async function GET() {
 
   const lastCronAt = await getHeartbeat().catch(() => null);
 
+  // 發文進度/ETA：排隊中的草稿預計何時發（含塞車提示）。取前 20 筆即可。
+  // 失敗不擋整個儀表板，但記 log 以利診斷（不靜默吞）。
+  const publishPlan = (
+    await getPublishPlan(ownerId).catch((e) => {
+      console.error("getPublishPlan 失敗：", e instanceof Error ? e.message : e);
+      return [];
+    })
+  ).slice(0, 20);
+
   // 金鑰自綁狀態（提示用）。owner 與 member 規則不同：
   // - Apify（爬蟲）只有 owner 需要；member 不適用 → 視為 OK 不嘮叨。
   // - Gemini（AI）每人都需要，自綁或 env 後備皆可。
@@ -84,6 +94,7 @@ export async function GET() {
     threadsQuota,
     cloudinary,
     lastCronAt,
-    binds
+    binds,
+    publishPlan
   });
 }

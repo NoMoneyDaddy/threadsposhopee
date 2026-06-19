@@ -20,6 +20,55 @@ interface DashboardData {
   cloudinary: { creditsUsed: number; creditsLimit: number; storageBytes: number; resources: number } | null;
   lastCronAt?: string | null;
   binds?: { apify: boolean; gemini: boolean; shopee: boolean } | null;
+  publishPlan?: { id: string; productName: string | null; accountLabel: string; etaIso: string | null; reason: string }[];
+}
+
+// 發文進度：排隊中的草稿預計何時發。多到一定量視為「塞車」。
+function PublishPlan({ rows }: { rows: DashboardData["publishPlan"] }) {
+  if (!rows || rows.length === 0) return null;
+  const congested = rows.length >= 10; // 佇列累積較多 → 提示塞車
+  const fmt = (iso: string | null) =>
+    iso
+      ? new Date(iso).toLocaleString("zh-TW", {
+          timeZone: "Asia/Taipei",
+          month: "numeric",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit"
+        })
+      : "—";
+  return (
+    <div className="rounded-lg border bg-white p-5">
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="font-semibold">發文排隊進度</h2>
+        {congested && (
+          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700">
+            🚦 塞車中（{rows.length} 篇待發）
+          </span>
+        )}
+      </div>
+      <table className="w-full text-sm">
+        <thead className="sr-only">
+          <tr>
+            <th>帳號</th>
+            <th>商品</th>
+            <th>狀態</th>
+            <th>預計時間</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.id} className="flex items-center gap-2">
+              <td className="w-24 shrink-0 truncate text-neutral-500">{r.accountLabel}</td>
+              <td className="min-w-0 flex-1 truncate text-neutral-800">{r.productName ?? "（草稿）"}</td>
+              <td className="shrink-0 text-xs text-neutral-400">{r.reason}</td>
+              <td className="w-28 shrink-0 text-right text-xs tabular-nums text-neutral-600">{fmt(r.etaIso)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 // 未綁金鑰提示：自綁或 env 任一有就算 OK；缺的列出來提醒去帳號管理綁。
@@ -149,6 +198,7 @@ export default function LiveDashboard() {
     <div className="space-y-6">
       <Autopilot lastCronAt={data.lastCronAt} demo={data.demo} />
       <MissingBinds binds={data.binds} />
+      <PublishPlan rows={data.publishPlan} />
       {setupIncomplete && (
         <div className="rounded-lg border border-shopee/30 bg-orange-50 p-5">
           <h2 className="mb-3 font-semibold text-neutral-800">🚀 開始使用（3 步驟）</h2>

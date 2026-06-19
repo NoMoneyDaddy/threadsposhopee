@@ -44,6 +44,11 @@ export default async function MaterialsPage() {
               {m.affiliate_short_link}
             </a>
             {m.affiliate_sub_id && <div className="text-xs text-neutral-400">subId: {m.affiliate_sub_id}</div>}
+            {m.affiliate_checked_at && (
+              <div className="mt-1 text-xs text-neutral-300">
+                連結檢查於 {new Date(m.affiliate_checked_at).toLocaleDateString("zh-TW", { timeZone: "Asia/Taipei" })}
+              </div>
+            )}
             <div className="mt-3">
               <RepostButton materialId={m.id} threadsAccounts={accounts} />
             </div>

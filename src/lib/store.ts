@@ -86,6 +86,33 @@ export async function markAffiliateInvalid(materialId: string): Promise<void> {
   if (error) throw error;
 }
 
+// 連結健檢 worker 用：取最久沒檢查、目前仍有效的素材（跨租戶）。
+export async function listMaterialsToCheck(
+  limit = 30
+): Promise<{ id: string; link: string }[]> {
+  if (isDemoMode) return [];
+  const sb = getServiceClient()!;
+  const { data } = await sb
+    .from("materials")
+    .select("id, affiliate_short_link, affiliate_checked_at")
+    .eq("affiliate_valid", true)
+    .not("affiliate_short_link", "is", null)
+    .order("affiliate_checked_at", { ascending: true, nullsFirst: true })
+    .limit(limit);
+  return (data ?? [])
+    .filter((m) => m.affiliate_short_link)
+    .map((m) => ({ id: m.id, link: m.affiliate_short_link as string }));
+}
+
+// 寫回健檢結果：更新 checked_at；dead=true 才標 affiliate_valid=false（保守）。
+export async function setAffiliateChecked(id: string, dead: boolean): Promise<void> {
+  if (isDemoMode) return;
+  const sb = getServiceClient()!;
+  const patch: Record<string, unknown> = { affiliate_checked_at: new Date().toISOString() };
+  if (dead) patch.affiliate_valid = false;
+  await sb.from("materials").update(patch).eq("id", id);
+}
+
 // 從素材快照產生一篇草稿（重用文案/連結/媒體，不重燒 token）
 export async function createDraftFromMaterial(
   material: Material,

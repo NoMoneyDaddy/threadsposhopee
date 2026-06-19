@@ -1,10 +1,11 @@
-import { listShopeeAccounts, listThreadsAccounts, hasApifyCredentials, hasGeminiKey } from "@/lib/store";
+import { listShopeeAccounts, listThreadsAccounts, hasApifyCredentials, hasGeminiKey, getCopyPrefs } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
 import { env, isDemoMode } from "@/lib/env";
 import ThreadsAccountForm from "@/components/ThreadsAccountForm";
 import ShopeeAccountForm from "@/components/ShopeeAccountForm";
 import ApifyForm from "@/components/ApifyForm";
 import GeminiForm from "@/components/GeminiForm";
+import CopyPrefsForm from "@/components/CopyPrefsForm";
 import { DeleteButton, ToggleButton } from "@/components/RowActions";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +22,7 @@ export default async function AccountsPage({
   // 爬蟲（Apify）owner 限定；AI（Gemini）每人各綁各的
   const apify = user?.isOwner ? await hasApifyCredentials(ownerId) : { bound: false, actor: null };
   const geminiBound = user ? await hasGeminiKey(user.id) : false;
+  const copyPrefs = await getCopyPrefs(ownerId);
 
   return (
     <div className="space-y-6">
@@ -71,6 +73,8 @@ export default async function AccountsPage({
         {user && <GeminiForm bound={geminiBound} />}
       </div>
 
+      <CopyPrefsForm initial={copyPrefs} />
+
       <section>
         <h2 className="mb-2 font-semibold">Threads 發文帳號</h2>
         <div className="grid gap-3 md:grid-cols-2">
@@ -83,7 +87,7 @@ export default async function AccountsPage({
               <div className="mt-1 text-sm text-neutral-500">user id: {a.threads_user_id}</div>
               {a.token_expires_at && (
                 <div className="text-xs text-neutral-400">
-                  token 到期：{new Date(a.token_expires_at).toLocaleDateString("zh-TW")}（自動展期）
+                  token 到期：{new Date(a.token_expires_at).toLocaleDateString("zh-TW", { timeZone: "Asia/Taipei" })}（自動展期）
                 </div>
               )}
               <div className="mt-2 flex items-center gap-3 border-t pt-2">

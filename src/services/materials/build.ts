@@ -4,7 +4,8 @@ import { isDemoMode } from "@/lib/env";
 import { generateAffiliateLink, getProductName, buildSubIds } from "@/services/shopee/affiliate";
 import { generateCopy } from "@/services/ai/provider";
 import { uploadToCloudinary } from "@/services/media/cloudinary";
-import { createMaterial } from "@/lib/store";
+import { createMaterial, getCopyPrefs } from "@/lib/store";
+import type { CopyPrefs } from "@/services/ai/prefs";
 import type { Material } from "@/lib/types";
 
 interface BuildMaterialInput {
@@ -25,7 +26,8 @@ export async function buildMaterialForProduct(
   // owner 傳入環境變數金鑰；member 傳入自己的金鑰或 null。
   shopeeCreds: { appId: string; secret: string; subId: string } | null,
   notes: string[] = [],
-  geminiKey?: string | null // 使用者自綁的 Gemini key；沒傳則退回 env
+  geminiKey?: string | null, // 使用者自綁的 Gemini key；沒傳則退回 env
+  copyPrefs?: CopyPrefs // 文案偏好；上層（pipeline 迴圈）先取好傳入，避免每篇重查
 ): Promise<Material> {
   const media = input.media ?? { url: null, type: "none" as const };
   let shortLink = input.originalShortLink;
@@ -60,6 +62,7 @@ export async function buildMaterialForProduct(
   let aiRaw: string | null = null;
   let aiAt: string | null = null;
   if (input.withCopy !== false) {
+    const prefs = copyPrefs ?? (await getCopyPrefs(ownerId)); // 套用該使用者的文案客製化偏好
     const copy = await generateCopy(
       {
         productName: productName ?? "這個好物",
@@ -68,7 +71,8 @@ export async function buildMaterialForProduct(
         mediaUrl: media.url,
         mediaType: media.type
       },
-      geminiKey
+      geminiKey,
+      prefs
     );
     mainText = copy.mainText;
     replyText = copy.replyText;

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { fetchWithTimeout } from "@/lib/http";
 
 // 各人自綁 Cloudinary：素材（圖片/影片）中轉進你自己的雲端，而非共用 owner 的額度。
 // 只需 cloud name 與一個「unsigned」upload preset（preset 本就設計給前端公開使用，非機密）。
@@ -22,11 +23,15 @@ export default function CloudinaryForm({
     setBusy(true);
     setMsg(null);
     try {
-      const res = await fetch("/api/accounts/cloudinary", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cloud: cloud.trim(), preset: preset.trim() })
-      });
+      const res = await fetchWithTimeout(
+        "/api/accounts/cloudinary",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cloud: cloud.trim(), preset: preset.trim() })
+        },
+        10000
+      );
       const json = await res.json();
       if (!json.ok) throw new Error(json.error);
       setMsg(cloud.trim() ? "✅ 已儲存" : "✅ 已清除");

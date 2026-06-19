@@ -405,7 +405,12 @@ export async function getUserCloudinary(ownerId: string): Promise<{ cloud: strin
     .select("cloudinary_cloud, cloudinary_preset")
     .eq("id", ownerId)
     .maybeSingle();
-  if (error) throw new Error(`讀取 Cloudinary 設定失敗：${error.message}`);
+  // Cloudinary 綁定是「可選」功能：讀取失敗不該中斷整條發文/爬取流程（pipeline 在迴圈外取一次，
+  // 拋出會讓整個 source run 失敗）。降級為記錄警告並回 null，自動退回 env 共用設定。
+  if (error) {
+    console.warn(`讀取 Cloudinary 設定失敗，改用共用設定：${error.message}`);
+    return null;
+  }
   const cloud = data?.cloudinary_cloud?.trim();
   const preset = data?.cloudinary_preset?.trim();
   // cloud 與 preset 必須成對才算綁定。不可用 env 預設 preset 補：系統 preset 多半不存在於

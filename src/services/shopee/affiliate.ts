@@ -31,6 +31,8 @@ export async function validateShopeeCredentials(
     if (/\b40[13]\b|signature|credential|authoriz|unauthor|invalid app/i.test(msg)) {
       return { ok: false, reason: "Shopee AppID／Secret 無效（驗證被拒）" };
     }
+    // 非授權錯誤（網路／逾時／schema 變更）放行，但記 log 以利觀測，避免驗證默默失效
+    console.warn("Shopee 憑證驗證無法確認，放行存檔：", msg);
     return { ok: true };
   }
 }

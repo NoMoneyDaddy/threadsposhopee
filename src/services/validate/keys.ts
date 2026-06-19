@@ -5,12 +5,13 @@ import { fetchWithTimeout } from "@/lib/http";
 //       網路錯誤／逾時無法確認 → unknown，仍照存（不因第三方故障擋住使用者）。
 export type KeyCheck = { ok: boolean; reason?: string };
 
-// Apify：GET /v2/users/me?token= 能拿到自己帳號即有效。
+// Apify：GET /v2/users/me 帶 Bearer token 能拿到自己帳號即有效。
+// 金鑰走 Authorization 標頭而非 query，避免寫進伺服器／代理日誌。
 export async function validateApifyToken(token: string): Promise<KeyCheck> {
   try {
     const res = await fetchWithTimeout(
-      `https://api.apify.com/v2/users/me?token=${encodeURIComponent(token)}`,
-      {},
+      "https://api.apify.com/v2/users/me",
+      { headers: { Authorization: `Bearer ${token}` } },
       8000
     );
     if (res.status === 401 || res.status === 403) {
@@ -23,12 +24,13 @@ export async function validateApifyToken(token: string): Promise<KeyCheck> {
   }
 }
 
-// Gemini：GET /v1beta/models?key= 能列模型即有效。
+// Gemini：GET /v1beta/models 帶 x-goog-api-key 能列模型即有效。
+// 金鑰走標頭而非 query，避免寫進日誌。
 export async function validateGeminiKey(key: string): Promise<KeyCheck> {
   try {
     const res = await fetchWithTimeout(
-      `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`,
-      {},
+      "https://generativelanguage.googleapis.com/v1beta/models",
+      { headers: { "x-goog-api-key": key } },
       8000
     );
     if (res.status === 400 || res.status === 401 || res.status === 403) {

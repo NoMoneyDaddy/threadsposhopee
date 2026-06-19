@@ -445,6 +445,58 @@ export async function deleteShopeeAccount(id: string, ownerId: string): Promise<
   return Boolean(data);
 }
 
+// 成效統計：近 N 日已發布貼文，依日期/商品/來源/帳號彙總（從自家發布資料，不需外部報表 API）。
+export interface PublishInsights {
+  days: number;
+  totalPublished: number;
+  byDay: { date: string; count: number }[];
+  byProduct: { name: string; count: number }[];
+  bySource: { name: string; count: number }[];
+}
+
+export async function getPublishInsights(ownerId: string, days = 30): Promise<PublishInsights> {
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  let rows: { product_name: string | null; source_id: string | null; published_at: string | null }[];
+  if (isDemoMode) {
+    rows = demo.drafts
+      .filter((d) => d.status === "published")
+      .map((d) => ({ product_name: d.product_name ?? null, source_id: d.source_id ?? null, published_at: d.published_at ?? d.created_at }));
+  } else {
+    const sb = getServiceClient()!;
+    const { data } = await sb
+      .from("drafts")
+      .select("product_name, source_id, published_at")
+      .eq("owner_id", ownerId)
+      .eq("status", "published")
+      .gte("published_at", since);
+    rows = data ?? [];
+  }
+
+  const dayMap = new Map<string, number>();
+  const prodMap = new Map<string, number>();
+  const srcMap = new Map<string, number>();
+  for (const r of rows) {
+    const day = r.published_at
+      ? new Date(r.published_at).toLocaleDateString("zh-TW", { timeZone: "Asia/Taipei", month: "2-digit", day: "2-digit" })
+      : "—";
+    dayMap.set(day, (dayMap.get(day) ?? 0) + 1);
+    const p = r.product_name ?? "（未命名商品）";
+    prodMap.set(p, (prodMap.get(p) ?? 0) + 1);
+    const s = r.source_id ?? "手動／批次";
+    srcMap.set(s, (srcMap.get(s) ?? 0) + 1);
+  }
+  const top = (m: Map<string, number>, n: number) =>
+    [...m.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, n);
+
+  return {
+    days,
+    totalPublished: rows.length,
+    byDay: [...dayMap.entries()].map(([date, count]) => ({ date, count })).sort((a, b) => a.date.localeCompare(b.date)),
+    byProduct: top(prodMap, 10),
+    bySource: top(srcMap, 10)
+  };
+}
+
 export async function listDrafts(ownerId: string): Promise<Draft[]> {
   if (isDemoMode) return [...demo.drafts].sort((a, b) => b.created_at.localeCompare(a.created_at));
   const sb = getServiceClient()!;

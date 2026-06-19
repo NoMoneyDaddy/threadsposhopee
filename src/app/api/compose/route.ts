@@ -57,8 +57,18 @@ export async function POST(req: Request) {
       draft = await withNextSlot(user.id, (slot) => make(slot));
       if (!draft) return NextResponse.json({ ok: false, error: "未來 30 天的時段都排滿了" }, { status: 409 });
       queuedSlot = draft.scheduled_at ?? null;
+    } else if (action === "schedule") {
+      try {
+        draft = await make(body.scheduled_at || null);
+      } catch (e) {
+        // migration 0008 唯一索引：同帳號同時段已有排程
+        if (e && typeof e === "object" && (e as { code?: string }).code === "23505") {
+          return NextResponse.json({ ok: false, error: "該帳號這個時間已有排程，請換個時間" }, { status: 409 });
+        }
+        throw e;
+      }
     } else {
-      draft = await make(action === "schedule" ? body.scheduled_at || null : null);
+      draft = await make(null);
     }
 
     if (action === "publish") {

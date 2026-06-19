@@ -7,7 +7,7 @@ import { uploadToCloudinary } from "@/services/media/cloudinary";
 import { createMaterial } from "@/lib/store";
 import type { Material } from "@/lib/types";
 
-export interface BuildMaterialInput {
+interface BuildMaterialInput {
   shopId: string;
   itemId: string;
   cleanUrl: string;

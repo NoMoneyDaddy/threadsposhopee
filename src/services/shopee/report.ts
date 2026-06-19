@@ -1,0 +1,138 @@
+// Shopee 分潤「轉換報表」：抓實際成交佣金，做收益儀表板。
+// 用 owner 的環境變數金鑰；沿用既有 HMAC 簽名與帶逾時的 fetch。
+import { buildShopeeAuth } from "@/services/shopee/sign";
+import { fetchWithTimeout } from "@/lib/http";
+import { env } from "@/lib/env";
+
+const GQL = "https://open-api.affiliate.shopee.tw/graphql";
+
+interface ReportItem {
+  itemName: string | null;
+  itemId: number | null;
+  imageUrl: string | null;
+  itemTotalCommission: string | null;
+}
+interface ReportNode {
+  purchaseTime: number;
+  conversionStatus: string | null;
+  totalCommission: string | null;
+  netCommission: string | null;
+  utmContent: string | null;
+  orders: { items: ReportItem[] }[];
+}
+
+export interface AffiliateRevenue {
+  days: number;
+  totalConversions: number;
+  totalCommission: number; // 估計總佣金（net）
+  byStatus: { status: string; count: number; commission: number }[];
+  byItem: { name: string; commission: number; count: number }[];
+  byDay: { date: string; commission: number }[];
+  bySubId: { subId: string; commission: number; count: number }[];
+  truncated: boolean; // 是否因頁數上限而截斷
+}
+
+const num = (s: string | null | undefined) => {
+  const n = parseFloat(s ?? "");
+  return Number.isFinite(n) ? n : 0;
+};
+
+// 抓近 N 天轉換報表（分頁，最多抓 maxPages 頁避免吃滿時間）。
+async function fetchConversions(days: number, maxPages = 10): Promise<{ nodes: ReportNode[]; truncated: boolean }> {
+  const appId = env.shopeeAppId;
+  const secret = env.shopeeSecret;
+  if (!appId || !secret) throw new Error("未設定 Shopee 分潤金鑰");
+
+  const end = Math.floor(Date.now() / 1000);
+  const start = end - days * 86400;
+  const nodes: ReportNode[] = [];
+  let scrollId = "";
+  let truncated = false;
+
+  for (let page = 0; page < maxPages; page++) {
+    const scrollArg = scrollId ? `, scrollId:"${scrollId}"` : "";
+    const query = `{ conversionReport(purchaseTimeStart:${start}, purchaseTimeEnd:${end}, limit:100${scrollArg}) { nodes { purchaseTime conversionStatus totalCommission netCommission utmContent orders { items { itemId itemName imageUrl itemTotalCommission } } } pageInfo { hasNextPage scrollId } } }`;
+    const payload = JSON.stringify({ query });
+    const auth = buildShopeeAuth(appId, secret, payload);
+    const res = await fetchWithTimeout(
+      GQL,
+      { method: "POST", headers: { "Content-Type": "application/json", Authorization: auth.authorization }, body: payload },
+      15000
+    );
+    if (!res.ok) throw new Error(`Shopee 報表 API ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    const json = await res.json();
+    if (json.errors?.length) throw new Error(`Shopee 報表錯誤: ${JSON.stringify(json.errors).slice(0, 200)}`);
+    const rep = json?.data?.conversionReport;
+    nodes.push(...((rep?.nodes ?? []) as ReportNode[]));
+    if (!rep?.pageInfo?.hasNextPage) break;
+    scrollId = rep.pageInfo.scrollId ?? "";
+    if (page === maxPages - 1 && rep.pageInfo.hasNextPage) truncated = true;
+  }
+  return { nodes, truncated };
+}
+
+export async function getAffiliateRevenue(days = 30): Promise<AffiliateRevenue> {
+  const { nodes, truncated } = await fetchConversions(days);
+
+  const statusMap = new Map<string, { count: number; commission: number }>();
+  const itemMap = new Map<string, { commission: number; count: number }>();
+  const dayMap = new Map<string, number>();
+  const subMap = new Map<string, { commission: number; count: number }>();
+  let totalCommission = 0;
+
+  for (const n of nodes) {
+    const comm = num(n.netCommission ?? n.totalCommission);
+    totalCommission += comm;
+
+    const st = n.conversionStatus ?? "UNKNOWN";
+    const s = statusMap.get(st) ?? { count: 0, commission: 0 };
+    s.count++;
+    s.commission += comm;
+    statusMap.set(st, s);
+
+    const day = new Date(n.purchaseTime * 1000).toLocaleDateString("zh-TW", {
+      timeZone: "Asia/Taipei",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    });
+    dayMap.set(day, (dayMap.get(day) ?? 0) + comm);
+
+    const sub = n.utmContent && n.utmContent.trim() ? n.utmContent.trim() : "（未標記）";
+    const sb = subMap.get(sub) ?? { commission: 0, count: 0 };
+    sb.commission += comm;
+    sb.count++;
+    subMap.set(sub, sb);
+
+    for (const o of n.orders ?? []) {
+      for (const it of o.items ?? []) {
+        const name = it.itemName ?? "（未知商品）";
+        const im = itemMap.get(name) ?? { commission: 0, count: 0 };
+        im.commission += num(it.itemTotalCommission);
+        im.count++;
+        itemMap.set(name, im);
+      }
+    }
+  }
+
+  const round = (x: number) => Math.round(x * 100) / 100;
+  const topItems = [...itemMap.entries()]
+    .map(([name, v]) => ({ name, commission: round(v.commission), count: v.count }))
+    .sort((a, b) => b.commission - a.commission)
+    .slice(0, 10);
+  const topSubs = [...subMap.entries()]
+    .map(([subId, v]) => ({ subId, commission: round(v.commission), count: v.count }))
+    .sort((a, b) => b.commission - a.commission)
+    .slice(0, 10);
+
+  return {
+    days,
+    totalConversions: nodes.length,
+    totalCommission: round(totalCommission),
+    byStatus: [...statusMap.entries()].map(([status, v]) => ({ status, count: v.count, commission: round(v.commission) })),
+    byItem: topItems,
+    byDay: [...dayMap.entries()].map(([date, commission]) => ({ date, commission: round(commission) })).sort((a, b) => a.date.localeCompare(b.date)),
+    bySubId: topSubs,
+    truncated
+  };
+}

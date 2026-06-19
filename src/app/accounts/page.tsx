@@ -1,10 +1,11 @@
-import { listShopeeAccounts, listThreadsAccounts, hasApifyCredentials, hasGeminiKey } from "@/lib/store";
+import { listShopeeAccounts, listThreadsAccounts, hasApifyCredentials, hasGeminiKey, getCopyPrefs } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
 import { env, isDemoMode } from "@/lib/env";
 import ThreadsAccountForm from "@/components/ThreadsAccountForm";
 import ShopeeAccountForm from "@/components/ShopeeAccountForm";
 import ApifyForm from "@/components/ApifyForm";
 import GeminiForm from "@/components/GeminiForm";
+import CopyPrefsForm from "@/components/CopyPrefsForm";
 import { DeleteButton, ToggleButton } from "@/components/RowActions";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +22,7 @@ export default async function AccountsPage({
   // 爬蟲（Apify）owner 限定；AI（Gemini）每人各綁各的
   const apify = user?.isOwner ? await hasApifyCredentials(ownerId) : { bound: false, actor: null };
   const geminiBound = user ? await hasGeminiKey(user.id) : false;
+  const copyPrefs = await getCopyPrefs(ownerId);
 
   return (
     <div className="space-y-6">
@@ -70,6 +72,8 @@ export default async function AccountsPage({
         {user?.isOwner && <ApifyForm bound={apify.bound} actor={apify.actor} />}
         {user && <GeminiForm bound={geminiBound} />}
       </div>
+
+      <CopyPrefsForm initial={copyPrefs} />
 
       <section>
         <h2 className="mb-2 font-semibold">Threads 發文帳號</h2>

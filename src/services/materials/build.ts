@@ -4,7 +4,7 @@ import { isDemoMode } from "@/lib/env";
 import { generateAffiliateLink, getProductName, buildSubIds } from "@/services/shopee/affiliate";
 import { generateCopy } from "@/services/ai/provider";
 import { uploadToCloudinary } from "@/services/media/cloudinary";
-import { createMaterial } from "@/lib/store";
+import { createMaterial, getCopyPrefs } from "@/lib/store";
 import type { Material } from "@/lib/types";
 
 interface BuildMaterialInput {
@@ -60,6 +60,7 @@ export async function buildMaterialForProduct(
   let aiRaw: string | null = null;
   let aiAt: string | null = null;
   if (input.withCopy !== false) {
+    const copyPrefs = await getCopyPrefs(ownerId); // 套用該使用者的文案客製化偏好
     const copy = await generateCopy(
       {
         productName: productName ?? "這個好物",
@@ -68,7 +69,8 @@ export async function buildMaterialForProduct(
         mediaUrl: media.url,
         mediaType: media.type
       },
-      geminiKey
+      geminiKey,
+      copyPrefs
     );
     mainText = copy.mainText;
     replyText = copy.replyText;

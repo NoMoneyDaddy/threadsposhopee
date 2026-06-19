@@ -5,7 +5,8 @@ import {
   deleteDraft,
   getDraft,
   getThreadsCredentials,
-  getGeminiKey
+  getGeminiKey,
+  getCopyPrefs
 } from "@/lib/store";
 import { publishToThreads } from "@/services/threads/publish";
 import { generateCopy } from "@/services/ai/provider";
@@ -48,7 +49,7 @@ export async function POST(req: Request) {
   }
   if (action === "regenerate") {
     try {
-      const geminiKey = await getGeminiKey(user.id);
+      const [geminiKey, copyPrefs] = await Promise.all([getGeminiKey(user.id), getCopyPrefs(user.id)]);
       const copy = await generateCopy(
         {
           productName: draft.product_name ?? "這個好物",
@@ -56,7 +57,8 @@ export async function POST(req: Request) {
           mediaUrl: draft.cloudinary_media_url,
           mediaType: (draft.media_type as "image" | "video" | "none") ?? "none"
         },
-        geminiKey
+        geminiKey,
+        copyPrefs
       );
       const updated = await updateDraft(id, user.id, {
         main_text: copy.mainText,

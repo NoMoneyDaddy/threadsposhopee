@@ -6,6 +6,7 @@ import { getServiceClient } from "./supabase/server";
 import { isDemoMode } from "./env";
 import { decrypt, encrypt } from "./crypto";
 import type { Draft, Material, Source, ThreadsAccount, ShopeeAccount } from "./types";
+import { DEFAULT_COPY_PREFS, normalizeCopyPrefs, type CopyPrefs } from "@/services/ai/prefs";
 import demoData from "@/fixtures/demo-data.json";
 
 // ── Demo 記憶體狀態（程序重啟即清空）──────────────────────────
@@ -332,6 +333,23 @@ export async function hasGeminiKey(ownerId: string): Promise<boolean> {
   const sb = getServiceClient()!;
   const { data } = await sb.from("profiles").select("gemini_api_key_enc").eq("id", ownerId).maybeSingle();
   return Boolean(data?.gemini_api_key_enc);
+}
+
+// AI 文案客製化偏好（非機密，明文 jsonb）。讀取一律經 normalizeCopyPrefs 夾成合法值。
+export async function getCopyPrefs(ownerId: string): Promise<CopyPrefs> {
+  if (isDemoMode) return DEFAULT_COPY_PREFS;
+  const sb = getServiceClient()!;
+  const { data } = await sb.from("profiles").select("copy_prefs").eq("id", ownerId).maybeSingle();
+  return normalizeCopyPrefs(data?.copy_prefs);
+}
+
+export async function setCopyPrefs(ownerId: string, prefs: unknown): Promise<CopyPrefs> {
+  const clean = normalizeCopyPrefs(prefs);
+  if (isDemoMode) return clean;
+  const sb = getServiceClient()!;
+  const { error } = await sb.from("profiles").upsert({ id: ownerId, copy_prefs: clean }, { onConflict: "id" });
+  if (error) throw error;
+  return clean;
 }
 
 export async function listShopeeAccounts(ownerId: string): Promise<ShopeeAccount[]> {

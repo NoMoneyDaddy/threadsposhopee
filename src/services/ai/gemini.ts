@@ -7,7 +7,8 @@ export async function generateWithGemini(
   prompt: string,
   mediaUrl: string | null,
   mediaType: "image" | "video" | "none",
-  apiKey?: string | null
+  apiKey?: string | null,
+  temperature = 0.9
 ): Promise<string> {
   const parts: any[] = [{ text: prompt }];
 
@@ -31,7 +32,7 @@ export async function generateWithGemini(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       contents: [{ role: "user", parts }],
-      generationConfig: { temperature: 0.9, maxOutputTokens: 512 }
+      generationConfig: { temperature, maxOutputTokens: 512 }
     })
   }, 30000); // 生成較慢，放寬到 30s
   if (!res.ok) throw new Error(`Gemini ${res.status}: ${await res.text()}`);

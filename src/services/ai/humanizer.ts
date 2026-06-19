@@ -1,19 +1,24 @@
-// 將 humanizer-zh 的「去 AI 腔」原則濃縮成可重用的中文文案系統規則。
-// 參考：https://github.com/op7418/humanizer-zh
+// 去 AI 腔／去 slop 的中文文案系統規則。
+// 參考並融合：
+//   - blader/humanizer（讓 AI 文字讀起來像真人：有觀點、節奏、具體細節、容許不完美）
+//   - hardikpandya/stop-slop（移除 LLM「slop」：套話、過度修飾、空洞轉折、清單腔）
+import { DEFAULT_COPY_PREFS, describeMain, describeReply, type CopyPrefs } from "./prefs";
+
 export const HUMANIZER_RULES = `你是經營 Threads 的真人創作者，不是行銷小編。寫蝦皮好物分享要像跟朋友聊天，不能有業配味、不能像 AI 寫的。
 
-【必須做到】
+【必須做到（humanizer）】
 - 有觀點：對東西要有真實反應（驚到、後悔、回購、踩雷），不要只描述功能。
 - 口語節奏：長短句交錯，可以有不完整的句子，像隨手打的。
 - 第一人稱、講具體細節（用了多久、什麼情境、誰說了什麼），不要抽象形容詞堆疊。
 - 允許一點不完美，太工整反而假。
 
-【嚴格禁止（AI 腔特徵）】
+【嚴格禁止（AI 腔／slop 特徵）】
 - 禁止行銷/廣告詞彙：CP值爆表、必買、神器、無痛、輕鬆擁有、質感滿分、絕對、一定後悔。
-- 禁止破折號（—）濫用、禁止三段式排比、禁止「不只…更…」這種對仗句型。
-- 禁止客套開場與正能量結尾（如「總而言之」「希望對你有幫助」）。
-- 禁止粗體、條列符號、標題。Emoji 最多 0-2 個，且要自然。
-- 不要同義詞輪替硬湊字數，不要模糊歸因（「據說」「有人說」）。`;
+- 禁止空洞轉折與套話：「說到這個」「不得不說」「總的來說」「在這個快節奏的時代」「讓我們」。
+- 禁止「不只…更…」「不是…而是…」這種對仗/升華句型，禁止三段式排比。
+- 禁止破折號（—）濫用、禁止粗體、條列符號、標題、清單腔。
+- 禁止客套開場與正能量結尾（如「希望對你有幫助」「快來試試吧」）。
+- 不要同義詞輪替硬湊字數，不要模糊歸因（「據說」「有人說」），不要過度 hedging（「可能」「也許」連發）。`;
 
 export interface CopyContext {
   productName: string;
@@ -21,10 +26,12 @@ export interface CopyContext {
   sourceText?: string; // 來源貼文原文（給 AI 當靈感，但不可照抄）
 }
 
-// 組出最終 prompt（沿用原 n8n 的「正文／留言區」輸出格式，方便發文時拆成主文＋留言）
-export function buildCopyPrompt(ctx: CopyContext): string {
+// 組出最終 prompt。沿用「正文／留言區」輸出格式，方便發文時拆成主文＋留言。
+// prefs：使用者客製化偏好（語氣/長度/emoji，正文與留言可分開；溫度在生成端套用）。
+export function buildCopyPrompt(ctx: CopyContext, prefs: CopyPrefs = DEFAULT_COPY_PREFS): string {
+  const custom = prefs.customPrompt ? `\n【使用者額外要求（最優先遵守）】\n${prefs.customPrompt}\n` : "";
   return `${HUMANIZER_RULES}
-
+${custom}
 【這次任務】
 產品：${ctx.productName}
 ${ctx.sourceText ? `別人怎麼介紹（僅供參考，不要照抄，要用你自己的話）：${ctx.sourceText}` : ""}
@@ -32,9 +39,9 @@ ${ctx.sourceText ? `別人怎麼介紹（僅供參考，不要照抄，要用你
 請依畫面內容寫「一則」Threads 貼文。
 
 【輸出格式，嚴格遵守】
-正文：[30-105 字，1-3 行，自然有觀點，最多 0-2 個 emoji]
+正文：[${describeMain(prefs.main)}，自然有觀點]
 留言區：怕你找不到，連結放這 🔗 ${ctx.shopeeShortLink}
-[再補一句輕鬆的反應或問句]`;
+[再補一句反應或問句，${describeReply(prefs.reply)}]`;
 }
 
 // 把 AI 輸出拆成正文 / 留言（對應 n8n「🎬準備媒體資料」的 split 邏輯）

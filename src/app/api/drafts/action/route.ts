@@ -8,6 +8,7 @@ import {
   getGeminiKey
 } from "@/lib/store";
 import { publishToThreads } from "@/services/threads/publish";
+import { normalizeDraftMedia } from "@/lib/media";
 import { generateCopy } from "@/services/ai/provider";
 import { getCurrentUser } from "@/lib/auth";
 import { isDemoMode } from "@/lib/env";
@@ -83,8 +84,7 @@ export async function POST(req: Request) {
         threadsUserId: creds.threadsUserId,
         accessToken: creds.accessToken,
         text: draft.main_text ?? "",
-        mediaUrl: draft.cloudinary_media_url,
-        mediaType: (draft.media_type as "image" | "video" | "none") ?? "none",
+        media: normalizeDraftMedia(draft),
         replyText: draft.reply_text
       });
       await updateDraftStatus(id, "published", { published_post_id: postId, published_at: new Date().toISOString() });

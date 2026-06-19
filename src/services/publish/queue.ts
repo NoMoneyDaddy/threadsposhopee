@@ -10,6 +10,7 @@ import {
   reclaimStalePublishing
 } from "@/lib/store";
 import { publishToThreads } from "@/services/threads/publish";
+import { normalizeDraftMedia } from "@/lib/media";
 
 export interface PublishResult {
   considered: number;
@@ -95,8 +96,7 @@ export async function runPublishQueue(): Promise<PublishResult> {
           threadsUserId: creds.threadsUserId,
           accessToken: creds.accessToken,
           text: draft.main_text ?? "",
-          mediaUrl: draft.cloudinary_media_url,
-          mediaType: draft.media_type ?? "none",
+          media: normalizeDraftMedia(draft),
           replyText: draft.reply_text
         });
         postId = res.postId;

@@ -18,7 +18,7 @@ import {
 } from "@/lib/store";
 import { publishToThreads, publishReply } from "@/services/threads/publish";
 import { normalizeDraftMedia } from "@/lib/media";
-import { effectiveGapMinutes } from "@/services/publish/cadence";
+import { effectiveGapMinutes, shardOf } from "@/services/publish/cadence";
 import { replyDelayMinutes } from "@/services/publish/reply-timing";
 
 export interface PublishResult {
@@ -31,25 +31,41 @@ export interface PublishResult {
   lockBusy?: boolean; // true 表示另一輪（cron 或手動）正在跑，本次未執行
 }
 
-export async function runPublishQueue(): Promise<PublishResult> {
+// 分片：多條 cron 並行發文時，各自只處理自己那片帳號（同帳號永遠落同片，防封節奏不被打散）。
+// 不傳 = 單一全域模式（向後相容）。注意：全域與分片模式擇一使用，勿混用以免重複發文。
+export interface ShardOpts {
+  index: number;
+  total: number;
+}
+
+export function inShard(accountId: string | null | undefined, shard?: ShardOpts): boolean {
+  if (!shard) return true;
+  // 未綁帳號的草稿歸片 0，確保仍有一片會記錄其「未綁定」略過（不會在每片都消失）
+  if (!accountId) return shard.index === 0;
+  return shardOf(accountId, shard.total) === shard.index;
+}
+
+export async function runPublishQueue(shard?: ShardOpts): Promise<PublishResult> {
   const result: PublishResult = { considered: 0, published: [], skipped: [], failed: [], reclaimed: 0 };
-  // 分布式鎖：避免 cron 與手動觸發同時跑而各自繞過防封最小間隔。搶不到就直接讓出。
-  const locked = await acquirePublishLock();
+  // 分布式鎖：避免同一片（或全域）同時跑而各自繞過防封間隔。不同片用不同鎖鍵 → 可並行。
+  const lockKey = shard ? `publish_queue_lock:s${shard.index}of${shard.total}` : "publish_queue_lock";
+  const locked = await acquirePublishLock(5, lockKey);
   if (!locked) {
     result.lockBusy = true;
     return result;
   }
   try {
-    return await runPublishQueueLocked(result);
+    return await runPublishQueueLocked(result, shard);
   } finally {
-    await releasePublishLock().catch(() => {});
+    await releasePublishLock(lockKey).catch(() => {});
   }
 }
 
-async function runPublishQueueLocked(result: PublishResult): Promise<PublishResult> {
+async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): Promise<PublishResult> {
   // 先回收上次中斷卡在 publishing 的草稿（標 failed 待人工重試）
   result.reclaimed = await reclaimStalePublishing();
-  const drafts = await listApprovedDrafts();
+  // 分片模式只處理本片帳號的草稿（同帳號穩定落同片）；未綁帳號者歸片 0，至少有人記錄略過
+  const drafts = (await listApprovedDrafts()).filter((d) => inShard(d.threads_account_id, shard));
   result.considered = drafts.length;
 
   // 以 Threads 帳號為單位控制節奏；同一次執行內累積計數
@@ -160,19 +176,22 @@ async function runPublishQueueLocked(result: PublishResult): Promise<PublishResu
   }
 
   // 延遲留言補發：撈「到期待補」的，逐則補上 2/2 留言。整個 run 在分布式鎖內，無併發。
-  result.replies = await publishDueReplies(startTime);
+  result.replies = await publishDueReplies(startTime, shard);
   return result;
 }
 
 // 補發到期的延遲留言（串文 2/2）。回傳補發/失敗數。
-async function publishDueReplies(startTime: number): Promise<{ published: number; failed: number }> {
+async function publishDueReplies(startTime: number, shard?: ShardOpts): Promise<{ published: number; failed: number }> {
   const out = { published: 0, failed: 0 };
   if (isDemoMode) return out;
   // 先回收上次中斷卡在 publishing-reply 的留言（標 failed），再撈到期待補的
   await reclaimStaleReplies().catch((e) => console.warn("回收卡住留言失敗：", e instanceof Error ? e.message : e));
   let due;
   try {
-    due = await listRepliesDue();
+    // 分片模式下，前 N 筆到期留言可能都屬其他片 → 本片過濾後變空而「餓死」。
+    // 撈大一點再記憶體過濾（迴圈有 50s budget 保護，量大也安全）。
+    const limit = shard ? 20 * shard.total : 20;
+    due = (await listRepliesDue(limit)).filter((d) => inShard(d.threads_account_id, shard));
   } catch (e) {
     console.warn("撈待補留言失敗：", e instanceof Error ? e.message : e);
     return out;

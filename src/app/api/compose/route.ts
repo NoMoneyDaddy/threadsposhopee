@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getMaterial, createDraft, getThreadsCredentials, updateDraftStatus } from "@/lib/store";
 import { publishToThreads } from "@/services/threads/publish";
+import { normalizeDraftMedia } from "@/lib/media";
 import { withNextSlot } from "@/services/publish/slots";
 import { getCurrentUser } from "@/lib/auth";
 import { isDemoMode } from "@/lib/env";
@@ -84,8 +85,7 @@ export async function POST(req: Request) {
           threadsUserId: creds.threadsUserId,
           accessToken: creds.accessToken,
           text: draft.main_text ?? "",
-          mediaUrl: draft.cloudinary_media_url,
-          mediaType: (draft.media_type as "image" | "video" | "none") ?? "none",
+          media: normalizeDraftMedia(draft),
           replyText: draft.reply_text
         });
         await updateDraftStatus(draft.id, "published", {

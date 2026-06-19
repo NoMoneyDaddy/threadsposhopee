@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { Draft } from "@/lib/types";
 import { CharCount } from "@/components/ThreadsPreview";
 import ThreadsPreview from "@/components/ThreadsPreview";
+import { normalizeDraftMedia } from "@/lib/media";
 
 export default function DraftCard({ draft }: { draft: Draft }) {
   const router = useRouter();
@@ -93,6 +94,7 @@ export default function DraftCard({ draft }: { draft: Draft }) {
           replyText={replyText}
           mediaUrl={draft.cloudinary_media_url}
           mediaType={draft.media_type}
+          media={normalizeDraftMedia(draft)}
         />
       )}
 

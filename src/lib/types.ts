@@ -39,6 +39,7 @@ export interface Material {
   affiliate_sub_id?: string | null;
   affiliate_generated_at?: string | null;
   affiliate_valid: boolean;
+  affiliate_checked_at?: string | null;
   media_type?: "image" | "video" | "none" | null;
   source_media_url?: string | null;
   cloudinary_media_url?: string | null;

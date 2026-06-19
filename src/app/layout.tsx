@@ -16,6 +16,7 @@ const nav = [
   { href: "/materials", label: "素材庫" },
   { href: "/drafts", label: "文案佇列" },
   { href: "/calendar", label: "排程總覽" },
+  { href: "/insights", label: "成效統計" },
   { href: "/accounts", label: "帳號管理" }
 ];
 

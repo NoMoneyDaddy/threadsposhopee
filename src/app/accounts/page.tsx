@@ -4,7 +4,8 @@ import {
   hasApifyCredentials,
   hasGeminiKey,
   getCopyPrefs,
-  getShopeeAffiliateId
+  getShopeeAffiliateId,
+  getUserCloudinary
 } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
 import { env, isDemoMode } from "@/lib/env";
@@ -14,6 +15,7 @@ import ApifyForm from "@/components/ApifyForm";
 import GeminiForm from "@/components/GeminiForm";
 import CopyPrefsForm from "@/components/CopyPrefsForm";
 import AffiliateIdForm from "@/components/AffiliateIdForm";
+import CloudinaryForm from "@/components/CloudinaryForm";
 import { DeleteButton, ToggleButton } from "@/components/RowActions";
 
 export const dynamic = "force-dynamic";
@@ -32,6 +34,7 @@ export default async function AccountsPage({
   const geminiBound = user ? await hasGeminiKey(user.id) : false;
   const copyPrefs = await getCopyPrefs(ownerId);
   const affiliateId = await getShopeeAffiliateId(ownerId);
+  const cloudinary = user ? await getUserCloudinary(ownerId) : null;
 
   return (
     <div className="space-y-6">
@@ -77,6 +80,8 @@ export default async function AccountsPage({
       </div>
 
       {user && <AffiliateIdForm initial={affiliateId} />}
+
+      {user && <CloudinaryForm initialCloud={cloudinary?.cloud ?? null} initialPreset={cloudinary?.preset ?? null} />}
 
       <div className="grid gap-4 md:grid-cols-2">
         {/* 爬蟲僅 owner；AI 文案每人各綁各的 */}

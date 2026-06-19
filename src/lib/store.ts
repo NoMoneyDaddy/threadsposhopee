@@ -395,6 +395,42 @@ export async function setShopeeAffiliateId(ownerId: string, affiliateId: string 
   if (error) throw new Error(`儲存 shopee_affiliate_id 失敗：${error.message}`);
 }
 
+// 各使用者自綁的 Cloudinary（cloud name + unsigned upload preset，皆非機密，明文存）。
+// 沒綁則回 null，呼叫端退回 env 共用設定。
+export async function getUserCloudinary(ownerId: string): Promise<{ cloud: string; preset: string } | null> {
+  if (isDemoMode) return null;
+  const sb = getServiceClient()!;
+  const { data, error } = await sb
+    .from("profiles")
+    .select("cloudinary_cloud, cloudinary_preset")
+    .eq("id", ownerId)
+    .maybeSingle();
+  // Cloudinary 綁定是「可選」功能：讀取失敗不該中斷整條發文/爬取流程（pipeline 在迴圈外取一次，
+  // 拋出會讓整個 source run 失敗）。降級為記錄警告並回 null，自動退回 env 共用設定。
+  if (error) {
+    console.warn(`讀取 Cloudinary 設定失敗，改用共用設定：${error.message}`);
+    return null;
+  }
+  const cloud = data?.cloudinary_cloud?.trim();
+  const preset = data?.cloudinary_preset?.trim();
+  // cloud 與 preset 必須成對才算綁定。不可用 env 預設 preset 補：系統 preset 多半不存在於
+  // 使用者帳號，會造成「使用者 cloud + 系統 preset」上傳失敗、靜默降級回原始短效 URL。
+  if (!cloud || !preset) return null; // 視為未綁，退回 env 共用設定
+  return { cloud, preset };
+}
+
+export async function setUserCloudinary(ownerId: string, cloud: string | null, preset: string | null): Promise<void> {
+  if (isDemoMode) return;
+  const sb = getServiceClient()!;
+  const { error } = await sb
+    .from("profiles")
+    .upsert(
+      { id: ownerId, cloudinary_cloud: cloud || null, cloudinary_preset: preset || null },
+      { onConflict: "id" }
+    );
+  if (error) throw new Error(`儲存 Cloudinary 設定失敗：${error.message}`);
+}
+
 // AI 文案客製化偏好（非機密，明文 jsonb）。讀取一律經 normalizeCopyPrefs 夾成合法值。
 export async function getCopyPrefs(ownerId: string): Promise<CopyPrefs> {
   if (isDemoMode) return DEFAULT_COPY_PREFS;

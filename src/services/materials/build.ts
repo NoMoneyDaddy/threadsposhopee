@@ -28,7 +28,8 @@ export async function buildMaterialForProduct(
   notes: string[] = [],
   geminiKey?: string | null, // 使用者自綁的 Gemini key；沒傳則退回 env
   copyPrefs?: CopyPrefs, // 文案偏好；上層（pipeline 迴圈）先取好傳入，避免每篇重查
-  affiliateId?: string | null // 無 API 時的後備：用 affiliate_id 組 an_redir 追蹤連結
+  affiliateId?: string | null, // 無 API 時的後備：用 affiliate_id 組 an_redir 追蹤連結
+  cloudinaryCreds?: { cloud: string; preset: string } | null // 使用者自綁 Cloudinary；沒傳退回 env
 ): Promise<Material> {
   const media = input.media ?? { url: null, type: "none" as const };
   let shortLink = input.originalShortLink;
@@ -59,7 +60,7 @@ export async function buildMaterialForProduct(
   let cloudinaryMediaUrl = media.url;
   if (!isDemoMode && media.url && media.type !== "none") {
     try {
-      cloudinaryMediaUrl = await uploadToCloudinary(media.url, media.type);
+      cloudinaryMediaUrl = await uploadToCloudinary(media.url, media.type, cloudinaryCreds);
     } catch (e) {
       notes.push(`Cloudinary 上傳失敗（暫用原連結）：${e instanceof Error ? e.message : String(e)}`);
     }

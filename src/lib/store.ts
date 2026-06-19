@@ -3,10 +3,11 @@
 // - 沒設定（Demo 模式）→ 用記憶體 + fixtures（單人，忽略 ownerId）。
 import { randomUUID } from "node:crypto";
 import { getServiceClient } from "./supabase/server";
-import { isDemoMode } from "./env";
+import { env, isDemoMode } from "./env";
 import { decrypt, encrypt } from "./crypto";
 import type { Draft, Material, Source, ThreadsAccount, ShopeeAccount } from "./types";
 import { DEFAULT_COPY_PREFS, normalizeCopyPrefs, type CopyPrefs } from "@/services/ai/prefs";
+import { planAccountQueue } from "@/services/publish/cadence";
 import demoData from "@/fixtures/demo-data.json";
 
 // ── Demo 記憶體狀態（程序重啟即清空）──────────────────────────
@@ -758,6 +759,69 @@ export async function listApprovedDrafts(): Promise<Draft[]> {
     .or(`scheduled_at.is.null,scheduled_at.lte.${nowIso}`)
     .order("created_at", { ascending: true });
   return (data ?? []) as Draft[];
+}
+
+export interface PublishPlanRow {
+  id: string;
+  productName: string | null;
+  accountLabel: string;
+  etaIso: string | null;
+  reason: string;
+}
+
+// 發文進度/ETA（給使用者看「排隊中／下次預計幾點／塞車」）。
+// 乾跑佇列節奏：依帳號分組，套用保底+抖動間隔與每日上限，算出每篇預計發文時間。
+export async function getPublishPlan(ownerId: string): Promise<PublishPlanRow[]> {
+  const [drafts, accounts] = await Promise.all([listDrafts(ownerId), listThreadsAccounts(ownerId)]);
+  const approved = drafts.filter((d) => d.status === "approved" && d.threads_account_id);
+  if (approved.length === 0) return [];
+  const labelOf = new Map(accounts.map((a) => [a.id, a.label] as const));
+  const now = Date.now();
+
+  // 依帳號分組，組內依排程時間/建立時間排序（與佇列處理順序一致）
+  const byAccount = new Map<string, Draft[]>();
+  for (const d of approved) {
+    const arr = byAccount.get(d.threads_account_id!) ?? [];
+    arr.push(d);
+    byAccount.set(d.threads_account_id!, arr);
+  }
+
+  const rows: PublishPlanRow[] = [];
+  for (const [accId, list] of byAccount) {
+    list.sort((a, b) => (a.scheduled_at ?? a.created_at).localeCompare(b.scheduled_at ?? b.created_at));
+    const state = await getAccountPublishState(accId).catch(() => null);
+    if (!state) continue;
+    if (state.accountStatus !== "active") {
+      for (const d of list) {
+        rows.push({ id: d.id, productName: d.product_name ?? null, accountLabel: labelOf.get(accId) ?? "帳號", etaIso: null, reason: `帳號${state.accountStatus}，暫停發文` });
+      }
+      continue;
+    }
+    const plan = planAccountQueue({
+      drafts: list.map((d) => ({ id: d.id, scheduledAt: d.scheduled_at ?? null })),
+      lastPublishedAt: state.lastPublishedAt,
+      publishedLast24h: state.publishedLast24h,
+      floorMin: env.publishMinGapMinutes,
+      jitterMax: env.publishGapJitterMinutes,
+      dailyCap: env.publishMaxPerDay,
+      accountId: accId,
+      now
+    });
+    const planById = new Map(plan.map((p) => [p.id, p] as const));
+    for (const d of list) {
+      const p = planById.get(d.id);
+      rows.push({
+        id: d.id,
+        productName: d.product_name ?? null,
+        accountLabel: labelOf.get(accId) ?? "帳號",
+        etaIso: p?.etaIso ?? null,
+        reason: p?.reason ?? "排隊中"
+      });
+    }
+  }
+  // 依預計時間排序（null 殿後）
+  rows.sort((a, b) => (a.etaIso ?? "9999").localeCompare(b.etaIso ?? "9999"));
+  return rows;
 }
 
 // 某 Threads 帳號的發文節奏狀態 + 帳號狀態（背景 worker 用）。

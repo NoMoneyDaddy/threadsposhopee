@@ -42,6 +42,47 @@ export async function getHeartbeat(): Promise<string | null> {
   return data?.value ?? null;
 }
 
+// 發文佇列分布式鎖：避免手動「立即跑一輪」與 cron 排程同時執行 runPublishQueue，
+// 各自讀到相同的節奏狀態而同時放行，繞過每帳號最小間隔（防封）。
+// 用 app_state 單列做 compare-and-set：value 存「鎖到期時間（ISO）」，
+// 只有鎖不存在或已逾期（value < now）才搶得到。ISO UTC 字串可直接按字典序＝時序比較。
+const PUBLISH_LOCK_KEY = "publish_queue_lock";
+const PAST_ISO = new Date(0).toISOString();
+
+export async function acquirePublishLock(ttlMinutes = 5): Promise<boolean> {
+  if (isDemoMode) return true; // demo 無併發
+  const sb = getServiceClient()!;
+  const now = Date.now();
+  const nowIso = new Date(now).toISOString();
+  const expiresIso = new Date(now + ttlMinutes * 60000).toISOString();
+  // 先確保列存在（初值為過去時間，可立即搶）；已存在則不覆蓋
+  await sb
+    .from("app_state")
+    .upsert(
+      { key: PUBLISH_LOCK_KEY, value: PAST_ISO, updated_at: nowIso },
+      { onConflict: "key", ignoreDuplicates: true }
+    );
+  // 原子 CAS：UPDATE 取列鎖，只有現有到期時間 < now 才搶得到（回傳該列代表成功）
+  const { data } = await sb
+    .from("app_state")
+    .update({ value: expiresIso, updated_at: nowIso })
+    .eq("key", PUBLISH_LOCK_KEY)
+    .lt("value", nowIso)
+    .select("key")
+    .maybeSingle();
+  return Boolean(data);
+}
+
+export async function releasePublishLock(): Promise<void> {
+  if (isDemoMode) return;
+  const sb = getServiceClient()!;
+  // 把到期時間設回過去，讓下一輪可立即搶（逾時則自動失效，毋須強制釋放）
+  await sb
+    .from("app_state")
+    .update({ value: PAST_ISO, updated_at: new Date().toISOString() })
+    .eq("key", PUBLISH_LOCK_KEY);
+}
+
 // ── 素材庫：以 (owner_id, shop_id, item_id) 為鍵，重用分潤連結＋AI 文案＋媒體 ──────
 export async function findMaterial(shopId: string, itemId: string, ownerId: string): Promise<Material | null> {
   if (isDemoMode) {

@@ -128,7 +128,11 @@ function RunQueueButton({ onDone }: { onDone: () => void }) {
       const json = await res.json();
       if (!json.ok) throw new Error(json.error);
       const r = json.result;
-      setMsg(`已發 ${r.published.length}、略過 ${r.skipped.length}、失敗 ${r.failed.length}`);
+      if (r.lockBusy) {
+        setMsg("另一輪發文正在執行，稍後再試");
+      } else {
+        setMsg(`已發 ${r.published.length}、略過 ${r.skipped.length}、失敗 ${r.failed.length}`);
+      }
       onDone();
     } catch (e) {
       setMsg(`❌ ${e instanceof Error ? e.message : String(e)}`);
@@ -137,10 +141,11 @@ function RunQueueButton({ onDone }: { onDone: () => void }) {
     }
   }
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2" role="status" aria-live="polite">
       <button
         onClick={run}
         disabled={busy}
+        aria-busy={busy}
         className="rounded-md border border-shopee/40 bg-orange-50 px-3 py-1.5 text-sm text-shopee hover:bg-orange-100 disabled:opacity-50"
       >
         {busy ? "發送中…" : "⚡ 立即跑一輪佇列"}

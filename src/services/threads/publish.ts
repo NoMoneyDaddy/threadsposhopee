@@ -15,6 +15,7 @@ interface PublishInput {
   mediaUrl?: string | null;
   mediaType?: "image" | "video" | "none";
   replyText?: string | null; // 發成功後自動留言（放分潤連結）
+  deferReply?: boolean; // true=只發主文、不立即留言（留言改由延遲 worker 補），回傳 replyDeferred
 }
 
 // 防禦性驗證：service 層入口不信任傳入的 media，過濾掉缺 url／型別錯誤的項。
@@ -105,29 +106,47 @@ async function publishContainer(userId: string, token: string, creationId: strin
   return (await res.json()).id;
 }
 
-export async function publishToThreads(input: PublishInput): Promise<{ postId: string }> {
+// 在指定主貼文下發一則留言（串文 2/2，放分潤連結），回傳留言貼文 id。
+// 給「立即留言」與「延遲補留言 worker」共用。
+export async function publishReply(
+  threadsUserId: string,
+  accessToken: string,
+  postId: string,
+  replyText: string
+): Promise<string> {
+  const replyParams = new URLSearchParams({
+    access_token: accessToken,
+    media_type: "TEXT",
+    text: replyText,
+    reply_to_id: postId
+  });
+  const replyUrl = assertSafePublicUrl(`${GRAPH}/${threadsUserId}/threads`).href;
+  const c = await fetchWithTimeout(replyUrl, { method: "POST", body: replyParams });
+  if (!c.ok) throw new Error(`留言容器建立失敗 ${c.status}: ${await c.text()}`);
+  const replyCreation = (await c.json()).id;
+  return publishContainer(threadsUserId, accessToken, replyCreation);
+}
+
+export async function publishToThreads(
+  input: PublishInput
+): Promise<{ postId: string; replyDeferred?: boolean; replyFailed?: boolean }> {
   const media = resolveMedia(input);
   const { creationId, needWait } = await buildCreation(input, media);
   if (needWait) await waitForContainerReady(creationId, input.accessToken);
   const postId = await publishContainer(input.threadsUserId, input.accessToken, creationId);
 
-  // 自動在貼文下留言放分潤連結（提高觸及，連結不放正文）
-  if (input.replyText) {
-    try {
-      const replyParams = new URLSearchParams({
-        access_token: input.accessToken,
-        media_type: "TEXT",
-        text: input.replyText,
-        reply_to_id: postId
-      });
-      const c = await fetchWithTimeout(`${GRAPH}/${input.threadsUserId}/threads`, { method: "POST", body: replyParams });
-      if (!c.ok) throw new Error(`留言容器建立失敗 ${c.status}: ${await c.text()}`);
-      const replyCreation = (await c.json()).id;
-      await publishContainer(input.threadsUserId, input.accessToken, replyCreation);
-    } catch (e) {
-      // 留言失敗不影響主貼文，但記錄下來以便排查（分潤連結沒留成會少觸及）
-      console.warn(`貼文 ${postId} 的留言發布失敗:`, e instanceof Error ? e.message : e);
-    }
+  if (!input.replyText) return { postId };
+
+  // 延遲留言：只發主文，留言交給延遲 worker 之後補（防「秒留言」固定行為）
+  if (input.deferReply) return { postId, replyDeferred: true };
+
+  // 立即在貼文下留言放分潤連結（提高觸及，連結不放正文）。
+  // 留言失敗不影響主貼文，但回傳 replyFailed 讓呼叫端把 reply_status 落成 failed（不要謊報 published）。
+  try {
+    await publishReply(input.threadsUserId, input.accessToken, postId, input.replyText);
+  } catch (e) {
+    console.warn(`貼文 ${postId} 的留言發布失敗:`, e instanceof Error ? e.message : e);
+    return { postId, replyFailed: true };
   }
   return { postId };
 }

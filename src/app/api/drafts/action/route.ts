@@ -11,8 +11,9 @@ import {
 import { publishToThreads } from "@/services/threads/publish";
 import { normalizeDraftMedia } from "@/lib/media";
 import { generateCopy } from "@/services/ai/provider";
+import { replyDelayMinutes } from "@/services/publish/reply-timing";
 import { getCurrentUser } from "@/lib/auth";
-import { isDemoMode } from "@/lib/env";
+import { env, isDemoMode } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 
@@ -86,15 +87,31 @@ export async function POST(req: Request) {
       if (!draft.threads_account_id) throw new Error("草稿未綁定 Threads 帳號");
       const creds = await getThreadsCredentials(draft.threads_account_id, user.id);
       if (!creds) throw new Error("找不到 Threads 帳號憑證（請先設定 access token）");
-      const { postId } = await publishToThreads({
+      // 留言延遲：>0 表示主文先發、留言之後由 cron 補（防「秒留言」固定行為）
+      const replyDelay = draft.reply_text
+        ? replyDelayMinutes(draft.id, env.replyDelayFloorMinutes, env.replyDelayJitterMinutes, draft.reply_delay_minutes)
+        : 0;
+      const deferReply = Boolean(draft.reply_text) && replyDelay > 0;
+      const { postId, replyFailed } = await publishToThreads({
         threadsUserId: creds.threadsUserId,
         accessToken: creds.accessToken,
         text: draft.main_text ?? "",
         media: normalizeDraftMedia(draft),
-        replyText: draft.reply_text
+        replyText: draft.reply_text,
+        deferReply
       });
-      await updateDraftStatus(id, "published", { published_post_id: postId, published_at: new Date().toISOString() });
-      return NextResponse.json({ ok: true, postId });
+      const nowMs = Date.now();
+      const replyPatch = deferReply
+        ? { reply_status: "pending" as const, reply_due_at: new Date(nowMs + replyDelay * 60000).toISOString() }
+        : draft.reply_text
+          ? { reply_status: replyFailed ? ("failed" as const) : ("published" as const) }
+          : {};
+      await updateDraftStatus(id, "published", {
+        published_post_id: postId,
+        published_at: new Date(nowMs).toISOString(),
+        ...replyPatch
+      });
+      return NextResponse.json({ ok: true, postId, replyDeferred: deferReply });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       await updateDraftStatus(id, "failed", { error: msg });

@@ -14,6 +14,7 @@ export default function ComposerForm({ threadsAccounts }: { threadsAccounts: Thr
   const [material, setMaterial] = useState<Material | null>(null);
   const [mainText, setMainText] = useState("");
   const [replyText, setReplyText] = useState("");
+  const [replyDelay, setReplyDelay] = useState(""); // 留言延遲（分），空=用全域預設
   const [accountId, setAccountId] = useState(threadsAccounts[0]?.id ?? "");
   const [scheduledAt, setScheduledAt] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
@@ -76,6 +77,7 @@ export default function ComposerForm({ threadsAccounts }: { threadsAccounts: Thr
           threads_account_id: targetAccountId,
           main_text: mainText,
           reply_text: replyText,
+          reply_delay_minutes: replyDelay.trim() === "" ? null : Number(replyDelay),
           action,
           scheduled_at: scheduledAt ? new Date(scheduledAt).toISOString() : null
         })
@@ -99,6 +101,7 @@ export default function ComposerForm({ threadsAccounts }: { threadsAccounts: Thr
       setUrl("");
       setMainText("");
       setReplyText("");
+      setReplyDelay("");
       router.refresh();
     } catch (e) {
       setMsg(`❌ ${e instanceof Error ? e.message : String(e)}`);
@@ -166,6 +169,24 @@ export default function ComposerForm({ threadsAccounts }: { threadsAccounts: Thr
             onChange={(e) => setReplyText(e.target.value)}
             placeholder="留言區（含分潤連結）"
           />
+          {replyText.trim() && (
+            <div className="flex items-center gap-2">
+              <label htmlFor="composer-reply-delay" className="text-xs text-neutral-500">
+                留言延遲（分，空＝用預設）
+              </label>
+              <input
+                id="composer-reply-delay"
+                className="w-24 rounded-md border px-2 py-1 text-xs"
+                inputMode="numeric"
+                placeholder="如 15"
+                value={replyDelay}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (/^\d*$/.test(v) && (v === "" || Number(v) <= 1440)) setReplyDelay(v);
+                }}
+              />
+            </div>
+          )}
 
           <ThreadsPreview
             accountLabel={threadsAccounts.find((a) => a.id === (accountId || threadsAccounts[0]?.id))?.label}

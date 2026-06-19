@@ -829,6 +829,99 @@ export async function reclaimStalePublishing(staleMinutes = 15): Promise<number>
   return (data ?? []).length;
 }
 
+// 延遲留言 worker 用：撈「主文已發、留言待補且到期」的草稿。
+// 與 listApprovedDrafts 同屬「跨租戶 worker 查詢」：只由 publishDueReplies（背景）呼叫、
+// 絕不吃使用者輸入；實際發文/更新仍以該列自己的 owner_id 過濾（見 mark* / getThreadsCredentials）。
+// 只回傳補留言會用到的欄位（型別誠實標示，避免誤用其他 Draft 欄位拿到 undefined）
+export type ReplyDueDraft = Pick<Draft, "id" | "owner_id" | "threads_account_id" | "published_post_id" | "reply_text">;
+export async function listRepliesDue(limit = 20): Promise<ReplyDueDraft[]> {
+  const nowIso = new Date().toISOString();
+  if (isDemoMode) {
+    return demo.drafts
+      .filter((d) => d.reply_status === "pending" && d.reply_due_at && d.reply_due_at <= nowIso)
+      .slice(0, limit);
+  }
+  const sb = getServiceClient()!;
+  const { data, error } = await sb
+    .from("drafts")
+    .select("id, owner_id, threads_account_id, published_post_id, reply_text")
+    .eq("reply_status", "pending")
+    .not("reply_due_at", "is", null)
+    .lte("reply_due_at", nowIso)
+    .order("reply_due_at", { ascending: true })
+    .limit(limit);
+  if (error) throw new Error(`撈待補留言失敗：${error.message}`);
+  return (data ?? []) as ReplyDueDraft[];
+}
+
+// 原子認領一則待補留言：只有 reply_status 仍是 'pending' 才搶得到（pending→publishing-reply）。
+// 防中斷窗口（已呼叫外部 API 但還沒寫 DB）下輪重複補發同一則留言。
+export async function claimReplyForPublish(id: string, ownerId: string): Promise<boolean> {
+  if (isDemoMode) {
+    const d = demo.drafts.find((x) => x.id === id);
+    if (d && d.reply_status === "pending") {
+      d.reply_status = "publishing-reply";
+      return true;
+    }
+    return false;
+  }
+  const sb = getServiceClient()!;
+  const { data, error } = await sb
+    .from("drafts")
+    .update({ reply_status: "publishing-reply" })
+    .eq("id", id)
+    .eq("owner_id", ownerId)
+    .eq("reply_status", "pending")
+    .select("id")
+    .maybeSingle();
+  if (error) throw new Error(`認領待補留言失敗：${error.message}`);
+  return Boolean(data);
+}
+
+// 回收卡在 publishing-reply（程序中斷）的留言：到期時間已過 staleMinutes → 標 failed，避免永久卡住。
+export async function reclaimStaleReplies(staleMinutes = 15): Promise<number> {
+  if (isDemoMode) return 0;
+  const cutoff = new Date(Date.now() - staleMinutes * 60_000).toISOString();
+  const sb = getServiceClient()!;
+  const { data } = await sb
+    .from("drafts")
+    .update({ reply_status: "failed", error: "補留言程序中斷" })
+    .eq("reply_status", "publishing-reply")
+    .lt("reply_due_at", cutoff)
+    .select("id");
+  return (data ?? []).length;
+}
+
+export async function markReplyPublished(id: string, ownerId: string, replyPostId: string): Promise<void> {
+  if (isDemoMode) {
+    const d = demo.drafts.find((x) => x.id === id);
+    if (d) Object.assign(d, { reply_status: "published", reply_post_id: replyPostId });
+    return;
+  }
+  const sb = getServiceClient()!;
+  const { error } = await sb
+    .from("drafts")
+    .update({ reply_status: "published", reply_post_id: replyPostId })
+    .eq("id", id)
+    .eq("owner_id", ownerId);
+  if (error) throw new Error(`標記留言已發失敗：${error.message}`);
+}
+
+export async function markReplyFailed(id: string, ownerId: string, err: string): Promise<void> {
+  if (isDemoMode) {
+    const d = demo.drafts.find((x) => x.id === id);
+    if (d) Object.assign(d, { reply_status: "failed", error: err.slice(0, 500) });
+    return;
+  }
+  const sb = getServiceClient()!;
+  const { error } = await sb
+    .from("drafts")
+    .update({ reply_status: "failed", error: err.slice(0, 500) })
+    .eq("id", id)
+    .eq("owner_id", ownerId);
+  if (error) throw new Error(`標記留言失敗失敗：${error.message}`);
+}
+
 // 原子性狀態更新（compare-and-swap）：只有當目前狀態 == expectedStatus 才更新。
 export async function updateDraftStatusAtomic(
   id: string,

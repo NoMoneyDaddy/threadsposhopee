@@ -116,6 +116,40 @@ function Autopilot({ lastCronAt, demo }: { lastCronAt?: string | null; demo: boo
   );
 }
 
+// 手動「立即跑一輪佇列」：不想等下次排程時，按一下馬上發（仍守防封節奏）。owner 限定。
+function RunQueueButton({ onDone }: { onDone: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  async function run() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/publish/run-now", { method: "POST" });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error);
+      const r = json.result;
+      setMsg(`已發 ${r.published.length}、略過 ${r.skipped.length}、失敗 ${r.failed.length}`);
+      onDone();
+    } catch (e) {
+      setMsg(`❌ ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="flex items-center gap-2">
+      <button
+        onClick={run}
+        disabled={busy}
+        className="rounded-md border border-shopee/40 bg-orange-50 px-3 py-1.5 text-sm text-shopee hover:bg-orange-100 disabled:opacity-50"
+      >
+        {busy ? "發送中…" : "⚡ 立即跑一輪佇列"}
+      </button>
+      {msg && <span className="text-xs text-neutral-500">{msg}</span>}
+    </div>
+  );
+}
+
 const REFRESH_MS = 20000;
 
 function Chip({ label, on }: { label: string; on: boolean }) {
@@ -197,6 +231,7 @@ export default function LiveDashboard() {
   return (
     <div className="space-y-6">
       <Autopilot lastCronAt={data.lastCronAt} demo={data.demo} />
+      {data.isOwner && !data.demo && <RunQueueButton onDone={load} />}
       <MissingBinds binds={data.binds} />
       <PublishPlan rows={data.publishPlan} />
       {setupIncomplete && (

@@ -14,14 +14,16 @@ function hash(seed: string): number {
 
 // 由 seed 推出 0..jitterMax（含）的穩定抖動分鐘數。
 export function gapJitterMinutes(seed: string, jitterMax: number): number {
-  if (jitterMax <= 0) return 0;
-  return hash(seed) % (jitterMax + 1);
+  // NaN 防禦：env 解析失敗（如非數字）→ NaN，若不擋會讓間隔變 NaN 使防封失效
+  if (!Number.isFinite(jitterMax) || jitterMax <= 0) return 0;
+  return hash(seed) % (Math.floor(jitterMax) + 1);
 }
 
 // 有效間隔 = 保底 + 抖動（分）。seed 通常用「帳號id + 上次發文時間」，
 // 讓每一段間隔固定但彼此不同。
 export function effectiveGapMinutes(floorMin: number, jitterMax: number, seed: string): number {
-  return Math.max(0, floorMin) + gapJitterMinutes(seed, jitterMax);
+  const floor = Number.isFinite(floorMin) ? Math.max(0, floorMin) : 0;
+  return floor + gapJitterMinutes(seed, jitterMax);
 }
 
 export interface QueuePlanItem {
@@ -50,11 +52,13 @@ export function planAccountQueue(input: PlanInput): QueuePlanItem[] {
 
   for (let i = 0; i < drafts.length; i++) {
     const d = drafts[i];
-    // 已達每日上限：要等最舊那篇滿 24h 才釋出額度（保守估 now + 24h）
+    // 已達每日上限：要等額度釋出（保守估 +24h）。以 max(lastAt, now) 為基準，
+    // 確保 ETA 單調遞增，不會比前一篇還早。
     if (postedToday >= dailyCap) {
-      const eta = new Date(now + 24 * 60 * 60 * 1000).toISOString();
-      out.push({ id: d.id, etaIso: eta, reason: "今日已達上限，明天接續" });
-      lastAt = now + 24 * 60 * 60 * 1000;
+      const reference = Math.max(lastAt ?? now, now);
+      const nextDay = reference + 24 * 60 * 60 * 1000;
+      out.push({ id: d.id, etaIso: new Date(nextDay).toISOString(), reason: "今日已達上限，明天接續" });
+      lastAt = nextDay;
       postedToday = 1;
       continue;
     }

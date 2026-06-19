@@ -769,16 +769,37 @@ export interface PublishPlanRow {
   reason: string;
 }
 
+// 規劃用：owner 自己「已核准」的草稿（含未來排程），不受 listDrafts 的 100 列上限影響。
+async function listApprovedDraftsForPlan(ownerId: string, limit = 200): Promise<Draft[]> {
+  if (isDemoMode) {
+    // demo 為單人，忽略 ownerId（與其他 demo 查詢一致）
+    return demo.drafts
+      .filter((d) => d.status === "approved")
+      .sort((a, b) => a.created_at.localeCompare(b.created_at))
+      .slice(0, limit);
+  }
+  const sb = getServiceClient()!;
+  const { data } = await sb
+    .from("drafts")
+    .select("id, product_name, threads_account_id, scheduled_at, created_at, status")
+    .eq("owner_id", ownerId)
+    .eq("status", "approved")
+    .order("created_at", { ascending: true })
+    .limit(limit);
+  return (data ?? []) as Draft[];
+}
+
 // 發文進度/ETA（給使用者看「排隊中／下次預計幾點／塞車」）。
 // 乾跑佇列節奏：依帳號分組，套用保底+抖動間隔與每日上限，算出每篇預計發文時間。
 export async function getPublishPlan(ownerId: string): Promise<PublishPlanRow[]> {
-  const [drafts, accounts] = await Promise.all([listDrafts(ownerId), listThreadsAccounts(ownerId)]);
-  const approved = drafts.filter((d) => d.status === "approved" && d.threads_account_id);
-  if (approved.length === 0) return [];
+  const [drafts, accounts] = await Promise.all([listApprovedDraftsForPlan(ownerId), listThreadsAccounts(ownerId)]);
   const labelOf = new Map(accounts.map((a) => [a.id, a.label] as const));
+  // 多租戶：只規劃 owner 自己擁有的帳號（即使草稿異常引用他人帳號也不跨租戶讀狀態）
+  const approved = drafts.filter((d) => d.threads_account_id && labelOf.has(d.threads_account_id));
+  if (approved.length === 0) return [];
   const now = Date.now();
 
-  // 依帳號分組，組內依排程時間/建立時間排序（與佇列處理順序一致）
+  // 依帳號分組，組內依 created_at 排序（與發文 worker 的處理順序一致）
   const byAccount = new Map<string, Draft[]>();
   for (const d of approved) {
     const arr = byAccount.get(d.threads_account_id!) ?? [];
@@ -786,10 +807,16 @@ export async function getPublishPlan(ownerId: string): Promise<PublishPlanRow[]>
     byAccount.set(d.threads_account_id!, arr);
   }
 
+  // 各帳號狀態並行抓，避免迴圈內序列化查詢（N+1）
+  const stateEntries = await Promise.all(
+    Array.from(byAccount.keys()).map(async (accId) => [accId, await getAccountPublishState(accId).catch(() => null)] as const)
+  );
+  const stateMap = new Map(stateEntries);
+
   const rows: PublishPlanRow[] = [];
   for (const [accId, list] of byAccount) {
-    list.sort((a, b) => (a.scheduled_at ?? a.created_at).localeCompare(b.scheduled_at ?? b.created_at));
-    const state = await getAccountPublishState(accId).catch(() => null);
+    list.sort((a, b) => a.created_at.localeCompare(b.created_at)); // 對齊 worker（listApprovedDrafts 依 created_at）
+    const state = stateMap.get(accId);
     if (!state) continue;
     if (state.accountStatus !== "active") {
       for (const d of list) {

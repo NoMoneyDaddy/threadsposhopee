@@ -75,6 +75,19 @@ npm run pipeline:demo
 - **爬取** `/api/cron` → `runAllSources()`：爬來源 → 換分潤連結 → AI 文案 → 存草稿（一律待人工核准）。**絕不發文**。
 - **發文** `/api/cron/publish` → `runPublishQueue()`：挑「已核准」草稿，依防封節奏（`PUBLISH_MIN_GAP_MINUTES` / `PUBLISH_MAX_PER_DAY` / `PUBLISH_BATCH_PER_RUN`）逐篇發到 Threads。
 
+### 擴展：帳號分片並行（帳號／草稿量大時才需要）
+單條發文 cron 每輪 60s 序列處理所有帳號，量大時可能一輪跑不完。可開**多條** cron 並行，各自只處理自己那片帳號（同帳號穩定落同片，**防封節奏不被打散**）：
+
+```bash
+# 4 條 cron，各打不同 shard（0..3）
+curl -fsS -H "Authorization: Bearer $CRON_SECRET" "https://<網域>/api/cron/publish?shards=4&shard=0"
+curl -fsS -H "Authorization: Bearer $CRON_SECRET" "https://<網域>/api/cron/publish?shards=4&shard=1"
+# …shard=2、shard=3
+```
+
+- 各片用獨立分布式鎖 → 可真正並行；同片不重疊。
+- **全域模式與分片模式擇一**：用了 `/api/cron/all` 或不帶參數的 `/api/cron/publish`，就別再同時開分片，否則會重複發文。
+
 > 備註：原 n8n 依賴的 Zeabur「蝦皮簽名服務」已不再需要——簽名邏輯已內建進 `src/services/shopee/sign.ts`，可以把那個舊服務停掉。
 
 ## 目錄結構

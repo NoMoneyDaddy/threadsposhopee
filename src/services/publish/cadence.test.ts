@@ -1,6 +1,16 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { gapJitterMinutes, effectiveGapMinutes, planAccountQueue } from "./cadence";
+import { gapJitterMinutes, effectiveGapMinutes, planAccountQueue, shardOf } from "./cadence";
+
+test("分片：穩定、落在 0..total-1，total<=1 一律 0", () => {
+  assert.equal(shardOf("acc-1", 4), shardOf("acc-1", 4)); // 同帳號穩定同片
+  for (const id of ["a", "b", "c", "acc-xyz", "123"]) {
+    const s = shardOf(id, 4);
+    assert.ok(Number.isInteger(s) && s >= 0 && s < 4);
+  }
+  assert.equal(shardOf("acc-1", 1), 0);
+  assert.equal(shardOf("acc-1", 0), 0);
+});
 
 test("抖動穩定且落在 0..max", () => {
   const a = gapJitterMinutes("acc:123", 40);

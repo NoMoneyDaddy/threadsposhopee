@@ -8,14 +8,14 @@ import { setHeartbeat } from "./store";
 // 例外一律回 500 並送 Telegram 告警。
 export function createCronHandler<T extends object>(
   label: string,
-  runner: () => Promise<T>,
+  runner: (req: Request) => Promise<T>,
   alertWhen?: (result: T) => string | null
 ) {
   return async function GET(req: Request) {
     const denied = assertCron(req);
     if (denied) return denied;
     try {
-      const result = await runner();
+      const result = await runner(req);
       await setHeartbeat().catch(() => {});
       const warn = alertWhen?.(result);
       if (warn) await sendAlert(warn);

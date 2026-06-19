@@ -19,6 +19,13 @@ export function gapJitterMinutes(seed: string, jitterMax: number): number {
   return hash(seed) % (Math.floor(jitterMax) + 1);
 }
 
+// 把 seed（通常是帳號 id）穩定分到 0..total-1 的某一片，用於多 cron 並行分片發文。
+// 同帳號永遠落同一片，確保防封節奏（以帳號為單位）不被分片打散。
+export function shardOf(seed: string, total: number): number {
+  if (!Number.isFinite(total) || total <= 1) return 0;
+  return hash(seed) % Math.floor(total);
+}
+
 // 有效間隔 = 保底 + 抖動（分）。seed 通常用「帳號id + 上次發文時間」，
 // 讓每一段間隔固定但彼此不同。
 export function effectiveGapMinutes(floorMin: number, jitterMax: number, seed: string): number {

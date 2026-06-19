@@ -49,7 +49,7 @@ export async function getHeartbeat(): Promise<string | null> {
 const PUBLISH_LOCK_KEY = "publish_queue_lock";
 const PAST_ISO = new Date(0).toISOString();
 
-export async function acquirePublishLock(ttlMinutes = 5): Promise<boolean> {
+export async function acquirePublishLock(ttlMinutes = 5, key: string = PUBLISH_LOCK_KEY): Promise<boolean> {
   if (isDemoMode) return true; // demo 無併發
   const sb = getServiceClient()!;
   const now = Date.now();
@@ -59,28 +59,28 @@ export async function acquirePublishLock(ttlMinutes = 5): Promise<boolean> {
   await sb
     .from("app_state")
     .upsert(
-      { key: PUBLISH_LOCK_KEY, value: PAST_ISO, updated_at: nowIso },
+      { key, value: PAST_ISO, updated_at: nowIso },
       { onConflict: "key", ignoreDuplicates: true }
     );
   // 原子 CAS：UPDATE 取列鎖，只有現有到期時間 < now 才搶得到（回傳該列代表成功）
   const { data } = await sb
     .from("app_state")
     .update({ value: expiresIso, updated_at: nowIso })
-    .eq("key", PUBLISH_LOCK_KEY)
+    .eq("key", key)
     .lt("value", nowIso)
     .select("key")
     .maybeSingle();
   return Boolean(data);
 }
 
-export async function releasePublishLock(): Promise<void> {
+export async function releasePublishLock(key: string = PUBLISH_LOCK_KEY): Promise<void> {
   if (isDemoMode) return;
   const sb = getServiceClient()!;
   // 把到期時間設回過去，讓下一輪可立即搶（逾時則自動失效，毋須強制釋放）
   await sb
     .from("app_state")
     .update({ value: PAST_ISO, updated_at: new Date().toISOString() })
-    .eq("key", PUBLISH_LOCK_KEY);
+    .eq("key", key);
 }
 
 // ── 素材庫：以 (owner_id, shop_id, item_id) 為鍵，重用分潤連結＋AI 文案＋媒體 ──────

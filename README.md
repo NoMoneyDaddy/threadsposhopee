@@ -49,7 +49,7 @@ npm run pipeline:demo
 
 ## 上線設定
 
-1. 建 Supabase 專案，**依序**跑 `supabase/migrations/` 下所有 SQL（`0001_init.sql` → `0009_material_checked.sql`）
+1. 建 Supabase 專案，**依序**跑 `supabase/migrations/` 下所有 SQL（`0001_init.sql` → `0016_profile_cloudinary.sql`）
 2. 填環境變數（Supabase、`APP_ENCRYPTION_KEY`、`OWNER_EMAIL`、Apify、Shopee、Gemini、Cloudinary、`CRON_SECRET`，以及 Threads OAuth 的 `THREADS_APP_ID/SECRET/REDIRECT_URI`）
 3. 部署（擇一）：
 
@@ -87,18 +87,20 @@ src/
     scraper/threads.ts   Apify 爬蟲 + 貼文解析
     shopee/sign.ts       自建簽名（取代 Zeabur）
     shopee/expand.ts     短網址還原
-    shopee/affiliate.ts  分潤連結 + 商品名
+    shopee/affiliate.ts  分潤連結 + 商品名（含無 API 的 an_redir 後備）
     ai/humanizer.ts      humanizer-zh 規則 + prompt
+    ai/prefs.ts          文案客製化偏好（語氣/溫度/emoji/長度，主文與回覆分開）
     ai/gemini.ts         Gemini 多模態呼叫
-    media/cloudinary.ts  媒體中轉（內建 SSRF 防護）
-    threads/publish.ts   發文（容器→發布→留言）
+    media/cloudinary.ts  媒體中轉（自綁優先、內建 SSRF 防護）
+    threads/publish.ts   發文（容器→發布→留言/串文 2/2）
     threads/oauth.ts     OAuth 一鍵連帳號
     threads/token.ts     長期 token 展期
     threads/refresh.ts   到期 token 自動展期 worker
-    publish/queue.ts     發文佇列（防封節奏 + 跳過失效帳號）
+    publish/queue.ts     發文佇列（防封節奏 + 分布式鎖 + 跳過失效帳號）
+    publish/cadence.ts   節奏：保底間隔 + 隨機抖動 + ETA 規劃
     pipeline/run.ts      端到端編排
   lib/                 env / 加密 / 資料層 / cron 驗證 / SSRF 防護 / 型別
-supabase/migrations/   資料庫 schema（0001–0009）
+supabase/migrations/   資料庫 schema（0001–0016）
 ```
 
 ## ⚠️ 安全
@@ -115,12 +117,19 @@ supabase/migrations/   資料庫 schema（0001–0009）
 - [x] 真實發布（解密 token → Cloudinary 中轉 → `publishToThreads`，連結放留言）
 - [x] 爬取／發文兩條獨立排程 + 防封節奏（間隔／每日上限／批次）
 - [x] 審核佇列：草稿審核、AI 重寫、排程、卡住可重試
-- [x] 即時儀表板（服務健康、Threads 額度、Cloudinary 用量、需要注意提醒）
-- [x] 排程總覽（依日期分組）
-- [x] 安全：AES-256-GCM 入庫加密、Cron 定時安全驗證、外部 fetch SSRF 防護
+- [x] 即時儀表板（服務健康、Threads 額度、Cloudinary 用量、需要注意提醒、發文排隊 ETA/塞車提示）
+- [x] 排程總覽（依日期分組，圖片/影片縮圖正確渲染）
+- [x] AI 文案客製化（語氣/溫度/emoji/長度，主文與回覆分開）+ humanizer-zh 去 AI 腔
+- [x] 無 Shopee Open API 也能分潤：填 `affiliate_id` 用官方 `an_redir` 自組追蹤連結
+- [x] 防封節奏隨機抖動（保底間隔 + 抖動，避免固定節奏被偵測）
+- [x] 手動推送：一鍵「立即跑一輪佇列」、自寫一則直推（free-form，可附媒體）
+- [x] 各人自綁 Cloudinary（素材中轉進自己雲端，不佔共用額度）
+- [x] 發文預覽對齊 Threads 串文（主文 1/2 + 接續貼文 2/2）
+- [x] 安全：AES-256-GCM 入庫加密、Cron 安全驗證、SSRF 防護、發文佇列分布式鎖、發文憑證 owner 過濾防越權
 
 ### 後續可選增強
 - [ ] 影片走 Gemini Files API（大檔）
 - [ ] 成效儀表板接 Shopee 報表 / Threads insights
 - [ ] 素材分潤連結到期自動偵測重產
+- [ ] 佇列分片／多帳號並行（高頻發文擴展性）
 ```

@@ -74,18 +74,6 @@ export async function createMaterial(input: Partial<Material>, ownerId: string):
   return data as Material;
 }
 
-// 標記某素材的分潤連結失效（下次會重產）
-export async function markAffiliateInvalid(materialId: string): Promise<void> {
-  if (isDemoMode) {
-    const m = demo.materials.find((x) => x.id === materialId);
-    if (m) m.affiliate_valid = false;
-    return;
-  }
-  const sb = getServiceClient()!;
-  const { error } = await sb.from("materials").update({ affiliate_valid: false }).eq("id", materialId);
-  if (error) throw error;
-}
-
 // 連結健檢 worker 用：取最久沒檢查、目前仍有效的素材（跨租戶）。
 export async function listMaterialsToCheck(
   limit = 30
@@ -468,7 +456,8 @@ export async function getPublishInsights(ownerId: string, days = 30): Promise<Pu
       .select("product_name, source_id, published_at")
       .eq("owner_id", ownerId)
       .eq("status", "published")
-      .gte("published_at", since);
+      .gte("published_at", since)
+      .limit(5000); // 上限，避免極大量發布時撐爆記憶體
     rows = data ?? [];
   }
 
@@ -477,7 +466,12 @@ export async function getPublishInsights(ownerId: string, days = 30): Promise<Pu
   const srcMap = new Map<string, number>();
   for (const r of rows) {
     const day = r.published_at
-      ? new Date(r.published_at).toLocaleDateString("zh-TW", { timeZone: "Asia/Taipei", month: "2-digit", day: "2-digit" })
+      ? new Date(r.published_at).toLocaleDateString("zh-TW", {
+          timeZone: "Asia/Taipei",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit"
+        })
       : "—";
     dayMap.set(day, (dayMap.get(day) ?? 0) + 1);
     const p = r.product_name ?? "（未命名商品）";
@@ -515,15 +509,17 @@ export async function listTakenScheduledSlots(ownerId: string): Promise<Set<stri
   if (isDemoMode) {
     return new Set(
       demo.drafts
-        .filter((d) => d.owner_id === ownerId && d.scheduled_at && d.scheduled_at > nowIso)
+        .filter((d) => d.owner_id === ownerId && d.status === "approved" && d.scheduled_at && d.scheduled_at > nowIso)
         .map((d) => d.scheduled_at as string)
     );
   }
   const sb = getServiceClient()!;
+  // 只算 approved（與 migration 0008 唯一索引一致），避免被 draft/rejected 的 scheduled_at 誤占
   const { data } = await sb
     .from("drafts")
     .select("scheduled_at")
     .eq("owner_id", ownerId)
+    .eq("status", "approved")
     .not("scheduled_at", "is", null)
     .gt("scheduled_at", nowIso);
   return new Set((data ?? []).map((r) => new Date(r.scheduled_at as string).toISOString()));

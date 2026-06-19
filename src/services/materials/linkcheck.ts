@@ -20,14 +20,18 @@ async function isLinkDead(link: string): Promise<boolean> {
 export async function checkAffiliateLinks(): Promise<{ checked: number; dead: number }> {
   const items = await listMaterialsToCheck();
   let dead = 0;
-  // 並行檢查，但限制併發避免一次太多外部請求
-  const results = await Promise.all(
-    items.map(async (m) => {
-      const isDead = await isLinkDead(m.link);
-      await setAffiliateChecked(m.id, isDead).catch(() => {});
-      return isDead;
-    })
-  );
-  dead = results.filter(Boolean).length;
+  // 分批檢查，每批最多 5 個並行，避免一次開 30 條外部連線
+  const CONCURRENCY = 5;
+  for (let i = 0; i < items.length; i += CONCURRENCY) {
+    const batch = items.slice(i, i + CONCURRENCY);
+    const results = await Promise.all(
+      batch.map(async (m) => {
+        const isDead = await isLinkDead(m.link);
+        await setAffiliateChecked(m.id, isDead).catch(() => {});
+        return isDead;
+      })
+    );
+    dead += results.filter(Boolean).length;
+  }
   return { checked: items.length, dead };
 }

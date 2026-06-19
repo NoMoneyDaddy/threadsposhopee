@@ -25,6 +25,15 @@ test("HTTP 401 → 擋下（ok:false）", async () => {
   }
 });
 
+test("HTTP 403 → 擋下（ok:false）", async () => {
+  const restore = stubFetch({ ok: false, status: 403, body: "forbidden" });
+  try {
+    assert.equal((await validateShopeeCredentials("a", "b")).ok, false);
+  } finally {
+    restore();
+  }
+});
+
 test("GraphQL 簽章錯誤 → 擋下（ok:false）", async () => {
   const restore = stubFetch({ ok: true, status: 200, body: { errors: [{ message: "Invalid Signature" }] } });
   try {

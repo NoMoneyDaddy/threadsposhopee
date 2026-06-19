@@ -1,24 +1,38 @@
 import { buildShopeeAuth } from "./sign";
 import { fetchWithTimeout } from "@/lib/http";
+import { assertSafePublicUrl } from "@/lib/url-guard";
 
 const SHOPEE_GQL = "https://open-api.affiliate.shopee.tw/graphql";
+
+// 帶結構化欄位的 Shopee 錯誤：讓呼叫端依 HTTP 狀態判斷，而非脆弱地比對訊息字串。
+export class ShopeeApiError extends Error {
+  status?: number;
+  constructor(message: string, status?: number) {
+    super(message);
+    this.name = "ShopeeApiError";
+    this.status = status;
+  }
+}
 
 async function callShopee(appId: string, secret: string, body: object): Promise<any> {
   const payload = JSON.stringify(body);
   const auth = buildShopeeAuth(appId, secret, payload);
+  assertSafePublicUrl(SHOPEE_GQL); // SSRF 防護：外部 fetch 前一律驗證 URL
   const res = await fetchWithTimeout(SHOPEE_GQL, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: auth.authorization },
     body: payload
   });
-  if (!res.ok) throw new Error(`Shopee API ${res.status}: ${await res.text()}`);
+  if (!res.ok) throw new ShopeeApiError(`Shopee API ${res.status}: ${await res.text()}`, res.status);
   const json = await res.json();
-  if (json.errors?.length) throw new Error(`Shopee GraphQL error: ${JSON.stringify(json.errors)}`);
+  if (json.errors?.length) throw new ShopeeApiError(`Shopee GraphQL error: ${JSON.stringify(json.errors)}`);
   return json.data;
 }
 
 // 綁定即驗證：用一筆最小讀取查詢確認 AppID／Secret 簽章有效。
-// 僅在「明確授權／簽章錯誤」時擋下；網路錯誤或非授權錯誤一律放行（不因第三方故障卡住）。
+// 分類：明確授權錯誤（HTTP 401/403 或簽章類訊息）→ 擋下；
+//       已知第三方/網路錯誤 → 放行並記 log（不因第三方故障卡住）；
+//       真正非預期錯誤（程式 bug）→ 上拋，由路由轉 500，不誤判為驗證通過。
 export async function validateShopeeCredentials(
   appId: string,
   secret: string
@@ -27,13 +41,17 @@ export async function validateShopeeCredentials(
     await callShopee(appId, secret, { query: "query{productOfferV2(limit:1){nodes{productName}}}" });
     return { ok: true };
   } catch (e) {
+    const status = e instanceof ShopeeApiError ? e.status : undefined;
     const msg = e instanceof Error ? e.message : String(e);
-    if (/\b40[13]\b|signature|credential|authoriz|unauthor|invalid app/i.test(msg)) {
+    if (status === 401 || status === 403 || /signature|credential|authoriz|unauthor|invalid app/i.test(msg)) {
       return { ok: false, reason: "Shopee AppID／Secret 無效（驗證被拒）" };
     }
-    // 非授權錯誤（網路／逾時／schema 變更）放行，但記 log 以利觀測，避免驗證默默失效
-    console.warn("Shopee 憑證驗證無法確認，放行存檔：", msg);
-    return { ok: true };
+    // 已知第三方/網路錯誤（含非授權 GraphQL 錯誤）放行但記 log；其餘非預期錯誤上拋
+    if (e instanceof ShopeeApiError || /network|fetch|timeout|abort|ECONN|ETIMEDOUT|EAI_AGAIN/i.test(msg)) {
+      console.warn("Shopee 憑證驗證無法確認，放行存檔：", msg);
+      return { ok: true };
+    }
+    throw e;
   }
 }
 

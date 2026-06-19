@@ -65,8 +65,12 @@ export async function scrapeLatestPosts(
 ): Promise<ScrapedPost[]> {
   const token = creds?.token || env.apifyToken;
   const actor = creds?.actor || env.apifyActor;
-  if (isDemoMode || !token) {
+  // Demo 模式才回假資料；正式環境沒金鑰要報錯，避免靜默吞掉（誤以為有在爬）
+  if (isDemoMode) {
     return parseThreadPayload(sampleThread);
+  }
+  if (!token) {
+    throw new Error("未綁定 Apify token（到帳號管理綁定，或設 APIFY_TOKEN）");
   }
 
   const url = `https://api.apify.com/v2/acts/${actor.replace("/", "~")}/run-sync-get-dataset-items?token=${token}`;

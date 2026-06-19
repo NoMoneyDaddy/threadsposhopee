@@ -57,12 +57,19 @@ export function parseThreadPayload(payload: any): ScrapedPost[] {
 }
 
 // 呼叫 Apify Threads Scraper 取得來源帳號最新貼文。Demo 模式直接回 fixture。
-export async function scrapeLatestPosts(username: string, postsLimit = 1): Promise<ScrapedPost[]> {
-  if (isDemoMode || !env.apifyToken) {
+// creds：使用者自己綁的 Apify token/actor；沒傳則退回全域 env（向後相容）。
+export async function scrapeLatestPosts(
+  username: string,
+  postsLimit = 1,
+  creds?: { token: string; actor?: string | null } | null
+): Promise<ScrapedPost[]> {
+  const token = creds?.token || env.apifyToken;
+  const actor = creds?.actor || env.apifyActor;
+  if (isDemoMode || !token) {
     return parseThreadPayload(sampleThread);
   }
 
-  const url = `https://api.apify.com/v2/acts/${env.apifyActor.replace("/", "~")}/run-sync-get-dataset-items?token=${env.apifyToken}`;
+  const url = `https://api.apify.com/v2/acts/${actor.replace("/", "~")}/run-sync-get-dataset-items?token=${token}`;
   const res = await fetchWithTimeout(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

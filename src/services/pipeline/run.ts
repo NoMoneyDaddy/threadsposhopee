@@ -13,7 +13,8 @@ import {
   markPostProcessed,
   listSources,
   findMaterial,
-  createDraftFromMaterial
+  createDraftFromMaterial,
+  getApifyCredentials
 } from "@/lib/store";
 import type { Source } from "@/lib/types";
 
@@ -48,7 +49,9 @@ export async function runSourcePipeline(source: Source, ownerId: string): Promis
     notes: []
   };
 
-  const posts = await scrapeLatestPosts(source.source_username, source.posts_limit);
+  // 爬蟲子系統用 owner 自己綁的 Apify 憑證（沒綁則退回全域 env）
+  const apify = await getApifyCredentials(ownerId);
+  const posts = await scrapeLatestPosts(source.source_username, source.posts_limit, apify);
   result.scanned = posts.length;
 
   for (const post of posts) {

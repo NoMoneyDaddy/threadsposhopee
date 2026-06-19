@@ -31,6 +31,15 @@ test("media_type 為 none → 空陣列", () => {
   assert.deepEqual(normalizeDraftMedia({ cloudinary_media_url: "x", media_type: "none" }), []);
 });
 
+test("media 陣列存在但全無效時，回退單一 media 欄位", () => {
+  const r = normalizeDraftMedia({
+    media: [{ url: "", type: "image" }],
+    cloudinary_media_url: "fallback.jpg",
+    media_type: "image"
+  });
+  assert.deepEqual(r, [{ url: "fallback.jpg", type: "image" }]);
+});
+
 test("全空 → 空陣列", () => {
   assert.deepEqual(normalizeDraftMedia({}), []);
 });

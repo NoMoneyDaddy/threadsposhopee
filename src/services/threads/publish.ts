@@ -1,6 +1,7 @@
 // Threads 發文：建立媒體容器 → 發布 → （可選）在自己貼文下留言放分潤連結。
 // 支援單圖/單片、純文字，以及多媒體輪播（carousel）。
 import { fetchWithTimeout } from "@/lib/http";
+import { assertSafePublicUrl } from "@/lib/url-guard";
 import type { DraftMedia } from "@/lib/types";
 
 const GRAPH = "https://graph.threads.net/v1.0";
@@ -16,8 +17,18 @@ interface PublishInput {
   replyText?: string | null; // 發成功後自動留言（放分潤連結）
 }
 
+// 防禦性驗證：service 層入口不信任傳入的 media，過濾掉缺 url／型別錯誤的項。
+function isValidMedia(m: unknown): m is DraftMedia {
+  return (
+    Boolean(m) &&
+    typeof (m as DraftMedia).url === "string" &&
+    (m as DraftMedia).url.length > 0 &&
+    ((m as DraftMedia).type === "image" || (m as DraftMedia).type === "video")
+  );
+}
+
 function resolveMedia(input: PublishInput): DraftMedia[] {
-  if (input.media && input.media.length > 0) return input.media;
+  if (input.media && input.media.length > 0) return input.media.filter(isValidMedia);
   if (input.mediaUrl && (input.mediaType === "image" || input.mediaType === "video")) {
     return [{ url: input.mediaUrl, type: input.mediaType }];
   }
@@ -25,13 +36,15 @@ function resolveMedia(input: PublishInput): DraftMedia[] {
 }
 
 // 對單一媒體項設定容器參數（IMAGE/VIDEO + 對應 url）。
+// SSRF 防護：media URL 可能來自爬蟲或使用者上傳，送往 Threads 前先過 assertSafePublicUrl。
 function setMediaParams(params: URLSearchParams, item: DraftMedia): void {
+  const safe = assertSafePublicUrl(item.url).href;
   if (item.type === "image") {
     params.set("media_type", "IMAGE");
-    params.set("image_url", item.url);
+    params.set("image_url", safe);
   } else {
     params.set("media_type", "VIDEO");
-    params.set("video_url", item.url);
+    params.set("video_url", safe);
   }
 }
 
@@ -51,6 +64,9 @@ async function waitForContainerReady(creationId: string, token: string): Promise
       const json = await res.json();
       if (json.status === "FINISHED") return;
       if (json.status === "ERROR") throw new Error(`媒體處理失敗: ${json.error_message ?? "unknown"}`);
+    } else if (res.status >= 400 && res.status < 500) {
+      // 4xx（授權/權限/參數錯誤）不會自己好，立即拋出真正原因，不要空轉到逾時
+      throw new Error(`媒體狀態查詢失敗 ${res.status}: ${await res.text()}`);
     }
     await new Promise((r) => setTimeout(r, 2000));
   }
@@ -105,6 +121,7 @@ export async function publishToThreads(input: PublishInput): Promise<{ postId: s
         reply_to_id: postId
       });
       const c = await fetchWithTimeout(`${GRAPH}/${input.threadsUserId}/threads`, { method: "POST", body: replyParams });
+      if (!c.ok) throw new Error(`留言容器建立失敗 ${c.status}: ${await c.text()}`);
       const replyCreation = (await c.json()).id;
       await publishContainer(input.threadsUserId, input.accessToken, replyCreation);
     } catch (e) {

@@ -71,6 +71,10 @@ export async function POST(req: Request) {
   }
 
   if (action === "publish") {
+    // 人工按「核准並發布」即視為核准；但已發布／發布中／已退回的不可再次發布，避免重複貼文
+    if (draft.status === "published" || draft.status === "publishing" || draft.status === "rejected") {
+      return NextResponse.json({ ok: false, error: `草稿狀態為「${draft.status}」，無法發布` }, { status: 400 });
+    }
     if (isDemoMode) {
       await updateDraftStatus(id, "published", { published_post_id: "demo_" + Date.now() });
       return NextResponse.json({ ok: true, demo: true });

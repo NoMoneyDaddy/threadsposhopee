@@ -210,8 +210,11 @@ export async function listThreadsAccounts(ownerId: string): Promise<ThreadsAccou
 }
 
 // 取出 Threads 帳號的發文憑證（解密後）。僅伺服器端使用，Demo 模式回 null。
+// 一律帶 ownerId 並過濾 owner_id：service-role 會繞過 RLS，若只用 id 查，
+// 任一登入者拿到別人的 account id 就能代發＝跨租戶越權。多租戶鐵則。
 export async function getThreadsCredentials(
-  id: string
+  id: string,
+  ownerId: string
 ): Promise<{ threadsUserId: string; accessToken: string } | null> {
   if (isDemoMode) return null;
   const sb = getServiceClient()!;
@@ -219,9 +222,23 @@ export async function getThreadsCredentials(
     .from("threads_accounts")
     .select("threads_user_id, access_token_enc")
     .eq("id", id)
+    .eq("owner_id", ownerId)
     .maybeSingle();
   if (!data?.access_token_enc) return null;
   return { threadsUserId: data.threads_user_id, accessToken: decrypt(data.access_token_enc) };
+}
+
+// 該 Threads 帳號是否屬於此使用者（建草稿/發文前驗證，擋跨租戶冒用 account id）。
+export async function userOwnsThreadsAccount(accountId: string, ownerId: string): Promise<boolean> {
+  if (isDemoMode) return true;
+  const sb = getServiceClient()!;
+  const { data } = await sb
+    .from("threads_accounts")
+    .select("id")
+    .eq("id", accountId)
+    .eq("owner_id", ownerId)
+    .maybeSingle();
+  return Boolean(data);
 }
 
 // 新增 Threads 發文帳號（access token / client secret 加密後存放）

@@ -1,5 +1,6 @@
 import ComposerForm from "@/components/ComposerForm";
 import BatchCompose from "@/components/BatchCompose";
+import SelfComposeForm from "@/components/SelfComposeForm";
 import { listThreadsAccounts } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
 
@@ -26,6 +27,12 @@ export default async function ComposePage() {
         </div>
       )}
       <ComposerForm threadsAccounts={accounts} />
+
+      <div className="pt-2">
+        <h2 className="mb-1 text-lg font-semibold">自寫一則直推</h2>
+        <p className="mb-2 text-sm text-neutral-500">不靠蝦皮連結，直接打字（可附一張圖／影片網址）發到 Threads。</p>
+        <SelfComposeForm threadsAccounts={accounts} />
+      </div>
 
       <div className="pt-2">
         <h2 className="mb-1 text-lg font-semibold">批次發文</h2>

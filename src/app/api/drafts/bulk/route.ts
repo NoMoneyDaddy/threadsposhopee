@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { getDraft, updateDraftStatus, deleteDraft, listTakenScheduledSlots } from "@/lib/store";
-import { nextOpenSlot } from "@/services/publish/slots";
+import { getDraft, updateDraftStatus, deleteDraft } from "@/lib/store";
+import { withNextSlot } from "@/services/publish/slots";
 import { getCurrentUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -19,9 +19,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "不支援的批次動作" }, { status: 400 });
   }
 
-  // queue：先取已占用時段，逐筆往後配；用 local set 累加避免同批撞同一格
-  const taken = action === "queue" ? await listTakenScheduledSlots(user.id) : new Set<string>();
-
   let done = 0;
   const errors: string[] = [];
   for (const id of ids) {
@@ -38,13 +35,12 @@ export async function POST(req: Request) {
       } else if (action === "approve") {
         await updateDraftStatus(id, "approved", { scheduled_at: null });
       } else if (action === "queue") {
-        const slot = nextOpenSlot(taken);
-        if (!slot) {
+        // 每筆即時配下一個空時段，撞格自動重試（前一筆已提交故會避開）
+        const ok = await withNextSlot(user.id, (slot) => updateDraftStatus(id, "approved", { scheduled_at: slot }));
+        if (!ok) {
           errors.push(`${id}: 30 天內時段已滿`);
           continue;
         }
-        taken.add(slot);
-        await updateDraftStatus(id, "approved", { scheduled_at: slot });
       }
       done++;
     } catch (e) {

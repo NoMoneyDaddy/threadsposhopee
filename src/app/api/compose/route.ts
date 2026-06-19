@@ -1,13 +1,7 @@
 import { NextResponse } from "next/server";
-import {
-  getMaterial,
-  createDraft,
-  getThreadsCredentials,
-  updateDraftStatus,
-  listTakenScheduledSlots
-} from "@/lib/store";
+import { getMaterial, createDraft, getThreadsCredentials, updateDraftStatus } from "@/lib/store";
 import { publishToThreads } from "@/services/threads/publish";
-import { nextOpenSlot } from "@/services/publish/slots";
+import { withNextSlot } from "@/services/publish/slots";
 import { getCurrentUser } from "@/lib/auth";
 import { isDemoMode } from "@/lib/env";
 
@@ -36,35 +30,36 @@ export async function POST(req: Request) {
     const material = await getMaterial(material_id, user.id);
     if (!material) return NextResponse.json({ ok: false, error: "找不到素材" }, { status: 404 });
 
-    // queue = 自動排進下一個空時段；draft = 待審；schedule = 指定時間；publish = 立即發
-    let queuedSlot: string | null = null;
-    if (action === "queue") {
-      const taken = await listTakenScheduledSlots(user.id);
-      queuedSlot = nextOpenSlot(taken);
-      if (!queuedSlot) {
-        return NextResponse.json({ ok: false, error: "未來 30 天的時段都排滿了" }, { status: 409 });
-      }
-    }
     // draft 待審；其餘（publish/schedule/queue）已核准
     const status = action === "draft" ? "draft" : "approved";
-    const scheduled_at = action === "schedule" ? body.scheduled_at || null : action === "queue" ? queuedSlot : null;
+    const make = (scheduled_at: string | null) =>
+      createDraft({
+        owner_id: user.id,
+        material_id: material.id,
+        threads_account_id,
+        product_name: material.product_name,
+        clean_product_url: material.clean_product_url,
+        shopee_short_link: material.affiliate_short_link,
+        media_type: material.media_type,
+        source_media_url: material.source_media_url,
+        cloudinary_media_url: material.cloudinary_media_url,
+        main_text: typeof body.main_text === "string" ? body.main_text : material.main_text,
+        reply_text: typeof body.reply_text === "string" ? body.reply_text : material.reply_text,
+        ai_raw: material.ai_raw,
+        status,
+        scheduled_at
+      });
 
-    const draft = await createDraft({
-      owner_id: user.id,
-      material_id: material.id,
-      threads_account_id,
-      product_name: material.product_name,
-      clean_product_url: material.clean_product_url,
-      shopee_short_link: material.affiliate_short_link,
-      media_type: material.media_type,
-      source_media_url: material.source_media_url,
-      cloudinary_media_url: material.cloudinary_media_url,
-      main_text: typeof body.main_text === "string" ? body.main_text : material.main_text,
-      reply_text: typeof body.reply_text === "string" ? body.reply_text : material.reply_text,
-      ai_raw: material.ai_raw,
-      status,
-      scheduled_at
-    });
+    let draft;
+    let queuedSlot: string | null = null;
+    if (action === "queue") {
+      // 自動排進下一個空時段；併發撞格時 withNextSlot 會重算重試
+      draft = await withNextSlot(user.id, (slot) => make(slot));
+      if (!draft) return NextResponse.json({ ok: false, error: "未來 30 天的時段都排滿了" }, { status: 409 });
+      queuedSlot = draft.scheduled_at ?? null;
+    } else {
+      draft = await make(action === "schedule" ? body.scheduled_at || null : null);
+    }
 
     if (action === "publish") {
       if (isDemoMode) {

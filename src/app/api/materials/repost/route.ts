@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { getMaterial, createDraftFromMaterial, listTakenScheduledSlots } from "@/lib/store";
-import { nextOpenSlot } from "@/services/publish/slots";
+import { getMaterial, createDraftFromMaterial } from "@/lib/store";
+import { withNextSlot } from "@/services/publish/slots";
 import { getCurrentUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -21,20 +21,26 @@ export async function POST(req: Request) {
     if (!material) return NextResponse.json({ ok: false, error: "找不到素材" }, { status: 404 });
 
     const action = body.action === "queue" ? "queue" : "draft";
-    let scheduledAt: string | null = null;
+
     if (action === "queue") {
-      const taken = await listTakenScheduledSlots(ownerId);
-      scheduledAt = nextOpenSlot(taken);
-      if (!scheduledAt) return NextResponse.json({ ok: false, error: "30 天內時段已滿" }, { status: 409 });
+      const draft = await withNextSlot(ownerId, (slot) =>
+        createDraftFromMaterial(material, {
+          owner_id: ownerId,
+          threads_account_id: body.threads_account_id,
+          status: "approved",
+          scheduled_at: slot
+        })
+      );
+      if (!draft) return NextResponse.json({ ok: false, error: "30 天內時段已滿" }, { status: 409 });
+      return NextResponse.json({ ok: true, draft, scheduledAt: draft.scheduled_at });
     }
 
     const draft = await createDraftFromMaterial(material, {
       owner_id: ownerId,
       threads_account_id: body.threads_account_id,
-      status: action === "queue" ? "approved" : "draft",
-      scheduled_at: scheduledAt
+      status: "draft"
     });
-    return NextResponse.json({ ok: true, draft, scheduledAt });
+    return NextResponse.json({ ok: true, draft, scheduledAt: null });
   } catch (e) {
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 500 });
   }

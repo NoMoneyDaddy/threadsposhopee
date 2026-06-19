@@ -304,6 +304,36 @@ export async function hasApifyCredentials(ownerId: string): Promise<{ bound: boo
   return { bound: Boolean(data?.apify_token_enc), actor: data?.apify_actor ?? null };
 }
 
+// ── AI 子系統：每個使用者自己綁的 Gemini API key ──────────────
+export async function getGeminiKey(ownerId: string): Promise<string | null> {
+  if (isDemoMode) return null;
+  const sb = getServiceClient()!;
+  const { data } = await sb.from("profiles").select("gemini_api_key_enc").eq("id", ownerId).maybeSingle();
+  if (!data?.gemini_api_key_enc) return null;
+  try {
+    return decrypt(data.gemini_api_key_enc);
+  } catch (e) {
+    console.error("解密 Gemini key 失敗:", e);
+    return null;
+  }
+}
+
+export async function setGeminiKey(ownerId: string, key: string): Promise<void> {
+  if (isDemoMode) return;
+  const sb = getServiceClient()!;
+  const { error } = await sb
+    .from("profiles")
+    .upsert({ id: ownerId, gemini_api_key_enc: encrypt(key) }, { onConflict: "id" });
+  if (error) throw error;
+}
+
+export async function hasGeminiKey(ownerId: string): Promise<boolean> {
+  if (isDemoMode) return false;
+  const sb = getServiceClient()!;
+  const { data } = await sb.from("profiles").select("gemini_api_key_enc").eq("id", ownerId).maybeSingle();
+  return Boolean(data?.gemini_api_key_enc);
+}
+
 export async function listShopeeAccounts(ownerId: string): Promise<ShopeeAccount[]> {
   if (isDemoMode) return demo.shopeeAccounts;
   const sb = getServiceClient()!;

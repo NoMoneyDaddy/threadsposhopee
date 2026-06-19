@@ -6,7 +6,8 @@ import { fetchWithTimeout } from "@/lib/http";
 export async function generateWithGemini(
   prompt: string,
   mediaUrl: string | null,
-  mediaType: "image" | "video" | "none"
+  mediaType: "image" | "video" | "none",
+  apiKey?: string | null
 ): Promise<string> {
   const parts: any[] = [{ text: prompt }];
 
@@ -24,7 +25,7 @@ export async function generateWithGemini(
     }
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${env.geminiModel}:generateContent?key=${env.geminiApiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${env.geminiModel}:generateContent?key=${apiKey || env.geminiApiKey}`;
   const res = await fetchWithTimeout(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

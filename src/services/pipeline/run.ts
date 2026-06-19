@@ -14,12 +14,16 @@ import {
   listSources,
   findMaterial,
   createDraftFromMaterial,
-  getApifyCredentials
+  getApifyCredentials,
+  getShopeeCredentials,
+  getGeminiKey
 } from "@/lib/store";
 import type { Source } from "@/lib/types";
 
-// 爬蟲是 owner 專屬，一律用 owner 的環境變數 Shopee 金鑰
-function ownerShopeeCreds(): { appId: string; secret: string; subId: string } | null {
+// owner 的 Shopee 金鑰：優先自綁（shopee_accounts），沒綁退回環境變數
+async function ownerShopeeCreds(ownerId: string): Promise<{ appId: string; secret: string; subId: string } | null> {
+  const bound = await getShopeeCredentials(ownerId);
+  if (bound) return bound;
   if (env.shopeeAppId && env.shopeeSecret) {
     return { appId: env.shopeeAppId, secret: env.shopeeSecret, subId: env.shopeeDefaultSubId };
   }
@@ -49,8 +53,10 @@ export async function runSourcePipeline(source: Source, ownerId: string): Promis
     notes: []
   };
 
-  // 爬蟲子系統用 owner 自己綁的 Apify 憑證（沒綁則退回全域 env）
+  // 子系統憑證一次解析（自綁優先，退回 env）：Apify（爬蟲）、Shopee（分潤）、Gemini（AI）
   const apify = await getApifyCredentials(ownerId);
+  const shopeeCreds = await ownerShopeeCreds(ownerId);
+  const geminiKey = await getGeminiKey(ownerId);
   const posts = await scrapeLatestPosts(source.source_username, source.posts_limit, apify);
   result.scanned = posts.length;
 
@@ -93,8 +99,9 @@ export async function runSourcePipeline(source: Source, ownerId: string): Promis
             withCopy: true
           },
           ownerId,
-          ownerShopeeCreds(),
-          result.notes
+          shopeeCreds,
+          result.notes,
+          geminiKey
         );
       }
 

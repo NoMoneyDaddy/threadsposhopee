@@ -1,9 +1,10 @@
-import { listShopeeAccounts, listThreadsAccounts, hasApifyCredentials } from "@/lib/store";
+import { listShopeeAccounts, listThreadsAccounts, hasApifyCredentials, hasGeminiKey } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
 import { env, isDemoMode } from "@/lib/env";
 import ThreadsAccountForm from "@/components/ThreadsAccountForm";
 import ShopeeAccountForm from "@/components/ShopeeAccountForm";
 import ApifyForm from "@/components/ApifyForm";
+import GeminiForm from "@/components/GeminiForm";
 import { DeleteButton, ToggleButton } from "@/components/RowActions";
 
 export const dynamic = "force-dynamic";
@@ -17,8 +18,9 @@ export default async function AccountsPage({
   const ownerId = user?.id ?? "demo-user";
   const [threads, shopee] = await Promise.all([listThreadsAccounts(ownerId), listShopeeAccounts(ownerId)]);
   const oauthReady = !isDemoMode && Boolean(env.threadsAppId && env.threadsRedirectUri);
-  // 爬蟲子系統綁定狀態（owner 限定）
+  // 子系統綁定狀態（owner 限定）
   const apify = user?.isOwner ? await hasApifyCredentials(ownerId) : { bound: false, actor: null };
+  const geminiBound = user?.isOwner ? await hasGeminiKey(ownerId) : false;
 
   return (
     <div className="space-y-6">
@@ -63,7 +65,12 @@ export default async function AccountsPage({
         <ShopeeAccountForm />
       </div>
 
-      {user?.isOwner && <ApifyForm bound={apify.bound} actor={apify.actor} />}
+      {user?.isOwner && (
+        <div className="grid gap-4 md:grid-cols-2">
+          <ApifyForm bound={apify.bound} actor={apify.actor} />
+          <GeminiForm bound={geminiBound} />
+        </div>
+      )}
 
       <section>
         <h2 className="mb-2 font-semibold">Threads 發文帳號</h2>

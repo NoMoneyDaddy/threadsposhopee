@@ -4,7 +4,8 @@ import {
   updateDraft,
   deleteDraft,
   getDraft,
-  getThreadsCredentials
+  getThreadsCredentials,
+  getGeminiKey
 } from "@/lib/store";
 import { publishToThreads } from "@/services/threads/publish";
 import { generateCopy } from "@/services/ai/provider";
@@ -47,12 +48,16 @@ export async function POST(req: Request) {
   }
   if (action === "regenerate") {
     try {
-      const copy = await generateCopy({
-        productName: draft.product_name ?? "這個好物",
-        shopeeShortLink: draft.shopee_short_link ?? "",
-        mediaUrl: draft.cloudinary_media_url,
-        mediaType: (draft.media_type as "image" | "video" | "none") ?? "none"
-      });
+      const geminiKey = await getGeminiKey(user.id);
+      const copy = await generateCopy(
+        {
+          productName: draft.product_name ?? "這個好物",
+          shopeeShortLink: draft.shopee_short_link ?? "",
+          mediaUrl: draft.cloudinary_media_url,
+          mediaType: (draft.media_type as "image" | "video" | "none") ?? "none"
+        },
+        geminiKey
+      );
       const updated = await updateDraft(id, user.id, {
         main_text: copy.mainText,
         reply_text: copy.replyText,

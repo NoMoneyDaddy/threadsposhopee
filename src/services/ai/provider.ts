@@ -14,22 +14,16 @@ export interface CopyInput extends CopyContext {
 }
 
 // 文案生成的統一入口。預設 Gemini（多模態、便宜快速）；可改 AI_PROVIDER 切換。
-export async function generateCopy(input: CopyInput): Promise<GeneratedCopy> {
+// apiKey：使用者自綁的 Gemini key；沒傳則退回全域 env（向後相容）。
+export async function generateCopy(input: CopyInput, apiKey?: string | null): Promise<GeneratedCopy> {
   const prompt = buildCopyPrompt(input);
+  const key = apiKey || env.geminiApiKey;
 
-  if (isDemoMode || (env.aiProvider === "gemini" && !env.geminiApiKey)) {
+  if (isDemoMode || (env.aiProvider === "gemini" && !key)) {
     return demoCopy(input);
   }
 
-  let raw: string;
-  switch (env.aiProvider) {
-    case "gemini":
-      raw = await generateWithGemini(prompt, input.mediaUrl ?? null, input.mediaType ?? "none");
-      break;
-    default:
-      // Claude 等其他 provider 之後可在此擴充
-      raw = await generateWithGemini(prompt, input.mediaUrl ?? null, input.mediaType ?? "none");
-  }
+  const raw = await generateWithGemini(prompt, input.mediaUrl ?? null, input.mediaType ?? "none", key);
   return { ...splitCopy(raw), raw };
 }
 

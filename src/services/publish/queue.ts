@@ -7,7 +7,9 @@ import {
   getThreadsCredentials,
   updateDraftStatus,
   updateDraftStatusAtomic,
-  reclaimStalePublishing
+  reclaimStalePublishing,
+  acquirePublishLock,
+  releasePublishLock
 } from "@/lib/store";
 import { publishToThreads } from "@/services/threads/publish";
 import { normalizeDraftMedia } from "@/lib/media";
@@ -19,10 +21,25 @@ export interface PublishResult {
   skipped: { id: string; reason: string }[];
   failed: { id: string; error: string }[];
   reclaimed: number;
+  lockBusy?: boolean; // true 表示另一輪（cron 或手動）正在跑，本次未執行
 }
 
 export async function runPublishQueue(): Promise<PublishResult> {
   const result: PublishResult = { considered: 0, published: [], skipped: [], failed: [], reclaimed: 0 };
+  // 分布式鎖：避免 cron 與手動觸發同時跑而各自繞過防封最小間隔。搶不到就直接讓出。
+  const locked = await acquirePublishLock();
+  if (!locked) {
+    result.lockBusy = true;
+    return result;
+  }
+  try {
+    return await runPublishQueueLocked(result);
+  } finally {
+    await releasePublishLock().catch(() => {});
+  }
+}
+
+async function runPublishQueueLocked(result: PublishResult): Promise<PublishResult> {
   // 先回收上次中斷卡在 publishing 的草稿（標 failed 待人工重試）
   result.reclaimed = await reclaimStalePublishing();
   const drafts = await listApprovedDrafts();

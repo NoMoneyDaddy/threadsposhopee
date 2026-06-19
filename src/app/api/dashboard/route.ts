@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { getDashboardStats, listActiveThreadsCredentials, getHeartbeat } from "@/lib/store";
+import {
+  getDashboardStats,
+  listActiveThreadsCredentials,
+  getHeartbeat,
+  hasApifyCredentials,
+  hasGeminiKey,
+  getShopeeCredentials
+} from "@/lib/store";
 import { getPublishingLimit } from "@/services/threads/limit";
 import { getCloudinaryUsage } from "@/services/media/cloudinary-usage";
 import { env, isDemoMode } from "@/lib/env";
@@ -49,6 +56,24 @@ export async function GET() {
 
   const lastCronAt = await getHeartbeat().catch(() => null);
 
+  // 金鑰自綁狀態（提示用）。owner 與 member 規則不同：
+  // - Apify（爬蟲）只有 owner 需要；member 不適用 → 視為 OK 不嘮叨。
+  // - Gemini（AI）每人都需要，自綁或 env 後備皆可。
+  // - Shopee（分潤）owner 需要（自綁或 env）；member 為選填（可貼現成分潤連結）→ 視為 OK。
+  let binds: { apify: boolean; gemini: boolean; shopee: boolean } | null = null;
+  if (!isDemoMode && user) {
+    const [apify, gemini, shopee] = await Promise.all([
+      isOwner
+        ? hasApifyCredentials(user.id).then((r) => r.bound || Boolean(env.apifyToken)).catch(() => false)
+        : Promise.resolve(true),
+      hasGeminiKey(user.id).then((b) => b || Boolean(env.geminiApiKey)).catch(() => false),
+      isOwner
+        ? getShopeeCredentials(user.id).then((c) => Boolean(c) || Boolean(env.shopeeAppId && env.shopeeSecret)).catch(() => false)
+        : Promise.resolve(true)
+    ]);
+    binds = { apify, gemini, shopee };
+  }
+
   return NextResponse.json({
     ok: true,
     at: new Date().toISOString(),
@@ -58,6 +83,7 @@ export async function GET() {
     stats,
     threadsQuota,
     cloudinary,
-    lastCronAt
+    lastCronAt,
+    binds
   });
 }

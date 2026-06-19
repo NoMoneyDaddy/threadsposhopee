@@ -19,6 +19,27 @@ interface DashboardData {
   threadsQuota: { label: string; used: number; limit: number }[];
   cloudinary: { creditsUsed: number; creditsLimit: number; storageBytes: number; resources: number } | null;
   lastCronAt?: string | null;
+  binds?: { apify: boolean; gemini: boolean; shopee: boolean } | null;
+}
+
+// 未綁金鑰提示：自綁或 env 任一有就算 OK；缺的列出來提醒去帳號管理綁。
+function MissingBinds({ binds }: { binds?: { apify: boolean; gemini: boolean; shopee: boolean } | null }) {
+  if (!binds) return null;
+  const missing = [
+    !binds.apify && "Apify（爬蟲）",
+    !binds.gemini && "Gemini（AI 文案）",
+    !binds.shopee && "Shopee（分潤）"
+  ].filter(Boolean) as string[];
+  if (missing.length === 0) return null;
+  return (
+    <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+      🔑 尚未設定：{missing.join("、")}。到{" "}
+      <Link href="/accounts" className="underline hover:opacity-80">
+        帳號管理
+      </Link>{" "}
+      綁定後爬蟲／AI 才能運作。
+    </div>
+  );
 }
 
 // 自動駕駛心跳：依上次排程執行時間判斷是否運轉中（demo 模式不顯示）。
@@ -127,6 +148,7 @@ export default function LiveDashboard() {
   return (
     <div className="space-y-6">
       <Autopilot lastCronAt={data.lastCronAt} demo={data.demo} />
+      <MissingBinds binds={data.binds} />
       {setupIncomplete && (
         <div className="rounded-lg border border-shopee/30 bg-orange-50 p-5">
           <h2 className="mb-3 font-semibold text-neutral-800">🚀 開始使用（3 步驟）</h2>

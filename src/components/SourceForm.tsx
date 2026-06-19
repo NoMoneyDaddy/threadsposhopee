@@ -21,8 +21,7 @@ export default function SourceForm({
     threads_account_id: threadsAccounts[0]?.id ?? "",
     shopee_account_id: "",
     poll_interval_minutes: "15",
-    posts_limit: "1",
-    auto_publish: false
+    posts_limit: "1"
   });
 
   function set<K extends keyof typeof form>(k: K, v: (typeof form)[K]) {
@@ -71,10 +70,9 @@ export default function SourceForm({
       </select>
       <input className={input} type="number" min={1} title="輪詢間隔（分鐘）" value={form.poll_interval_minutes} onChange={(e) => set("poll_interval_minutes", e.target.value)} />
       <input className={input} type="number" min={1} title="每次抓幾篇" value={form.posts_limit} onChange={(e) => set("posts_limit", e.target.value)} />
-      <label className="flex items-center gap-2 text-sm text-neutral-600">
-        <input type="checkbox" checked={form.auto_publish} onChange={(e) => set("auto_publish", e.target.checked)} />
-        全自動發布（不勾＝進審核佇列，較安全）
-      </label>
+      <p className="text-xs text-neutral-400 md:col-span-2">
+        爬取的內容會先進「文案佇列」待你審核，核准後才會發布（可在佇列頁批次核准／加入佇列）。
+      </p>
       <div className="flex items-center gap-3 md:col-span-2">
         <button disabled={busy} className="rounded-md bg-shopee px-4 py-2 text-sm text-white disabled:opacity-50">
           {busy ? "新增中…" : "新增來源"}

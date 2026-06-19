@@ -100,8 +100,8 @@ export async function runSourcePipeline(source: Source, ownerId: string): Promis
         source_id: source.id,
         threads_account_id: source.threads_account_id,
         source_post_id: post.postId,
-        // 來源設「全自動」→ 直接 approved 進發文佇列；否則待人工核准
-        status: source.auto_publish ? "approved" : "draft"
+        // 一律待人工核准——只有審核過的草稿才能發布（不自動發到 Threads）
+        status: "draft"
       });
 
       await markPostProcessed(source.id, post.postId);

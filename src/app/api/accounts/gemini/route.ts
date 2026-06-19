@@ -7,16 +7,20 @@ export const dynamic = "force-dynamic";
 
 // 綁定 Gemini API key（AI 子系統）。key 加密存放。
 export async function POST(req: Request) {
-  const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+  try {
+    const user = await getCurrentUser();
+    if (!user) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
 
-  const body = await req.json().catch(() => ({}));
-  const key = typeof body.key === "string" ? body.key.trim() : "";
-  if (!key) return NextResponse.json({ ok: false, error: "缺少 Gemini API key" }, { status: 400 });
+    const body = await req.json().catch(() => ({}));
+    const key = typeof body.key === "string" ? body.key.trim() : "";
+    if (!key) return NextResponse.json({ ok: false, error: "缺少 Gemini API key" }, { status: 400 });
 
-  const check = await validateGeminiKey(key);
-  if (!check.ok) return NextResponse.json({ ok: false, error: check.reason }, { status: 400 });
+    const check = await validateGeminiKey(key);
+    if (!check.ok) return NextResponse.json({ ok: false, error: check.reason }, { status: 400 });
 
-  await setGeminiKey(user.id, key);
-  return NextResponse.json({ ok: true });
+    await setGeminiKey(user.id, key);
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 500 });
+  }
 }

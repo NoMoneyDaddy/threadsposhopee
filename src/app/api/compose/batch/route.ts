@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveMaterialFromUrl } from "@/services/materials/fromUrl";
-import { createDraftFromMaterial, listTakenScheduledSlots } from "@/lib/store";
-import { nextOpenSlot } from "@/services/publish/slots";
+import { createDraftFromMaterial } from "@/lib/store";
+import { withNextSlot } from "@/services/publish/slots";
 import { getCurrentUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -27,7 +27,6 @@ export async function POST(req: Request) {
       .slice(0, 20); // 單次上限 20 筆，避免吃滿 maxDuration
     if (!urls.length) return NextResponse.json({ ok: false, error: "沒有有效連結" }, { status: 400 });
 
-    const taken = action === "queue" ? await listTakenScheduledSlots(user.id) : new Set<string>();
     const startTime = Date.now();
     const results: { url: string; ok: boolean; error?: string; scheduledAt?: string }[] = [];
 
@@ -38,22 +37,29 @@ export async function POST(req: Request) {
       }
       try {
         const { material } = await resolveMaterialFromUrl(url, user, true);
-        let scheduledAt: string | null = null;
         if (action === "queue") {
-          scheduledAt = nextOpenSlot(taken);
-          if (!scheduledAt) {
+          // 每筆即時重抓已占用時段並重試，前一筆已提交故不會重排同格
+          const draft = await withNextSlot(user.id, (slot) =>
+            createDraftFromMaterial(material, {
+              owner_id: user.id,
+              threads_account_id: threadsAccountId,
+              status: "approved",
+              scheduled_at: slot
+            })
+          );
+          if (!draft) {
             results.push({ url, ok: false, error: "30 天內時段已滿" });
             continue;
           }
-          taken.add(scheduledAt);
+          results.push({ url, ok: true, scheduledAt: draft.scheduled_at ?? undefined });
+        } else {
+          await createDraftFromMaterial(material, {
+            owner_id: user.id,
+            threads_account_id: threadsAccountId,
+            status: "draft"
+          });
+          results.push({ url, ok: true });
         }
-        await createDraftFromMaterial(material, {
-          owner_id: user.id,
-          threads_account_id: threadsAccountId,
-          status: action === "queue" ? "approved" : "draft",
-          scheduled_at: scheduledAt
-        });
-        results.push({ url, ok: true, scheduledAt: scheduledAt ?? undefined });
       } catch (e) {
         results.push({ url, ok: false, error: e instanceof Error ? e.message : String(e) });
       }

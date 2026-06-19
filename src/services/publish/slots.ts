@@ -1,4 +1,5 @@
 import { env } from "@/lib/env";
+import { listTakenScheduledSlots } from "@/lib/store";
 
 // 「加入佇列」：把貼文排進下一個尚未被占用的每日發文時段（仿 Buffer 的 Queue）。
 // 時段以 Asia/Taipei（固定 UTC+8，無 DST）計算，回傳 UTC ISO 字串。
@@ -25,4 +26,30 @@ export function nextOpenSlot(takenIso: Set<string>, fromMs = Date.now(), daysAhe
     }
   }
   return null;
+}
+
+// Postgres 唯一鍵衝突（撞格時 migration 0008 的索引會回 23505）
+function isUniqueViolation(e: unknown): boolean {
+  return Boolean(e && typeof e === "object" && (e as { code?: string }).code === "23505");
+}
+
+// 配下一個空時段並建立草稿；若併發撞格（DB 唯一索引擋下）則重算重試。
+// create(slot) 須真正寫入 DB；回傳 null 代表 30 天內無空檔。
+export async function withNextSlot<T>(
+  ownerId: string,
+  create: (slot: string) => Promise<T>,
+  maxRetry = 5
+): Promise<T | null> {
+  for (let i = 0; i < maxRetry; i++) {
+    const taken = await listTakenScheduledSlots(ownerId);
+    const slot = nextOpenSlot(taken);
+    if (!slot) return null;
+    try {
+      return await create(slot);
+    } catch (e) {
+      if (isUniqueViolation(e)) continue; // 撞格 → 重新抓已占用時段再試
+      throw e;
+    }
+  }
+  throw new Error("配置發文時段失敗（多次重試仍撞格），請稍後再試");
 }

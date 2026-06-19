@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { Draft } from "@/lib/types";
 import { CharCount } from "@/components/ThreadsPreview";
+import ThreadsPreview from "@/components/ThreadsPreview";
 
 export default function DraftCard({ draft }: { draft: Draft }) {
   const router = useRouter();
@@ -52,11 +53,6 @@ export default function DraftCard({ draft }: { draft: Draft }) {
         <span className="rounded bg-neutral-100 px-2 py-0.5 text-xs text-neutral-500">{draft.status}</span>
       </div>
 
-      {draft.cloudinary_media_url && draft.media_type !== "none" && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={draft.cloudinary_media_url} alt="" className="mb-3 h-40 w-full rounded object-cover" />
-      )}
-
       {editing ? (
         <div className="space-y-2">
           <textarea
@@ -90,10 +86,14 @@ export default function DraftCard({ draft }: { draft: Draft }) {
           </div>
         </div>
       ) : (
-        <>
-          <div className="whitespace-pre-wrap text-sm text-neutral-800">{mainText}</div>
-          <div className="mt-2 rounded bg-neutral-50 p-2 text-xs text-neutral-500 whitespace-pre-wrap">💬 {replyText}</div>
-        </>
+        // 預覽素材：仿 Threads 版面呈現正文／媒體（圖或影片）／留言區分潤連結
+        <ThreadsPreview
+          accountLabel={draft.product_name ?? undefined}
+          mainText={mainText}
+          replyText={replyText}
+          mediaUrl={draft.cloudinary_media_url}
+          mediaType={draft.media_type}
+        />
       )}
 
       <a

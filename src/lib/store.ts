@@ -340,8 +340,9 @@ export async function getCopyPrefs(ownerId: string): Promise<CopyPrefs> {
   if (isDemoMode) return DEFAULT_COPY_PREFS;
   const sb = getServiceClient()!;
   const { data, error } = await sb.from("profiles").select("copy_prefs").eq("id", ownerId).maybeSingle();
-  // 查詢失敗（DB 異常）與「無此列」分開：前者記 log 以利診斷，再退回預設不擋住文案生成
-  if (error) console.error("讀取 copy_prefs 失敗，改用預設：", error.message);
+  // 查詢失敗（DB 異常）要拋出，不可與「無此列」混為一談而靜默回退預設——
+  // 否則表單載入會把預設誤當使用者偏好，存檔後反而覆寫原本設定。
+  if (error) throw error;
   return normalizeCopyPrefs(data?.copy_prefs);
 }
 

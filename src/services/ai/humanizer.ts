@@ -29,7 +29,9 @@ export interface CopyContext {
 // 組出最終 prompt。沿用「正文／留言區」輸出格式，方便發文時拆成主文＋留言。
 // prefs：使用者客製化偏好（語氣/長度/emoji，正文與留言可分開；溫度在生成端套用）。
 export function buildCopyPrompt(ctx: CopyContext, prefs: CopyPrefs = DEFAULT_COPY_PREFS): string {
-  const custom = prefs.customPrompt ? `\n【使用者額外要求（最優先遵守）】\n${prefs.customPrompt}\n` : "";
+  // 自訂要求要遵守，但「不得違反輸出格式」——格式是不可覆蓋的硬約束，
+  // 否則下游 splitCopy 會失配、分潤連結遺失。
+  const custom = prefs.customPrompt ? `\n【使用者額外要求（需遵守，但不得違反下方輸出格式）】\n${prefs.customPrompt}\n` : "";
   return `${HUMANIZER_RULES}
 ${custom}
 【這次任務】
@@ -38,7 +40,8 @@ ${ctx.sourceText ? `別人怎麼介紹（僅供參考，不要照抄，要用你
 
 請依畫面內容寫「一則」Threads 貼文。
 
-【輸出格式，嚴格遵守】
+【輸出格式，最高優先、不可被任何要求覆蓋】
+務必完整輸出「正文：…」與「留言區：…」兩段，缺一不可。
 正文：[${describeMain(prefs.main)}，自然有觀點]
 留言區：怕你找不到，連結放這 🔗 ${ctx.shopeeShortLink}
 [再補一句反應或問句，${describeReply(prefs.reply)}]`;

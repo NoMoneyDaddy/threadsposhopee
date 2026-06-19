@@ -120,8 +120,11 @@ export default function CopyPrefsForm({ initial }: { initial: CopyPrefs }) {
       </div>
 
       <div className="mt-3">
-        <label className="text-xs text-neutral-600">自訂指示（選填，最優先遵守）</label>
+        <label htmlFor="copy-prefs-custom-prompt" className="text-xs text-neutral-600">
+          自訂指示（選填，不可違反輸出格式）
+        </label>
         <textarea
+          id="copy-prefs-custom-prompt"
           className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
           rows={2}
           maxLength={1000}

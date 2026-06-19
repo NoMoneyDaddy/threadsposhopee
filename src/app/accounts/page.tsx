@@ -87,7 +87,7 @@ export default async function AccountsPage({
               <div className="mt-1 text-sm text-neutral-500">user id: {a.threads_user_id}</div>
               {a.token_expires_at && (
                 <div className="text-xs text-neutral-400">
-                  token 到期：{new Date(a.token_expires_at).toLocaleDateString("zh-TW")}（自動展期）
+                  token 到期：{new Date(a.token_expires_at).toLocaleDateString("zh-TW", { timeZone: "Asia/Taipei" })}（自動展期）
                 </div>
               )}
               <div className="mt-2 flex items-center gap-3 border-t pt-2">

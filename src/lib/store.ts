@@ -335,6 +335,24 @@ export async function hasGeminiKey(ownerId: string): Promise<boolean> {
   return Boolean(data?.gemini_api_key_enc);
 }
 
+// Shopee affiliate_id（無 API 時用 an_redir 自組追蹤連結）。非機密，明文存。
+export async function getShopeeAffiliateId(ownerId: string): Promise<string | null> {
+  if (isDemoMode) return null;
+  const sb = getServiceClient()!;
+  const { data, error } = await sb.from("profiles").select("shopee_affiliate_id").eq("id", ownerId).maybeSingle();
+  if (error) throw new Error(`讀取 shopee_affiliate_id 失敗：${error.message}`);
+  return data?.shopee_affiliate_id ?? null;
+}
+
+export async function setShopeeAffiliateId(ownerId: string, affiliateId: string | null): Promise<void> {
+  if (isDemoMode) return;
+  const sb = getServiceClient()!;
+  const { error } = await sb
+    .from("profiles")
+    .upsert({ id: ownerId, shopee_affiliate_id: affiliateId || null }, { onConflict: "id" });
+  if (error) throw new Error(`儲存 shopee_affiliate_id 失敗：${error.message}`);
+}
+
 // AI 文案客製化偏好（非機密，明文 jsonb）。讀取一律經 normalizeCopyPrefs 夾成合法值。
 export async function getCopyPrefs(ownerId: string): Promise<CopyPrefs> {
   if (isDemoMode) return DEFAULT_COPY_PREFS;

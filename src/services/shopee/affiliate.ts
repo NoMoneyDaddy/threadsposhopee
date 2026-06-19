@@ -64,6 +64,19 @@ export function buildSubIds(base: string | null | undefined, sourceUsername: str
   return parts.filter((p) => p.length > 0);
 }
 
+// 無 Open API 的替代：依蝦皮官方「Product Feed 第三方短連結」做法，
+// 直接組 an_redir 轉址連結帶上 affiliate_id 與 sub_id（最多 5 個、用 - 連接）。
+// 只要使用者的 affiliate_id 即可追蹤分潤，免申請 API 金鑰。
+// 參考：help.shopee.tw 文章 172901。
+export function buildAffiliateRedirectLink(originUrl: string, affiliateId: string, subIds: string[] = []): string {
+  const u = new URL("https://s.shopee.tw/an_redir");
+  u.searchParams.set("origin_link", originUrl);
+  u.searchParams.set("affiliate_id", affiliateId);
+  const subs = subIds.filter(Boolean).slice(0, 5);
+  if (subs.length) u.searchParams.set("sub_id", subs.join("-"));
+  return u.toString();
+}
+
 // 產生帶自己 subId 的分潤短連結（對應 n8n「取得分潤連結」）
 export async function generateAffiliateLink(
   appId: string,

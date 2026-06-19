@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { setGeminiKey } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
+import { validateGeminiKey } from "@/services/validate/keys";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,9 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const key = typeof body.key === "string" ? body.key.trim() : "";
   if (!key) return NextResponse.json({ ok: false, error: "缺少 Gemini API key" }, { status: 400 });
+
+  const check = await validateGeminiKey(key);
+  if (!check.ok) return NextResponse.json({ ok: false, error: check.reason }, { status: 400 });
 
   await setGeminiKey(user.id, key);
   return NextResponse.json({ ok: true });

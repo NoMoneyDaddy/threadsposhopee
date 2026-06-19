@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { setApifyCredentials } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
+import { validateApifyToken } from "@/services/validate/keys";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,9 @@ export async function POST(req: Request) {
   const token = typeof body.token === "string" ? body.token.trim() : "";
   const actor = typeof body.actor === "string" ? body.actor.trim() : "";
   if (!token) return NextResponse.json({ ok: false, error: "缺少 Apify token" }, { status: 400 });
+
+  const check = await validateApifyToken(token);
+  if (!check.ok) return NextResponse.json({ ok: false, error: check.reason }, { status: 400 });
 
   await setApifyCredentials(user.id, token, actor || null);
   return NextResponse.json({ ok: true });

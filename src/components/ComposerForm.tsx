@@ -180,7 +180,10 @@ export default function ComposerForm({ threadsAccounts }: { threadsAccounts: Thr
                 inputMode="numeric"
                 placeholder="如 15"
                 value={replyDelay}
-                onChange={(e) => setReplyDelay(e.target.value)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (/^\d*$/.test(v) && (v === "" || Number(v) <= 1440)) setReplyDelay(v);
+                }}
               />
             </div>
           )}

@@ -11,6 +11,8 @@ import {
   acquirePublishLock,
   releasePublishLock,
   listRepliesDue,
+  claimReplyForPublish,
+  reclaimStaleReplies,
   markReplyPublished,
   markReplyFailed
 } from "@/lib/store";
@@ -121,6 +123,7 @@ async function runPublishQueueLocked(result: PublishResult): Promise<PublishResu
       const nowMs = Date.now();
       const nowIso = new Date(nowMs).toISOString();
       let postId = "demo_" + nowMs;
+      let replyFailedInline = false;
 
       if (!isDemoMode) {
         const creds = await getThreadsCredentials(accId, draft.owner_id ?? "");
@@ -134,13 +137,15 @@ async function runPublishQueueLocked(result: PublishResult): Promise<PublishResu
           deferReply
         });
         postId = res.postId;
+        replyFailedInline = Boolean(res.replyFailed);
       }
 
-      // 延遲留言：標 pending + 到期時間，交給下方的補留言 pass；否則本次已隨主文發完
+      // 延遲留言：標 pending + 到期時間，交給下方的補留言 pass；
+      // 立即留言：依實際成功與否落 published/failed（不要謊報 published）
       const replyPatch = deferReply
         ? { reply_status: "pending" as const, reply_due_at: new Date(nowMs + replyDelay * 60000).toISOString() }
         : draft.reply_text
-          ? { reply_status: "published" as const }
+          ? { reply_status: replyFailedInline ? ("failed" as const) : ("published" as const) }
           : {};
       await updateDraftStatus(draft.id, "published", { published_post_id: postId, published_at: nowIso, ...replyPatch });
       // 更新本地節奏狀態，讓同帳號的下一篇遵守間隔/上限
@@ -163,6 +168,8 @@ async function runPublishQueueLocked(result: PublishResult): Promise<PublishResu
 async function publishDueReplies(startTime: number): Promise<{ published: number; failed: number }> {
   const out = { published: 0, failed: 0 };
   if (isDemoMode) return out;
+  // 先回收上次中斷卡在 publishing-reply 的留言（標 failed），再撈到期待補的
+  await reclaimStaleReplies().catch((e) => console.warn("回收卡住留言失敗：", e instanceof Error ? e.message : e));
   let due;
   try {
     due = await listRepliesDue();
@@ -172,19 +179,23 @@ async function publishDueReplies(startTime: number): Promise<{ published: number
   }
   for (const d of due) {
     if (Date.now() - startTime > 50000) break; // 守住 maxDuration，剩下的下輪再補
-    if (!d.threads_account_id || !d.published_post_id || !d.reply_text) {
-      await markReplyFailed(d.id, "缺帳號/主貼文/留言內容，無法補留言");
-      out.failed++;
-      continue;
-    }
+    const ownerId = d.owner_id;
+    if (!ownerId) continue; // 無 owner（理論上不會發生）無法安全 owner 過濾，略過
     try {
-      const creds = await getThreadsCredentials(d.threads_account_id, d.owner_id ?? "");
+      // 原子認領：搶不到代表已被處理/狀態變更 → 跳過，避免重複補發
+      if (!(await claimReplyForPublish(d.id, ownerId))) continue;
+      if (!d.threads_account_id || !d.published_post_id || !d.reply_text) {
+        await markReplyFailed(d.id, ownerId, "缺帳號/主貼文/留言內容，無法補留言");
+        out.failed++;
+        continue;
+      }
+      const creds = await getThreadsCredentials(d.threads_account_id, ownerId);
       if (!creds) throw new Error("找不到 Threads 帳號憑證");
       const replyPostId = await publishReply(creds.threadsUserId, creds.accessToken, d.published_post_id, d.reply_text);
-      await markReplyPublished(d.id, replyPostId);
+      await markReplyPublished(d.id, ownerId, replyPostId);
       out.published++;
     } catch (e) {
-      await markReplyFailed(d.id, e instanceof Error ? e.message : String(e));
+      await markReplyFailed(d.id, ownerId, e instanceof Error ? e.message : String(e)).catch(() => {});
       out.failed++;
     }
   }

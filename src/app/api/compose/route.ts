@@ -101,11 +101,16 @@ export async function POST(req: Request) {
     // 留言延遲逐則覆寫（分）：選填非負整數（0=立即）；未填則用全域預設
     let replyDelayOverride: number | null = null;
     if (body.reply_delay_minutes !== undefined && body.reply_delay_minutes !== null && body.reply_delay_minutes !== "") {
-      const n = Number(body.reply_delay_minutes);
-      if (!Number.isFinite(n) || n < 0 || n > 1440) {
-        return NextResponse.json({ ok: false, error: "留言延遲需為 0–1440 的分鐘數" }, { status: 400 });
+      const raw = body.reply_delay_minutes;
+      // 限定 number/string，避免 Number(true)=1、Number([])=0 等非預期型別繞過驗證
+      if (typeof raw !== "number" && typeof raw !== "string") {
+        return NextResponse.json({ ok: false, error: "留言延遲格式不正確" }, { status: 400 });
       }
-      replyDelayOverride = Math.floor(n);
+      const n = Number(raw);
+      if (!Number.isInteger(n) || n < 0 || n > 1440) {
+        return NextResponse.json({ ok: false, error: "留言延遲需為 0–1440 的整數分鐘" }, { status: 400 });
+      }
+      replyDelayOverride = n;
     }
 
     // draft 待審；其餘（publish/schedule/queue）已核准
@@ -164,7 +169,7 @@ export async function POST(req: Request) {
           ? replyDelayMinutes(draft.id, env.replyDelayFloorMinutes, env.replyDelayJitterMinutes, draft.reply_delay_minutes)
           : 0;
         const deferReply = Boolean(draft.reply_text) && replyDelay > 0;
-        const { postId } = await publishToThreads({
+        const { postId, replyFailed } = await publishToThreads({
           threadsUserId: creds.threadsUserId,
           accessToken: creds.accessToken,
           text: draft.main_text ?? "",
@@ -176,7 +181,7 @@ export async function POST(req: Request) {
         const replyPatch = deferReply
           ? { reply_status: "pending" as const, reply_due_at: new Date(nowMs + replyDelay * 60000).toISOString() }
           : draft.reply_text
-            ? { reply_status: "published" as const }
+            ? { reply_status: replyFailed ? ("failed" as const) : ("published" as const) }
             : {};
         await updateDraftStatus(draft.id, "published", {
           published_post_id: postId,

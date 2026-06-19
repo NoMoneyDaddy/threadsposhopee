@@ -88,7 +88,7 @@ export interface Draft {
   published_at?: string | null;
   error?: string | null;
   // 延遲留言（串文 2/2）：主文發出後隔一段才補留言
-  reply_status?: "none" | "pending" | "published" | "failed" | null;
+  reply_status?: "none" | "pending" | "publishing-reply" | "published" | "failed" | null;
   reply_due_at?: string | null;
   reply_post_id?: string | null;
   reply_delay_minutes?: number | null; // 逐則覆寫；null = 用全域預設

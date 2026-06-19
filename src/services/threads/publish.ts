@@ -120,13 +120,16 @@ export async function publishReply(
     text: replyText,
     reply_to_id: postId
   });
-  const c = await fetchWithTimeout(`${GRAPH}/${threadsUserId}/threads`, { method: "POST", body: replyParams });
+  const replyUrl = assertSafePublicUrl(`${GRAPH}/${threadsUserId}/threads`).href;
+  const c = await fetchWithTimeout(replyUrl, { method: "POST", body: replyParams });
   if (!c.ok) throw new Error(`留言容器建立失敗 ${c.status}: ${await c.text()}`);
   const replyCreation = (await c.json()).id;
   return publishContainer(threadsUserId, accessToken, replyCreation);
 }
 
-export async function publishToThreads(input: PublishInput): Promise<{ postId: string; replyDeferred?: boolean }> {
+export async function publishToThreads(
+  input: PublishInput
+): Promise<{ postId: string; replyDeferred?: boolean; replyFailed?: boolean }> {
   const media = resolveMedia(input);
   const { creationId, needWait } = await buildCreation(input, media);
   if (needWait) await waitForContainerReady(creationId, input.accessToken);
@@ -137,12 +140,13 @@ export async function publishToThreads(input: PublishInput): Promise<{ postId: s
   // 延遲留言：只發主文，留言交給延遲 worker 之後補（防「秒留言」固定行為）
   if (input.deferReply) return { postId, replyDeferred: true };
 
-  // 立即在貼文下留言放分潤連結（提高觸及，連結不放正文）
+  // 立即在貼文下留言放分潤連結（提高觸及，連結不放正文）。
+  // 留言失敗不影響主貼文，但回傳 replyFailed 讓呼叫端把 reply_status 落成 failed（不要謊報 published）。
   try {
     await publishReply(input.threadsUserId, input.accessToken, postId, input.replyText);
   } catch (e) {
-    // 留言失敗不影響主貼文，但記錄下來以便排查（分潤連結沒留成會少觸及）
     console.warn(`貼文 ${postId} 的留言發布失敗:`, e instanceof Error ? e.message : e);
+    return { postId, replyFailed: true };
   }
   return { postId };
 }

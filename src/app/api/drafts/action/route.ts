@@ -92,7 +92,7 @@ export async function POST(req: Request) {
         ? replyDelayMinutes(draft.id, env.replyDelayFloorMinutes, env.replyDelayJitterMinutes, draft.reply_delay_minutes)
         : 0;
       const deferReply = Boolean(draft.reply_text) && replyDelay > 0;
-      const { postId } = await publishToThreads({
+      const { postId, replyFailed } = await publishToThreads({
         threadsUserId: creds.threadsUserId,
         accessToken: creds.accessToken,
         text: draft.main_text ?? "",
@@ -104,7 +104,7 @@ export async function POST(req: Request) {
       const replyPatch = deferReply
         ? { reply_status: "pending" as const, reply_due_at: new Date(nowMs + replyDelay * 60000).toISOString() }
         : draft.reply_text
-          ? { reply_status: "published" as const }
+          ? { reply_status: replyFailed ? ("failed" as const) : ("published" as const) }
           : {};
       await updateDraftStatus(id, "published", {
         published_post_id: postId,

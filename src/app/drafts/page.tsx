@@ -1,5 +1,5 @@
-import DraftCard from "@/components/DraftCard";
 import BulkDraftBar from "@/components/BulkDraftBar";
+import DraftsExplorer from "@/components/DraftsExplorer";
 import { listDrafts } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
 
@@ -18,17 +18,7 @@ export default async function DraftsPage() {
       </p>
 
       <BulkDraftBar draftIds={pendingIds} />
-
-      <div className="grid gap-4 md:grid-cols-2">
-        {drafts.map((d) => (
-          <DraftCard key={d.id} draft={d} />
-        ))}
-        {drafts.length === 0 && (
-          <div className="col-span-2 rounded-lg border border-dashed p-10 text-center text-neutral-400">
-            還沒有草稿。到「素材庫」建立內容，或（管理者）回儀表板按「立即跑一次」。
-          </div>
-        )}
-      </div>
+      <DraftsExplorer drafts={drafts} />
     </div>
   );
 }

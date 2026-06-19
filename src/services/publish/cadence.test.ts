@@ -49,6 +49,22 @@ test("剛發過：下一篇要等保底間隔", () => {
   assert.match(plan[0].reason, /間隔等待/);
 });
 
+test("上次發文已超過保底間隔 → ETA 為 now，不顯示過去時間", () => {
+  const last = new Date(base - 300 * 60000).toISOString(); // 5 小時前，floor=4 小時
+  const plan = planAccountQueue({
+    drafts: [{ id: "d1", scheduledAt: null }],
+    lastPublishedAt: last,
+    publishedLast24h: 1,
+    floorMin: 240,
+    jitterMax: 0,
+    dailyCap: 5,
+    accountId: "acc",
+    now: base
+  });
+  assert.equal(plan[0].etaIso, new Date(base).toISOString());
+  assert.match(plan[0].reason, /排隊中/);
+});
+
 test("已達每日上限 → 明天接續", () => {
   const plan = planAccountQueue({
     drafts: [{ id: "d1", scheduledAt: null }],

@@ -809,7 +809,7 @@ export async function getPublishPlan(ownerId: string): Promise<PublishPlanRow[]>
 
   // 各帳號狀態並行抓，避免迴圈內序列化查詢（N+1）
   const stateEntries = await Promise.all(
-    Array.from(byAccount.keys()).map(async (accId) => [accId, await getAccountPublishState(accId).catch(() => null)] as const)
+    Array.from(byAccount.keys()).map(async (accId) => [accId, await getAccountPublishState(accId, ownerId).catch(() => null)] as const)
   );
   const stateMap = new Map(stateEntries);
 
@@ -853,8 +853,11 @@ export async function getPublishPlan(ownerId: string): Promise<PublishPlanRow[]>
 
 // 某 Threads 帳號的發文節奏狀態 + 帳號狀態（背景 worker 用）。
 // accountStatus：active 才會被發文；error/paused（如展期失敗）會被佇列跳過。
+// ownerId（選填）：傳入則對 drafts 查詢加 owner_id 過濾，強化多租戶隔離；
+// 背景 worker 跨租戶處理時可不傳。
 export async function getAccountPublishState(
-  threadsAccountId: string
+  threadsAccountId: string,
+  ownerId?: string
 ): Promise<{ lastPublishedAt: string | null; publishedLast24h: number; accountStatus: string }> {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   if (isDemoMode) {
@@ -875,19 +878,21 @@ export async function getAccountPublishState(
     .maybeSingle();
   if (accError) throw accError;
   if (!acc) throw new Error(`找不到 ID 為 ${threadsAccountId} 的 Threads 帳號`);
-  const { data: latest } = await sb
+  let latestQ = sb
     .from("drafts")
     .select("published_at")
     .eq("threads_account_id", threadsAccountId)
-    .eq("status", "published")
-    .order("published_at", { ascending: false })
-    .limit(1);
-  const { count } = await sb
+    .eq("status", "published");
+  if (ownerId) latestQ = latestQ.eq("owner_id", ownerId);
+  const { data: latest } = await latestQ.order("published_at", { ascending: false }).limit(1);
+  let countQ = sb
     .from("drafts")
     .select("*", { count: "exact", head: true })
     .eq("threads_account_id", threadsAccountId)
     .eq("status", "published")
     .gte("published_at", since);
+  if (ownerId) countQ = countQ.eq("owner_id", ownerId);
+  const { count } = await countQ;
   return {
     lastPublishedAt: latest?.[0]?.published_at ?? null,
     publishedLast24h: count ?? 0,

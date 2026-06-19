@@ -64,8 +64,9 @@ export function planAccountQueue(input: PlanInput): QueuePlanItem[] {
     }
     // 最小間隔（含抖動）：以「上次發文時間」為 seed
     const gapMin = lastAt === null ? 0 : effectiveGapMinutes(floorMin, jitterMax, `${accountId}:${lastAt}`);
-    let candidate = lastAt === null ? now : lastAt + gapMin * 60000;
-    let reason = lastAt === null || candidate <= now ? "排隊中（下輪可發）" : `間隔等待（約 ${gapMin} 分）`;
+    // 間隔已過很久時 lastAt+gap 會落在過去，夾到 now 以免 ETA 顯示過期時間
+    let candidate = lastAt === null ? now : Math.max(now, lastAt + gapMin * 60000);
+    let reason = candidate <= now ? "排隊中（下輪可發）" : `間隔等待（約 ${gapMin} 分）`;
     // 使用者指定排程時間 → 取較晚者
     if (d.scheduledAt) {
       const s = new Date(d.scheduledAt).getTime();

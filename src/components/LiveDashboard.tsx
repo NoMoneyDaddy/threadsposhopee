@@ -47,16 +47,26 @@ function PublishPlan({ rows }: { rows: DashboardData["publishPlan"] }) {
           </span>
         )}
       </div>
-      <div className="space-y-1.5">
-        {rows.map((r) => (
-          <div key={r.id} className="flex items-center gap-2 text-sm">
-            <span className="w-24 shrink-0 truncate text-neutral-500">{r.accountLabel}</span>
-            <span className="min-w-0 flex-1 truncate text-neutral-800">{r.productName ?? "（草稿）"}</span>
-            <span className="shrink-0 text-xs text-neutral-400">{r.reason}</span>
-            <span className="w-28 shrink-0 text-right text-xs tabular-nums text-neutral-600">{fmt(r.etaIso)}</span>
-          </div>
-        ))}
-      </div>
+      <table className="w-full text-sm">
+        <thead className="sr-only">
+          <tr>
+            <th>帳號</th>
+            <th>商品</th>
+            <th>狀態</th>
+            <th>預計時間</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.id} className="flex items-center gap-2">
+              <td className="w-24 shrink-0 truncate text-neutral-500">{r.accountLabel}</td>
+              <td className="min-w-0 flex-1 truncate text-neutral-800">{r.productName ?? "（草稿）"}</td>
+              <td className="shrink-0 text-xs text-neutral-400">{r.reason}</td>
+              <td className="w-28 shrink-0 text-right text-xs tabular-nums text-neutral-600">{fmt(r.etaIso)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

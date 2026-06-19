@@ -17,7 +17,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "請求格式錯誤（非合法 JSON）" }, { status: 400 });
     }
     const raw = (body as { affiliate_id?: unknown })?.affiliate_id;
-    const affiliateId = typeof raw === "string" ? raw.trim() : "";
+    // 容錯：複製常夾空白（如 "1630 8730 014"）→ 去掉所有空白；也接受 JSON 數字型態
+    const affiliateId = typeof raw === "string" ? raw.replace(/\s+/g, "") : typeof raw === "number" ? String(raw) : "";
     // affiliate_id 為純數字字串；非數字直接擋下，避免組出壞連結
     if (affiliateId && !/^\d{3,20}$/.test(affiliateId)) {
       return NextResponse.json({ ok: false, error: "affiliate_id 應為純數字" }, { status: 400 });

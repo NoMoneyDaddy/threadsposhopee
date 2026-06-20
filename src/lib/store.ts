@@ -82,7 +82,8 @@ export {
   listActiveThreadsCredentials,
   listThreadsTokensToRefresh,
   updateThreadsToken,
-  markThreadsAccountError
+  markThreadsAccountError,
+  canAddThreadsAccount
 } from "./accounts-store";
 
 // 個人憑證／設定層（profiles 表：Apify/Gemini/Telegram/Discord/ShopeeAffiliateId/Cloudinary）
@@ -101,7 +102,9 @@ export {
   getShopeeAffiliateId,
   setShopeeAffiliateId,
   getUserCloudinary,
-  setUserCloudinary
+  setUserCloudinary,
+  getUserPlan,
+  setUserPlan
 } from "./credentials";
 
 // AI 文案客製化偏好（非機密，明文 jsonb）。讀取一律經 normalizeCopyPrefs 夾成合法值。

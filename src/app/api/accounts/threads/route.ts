@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { createThreadsAccount } from "@/lib/store";
+import { createThreadsAccount, canAddThreadsAccount } from "@/lib/store";
+import { PLAN_LABELS, type PlanId } from "@/lib/plans";
 import { getCurrentUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -12,6 +13,14 @@ export async function POST(req: Request) {
     const body = await req.json();
     if (!body.label || !body.threads_user_id) {
       return NextResponse.json({ ok: false, error: "缺少 label 或 threads_user_id" }, { status: 400 });
+    }
+    // 方案配額：超過上限擋下（owner 不受限；既有同帳號更新不占名額）
+    const quota = await canAddThreadsAccount(user.id, { isOwner: user.isOwner, threadsUserId: String(body.threads_user_id) });
+    if (!quota.ok) {
+      return NextResponse.json(
+        { ok: false, code: "plan_limit", error: `已達${PLAN_LABELS[quota.plan as PlanId]}上限（${quota.limit} 個發文帳號），請升級方案後再新增。` },
+        { status: 402 }
+      );
     }
     const account = await createThreadsAccount(
       {

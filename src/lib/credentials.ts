@@ -5,6 +5,23 @@ import { getServiceClient } from "./supabase/server";
 import { isDemoMode } from "./env";
 import { decrypt, encrypt } from "./crypto";
 import { log } from "./logger";
+import { normalizePlan, type PlanId } from "./plans";
+
+// ── 方案分層（商業化）：每人一個方案字串（非機密，明文存）。限額查 plans.ts ──
+export async function getUserPlan(ownerId: string): Promise<PlanId> {
+  if (isDemoMode) return "free";
+  const sb = getServiceClient();
+  if (!sb) return "free";
+  const { data } = await sb.from("profiles").select("plan").eq("id", ownerId).maybeSingle();
+  return normalizePlan(data?.plan);
+}
+
+export async function setUserPlan(ownerId: string, plan: PlanId): Promise<void> {
+  if (isDemoMode) return;
+  const sb = getServiceClient()!;
+  const { error } = await sb.from("profiles").upsert({ id: ownerId, plan: normalizePlan(plan) }, { onConflict: "id" });
+  if (error) throw error;
+}
 
 // ── 爬蟲子系統：每個使用者自己綁的 Apify 憑證（owner 用）──────────
 // 取出某使用者的 Apify token + actor（解密）。沒綁則回 null（呼叫端可退回全域 env）。

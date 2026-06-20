@@ -6,6 +6,7 @@ import type { Draft } from "@/lib/types";
 import { CharCount } from "@/components/ThreadsPreview";
 import ThreadsPreview from "@/components/ThreadsPreview";
 import { normalizeDraftMedia } from "@/lib/media";
+import { checkThreadsContent, THREADS_MAX_HASHTAGS } from "@/lib/threads-content";
 
 export default function DraftCard({ draft }: { draft: Draft }) {
   const router = useRouter();
@@ -120,6 +121,19 @@ export default function DraftCard({ draft }: { draft: Draft }) {
       >
         {draft.shopee_short_link}
       </a>
+
+      {(() => {
+        const c = checkThreadsContent(mainText);
+        if (c.ok) return null;
+        return (
+          <div className="mt-2 rounded bg-amber-50 p-2 text-xs text-amber-700" role="alert">
+            {c.overLimit && <div>⚠️ 正文超過 500 字（目前 {c.chars}），Threads 會發布失敗。</div>}
+            {c.tooManyHashtags && (
+              <div>⚠️ 有 {c.hashtags} 個 hashtag，Threads 建議最多 {THREADS_MAX_HASHTAGS} 個（過多易被降觸及）。</div>
+            )}
+          </div>
+        );
+      })()}
 
       {!done && !editing && (
         <div className="mt-3 flex flex-wrap gap-2">

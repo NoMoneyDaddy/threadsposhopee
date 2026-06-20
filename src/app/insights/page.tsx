@@ -1,5 +1,6 @@
 import { getPublishInsights } from "@/lib/store";
 import { getAffiliateRevenue, type AffiliateRevenue } from "@/services/shopee/report";
+import { getEngagement, type EngagementSummary } from "@/services/threads/engagement";
 import { getCurrentUser } from "@/lib/auth";
 import { env, isDemoMode } from "@/lib/env";
 
@@ -24,6 +25,9 @@ export default async function InsightsPage() {
     }
   }
 
+  // Threads 貼文互動數據（每人自己的帳號；逐篇查 insights，失敗則優雅降級不擋頁）
+  const engagement = isDemoMode ? null : await getEngagement(user.id, 15).catch(() => null);
+
   return (
     <div className="space-y-6">
       <div>
@@ -39,6 +43,8 @@ export default async function InsightsPage() {
           分潤收益讀取失敗：{revenueErr}
         </div>
       )}
+
+      {engagement && engagement.fetched > 0 && <EngagementSection e={engagement} />}
 
       <section className="rounded-lg border bg-white p-5">
         <h2 className="mb-3 font-semibold">每日發布量</h2>
@@ -86,6 +92,54 @@ function RankCard({ title, rows, empty }: { title: string; rows: { name: string;
           ))}
         </ul>
       )}
+    </section>
+  );
+}
+
+function num(n: number) {
+  return n.toLocaleString("zh-TW");
+}
+
+function EngagementSection({ e }: { e: EngagementSummary }) {
+  const t = e.totals;
+  const cards: { label: string; value: number }[] = [
+    { label: "觀看", value: t.views },
+    { label: "讚", value: t.likes },
+    { label: "留言", value: t.replies },
+    { label: "轉發", value: t.reposts },
+    { label: "引用", value: t.quotes },
+    { label: "分享", value: t.shares }
+  ];
+  const maxViews = Math.max(1, ...e.posts.map((p) => p.views));
+  return (
+    <section className="rounded-lg border bg-white p-5">
+      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="font-semibold">Threads 互動成效</h2>
+        <span className="text-xs text-neutral-500">最近 {e.sampled} 篇，{e.fetched} 篇有數據</span>
+      </div>
+      <div className="mb-4 grid grid-cols-3 gap-2 sm:grid-cols-6">
+        {cards.map((c) => (
+          <div key={c.label} className="rounded-md bg-neutral-50 p-2 text-center">
+            <div className="text-lg font-bold tabular-nums text-shopee">{num(c.value)}</div>
+            <div className="text-[11px] text-neutral-500">{c.label}</div>
+          </div>
+        ))}
+      </div>
+      <ul className="space-y-2">
+        {e.posts.map((p) => (
+          <li key={p.id} className="text-sm">
+            <div className="mb-0.5 flex justify-between gap-2">
+              <span className="truncate pr-2">{p.productName ?? "（未命名貼文）"}</span>
+              <span className="shrink-0 text-xs text-neutral-500 tabular-nums">
+                👁 {num(p.views)} · ♥ {num(p.likes)} · 💬 {num(p.replies)}
+              </span>
+            </div>
+            <div className="h-1.5 w-full overflow-hidden rounded bg-neutral-100">
+              <div className="h-full bg-shopee/70" style={{ width: `${(p.views / maxViews) * 100}%` }} />
+            </div>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

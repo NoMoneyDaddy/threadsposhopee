@@ -241,6 +241,62 @@ export async function userOwnsThreadsAccount(accountId: string, ownerId: string)
   return Boolean(data);
 }
 
+// 該使用者所有啟用帳號的解密 token（依 account id 索引）。貼文互動數據需逐帳號 token 查 insights。
+export async function listThreadsAccountTokens(ownerId: string): Promise<{ id: string; accessToken: string }[]> {
+  if (isDemoMode) return [];
+  const sb = getServiceClient()!;
+  const { data } = await sb
+    .from("threads_accounts")
+    .select("id, access_token_enc, status")
+    .eq("owner_id", ownerId)
+    .eq("status", "active");
+  return (data ?? [])
+    .filter((r) => r.access_token_enc)
+    .map((r) => {
+      try {
+        return { id: r.id, accessToken: decrypt(r.access_token_enc) };
+      } catch (e) {
+        console.error(`解密帳號 ${r.id} token 失敗：`, e);
+        return null;
+      }
+    })
+    .filter((x): x is { id: string; accessToken: string } => x !== null);
+}
+
+// 最近已發布、且有 Threads 貼文 id 的草稿（查互動數據用）。
+export type PublishedPostRef = {
+  id: string;
+  product_name: string | null;
+  published_post_id: string;
+  threads_account_id: string | null;
+  published_at: string | null;
+};
+export async function listRecentPublishedPosts(ownerId: string, limit = 15): Promise<PublishedPostRef[]> {
+  if (isDemoMode) {
+    return demo.drafts
+      .filter((d) => d.status === "published" && d.published_post_id)
+      .sort((a, b) => (b.published_at ?? b.created_at).localeCompare(a.published_at ?? a.created_at))
+      .slice(0, limit)
+      .map((d) => ({
+        id: d.id,
+        product_name: d.product_name ?? null,
+        published_post_id: d.published_post_id as string,
+        threads_account_id: d.threads_account_id ?? null,
+        published_at: d.published_at ?? d.created_at
+      }));
+  }
+  const sb = getServiceClient()!;
+  const { data } = await sb
+    .from("drafts")
+    .select("id, product_name, published_post_id, threads_account_id, published_at")
+    .eq("owner_id", ownerId)
+    .eq("status", "published")
+    .not("published_post_id", "is", null)
+    .order("published_at", { ascending: false })
+    .limit(limit);
+  return (data ?? []) as PublishedPostRef[];
+}
+
 // 新增 Threads 發文帳號（access token / client secret 加密後存放）
 export async function createThreadsAccount(
   input: {

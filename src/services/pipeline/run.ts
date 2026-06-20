@@ -7,6 +7,7 @@ import { scrapeLatestPosts } from "@/services/scraper/threads";
 import { expandShopeeLink } from "@/services/shopee/expand";
 import { buildMaterialForProduct } from "@/services/materials/build";
 import { env } from "@/lib/env";
+import { log } from "@/lib/logger";
 import { getOwnerUserId } from "@/lib/auth";
 import {
   isPostProcessed,
@@ -139,10 +140,28 @@ export async function runSourcePipeline(source: Source, ownerId: string): Promis
 // 跑所有啟用中的來源（給排程 / 手動觸發用）。爬蟲是 owner 專屬，產出掛在 owner 名下。
 export async function runAllSources(): Promise<PipelineResult[]> {
   const ownerId = (await getOwnerUserId()) ?? "demo-user";
-  const sources = (await listSources()).filter((s) => s.enabled);
+  // owner-scope：只撈該 owner 自己的來源（爬蟲為 owner 限定子系統），確保用對的憑證、
+  // 草稿掛在對的 owner 名下，符合多租戶過濾鐵則（不可用 listSources() 撈到跨租戶來源）。
+  const sources = (await listSources(ownerId)).filter((s) => s.enabled);
   const results: PipelineResult[] = [];
   for (const s of sources) {
-    results.push(await runSourcePipeline(s, ownerId));
+    // 單一來源拋錯不該中斷整批後續來源（fail-isolation，對齊 cron/all 的 allSettled 精神）。
+    try {
+      results.push(await runSourcePipeline(s, ownerId));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      log.error("來源爬取流程失敗", { ownerId, sourceId: s.id, sourceUsername: s.source_username, err: msg });
+      results.push({
+        sourceId: s.id,
+        sourceUsername: s.source_username,
+        scanned: 0,
+        created: 0,
+        skipped: 0,
+        reusedMaterial: 0,
+        drafts: [],
+        notes: [`來源流程失敗：${msg}`]
+      });
+    }
   }
   return results;
 }

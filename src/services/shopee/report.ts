@@ -49,10 +49,16 @@ async function fetchConversions(days: number, maxPages = 10): Promise<{ nodes: R
   let scrollId = "";
   let truncated = false;
 
+  // 報表選擇集（兩種 query 變體共用）。start/end/limit 為數值（安全內插）；
+  // scrollId 來自 Shopee 回傳，改用 GraphQL variables 傳遞、不字串拼接（避免破壞查詢/注入）。
+  const selection =
+    "nodes { purchaseTime conversionStatus totalCommission netCommission utmContent orders { items { itemId itemName imageUrl itemTotalCommission } } } pageInfo { hasNextPage scrollId }";
   for (let page = 0; page < maxPages; page++) {
-    const scrollArg = scrollId ? `, scrollId:"${scrollId}"` : "";
-    const query = `{ conversionReport(purchaseTimeStart:${start}, purchaseTimeEnd:${end}, limit:100${scrollArg}) { nodes { purchaseTime conversionStatus totalCommission netCommission utmContent orders { items { itemId itemName imageUrl itemTotalCommission } } } pageInfo { hasNextPage scrollId } } }`;
-    const payload = JSON.stringify({ query });
+    // 首頁不帶 scrollId（維持原行為，避免傳 null 被 API 拒）；後續頁以 variable 帶入。
+    const query = scrollId
+      ? `query($scrollId:String!){ conversionReport(purchaseTimeStart:${start}, purchaseTimeEnd:${end}, limit:100, scrollId:$scrollId) { ${selection} } }`
+      : `{ conversionReport(purchaseTimeStart:${start}, purchaseTimeEnd:${end}, limit:100) { ${selection} } }`;
+    const payload = JSON.stringify(scrollId ? { query, variables: { scrollId } } : { query });
     const auth = buildShopeeAuth(appId, secret, payload);
     const res = await fetchWithTimeout(
       GQL,

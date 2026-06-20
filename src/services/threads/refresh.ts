@@ -3,6 +3,7 @@
 // 展期失敗（多半因 token 已過期）→ 標記帳號 error，前端可見並停止排程。
 import { refreshLongLivedToken } from "@/services/threads/token";
 import { listThreadsTokensToRefresh, updateThreadsToken, markThreadsAccountError } from "@/lib/store";
+import { log } from "@/lib/logger";
 
 export async function refreshExpiringTokens(): Promise<{
   checked: number;
@@ -28,7 +29,10 @@ export async function refreshExpiringTokens(): Promise<{
         return { label: acc.label, ok: true as const };
       } catch (e) {
         const error = e instanceof Error ? e.message : String(e);
-        await markThreadsAccountError(acc.id).catch(() => {});
+        // 標記失敗若又失敗需可見：否則帳號維持 active 會持續展期失敗、發文也跟著失敗。
+        await markThreadsAccountError(acc.id).catch((me) =>
+          log.warn("標記 Threads 帳號 error 失敗", { accountId: acc.id, accountLabel: acc.label, err: me })
+        );
         return { label: acc.label, ok: false as const, error };
       }
     })

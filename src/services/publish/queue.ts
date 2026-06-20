@@ -19,6 +19,7 @@ import {
   isPublishPaused
 } from "@/lib/store";
 import { publishToThreads, publishReply, PublishUncertainError } from "@/services/threads/publish";
+import { log } from "@/lib/logger";
 import { normalizeDraftMedia } from "@/lib/media";
 import { effectiveGapMinutes, shardOf, warmupDailyCap, circuitOpen } from "@/services/publish/cadence";
 import { replyDelayMinutes } from "@/services/publish/reply-timing";
@@ -62,7 +63,8 @@ export async function runPublishQueue(shard?: ShardOpts): Promise<PublishResult>
   try {
     return await runPublishQueueLocked(result, shard);
   } finally {
-    await releasePublishLock(lockKey).catch(() => {});
+    // 釋放鎖失敗不該炸上層，但需可見：否則下一輪 cron 會卡 lockBusy 直到 TTL 過期難以察覺。
+    await releasePublishLock(lockKey).catch((e) => log.warn("釋放發文鎖失敗", { lockKey, err: e }));
   }
 }
 
@@ -279,7 +281,9 @@ async function publishDueReplies(startTime: number, shard?: ShardOpts): Promise<
       await markReplyPublished(d.id, ownerId, replyPostId);
       out.published++;
     } catch (e) {
-      await markReplyFailed(d.id, ownerId, e instanceof Error ? e.message : String(e)).catch(() => {});
+      await markReplyFailed(d.id, ownerId, e instanceof Error ? e.message : String(e)).catch((me) =>
+        log.warn("標記延遲留言失敗時又失敗（將由 reclaim 回收）", { ownerId, draftId: d.id, err: me })
+      );
       out.failed++;
     }
   }

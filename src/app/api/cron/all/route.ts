@@ -9,6 +9,7 @@ import { buildDailyDigest } from "@/services/digest/daily";
 import { getOwnerUserId } from "@/lib/auth";
 import { env } from "@/lib/env";
 import { setHeartbeat } from "@/lib/store";
+import { log } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -78,7 +79,7 @@ export async function GET(req: Request) {
     }
   }
 
-  await setHeartbeat().catch(() => {});
+  await setHeartbeat().catch((e) => log.warn("setHeartbeat 失敗", { err: e }));
   if (alerts.length) await sendAlert(`自動排程：${alerts.join("；")}`);
   return NextResponse.json({ ok: true, ...out });
 }

@@ -75,6 +75,33 @@ export async function POST(req: Request) {
     }
   }
 
+  // A/B 文案：一次產生多個版本供人工挑選（不覆寫草稿；套用走既有 edit）。
+  // 防濫用：版本數限 2–3；並行產生，部分失敗仍回傳已成功的版本。
+  if (action === "variants") {
+    const n = Math.min(3, Math.max(2, Number(body.count) || 2));
+    try {
+      const [geminiKey, copyPrefs] = await Promise.all([getGeminiKey(user.id), getCopyPrefs(user.id)]);
+      const ctx = {
+        productName: draft.product_name ?? "這個好物",
+        shopeeShortLink: draft.shopee_short_link ?? "",
+        mediaUrl: draft.cloudinary_media_url,
+        mediaType: (draft.media_type as "image" | "video" | "none") ?? "none"
+      };
+      const results = await Promise.all(
+        Array.from({ length: n }, () => generateCopy(ctx, geminiKey, copyPrefs).catch(() => null))
+      );
+      const variants = results
+        .filter((c): c is NonNullable<typeof c> => c !== null)
+        .map((c) => ({ mainText: c.mainText, replyText: c.replyText }));
+      if (variants.length === 0) {
+        return NextResponse.json({ ok: false, error: "文案產生失敗，請稍後再試" }, { status: 502 });
+      }
+      return NextResponse.json({ ok: true, variants });
+    } catch (e) {
+      return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 500 });
+    }
+  }
+
   if (action === "publish") {
     // 人工按「核准並發布」即視為核准；但已發布／發布中／已退回的不可再次發布，避免重複貼文
     if (draft.status === "published" || draft.status === "publishing" || draft.status === "rejected") {

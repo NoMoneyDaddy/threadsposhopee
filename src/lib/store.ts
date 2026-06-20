@@ -1505,26 +1505,26 @@ export async function listActiveThreadsCredentials(
 // thresholdDays：到期前幾天內就先展期（預設 7 天）。
 export async function listThreadsTokensToRefresh(
   thresholdDays = 7
-): Promise<{ id: string; label: string; accessToken: string }[]> {
+): Promise<{ id: string; label: string; accessToken: string; ownerId: string | null }[]> {
   if (isDemoMode) return [];
   const sb = getServiceClient()!;
   const cutoff = new Date(Date.now() + thresholdDays * 24 * 60 * 60 * 1000).toISOString();
   const { data } = await sb
     .from("threads_accounts")
-    .select("id, label, access_token_enc, token_expires_at")
+    .select("id, label, owner_id, access_token_enc, token_expires_at")
     .eq("status", "active")
     .not("access_token_enc", "is", null)
     .lte("token_expires_at", cutoff);
   return (data ?? [])
     .map((r) => {
       try {
-        return { id: r.id, label: r.label, accessToken: decrypt(r.access_token_enc) };
+        return { id: r.id, label: r.label, ownerId: r.owner_id ?? null, accessToken: decrypt(r.access_token_enc) };
       } catch (e) {
         log.error("解密 Threads token 失敗（展期 worker）", { accountId: r.id, accountLabel: r.label, err: e });
         return null;
       }
     })
-    .filter((x): x is { id: string; label: string; accessToken: string } => x !== null);
+    .filter((x): x is { id: string; label: string; accessToken: string; ownerId: string | null } => x !== null);
 }
 
 // 更新某帳號的長期 token + 到期日（展期後寫回，加密存放）。

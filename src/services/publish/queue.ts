@@ -306,6 +306,8 @@ async function publishDueReplies(startTime: number, shard?: ShardOpts): Promise<
       await markReplyFailed(d.id, ownerId, e instanceof Error ? e.message : String(e)).catch((me) =>
         log.warn("標記延遲留言失敗時又失敗（將由 reclaim 回收）", { ownerId, draftId: d.id, err: me })
       );
+      // 個人通知：分潤連結留言（串文 2/2）沒補上＝影響轉換，推給該草稿擁有者到草稿頁重補。
+      await sendUserAlert(ownerId, "💬 你有一則分潤連結留言補發失敗，請到草稿頁「重試補留言」。").catch(() => {});
       out.failed++;
     }
   }

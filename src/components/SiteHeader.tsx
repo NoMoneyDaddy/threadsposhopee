@@ -44,7 +44,7 @@ export default function SiteHeader({
               <span className="text-ink">Shopee</span>
             </span>
           </Link>
-          {isDemo && <span className="badge-warn">Demo 模式</span>}
+          {isDemo && <span className="badge-warn">Demo 模式（未連接金鑰）</span>}
           {user && (
             <form action="/auth/signout" method="post" className="ml-auto sm:hidden">
               <button className="btn btn-ghost btn-sm" type="submit">

@@ -10,7 +10,10 @@ export async function POST(req: Request) {
   if (!user) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   if (!user.isOwner) return NextResponse.json({ ok: false, error: "僅 owner 可操作" }, { status: 403 });
   const body = await req.json().catch(() => ({}));
-  const paused = body.paused === true;
+  if (typeof body.paused !== "boolean") {
+    return NextResponse.json({ ok: false, error: "參數錯誤，paused 必須為布林值" }, { status: 400 });
+  }
+  const paused = body.paused;
   try {
     await setPublishPaused(paused);
     return NextResponse.json({ ok: true, paused });
@@ -23,5 +26,6 @@ export async function POST(req: Request) {
 export async function GET() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+  if (!user.isOwner) return NextResponse.json({ ok: false, error: "僅 owner 可操作" }, { status: 403 });
   return NextResponse.json({ ok: true, paused: await isPublishPaused() });
 }

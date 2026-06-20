@@ -29,7 +29,9 @@ export async function isPublishPaused(): Promise<boolean> {
   if (isDemoMode) return demoPublishPaused;
   const sb = getServiceClient();
   if (!sb) return false;
-  const { data } = await sb.from("app_state").select("value").eq("key", "publish_paused").maybeSingle();
+  // Fail-safe：讀取失敗就拋錯中斷發文，寧可不發也別在該暫停時誤發（急停安全降級）。
+  const { data, error } = await sb.from("app_state").select("value").eq("key", "publish_paused").maybeSingle();
+  if (error) throw new Error(`讀取發文暫停狀態失敗：${error.message}`);
   return data?.value === "1";
 }
 export async function setPublishPaused(paused: boolean): Promise<void> {

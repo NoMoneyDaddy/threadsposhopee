@@ -42,6 +42,28 @@ export async function getHeartbeat(): Promise<string | null> {
   return data?.value ?? null;
 }
 
+// app_state 上的泛用 JSON 快取（給「即時但可短暫舊」的外部資料用，如 Threads insights，省 API 額度）。
+export async function getCachedJson<T>(key: string, maxAgeMs: number): Promise<T | null> {
+  if (isDemoMode) return null;
+  const sb = getServiceClient()!;
+  const { data } = await sb.from("app_state").select("value, updated_at").eq("key", key).maybeSingle();
+  if (!data?.value || !data.updated_at) return null;
+  if (Date.now() - new Date(data.updated_at).getTime() > maxAgeMs) return null;
+  try {
+    return JSON.parse(data.value) as T;
+  } catch {
+    return null;
+  }
+}
+
+export async function setCachedJson(key: string, value: unknown): Promise<void> {
+  if (isDemoMode) return;
+  const sb = getServiceClient()!;
+  await sb
+    .from("app_state")
+    .upsert({ key, value: JSON.stringify(value), updated_at: new Date().toISOString() }, { onConflict: "key" });
+}
+
 // 發文佇列分布式鎖：避免手動「立即跑一輪」與 cron 排程同時執行 runPublishQueue，
 // 各自讀到相同的節奏狀態而同時放行，繞過每帳號最小間隔（防封）。
 // 用 app_state 單列做 compare-and-set：value 存「鎖到期時間（ISO）」，

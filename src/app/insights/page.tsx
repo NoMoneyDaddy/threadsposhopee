@@ -1,6 +1,6 @@
 import { getPublishInsights } from "@/lib/store";
 import { getAffiliateRevenue, type AffiliateRevenue } from "@/services/shopee/report";
-import { getEngagement, bestPostingTimes, type EngagementSummary } from "@/services/threads/engagement";
+import { getEngagementCached, bestPostingTimes, type EngagementSummary } from "@/services/threads/engagement";
 import { getCurrentUser } from "@/lib/auth";
 import { env, isDemoMode } from "@/lib/env";
 
@@ -26,7 +26,7 @@ export default async function InsightsPage() {
   }
 
   // Threads 貼文互動數據（每人自己的帳號；逐篇查 insights，失敗則優雅降級不擋頁）
-  const engagement = isDemoMode ? null : await getEngagement(user.id, 15).catch(() => null);
+  const engagement = isDemoMode ? null : await getEngagementCached(user.id, 15).catch(() => null);
 
   return (
     <div className="space-y-6">

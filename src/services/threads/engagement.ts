@@ -1,5 +1,5 @@
 // 彙整最近貼文的 Threads 互動數據：逐帳號 token 查每篇 insights，加總並依觀看數排序。
-import { listRecentPublishedPosts, listThreadsAccountTokens } from "@/lib/store";
+import { listRecentPublishedPosts, listThreadsAccountTokens, getCachedJson, setCachedJson } from "@/lib/store";
 import { getPostInsights, type PostInsights } from "./insights";
 
 export interface PostEngagement extends PostInsights {
@@ -99,4 +99,20 @@ export async function getEngagement(ownerId: string, limit = 15): Promise<Engage
   got.sort((a, b) => b.views - a.views);
 
   return { posts: got, totals, sampled: posts.length, fetched: got.length };
+}
+
+// 快取版（成效頁用）：Threads insights 逐篇打 API（受 200 calls/hr 限制），
+// 重載頁面易燒額度 → app_state 快取一段時間。只快取「有抓到資料」的結果，
+// 避免把暫時性失敗的空結果鎖住整個 TTL。
+export async function getEngagementCached(
+  ownerId: string,
+  limit = 15,
+  maxAgeMs = 30 * 60_000
+): Promise<EngagementSummary> {
+  const key = `engagement:${ownerId}`;
+  const cached = await getCachedJson<EngagementSummary>(key, maxAgeMs).catch(() => null);
+  if (cached) return cached;
+  const fresh = await getEngagement(ownerId, limit);
+  if (fresh.fetched > 0) await setCachedJson(key, fresh).catch(() => {});
+  return fresh;
 }

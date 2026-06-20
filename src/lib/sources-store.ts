@@ -104,3 +104,19 @@ export async function markPostProcessed(sourceId: string, postId: string) {
   const sb = getServiceClient()!;
   await sb.from("processed_posts").upsert({ source_id: sourceId, post_id: postId }, { onConflict: "source_id,post_id" });
 }
+
+// 批次去重：一次撈出本來源在候選清單中「已處理」的貼文 id 集合（只查候選，避免全表）。
+// pipeline 迴圈前預載一次，取代逐篇 isPostProcessed 查詢（消除 N+1）。
+export async function listProcessedPostIds(sourceId: string, postIds: string[]): Promise<Set<string>> {
+  if (postIds.length === 0) return new Set();
+  if (isDemoMode) {
+    return new Set(
+      demo.drafts
+        .filter((d) => d.source_id === sourceId && d.source_post_id && postIds.includes(d.source_post_id))
+        .map((d) => d.source_post_id as string)
+    );
+  }
+  const sb = getServiceClient()!;
+  const { data } = await sb.from("processed_posts").select("post_id").eq("source_id", sourceId).in("post_id", postIds);
+  return new Set((data ?? []).map((r) => r.post_id as string));
+}

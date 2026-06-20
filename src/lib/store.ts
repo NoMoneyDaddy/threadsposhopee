@@ -135,7 +135,8 @@ export {
   setSourceEnabled,
   deleteSource,
   isPostProcessed,
-  markPostProcessed
+  markPostProcessed,
+  listProcessedPostIds
 } from "./sources-store";
 
 // 成效統計：近 N 日已發布貼文，依日期/商品/來源/帳號彙總（從自家發布資料，不需外部報表 API）。

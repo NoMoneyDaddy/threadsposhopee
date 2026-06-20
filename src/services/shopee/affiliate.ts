@@ -1,33 +1,11 @@
-import { buildShopeeAuth } from "./sign";
 import { log } from "@/lib/logger";
-import { fetchWithTimeout } from "@/lib/http";
-import { assertSafePublicUrl } from "@/lib/url-guard";
+import { callShopeeGql, ShopeeApiError } from "./gql";
 
-const SHOPEE_GQL = "https://open-api.affiliate.shopee.tw/graphql";
+export { ShopeeApiError }; // 向後相容：原本由本檔匯出
 
-// 帶結構化欄位的 Shopee 錯誤：讓呼叫端依 HTTP 狀態判斷，而非脆弱地比對訊息字串。
-export class ShopeeApiError extends Error {
-  status?: number;
-  constructor(message: string, status?: number) {
-    super(message);
-    this.name = "ShopeeApiError";
-    this.status = status;
-  }
-}
-
+// 共用 Shopee GraphQL 呼叫；payload 由物件序列化，簽名位元組與原本一致（8s 預設逾時）。
 async function callShopee(appId: string, secret: string, body: object): Promise<any> {
-  const payload = JSON.stringify(body);
-  const auth = buildShopeeAuth(appId, secret, payload);
-  assertSafePublicUrl(SHOPEE_GQL); // SSRF 防護：外部 fetch 前一律驗證 URL
-  const res = await fetchWithTimeout(SHOPEE_GQL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: auth.authorization },
-    body: payload
-  });
-  if (!res.ok) throw new ShopeeApiError(`Shopee API ${res.status}: ${await res.text()}`, res.status);
-  const json = await res.json();
-  if (json.errors?.length) throw new ShopeeApiError(`Shopee GraphQL error: ${JSON.stringify(json.errors)}`);
-  return json.data;
+  return callShopeeGql(appId, secret, JSON.stringify(body));
 }
 
 // 綁定即驗證：用一筆最小讀取查詢確認 AppID／Secret 簽章有效。

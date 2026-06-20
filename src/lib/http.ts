@@ -12,9 +12,11 @@ export async function fetchWithTimeout(
 // Retry-After 可能是「秒數」或「HTTP-date」；都支援，回傳等待毫秒（無法解析回 null）。
 export function retryAfterMs(header: string | null, now = Date.now()): number | null {
   if (!header) return null;
-  const secs = Number(header.trim());
+  const trimmed = header.trim();
+  if (trimmed === "") return null; // 純空白：視為無效，讓呼叫端退回指數退避（避免 Number("")===0）
+  const secs = Number(trimmed);
   if (Number.isFinite(secs)) return secs > 0 ? secs * 1000 : 0;
-  const date = Date.parse(header);
+  const date = Date.parse(trimmed);
   if (!Number.isNaN(date)) return Math.max(0, date - now);
   return null;
 }

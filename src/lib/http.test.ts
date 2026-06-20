@@ -12,6 +12,8 @@ test("retryAfterMs：HTTP-date 與壞值", () => {
   assert.equal(retryAfterMs("Sat, 20 Jun 2026 00:00:02 GMT", now), 2000);
   assert.equal(retryAfterMs(null), null);
   assert.equal(retryAfterMs("abc"), null);
+  assert.equal(retryAfterMs(""), null);
+  assert.equal(retryAfterMs("   "), null); // 純空白不可變成 0ms
 });
 
 function stubFetch(statuses: number[]): { calls: number; restore: () => void } {

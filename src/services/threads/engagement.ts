@@ -116,3 +116,11 @@ export async function getEngagementCached(
   if (fresh.fetched > 0) await setCachedJson(key, fresh).catch(() => {});
   return fresh;
 }
+
+// 取該使用者「最佳發文時段」整點（依平均觀看由高到低排序）；成效樣本不足回 []，
+// 呼叫端據此退回預設 PUBLISH_SLOTS。共用於單篇重發與批次回收的「最佳時段」排程。
+export async function getBestHours(ownerId: string, minSamples = 3): Promise<number[]> {
+  const eng = await getEngagementCached(ownerId).catch(() => null);
+  if (!eng || eng.fetched < minSamples) return [];
+  return bestPostingTimes(eng.posts).byHour.map((b) => b.key);
+}

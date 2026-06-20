@@ -2,17 +2,10 @@ import { NextResponse } from "next/server";
 import { log } from "@/lib/logger";
 import { getMaterial, createDraftFromMaterial, updateDraft, getGeminiKey, getCopyPrefs, userOwnsThreadsAccount } from "@/lib/store";
 import { withNextSlot, nextOpenSlotAtHours } from "@/services/publish/slots";
-import { getEngagementCached, bestPostingTimes } from "@/services/threads/engagement";
+import { getBestHours } from "@/services/threads/engagement";
 import { generateCopy } from "@/services/ai/provider";
 import { getCurrentUser } from "@/lib/auth";
 import type { Draft, Material } from "@/lib/types";
-
-// 取該使用者「最佳發文時段」整點（依成效排序）；資料不足回 []。
-async function bestHours(ownerId: string): Promise<number[]> {
-  const eng = await getEngagementCached(ownerId).catch(() => null);
-  if (!eng || eng.fetched < 3) return [];
-  return bestPostingTimes(eng.posts).byHour.map((b) => b.key);
-}
 
 export const dynamic = "force-dynamic";
 
@@ -72,7 +65,7 @@ export async function POST(req: Request) {
     let scheduledAt: string | null = null;
     if (action === "queue") {
       // bestTime=true 且有足夠成效資料 → 依最佳時段排程；否則用預設 PUBLISH_SLOTS。
-      const hours = body.bestTime === true ? await bestHours(ownerId) : [];
+      const hours = body.bestTime === true ? await getBestHours(ownerId) : [];
       const pick = hours.length ? (taken: Set<string>) => nextOpenSlotAtHours(taken, hours) : undefined;
       draft = await withNextSlot(
         ownerId,

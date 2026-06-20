@@ -38,12 +38,22 @@ function isValidMedia(m: unknown): m is DraftMedia {
   );
 }
 
+// Threads 輪播上限 20 項；超過 API 會整批拒。防禦性截斷（取前 20）讓多媒體仍能發出，
+// 而非整篇失敗。註：輪播含多個影片時，逐項等就緒（每項最久 ~40s）可能逼近 serverless
+// maxDuration；真逾時會留 publishing → reclaim 標 needs_verification（H2），人工確認後重試。
+export const MAX_CAROUSEL_ITEMS = 20;
+
 function resolveMedia(input: PublishInput): DraftMedia[] {
-  if (input.media && input.media.length > 0) return input.media.filter(isValidMedia);
-  if (input.mediaUrl && (input.mediaType === "image" || input.mediaType === "video")) {
-    return [{ url: input.mediaUrl, type: input.mediaType }];
+  let items: DraftMedia[] = [];
+  if (input.media && input.media.length > 0) items = input.media.filter(isValidMedia);
+  else if (input.mediaUrl && (input.mediaType === "image" || input.mediaType === "video")) {
+    items = [{ url: input.mediaUrl, type: input.mediaType }];
   }
-  return [];
+  if (items.length > MAX_CAROUSEL_ITEMS) {
+    log.warn("輪播項數超過 Threads 上限，截斷至前 20 項", { total: items.length, max: MAX_CAROUSEL_ITEMS });
+    items = items.slice(0, MAX_CAROUSEL_ITEMS);
+  }
+  return items;
 }
 
 // 對單一媒體項設定容器參數（IMAGE/VIDEO + 對應 url）。

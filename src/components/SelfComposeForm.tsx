@@ -5,12 +5,10 @@ import { useRouter } from "next/navigation";
 import type { ThreadsAccount } from "@/lib/types";
 import ThreadsPreview, { CharCount } from "@/components/ThreadsPreview";
 import { fetchWithTimeout } from "@/lib/http";
+import { parseTaipeiDateTimeLocal } from "@/lib/datetime";
 
 const input = "w-full rounded-md border px-3 py-2 text-sm";
 const THREADS_LIMIT = 500;
-
-// datetime-local 是「無時區的牆上時間」；本服務一律以台北時區解讀，避免不同瀏覽器時區算出不同 UTC。
-const parseTaipeiDateTimeLocal = (value: string) => new Date(`${value}:00+08:00`);
 
 // 自寫一則直推：不靠蝦皮連結／AI，直接打字發到 Threads（可選一張圖或影片網址）。
 export default function SelfComposeForm({ threadsAccounts }: { threadsAccounts: ThreadsAccount[] }) {

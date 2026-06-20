@@ -338,7 +338,7 @@ export async function markReplyFailed(id: string, ownerId: string, err: string):
     .update({ reply_status: "failed", error: err.slice(0, 500) })
     .eq("id", id)
     .eq("owner_id", ownerId);
-  if (error) throw new Error(`標記留言失敗失敗：${error.message}`);
+  if (error) throw new Error(`標記留言失敗時出錯：${error.message}`);
 }
 
 // 人工重試「補留言失敗」：reply_status failed → pending、reply_due_at 設為現在，下輪 cron 立即重補。
@@ -391,12 +391,16 @@ export async function updateDraftStatusAtomic(
 }
 
 // 發文佇列：取出可發布的草稿（全租戶，發到各自綁定的 Threads 帳號）。背景 worker 用。
-export async function listApprovedDrafts(): Promise<Draft[]> {
+// 上限避免大量積壓時整批載入記憶體爆掉；oldest-first（FIFO）確保積壓會跨輪逐步排空。
+// ponytail: 分片過濾仍在 queue.ts 記憶體做；要 SQL 層分片需加預算 shard 欄位（migration），暫不做。
+const APPROVED_DRAFTS_BATCH = 2000;
+export async function listApprovedDrafts(limit = APPROVED_DRAFTS_BATCH): Promise<Draft[]> {
   const nowIso = new Date().toISOString();
   if (isDemoMode) {
     return demo.drafts
       .filter((d) => d.status === "approved" && (!d.scheduled_at || d.scheduled_at <= nowIso))
-      .sort((a, b) => a.created_at.localeCompare(b.created_at));
+      .sort((a, b) => a.created_at.localeCompare(b.created_at))
+      .slice(0, limit);
   }
   const sb = getServiceClient()!;
   const { data } = await sb
@@ -404,6 +408,7 @@ export async function listApprovedDrafts(): Promise<Draft[]> {
     .select("*")
     .eq("status", "approved")
     .or(`scheduled_at.is.null,scheduled_at.lte.${nowIso}`)
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: true })
+    .limit(limit);
   return (data ?? []) as Draft[];
 }

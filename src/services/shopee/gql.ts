@@ -1,7 +1,7 @@
 // Shopee 分潤 Open API（GraphQL）共用呼叫：HMAC 簽名 → SSRF 守衛 → 帶逾時 POST → 錯誤分類。
 // affiliate（連結/商品名/驗證）與 report（轉換報表）共用，避免兩份重複（並確保兩邊都過 SSRF 守衛）。
 import { buildShopeeAuth } from "./sign";
-import { fetchWithTimeout } from "@/lib/http";
+import { fetchWithRetry } from "@/lib/http";
 import { assertSafePublicUrl } from "@/lib/url-guard";
 import { log } from "@/lib/logger";
 
@@ -22,7 +22,8 @@ export class ShopeeApiError extends Error {
 export async function callShopeeGql(appId: string, secret: string, payload: string, timeoutMs = 8000): Promise<any> {
   const auth = buildShopeeAuth(appId, secret, payload);
   assertSafePublicUrl(SHOPEE_GQL); // SSRF 防護：外部 fetch 前一律驗證 URL
-  const res = await fetchWithTimeout(
+  // 只重試 429（rate limited、請求未被處理）；簽名含 timestamp 但 16s 退避封頂遠小於有效期，安全。
+  const res = await fetchWithRetry(
     SHOPEE_GQL,
     { method: "POST", headers: { "Content-Type": "application/json", Authorization: auth.authorization }, body: payload },
     timeoutMs

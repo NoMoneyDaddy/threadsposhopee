@@ -27,7 +27,9 @@ export async function POST(req: Request) {
 
   const body = await req.json();
   const { id, action } = body;
-  if (!id || !action) return NextResponse.json({ ok: false, error: "缺少 id 或 action" }, { status: 400 });
+  if (typeof id !== "string" || typeof action !== "string") {
+    return NextResponse.json({ ok: false, error: "缺少或格式錯誤的 id / action" }, { status: 400 });
+  }
 
   const draft = await getDraft(id, user.id);
   if (!draft) return NextResponse.json({ ok: false, error: "找不到草稿" }, { status: 404 });

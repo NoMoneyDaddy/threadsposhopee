@@ -14,9 +14,10 @@ export async function refreshExpiringTokens(): Promise<{
 }> {
   const accounts = await listThreadsTokensToRefresh();
 
-  // 並行展期，避免帳號多時序列累加超過 maxDuration(60s)
-  const details = await Promise.all(
-    accounts.map(async (acc) => {
+  // 分批並行展期：兼顧 maxDuration(60s) 與「不一次轟爆 Threads API 觸發限流」。
+  // 同批內 Promise.all、批與批之間序列，並發上限 = REFRESH_CONCURRENCY。
+  const REFRESH_CONCURRENCY = 5;
+  const refreshOne = async (acc: (typeof accounts)[number]) => {
       try {
         const { accessToken, expiresInSec } = await refreshLongLivedToken(acc.accessToken);
         if (!accessToken) throw new Error("API 回傳的 accessToken 為空");
@@ -41,8 +42,13 @@ export async function refreshExpiringTokens(): Promise<{
         ).catch(() => {});
         return { label: acc.label, ok: false as const, error };
       }
-    })
-  );
+  };
+
+  const details: { label: string; ok: boolean; error?: string }[] = [];
+  for (let i = 0; i < accounts.length; i += REFRESH_CONCURRENCY) {
+    const batch = accounts.slice(i, i + REFRESH_CONCURRENCY);
+    details.push(...(await Promise.all(batch.map(refreshOne))));
+  }
 
   const refreshed = details.filter((d) => d.ok).length;
   const failed = details.length - refreshed;

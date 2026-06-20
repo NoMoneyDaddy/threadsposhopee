@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { ThreadsAccount, Material } from "@/lib/types";
 import ThreadsPreview, { CharCount } from "@/components/ThreadsPreview";
 import { checkThreadsContent, THREADS_MAX_HASHTAGS } from "@/lib/threads-content";
+import { parseTaipeiDateTimeLocal } from "@/lib/datetime";
 
 const input = "w-full rounded-md border px-3 py-2 text-sm";
 const THREADS_LIMIT = 500;
@@ -62,7 +63,7 @@ export default function ComposerForm({ threadsAccounts }: { threadsAccounts: Thr
         setMsg("請選擇排程時間");
         return;
       }
-      if (new Date(scheduledAt) <= new Date()) {
+      if (parseTaipeiDateTimeLocal(scheduledAt).getTime() <= Date.now()) {
         setMsg("排程時間必須是未來的時間");
         return;
       }
@@ -80,7 +81,7 @@ export default function ComposerForm({ threadsAccounts }: { threadsAccounts: Thr
           reply_text: replyText,
           reply_delay_minutes: replyDelay.trim() === "" ? null : Number(replyDelay),
           action,
-          scheduled_at: scheduledAt ? new Date(scheduledAt).toISOString() : null
+          scheduled_at: scheduledAt ? parseTaipeiDateTimeLocal(scheduledAt).toISOString() : null
         })
       });
       const json = await res.json();

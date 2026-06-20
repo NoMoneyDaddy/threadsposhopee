@@ -35,7 +35,9 @@ export async function expandShopeeLink(shortLink: string): Promise<ExpandedProdu
   let location = shortLink;
   try {
     const res = await fetchWithTimeout(safe.href, { method: "GET", redirect: "manual" });
-    location = res.headers.get("location") ?? shortLink;
+    // Location 可能是相對路徑（如 /product/...），以原連結為 base 解析回絕對 URL。
+    const redirectUrl = res.headers.get("location");
+    location = redirectUrl ? new URL(redirectUrl, safe.href).href : shortLink;
   } catch {
     // 網路失敗時退回原連結，仍嘗試從中解析
   }

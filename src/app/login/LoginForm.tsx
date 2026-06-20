@@ -53,11 +53,7 @@ export default function LoginForm({ next }: { next: string }) {
 
   return (
     <div className="space-y-3">
-      <button
-        onClick={google}
-        disabled={busy}
-        className="flex w-full items-center justify-center gap-2 rounded-md border px-4 py-2 text-sm font-medium hover:bg-neutral-50 disabled:opacity-50"
-      >
+      <button onClick={google} disabled={busy} className="btn btn-outline w-full">
         <svg width="16" height="16" viewBox="0 0 48 48" aria-hidden>
           <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.9 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.3 6.1 29.4 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.3-.4-3.5z"/>
           <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 16 19 13 24 13c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.3 6.1 29.4 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/>
@@ -66,8 +62,8 @@ export default function LoginForm({ next }: { next: string }) {
         </svg>
         用 Google 登入
       </button>
-      <div className="flex items-center gap-2 text-xs text-neutral-400">
-        <span className="h-px flex-1 bg-neutral-200" />或 email 登入<span className="h-px flex-1 bg-neutral-200" />
+      <div className="flex items-center gap-3 text-xs text-ink-3">
+        <span className="h-px flex-1 bg-border" />或用 email<span className="h-px flex-1 bg-border" />
       </div>
       <input
         type="email"
@@ -75,7 +71,7 @@ export default function LoginForm({ next }: { next: string }) {
         placeholder="Email"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
-        className="w-full rounded-md border px-3 py-2 text-sm"
+        className="input"
       />
       <input
         type="password"
@@ -84,25 +80,17 @@ export default function LoginForm({ next }: { next: string }) {
         placeholder="密碼（至少 6 碼）"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
-        className="w-full rounded-md border px-3 py-2 text-sm"
+        className="input"
       />
-      <div className="flex items-center gap-2">
-        <button
-          onClick={() => run("in")}
-          disabled={busy}
-          className="rounded-md bg-shopee px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
-        >
+      <div className="flex items-center gap-2 pt-1">
+        <button onClick={() => run("in")} disabled={busy} className="btn btn-brand flex-1">
           {busy ? "處理中…" : "登入"}
         </button>
-        <button
-          onClick={() => run("up")}
-          disabled={busy}
-          className="rounded-md border px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
-        >
+        <button onClick={() => run("up")} disabled={busy} className="btn btn-outline">
           註冊
         </button>
       </div>
-      {msg && <p className="text-sm text-neutral-600">{msg}</p>}
+      {msg && <p className="text-sm text-ink-2">{msg}</p>}
     </div>
   );
 }

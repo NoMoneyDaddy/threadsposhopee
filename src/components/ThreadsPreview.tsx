@@ -32,8 +32,8 @@ export default function ThreadsPreview({
   const hasReply = Boolean(replyText && replyText.trim());
   const total = hasReply ? 2 : 1;
   return (
-    <div className="rounded-xl border bg-white p-4">
-      <div className="mb-2 text-xs font-medium text-neutral-400">預覽（Threads 串文）</div>
+    <div className="rounded-xl border bg-surface p-4">
+      <div className="mb-2 text-xs font-medium text-ink-3">預覽（Threads 串文）</div>
 
       {/* 主文 1/2 */}
       <div className="flex gap-3">
@@ -43,19 +43,19 @@ export default function ThreadsPreview({
         </div>
         <div className="min-w-0 flex-1 pb-3">
           <div className="flex items-center gap-1 text-sm">
-            <span className="font-semibold text-neutral-900">{handle}</span>
-            {total > 1 && <span className="text-neutral-400">{`1/${total}`}</span>}
-            <span className="text-neutral-400">· 現在</span>
+            <span className="font-semibold text-ink">{handle}</span>
+            {total > 1 && <span className="text-ink-3">{`1/${total}`}</span>}
+            <span className="text-ink-3">· 現在</span>
           </div>
-          <div className="mt-0.5 whitespace-pre-wrap break-words text-sm text-neutral-800">
-            {mainText || <span className="text-neutral-300">正文預覽…</span>}
+          <div className="mt-0.5 whitespace-pre-wrap break-words text-sm text-ink">
+            {mainText || <span className="text-ink-3">正文預覽…</span>}
           </div>
           {items.length > 0 && (
             <div className={carousel ? "mt-2 flex gap-2 overflow-x-auto pb-1" : "mt-2"}>
               {items.map((m, i) => {
                 const cls = carousel
-                  ? "h-44 w-44 shrink-0 rounded-lg border object-cover"
-                  : "max-h-72 w-full rounded-lg border object-cover";
+                  ? "h-44 w-44 shrink-0 rounded-2xl border object-cover"
+                  : "max-h-72 w-full rounded-2xl border object-cover";
                 return m.type === "image" ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img key={`${m.url}-${i}`} src={m.url} alt="" className={cls} />
@@ -65,8 +65,8 @@ export default function ThreadsPreview({
               })}
             </div>
           )}
-          {carousel && <div className="mt-1 text-xs text-neutral-400">輪播 {items.length} 則媒體</div>}
-          <div className="mt-2 flex gap-5 text-neutral-400">
+          {carousel && <div className="mt-1 text-xs text-ink-3">輪播 {items.length} 則媒體</div>}
+          <div className="mt-2 flex gap-5 text-ink-3">
             <span className="text-xs">♡ 讚</span>
             <span className="text-xs">💬 留言</span>
             <span className="text-xs">↻ 轉發</span>
@@ -80,11 +80,11 @@ export default function ThreadsPreview({
           <div className="h-9 w-9 shrink-0 rounded-full bg-gradient-to-br from-neutral-300 to-neutral-400" />
           <div className="min-w-0 flex-1 pt-1">
             <div className="flex items-center gap-1 text-sm">
-              <span className="font-semibold text-neutral-900">{handle}</span>
-              <span className="text-neutral-400">{`2/${total}`}</span>
-              <span className="text-neutral-400">· 接續</span>
+              <span className="font-semibold text-ink">{handle}</span>
+              <span className="text-ink-3">{`2/${total}`}</span>
+              <span className="text-ink-3">· 接續</span>
             </div>
-            <div className="mt-0.5 whitespace-pre-wrap break-words text-sm text-shopee">{replyText}</div>
+            <div className="mt-0.5 whitespace-pre-wrap break-words text-sm text-brand">{replyText}</div>
           </div>
         </div>
       )}
@@ -98,7 +98,7 @@ export function CharCount({ text, limit = 500 }: { text: string; limit?: number 
   const over = len > limit;
   const near = len > limit * 0.9;
   return (
-    <span className={`text-xs tabular-nums ${over ? "text-red-500" : near ? "text-amber-500" : "text-neutral-400"}`}>
+    <span className={`text-xs tabular-nums ${over ? "text-red-500" : near ? "text-amber-500" : "text-ink-3"}`}>
       {len} / {limit}
     </span>
   );

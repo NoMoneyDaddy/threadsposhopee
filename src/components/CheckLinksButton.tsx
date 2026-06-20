@@ -30,11 +30,11 @@ export default function CheckLinksButton() {
       <button
         onClick={run}
         disabled={busy}
-        className="rounded-md border px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50"
+        className="rounded-xl border px-3 py-1.5 text-sm hover:bg-surface-2 disabled:opacity-50"
       >
         {busy ? "檢查中…" : "立即檢查連結"}
       </button>
-      {msg && <span className="text-xs text-neutral-500">{msg}</span>}
+      {msg && <span className="text-xs text-ink-2">{msg}</span>}
     </div>
   );
 }

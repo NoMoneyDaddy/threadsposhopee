@@ -54,7 +54,7 @@ export default async function AccountsPage({
 
       {searchParams.threads && (
         <div
-          className={`rounded-lg border p-3 text-sm ${
+          className={`rounded-2xl border p-3 text-sm ${
             searchParams.threads === "ok"
               ? "border-green-200 bg-green-50 text-green-700"
               : "border-red-200 bg-red-50 text-red-700"
@@ -65,21 +65,21 @@ export default async function AccountsPage({
         </div>
       )}
 
-      <div className="rounded-lg border bg-white p-4">
+      <div className="rounded-2xl border bg-surface p-4">
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="font-medium">用 Threads 一鍵連結發文帳號</div>
-            <p className="text-sm text-neutral-500">免手貼 token，授權後自動換 60 天長期憑證並自動展期。</p>
+            <p className="text-sm text-ink-2">免手貼 token，授權後自動換 60 天長期憑證並自動展期。</p>
           </div>
           {oauthReady ? (
             <a
               href="/api/auth/threads/start"
-              className="shrink-0 rounded-md bg-shopee px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+              className="shrink-0 rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90"
             >
               用 Threads 連結帳號
             </a>
           ) : (
-            <span className="shrink-0 rounded-md bg-neutral-100 px-3 py-2 text-xs text-neutral-500">
+            <span className="shrink-0 rounded-xl bg-surface-2 px-3 py-2 text-xs text-ink-2">
               尚未設定 Threads App
             </span>
           )}
@@ -113,7 +113,7 @@ export default async function AccountsPage({
           <h2 className="font-semibold">Threads 發文帳號</h2>
           <a
             href="/pricing"
-            className="rounded-full bg-shopee/10 px-3 py-1 text-xs text-shopee hover:bg-shopee/20"
+            className="rounded-full bg-brand/10 px-3 py-1 text-xs text-brand hover:bg-brand/20"
             title="查看方案與升級（可連結的發文帳號數依方案而定）"
           >
             {PLAN_LABELS[plan]}方案 ·{" "}
@@ -122,22 +122,22 @@ export default async function AccountsPage({
         </div>
         <div className="grid gap-3 md:grid-cols-2">
           {threads.map((a) => (
-            <div key={a.id} className="rounded-lg border bg-white p-4">
+            <div key={a.id} className="rounded-2xl border bg-surface p-4">
               <div className="flex items-center justify-between">
                 <span className="font-medium">{a.label}</span>
-                <span className="text-xs text-neutral-500">{a.status}</span>
+                <span className="text-xs text-ink-2">{a.status}</span>
               </div>
-              <div className="mt-1 text-sm text-neutral-500">user id: {a.threads_user_id}</div>
+              <div className="mt-1 text-sm text-ink-2">user id: {a.threads_user_id}</div>
               {a.token_expires_at && (() => {
                 const exp = tokenExpiryState(a.token_expires_at);
                 if (exp.level === "unknown")
-                  return <div className="text-xs font-medium text-neutral-500">⚠️ token 到期日格式異常，請重新授權</div>;
+                  return <div className="text-xs font-medium text-ink-2">⚠️ token 到期日格式異常，請重新授權</div>;
                 const date = new Date(a.token_expires_at).toLocaleDateString("zh-TW", { timeZone: "Asia/Taipei" });
                 if (exp.level === "expired")
                   return <div className="text-xs font-medium text-red-600">⚠️ token 已過期（{date}）— 請重新授權</div>;
                 if (exp.level === "soon")
                   return <div className="text-xs font-medium text-amber-600">⏳ token {exp.daysLeft} 天後到期（{date}）— 自動展期中，若仍失敗請重新授權</div>;
-                return <div className="text-xs text-neutral-400">token 到期：{date}（自動展期）</div>;
+                return <div className="text-xs text-ink-3">token 到期：{date}（自動展期）</div>;
               })()}
               <div className="mt-2 flex items-center gap-3 border-t pt-2">
                 {a.status === "paused" ? (
@@ -156,10 +156,10 @@ export default async function AccountsPage({
         <h2 className="mb-2 font-semibold">Shopee 分潤帳號</h2>
         <div className="grid gap-3 md:grid-cols-2">
           {shopee.map((a) => (
-            <div key={a.id} className="rounded-lg border bg-white p-4">
+            <div key={a.id} className="rounded-2xl border bg-surface p-4">
               <div className="font-medium">{a.label}</div>
-              <div className="mt-1 text-sm text-neutral-500">app id: {a.app_id}</div>
-              <div className="text-sm text-neutral-500">預設 subId: {a.default_sub_id}</div>
+              <div className="mt-1 text-sm text-ink-2">app id: {a.app_id}</div>
+              <div className="text-sm text-ink-2">預設 subId: {a.default_sub_id}</div>
               <div className="mt-2 border-t pt-2">
                 <DeleteButton endpoint={`/api/accounts/shopee/${a.id}`} />
               </div>
@@ -168,7 +168,7 @@ export default async function AccountsPage({
         </div>
       </section>
 
-      <p className="text-sm text-neutral-400">
+      <p className="text-sm text-ink-3">
         🔒 access token / secret 以 AES-256-GCM 加密存放，前端不會回傳明文。
       </p>
     </div>

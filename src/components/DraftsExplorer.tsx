@@ -75,7 +75,7 @@ export default function DraftsExplorer({
               key={t.value}
               onClick={() => setStatus(t.value)}
               className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1 text-xs ${
-                status === t.value ? "bg-shopee text-white" : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
+                status === t.value ? "bg-brand text-white" : "bg-surface-2 text-ink-2 hover:bg-neutral-200"
               }`}
             >
               {t.label}
@@ -84,7 +84,7 @@ export default function DraftsExplorer({
           ))}
         </div>
         <input
-          className="ml-auto w-full rounded-md border px-3 py-1.5 text-sm sm:w-56"
+          className="ml-auto w-full rounded-xl border px-3 py-1.5 text-sm sm:w-56"
           placeholder="搜尋商品名／正文／連結"
           value={q}
           onChange={(e) => setQ(e.target.value)}
@@ -101,7 +101,7 @@ export default function DraftsExplorer({
           />
         ))}
         {filtered.length === 0 && (
-          <div className="col-span-2 rounded-lg border border-dashed p-10 text-center text-neutral-400">
+          <div className="col-span-2 rounded-2xl border border-dashed p-10 text-center text-ink-3">
             {drafts.length === 0 ? "還沒有草稿。" : "沒有符合條件的草稿。"}
           </div>
         )}

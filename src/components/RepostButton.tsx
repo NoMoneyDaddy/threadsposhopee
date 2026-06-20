@@ -60,26 +60,26 @@ export default function RepostButton({
       <button
         onClick={() => repost("queue")}
         disabled={!!busy}
-        className="rounded border border-shopee/40 px-3 py-1 text-xs text-shopee hover:bg-orange-50 disabled:opacity-50"
+        className="rounded border border-brand/40 px-3 py-1 text-xs text-brand hover:bg-orange-50 disabled:opacity-50"
       >
         {busy === "queue" ? "…" : "再排一篇（進佇列）"}
       </button>
       <button
         onClick={() => repost("draft")}
         disabled={!!busy}
-        className="rounded border px-3 py-1 text-xs text-neutral-600 hover:bg-neutral-50 disabled:opacity-50"
+        className="rounded border px-3 py-1 text-xs text-ink-2 hover:bg-surface-2 disabled:opacity-50"
       >
         {busy === "draft" ? "…" : "存草稿"}
       </button>
-      <label className="flex items-center gap-1 text-xs text-neutral-500" title="用 AI 重寫文案，避免重複措辭被降觸及">
+      <label className="flex items-center gap-1 text-xs text-ink-2" title="用 AI 重寫文案，避免重複措辭被降觸及">
         <input type="checkbox" checked={vary} onChange={(e) => setVary(e.target.checked)} disabled={!!busy} />
         重寫文案
       </label>
-      <label className="flex items-center gap-1 text-xs text-neutral-500" title="進佇列時依成效挑該帳號高觸及時段（資料不足則用預設時段）">
+      <label className="flex items-center gap-1 text-xs text-ink-2" title="進佇列時依成效挑該帳號高觸及時段（資料不足則用預設時段）">
         <input type="checkbox" checked={bestTime} onChange={(e) => setBestTime(e.target.checked)} disabled={!!busy} />
         最佳時段
       </label>
-      {msg && <span className="text-xs text-neutral-500">{msg}</span>}
+      {msg && <span className="text-xs text-ink-2">{msg}</span>}
     </div>
   );
 }

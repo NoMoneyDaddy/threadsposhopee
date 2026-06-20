@@ -21,7 +21,7 @@ const EMOJI_OPTS: { v: EmojiLevel; label: string }[] = [
   { v: "some", label: "適中" }
 ];
 
-const sel = "rounded-md border px-2 py-1 text-sm";
+const sel = "rounded-xl border px-2 py-1 text-sm";
 
 function SideEditor({
   title,
@@ -33,10 +33,10 @@ function SideEditor({
   onChange: (s: SidePrefs) => void;
 }) {
   return (
-    <div className="rounded-md border bg-neutral-50 p-3">
+    <div className="rounded-xl border bg-surface-2 p-3">
       <div className="mb-2 text-sm font-medium">{title}</div>
       <div className="flex flex-wrap gap-3">
-        <label className="text-xs text-neutral-600">
+        <label className="text-xs text-ink-2">
           語氣
           <select className={`${sel} ml-1`} value={side.tone} onChange={(e) => onChange({ ...side, tone: e.target.value as Tone })}>
             {TONE_OPTS.map((o) => (
@@ -44,7 +44,7 @@ function SideEditor({
             ))}
           </select>
         </label>
-        <label className="text-xs text-neutral-600">
+        <label className="text-xs text-ink-2">
           長度
           <select className={`${sel} ml-1`} value={side.length} onChange={(e) => onChange({ ...side, length: e.target.value as Length })}>
             {LENGTH_OPTS.map((o) => (
@@ -52,7 +52,7 @@ function SideEditor({
             ))}
           </select>
         </label>
-        <label className="text-xs text-neutral-600">
+        <label className="text-xs text-ink-2">
           Emoji
           <select className={`${sel} ml-1`} value={side.emoji} onChange={(e) => onChange({ ...side, emoji: e.target.value as EmojiLevel })}>
             {EMOJI_OPTS.map((o) => (
@@ -94,9 +94,9 @@ export default function CopyPrefsForm({ initial }: { initial: CopyPrefs }) {
   }
 
   return (
-    <div className="rounded-lg border bg-white p-4">
+    <div className="rounded-2xl border bg-surface p-4">
       <div className="mb-1 font-medium">AI 文案客製化</div>
-      <p className="mb-3 text-xs text-neutral-500">生成貼文時套用的全域偏好。正文與留言可分開設定。</p>
+      <p className="mb-3 text-xs text-ink-2">生成貼文時套用的全域偏好。正文與留言可分開設定。</p>
 
       <div className="grid gap-3 md:grid-cols-2">
         <SideEditor title="正文" side={prefs.main} onChange={(main) => setPrefs((p) => ({ ...p, main }))} />
@@ -104,7 +104,7 @@ export default function CopyPrefsForm({ initial }: { initial: CopyPrefs }) {
       </div>
 
       <div className="mt-3">
-        <label className="text-xs text-neutral-600">
+        <label className="text-xs text-ink-2">
           創意度（溫度）：<b className="tabular-nums">{prefs.temperature.toFixed(2)}</b>
           <input
             type="range"
@@ -115,17 +115,17 @@ export default function CopyPrefsForm({ initial }: { initial: CopyPrefs }) {
             onChange={(e) => setPrefs((p) => ({ ...p, temperature: Number(e.target.value) }))}
             className="ml-2 w-48 align-middle"
           />
-          <span className="ml-2 text-neutral-400">低=穩定，高=發散</span>
+          <span className="ml-2 text-ink-3">低=穩定，高=發散</span>
         </label>
       </div>
 
       <div className="mt-3">
-        <label htmlFor="copy-prefs-custom-prompt" className="text-xs text-neutral-600">
+        <label htmlFor="copy-prefs-custom-prompt" className="text-xs text-ink-2">
           自訂指示（選填，不可違反輸出格式）
         </label>
         <textarea
           id="copy-prefs-custom-prompt"
-          className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
+          className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
           rows={2}
           maxLength={1000}
           placeholder="例如：多強調保固與台灣出貨；不要提到價格"
@@ -135,10 +135,10 @@ export default function CopyPrefsForm({ initial }: { initial: CopyPrefs }) {
       </div>
 
       <div className="mt-3 flex items-center gap-3">
-        <button onClick={save} disabled={busy} className="rounded-md bg-shopee px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+        <button onClick={save} disabled={busy} className="rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
           {busy ? "儲存中…" : "儲存偏好"}
         </button>
-        {msg && <span className="text-sm text-neutral-600">{msg}</span>}
+        {msg && <span className="text-sm text-ink-2">{msg}</span>}
       </div>
     </div>
   );

@@ -33,24 +33,24 @@ export default function MaterialCreateForm() {
   }
 
   return (
-    <form onSubmit={submit} className="space-y-2 rounded-lg border bg-white p-4">
+    <form onSubmit={submit} className="space-y-2 rounded-2xl border bg-surface p-4">
       <div className="font-medium">手動建立素材（貼蝦皮商品連結）</div>
       <input
-        className="w-full rounded-md border px-3 py-2 text-sm"
+        className="w-full rounded-xl border px-3 py-2 text-sm"
         placeholder="蝦皮連結（s.shopee.tw/... 或 shopee.tw/product/...）"
         value={url}
         onChange={(e) => setUrl(e.target.value)}
         required
       />
-      <label className="flex items-center gap-2 text-sm text-neutral-600">
+      <label className="flex items-center gap-2 text-sm text-ink-2">
         <input type="checkbox" checked={withCopy} onChange={(e) => setWithCopy(e.target.checked)} />
         順便用 AI 生成文案（不勾＝只建分潤連結，文案之後再補）
       </label>
       <div className="flex items-center gap-3">
-        <button disabled={busy} className="rounded-md bg-shopee px-4 py-2 text-sm text-white disabled:opacity-50">
+        <button disabled={busy} className="rounded-xl bg-brand px-4 py-2 text-sm text-white disabled:opacity-50">
           {busy ? "建立中…" : "建立素材"}
         </button>
-        {msg && <span className="text-sm text-neutral-600">{msg}</span>}
+        {msg && <span className="text-sm text-ink-2">{msg}</span>}
       </div>
     </form>
   );

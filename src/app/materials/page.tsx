@@ -35,7 +35,7 @@ export default async function MaterialsPage() {
           <CheckLinksButton />
         </div>
       </div>
-      <p className="text-sm text-neutral-500">
+      <p className="text-sm text-ink-2">
         每個素材 = 一個商品的分潤連結＋AI 文案＋媒體。可重複「再排一篇」而不重燒 token；連結失效才會重產。
       </p>
 
@@ -43,9 +43,9 @@ export default async function MaterialsPage() {
 
       <div className="grid gap-4 md:grid-cols-2">
         {materials.map((m) => (
-          <div key={m.id} className="flex flex-col rounded-lg border bg-white p-4">
+          <div key={m.id} className="flex flex-col rounded-2xl border bg-surface p-4">
             <div className="mb-1 flex items-center justify-between gap-2">
-              <span className="min-w-0 truncate text-sm font-medium text-neutral-700">{m.product_name ?? `商品 ${m.item_id}`}</span>
+              <span className="min-w-0 truncate text-sm font-medium text-ink">{m.product_name ?? `商品 ${m.item_id}`}</span>
               <span className="flex shrink-0 items-center gap-1">
                 {itemRev[m.item_id] && (
                   <span
@@ -63,21 +63,21 @@ export default async function MaterialsPage() {
               <img src={m.cloudinary_media_url} alt="" className="mb-2 h-32 w-full rounded object-cover" />
             )}
             {m.main_text ? (
-              <div className="whitespace-pre-wrap text-sm text-neutral-800">{m.main_text}</div>
+              <div className="whitespace-pre-wrap text-sm text-ink">{m.main_text}</div>
             ) : (
-              <div className="text-sm text-neutral-400">（尚未生成文案）</div>
+              <div className="text-sm text-ink-3">（尚未生成文案）</div>
             )}
             <a
               href={m.affiliate_short_link ?? "#"}
               target="_blank"
               rel="noreferrer"
-              className="mt-2 text-xs text-shopee hover:underline"
+              className="mt-2 text-xs text-brand hover:underline"
             >
               {m.affiliate_short_link}
             </a>
-            {m.affiliate_sub_id && <div className="text-xs text-neutral-400">subId: {m.affiliate_sub_id}</div>}
+            {m.affiliate_sub_id && <div className="text-xs text-ink-3">subId: {m.affiliate_sub_id}</div>}
             {m.affiliate_checked_at && (
-              <div className="mt-1 text-xs text-neutral-300">
+              <div className="mt-1 text-xs text-ink-3">
                 連結檢查於 {new Date(m.affiliate_checked_at).toLocaleDateString("zh-TW", { timeZone: "Asia/Taipei" })}
               </div>
             )}
@@ -87,7 +87,7 @@ export default async function MaterialsPage() {
           </div>
         ))}
         {materials.length === 0 && (
-          <div className="col-span-2 rounded-lg border border-dashed p-10 text-center text-neutral-400">
+          <div className="col-span-2 rounded-2xl border border-dashed p-10 text-center text-ink-3">
             還沒有素材。用上面的表單貼一個蝦皮連結建立，或讓爬取流程自動產生。
           </div>
         )}

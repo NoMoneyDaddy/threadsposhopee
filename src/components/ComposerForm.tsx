@@ -7,7 +7,7 @@ import ThreadsPreview, { CharCount } from "@/components/ThreadsPreview";
 import { checkThreadsContent, THREADS_MAX_HASHTAGS } from "@/lib/threads-content";
 import { parseTaipeiDateTimeLocal } from "@/lib/datetime";
 
-const input = "w-full rounded-md border px-3 py-2 text-sm";
+const input = "w-full rounded-xl border px-3 py-2 text-sm";
 const THREADS_LIMIT = 500;
 
 export default function ComposerForm({ threadsAccounts }: { threadsAccounts: ThreadsAccount[] }) {
@@ -120,7 +120,7 @@ export default function ComposerForm({ threadsAccounts }: { threadsAccounts: Thr
   return (
     <div className="space-y-4">
       {/* 步驟 1：貼連結 */}
-      <div className="rounded-lg border bg-white p-4">
+      <div className="rounded-2xl border bg-surface p-4">
         <label className="mb-1 block text-sm font-medium">貼上蝦皮商品連結（或現成分潤連結）</label>
         <div className="flex gap-2">
           <input
@@ -132,7 +132,7 @@ export default function ComposerForm({ threadsAccounts }: { threadsAccounts: Thr
           <button
             onClick={generate}
             disabled={busy === "gen" || !url.trim()}
-            className="shrink-0 rounded-md bg-shopee px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+            className="shrink-0 rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
           >
             {busy === "gen" ? "產生中…" : "產生文案"}
           </button>
@@ -141,7 +141,7 @@ export default function ComposerForm({ threadsAccounts }: { threadsAccounts: Thr
 
       {/* 步驟 2：預覽 + 編輯 + 送出 */}
       {material && (
-        <div className="space-y-3 rounded-lg border bg-white p-4">
+        <div className="space-y-3 rounded-2xl border bg-surface p-4">
           <div className="flex items-center gap-3">
             {material.cloudinary_media_url && material.media_type === "image" && (
               // eslint-disable-next-line @next/next/no-img-element
@@ -156,7 +156,7 @@ export default function ComposerForm({ threadsAccounts }: { threadsAccounts: Thr
                 href={material.affiliate_short_link ?? "#"}
                 target="_blank"
                 rel="noreferrer"
-                className="truncate text-xs text-shopee hover:underline"
+                className="truncate text-xs text-brand hover:underline"
               >
                 {material.affiliate_short_link}
               </a>
@@ -183,12 +183,12 @@ export default function ComposerForm({ threadsAccounts }: { threadsAccounts: Thr
           />
           {replyText.trim() && (
             <div className="flex items-center gap-2">
-              <label htmlFor="composer-reply-delay" className="text-xs text-neutral-500">
+              <label htmlFor="composer-reply-delay" className="text-xs text-ink-2">
                 留言延遲（分，空＝用預設）
               </label>
               <input
                 id="composer-reply-delay"
-                className="w-24 rounded-md border px-2 py-1 text-xs"
+                className="w-24 rounded-xl border px-2 py-1 text-xs"
                 inputMode="numeric"
                 placeholder="如 15"
                 value={replyDelay}
@@ -210,7 +210,7 @@ export default function ComposerForm({ threadsAccounts }: { threadsAccounts: Thr
 
           <div className="flex flex-wrap items-center gap-2">
             <select
-              className="rounded-md border px-2 py-2 text-sm"
+              className="rounded-xl border px-2 py-2 text-sm"
               value={accountId || threadsAccounts[0]?.id || ""}
               onChange={(e) => setAccountId(e.target.value)}
             >
@@ -223,7 +223,7 @@ export default function ComposerForm({ threadsAccounts }: { threadsAccounts: Thr
             </select>
             <input
               type="datetime-local"
-              className="rounded-md border px-2 py-2 text-sm"
+              className="rounded-xl border px-2 py-2 text-sm"
               value={scheduledAt}
               onChange={(e) => setScheduledAt(e.target.value)}
               title="排程時間（選「排程發布」時使用）"
@@ -231,28 +231,28 @@ export default function ComposerForm({ threadsAccounts }: { threadsAccounts: Thr
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <button onClick={() => submit("publish")} disabled={!!busy} className="rounded-md bg-shopee px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+            <button onClick={() => submit("publish")} disabled={!!busy} className="rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
               {busy === "publish" ? "發布中…" : "立即發布"}
             </button>
             <button
               onClick={() => submit("queue")}
               disabled={!!busy}
               title="自動排進下一個空的每日發文時段"
-              className="rounded-md border border-shopee/40 px-4 py-2 text-sm text-shopee hover:bg-orange-50 disabled:opacity-50"
+              className="rounded-xl border border-brand/40 px-4 py-2 text-sm text-brand hover:bg-orange-50 disabled:opacity-50"
             >
               {busy === "queue" ? "排入中…" : "加入佇列"}
             </button>
-            <button onClick={() => submit("schedule")} disabled={!!busy} className="rounded-md border px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50">
+            <button onClick={() => submit("schedule")} disabled={!!busy} className="rounded-xl border px-4 py-2 text-sm hover:bg-surface-2 disabled:opacity-50">
               指定時間
             </button>
-            <button onClick={() => submit("draft")} disabled={!!busy} className="rounded-md border px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50">
+            <button onClick={() => submit("draft")} disabled={!!busy} className="rounded-xl border px-4 py-2 text-sm hover:bg-surface-2 disabled:opacity-50">
               存草稿
             </button>
           </div>
         </div>
       )}
 
-      {msg && <p className="text-sm text-neutral-600">{msg}</p>}
+      {msg && <p className="text-sm text-ink-2">{msg}</p>}
     </div>
   );
 }

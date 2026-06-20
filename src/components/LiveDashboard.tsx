@@ -32,15 +32,15 @@ interface DashboardData {
 function AccountsHealth({ rows }: { rows: DashboardData["accountsHealth"] }) {
   if (!rows || rows.length === 0) return null;
   const dot: Record<string, string> = { ok: "bg-green-500", warn: "bg-amber-500", error: "bg-red-500" };
-  const text: Record<string, string> = { ok: "text-neutral-500", warn: "text-amber-700", error: "text-red-600" };
+  const text: Record<string, string> = { ok: "text-ink-2", warn: "text-amber-700", error: "text-red-600" };
   return (
-    <div className="rounded-lg border bg-white p-5">
+    <div className="rounded-2xl border bg-surface p-5">
       <h2 className="mb-3 font-semibold">帳號健康</h2>
       <ul className="space-y-2">
         {rows.map((r) => (
           <li key={r.label} className="flex items-center gap-2 text-sm">
             <span className={`h-2 w-2 shrink-0 rounded-full ${dot[r.level]}`} />
-            <span className="min-w-0 truncate font-medium text-neutral-700">{r.label}</span>
+            <span className="min-w-0 truncate font-medium text-ink">{r.label}</span>
             <span className={`ml-auto shrink-0 text-xs ${text[r.level]}`}>{r.summary}</span>
           </li>
         ))}
@@ -64,7 +64,7 @@ function PublishPlan({ rows }: { rows: DashboardData["publishPlan"] }) {
         })
       : "—";
   return (
-    <div className="rounded-lg border bg-white p-5">
+    <div className="rounded-2xl border bg-surface p-5">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="font-semibold">發文排隊進度</h2>
         {congested && (
@@ -85,10 +85,10 @@ function PublishPlan({ rows }: { rows: DashboardData["publishPlan"] }) {
         <tbody>
           {rows.map((r) => (
             <tr key={r.id} className="flex items-center gap-2">
-              <td className="w-24 shrink-0 truncate text-neutral-500">{r.accountLabel}</td>
-              <td className="min-w-0 flex-1 truncate text-neutral-800">{r.productName ?? "（草稿）"}</td>
-              <td className="shrink-0 text-xs text-neutral-400">{r.reason}</td>
-              <td className="w-28 shrink-0 text-right text-xs tabular-nums text-neutral-600">{fmt(r.etaIso)}</td>
+              <td className="w-24 shrink-0 truncate text-ink-2">{r.accountLabel}</td>
+              <td className="min-w-0 flex-1 truncate text-ink">{r.productName ?? "（草稿）"}</td>
+              <td className="shrink-0 text-xs text-ink-3">{r.reason}</td>
+              <td className="w-28 shrink-0 text-right text-xs tabular-nums text-ink-2">{fmt(r.etaIso)}</td>
             </tr>
           ))}
         </tbody>
@@ -107,7 +107,7 @@ function MissingBinds({ binds }: { binds?: { apify: boolean; gemini: boolean; sh
   ].filter(Boolean) as string[];
   if (missing.length === 0) return null;
   return (
-    <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
       🔑 尚未設定：{missing.join("、")}。到{" "}
       <Link href="/accounts" className="underline hover:opacity-80">
         帳號管理
@@ -122,7 +122,7 @@ function Autopilot({ lastCronAt, demo }: { lastCronAt?: string | null; demo: boo
   if (demo) return null;
   if (!lastCronAt) {
     return (
-      <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-sm text-neutral-500">
+      <div className="rounded-2xl border border-border bg-surface-2 p-3 text-sm text-ink-2">
         🅿️ 自動駕駛尚未啟動 — 請到 Zeabur 設一條 Cron 打 <code>/api/cron/all</code>（每 15 分）。
       </div>
     );
@@ -132,7 +132,7 @@ function Autopilot({ lastCronAt, demo }: { lastCronAt?: string | null; demo: boo
   const ago = mins < 1 ? "剛剛" : mins < 60 ? `${mins} 分鐘前` : `${Math.round(mins / 60)} 小時前`;
   return (
     <div
-      className={`flex items-center gap-2 rounded-lg border p-3 text-sm ${
+      className={`flex items-center gap-2 rounded-2xl border p-3 text-sm ${
         stale ? "border-amber-200 bg-amber-50 text-amber-700" : "border-green-200 bg-green-50 text-green-700"
       }`}
     >
@@ -172,11 +172,11 @@ function RunQueueButton({ onDone }: { onDone: () => void }) {
         onClick={run}
         disabled={busy}
         aria-busy={busy}
-        className="rounded-md border border-shopee/40 bg-orange-50 px-3 py-1.5 text-sm text-shopee hover:bg-orange-100 disabled:opacity-50"
+        className="rounded-xl border border-brand/40 bg-orange-50 px-3 py-1.5 text-sm text-brand hover:bg-orange-100 disabled:opacity-50"
       >
         {busy ? "發送中…" : "⚡ 立即跑一輪佇列"}
       </button>
-      {msg && <span className="text-xs text-neutral-500">{msg}</span>}
+      {msg && <span className="text-xs text-ink-2">{msg}</span>}
     </div>
   );
 }
@@ -210,7 +210,7 @@ function PauseToggle({ paused, onDone }: { paused: boolean; onDone: () => void }
         onClick={toggle}
         disabled={busy}
         aria-busy={busy}
-        className={`rounded-md border px-3 py-1.5 text-sm disabled:opacity-50 ${
+        className={`rounded-xl border px-3 py-1.5 text-sm disabled:opacity-50 ${
           paused
             ? "border-green-400 bg-green-50 text-green-700 hover:bg-green-100"
             : "border-red-300 bg-red-50 text-red-600 hover:bg-red-100"
@@ -218,7 +218,7 @@ function PauseToggle({ paused, onDone }: { paused: boolean; onDone: () => void }
       >
         {busy ? "處理中…" : paused ? "▶️ 恢復自動發文" : "⏸️ 暫停自動發文"}
       </button>
-      {msg && <span className="text-xs text-neutral-500">{msg}</span>}
+      {msg && <span className="text-xs text-ink-2">{msg}</span>}
     </div>
   );
 }
@@ -229,7 +229,7 @@ function Chip({ label, on }: { label: string; on: boolean }) {
   return (
     <span
       className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs ${
-        on ? "bg-green-50 text-green-700" : "bg-neutral-100 text-neutral-400"
+        on ? "bg-green-50 text-green-700" : "bg-surface-2 text-ink-3"
       }`}
     >
       <span className={`h-2 w-2 rounded-full ${on ? "bg-green-500" : "bg-neutral-300"}`} />
@@ -240,8 +240,8 @@ function Chip({ label, on }: { label: string; on: boolean }) {
 
 function Stat({ label, value, accent }: { label: string; value: number; accent?: string }) {
   return (
-    <div className="rounded-lg border bg-white p-4">
-      <div className="text-sm text-neutral-500">{label}</div>
+    <div className="rounded-2xl border bg-surface p-4">
+      <div className="text-sm text-ink-2">{label}</div>
       <div className={`mt-1 text-3xl font-bold ${accent ?? ""}`}>{value}</div>
     </div>
   );
@@ -251,7 +251,7 @@ function Bar({ used, limit }: { used: number; limit: number }) {
   const pct = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
   const color = pct > 80 ? "bg-red-500" : pct > 50 ? "bg-amber-500" : "bg-green-500";
   return (
-    <div className="h-2 w-full overflow-hidden rounded bg-neutral-100">
+    <div className="h-2 w-full overflow-hidden rounded bg-surface-2">
       <div className={`h-full ${color}`} style={{ width: `${pct}%` }} />
     </div>
   );
@@ -287,8 +287,8 @@ export default function LiveDashboard() {
     return () => clearInterval(t);
   }, [load]);
 
-  if (!data && !err) return <div className="text-sm text-neutral-400">載入中…</div>;
-  if (err) return <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-600">⚠️ {err}</div>;
+  if (!data && !err) return <div className="text-sm text-ink-3">載入中…</div>;
+  if (err) return <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-600">⚠️ {err}</div>;
   if (!data) return null;
 
   const d = data.stats;
@@ -309,7 +309,7 @@ export default function LiveDashboard() {
     <div className="space-y-6">
       <Autopilot lastCronAt={data.lastCronAt} demo={data.demo} />
       {data.publishPaused && (
-        <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+        <div className="flex items-center gap-2 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
           <span className="h-2 w-2 rounded-full bg-red-500" />
           ⏸️ 自動發文已暫停 — cron 與「立即跑一輪」整批跳過。草稿頁單篇「核准並發布」仍可手動發。
         </div>
@@ -324,21 +324,21 @@ export default function LiveDashboard() {
       <AccountsHealth rows={data.accountsHealth} />
       <PublishPlan rows={data.publishPlan} />
       {setupIncomplete && (
-        <div className="rounded-lg border border-shopee/30 bg-orange-50 p-5">
-          <h2 className="mb-3 font-semibold text-neutral-800">🚀 開始使用（3 步驟）</h2>
+        <div className="rounded-2xl border border-brand/30 bg-orange-50 p-5">
+          <h2 className="mb-3 font-semibold text-ink">🚀 開始使用（3 步驟）</h2>
           <ol className="space-y-2">
             {steps.map((s, i) => (
               <li key={s.href} className="flex items-center gap-3 text-sm">
                 <span
                   className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs ${
-                    s.done ? "bg-green-500 text-white" : "bg-white text-neutral-500 ring-1 ring-neutral-300"
+                    s.done ? "bg-green-500 text-white" : "bg-surface text-ink-2 ring-1 ring-neutral-300"
                   }`}
                 >
                   {s.done ? "✓" : i + 1}
                 </span>
-                <span className={s.done ? "text-neutral-400 line-through" : "text-neutral-700"}>{s.label}</span>
+                <span className={s.done ? "text-ink-3 line-through" : "text-ink"}>{s.label}</span>
                 {!s.done && (
-                  <Link href={s.href} className="ml-auto rounded-md bg-shopee px-3 py-1 text-xs font-medium text-white hover:opacity-90">
+                  <Link href={s.href} className="ml-auto rounded-xl bg-brand px-3 py-1 text-xs font-medium text-white hover:opacity-90">
                     {s.cta}
                   </Link>
                 )}
@@ -348,7 +348,7 @@ export default function LiveDashboard() {
         </div>
       )}
       {needsAttention && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
           <span className="font-semibold">⚠️ 需要注意</span>
           <span className="ml-2 inline-flex flex-wrap gap-x-4 gap-y-1">
             {issues.error > 0 && (
@@ -386,10 +386,10 @@ export default function LiveDashboard() {
         <Chip label="Apify 爬蟲" on={Boolean(data.services.apify)} />
         <Chip label="Shopee 分潤" on={Boolean(data.services.shopee)} />
         <Chip label="Cloudinary" on={Boolean(data.services.cloudinary)} />
-        <span className="ml-auto flex items-center gap-2 text-xs text-neutral-400">
+        <span className="ml-auto flex items-center gap-2 text-xs text-ink-3">
           {loading && <span className="h-2 w-2 animate-pulse rounded-full bg-green-400" />}
           更新於 {new Date(data.at).toLocaleTimeString("zh-TW")}
-          <button onClick={load} className="rounded border px-2 py-0.5 hover:bg-neutral-50">
+          <button onClick={load} className="rounded border px-2 py-0.5 hover:bg-surface-2">
             重新整理
           </button>
         </span>
@@ -403,7 +403,7 @@ export default function LiveDashboard() {
         <Stat label="近 24h 已發" value={d.publishedLast24h} accent="text-green-600" />
       </div>
 
-      <div className="rounded-lg border bg-white p-5">
+      <div className="rounded-2xl border bg-surface p-5">
         <h2 className="mb-3 font-semibold">草稿漏斗</h2>
         <div className="flex flex-wrap items-center gap-2 text-sm">
           {[
@@ -413,35 +413,35 @@ export default function LiveDashboard() {
             ["失敗", d.drafts.failed, "bg-red-50 text-red-600"]
           ].map(([label, v, cls], i) => (
             <span key={label as string} className="flex items-center gap-2">
-              <span className={`rounded-md px-3 py-1.5 ${cls}`}>
+              <span className={`rounded-xl px-3 py-1.5 ${cls}`}>
                 {label as string} <b>{v as number}</b>
               </span>
-              {i < 3 && <span className="text-neutral-300">→</span>}
+              {i < 3 && <span className="text-ink-3">→</span>}
             </span>
           ))}
         </div>
         {d.replies && (d.replies.pending > 0 || d.replies.failed > 0) && (
           <div className="mt-3 flex flex-wrap items-center gap-2 border-t pt-3 text-sm">
-            <span className="text-neutral-500">延遲留言：</span>
+            <span className="text-ink-2">延遲留言：</span>
             {d.replies.pending > 0 && (
-              <span className="rounded-md bg-amber-50 px-3 py-1.5 text-amber-700">待補 <b>{d.replies.pending}</b></span>
+              <span className="rounded-xl bg-amber-50 px-3 py-1.5 text-amber-700">待補 <b>{d.replies.pending}</b></span>
             )}
             {d.replies.failed > 0 && (
-              <span className="rounded-md bg-red-50 px-3 py-1.5 text-red-600">補發失敗 <b>{d.replies.failed}</b></span>
+              <span className="rounded-xl bg-red-50 px-3 py-1.5 text-red-600">補發失敗 <b>{d.replies.failed}</b></span>
             )}
           </div>
         )}
       </div>
 
       {data.isOwner && data.threadsQuota.length > 0 && (
-        <div className="rounded-lg border bg-white p-5">
+        <div className="rounded-2xl border bg-surface p-5">
           <h2 className="mb-3 font-semibold">Threads 今日發文額度（即時）</h2>
           <div className="space-y-3">
             {data.threadsQuota.map((q) => (
               <div key={q.label}>
                 <div className="mb-1 flex justify-between text-sm">
                   <span>{q.label}</span>
-                  <span className="text-neutral-500">
+                  <span className="text-ink-2">
                     {q.used} / {q.limit}
                   </span>
                 </div>
@@ -453,16 +453,16 @@ export default function LiveDashboard() {
       )}
 
       {data.isOwner && data.cloudinary && (
-        <div className="rounded-lg border bg-white p-5">
+        <div className="rounded-2xl border bg-surface p-5">
           <h2 className="mb-3 font-semibold">Cloudinary 用量（即時）</h2>
           <div className="mb-1 flex justify-between text-sm">
             <span>Credits</span>
-            <span className="text-neutral-500">
+            <span className="text-ink-2">
               {data.cloudinary.creditsUsed.toFixed(2)} / {data.cloudinary.creditsLimit}
             </span>
           </div>
           <Bar used={data.cloudinary.creditsUsed} limit={data.cloudinary.creditsLimit} />
-          <div className="mt-2 text-xs text-neutral-400">
+          <div className="mt-2 text-xs text-ink-3">
             儲存 {(data.cloudinary.storageBytes / 1e9).toFixed(2)} GB · {data.cloudinary.resources} 個資源
           </div>
         </div>

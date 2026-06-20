@@ -32,17 +32,17 @@ export default function BulkDraftBar({ draftIds }: { draftIds: string[] }) {
     }
   }
 
-  const btn = "rounded-md border px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50";
+  const btn = "rounded-xl border px-3 py-1.5 text-sm hover:bg-surface-2 disabled:opacity-50";
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-white p-3">
-      <span className="text-sm text-neutral-500">{draftIds.length} 則待審：</span>
+    <div className="flex flex-wrap items-center gap-2 rounded-2xl border bg-surface p-3">
+      <span className="text-sm text-ink-2">{draftIds.length} 則待審：</span>
       <button disabled={!!busy} onClick={() => run("approve", "核准")} className={btn}>
         全部核准
       </button>
       <button
         disabled={!!busy}
         onClick={() => run("queue", "加入佇列")}
-        className="rounded-md border border-shopee/40 px-3 py-1.5 text-sm text-shopee hover:bg-orange-50 disabled:opacity-50"
+        className="rounded-xl border border-brand/40 px-3 py-1.5 text-sm text-brand hover:bg-orange-50 disabled:opacity-50"
       >
         全部加入佇列
       </button>
@@ -52,11 +52,11 @@ export default function BulkDraftBar({ draftIds }: { draftIds: string[] }) {
       <button
         disabled={!!busy}
         onClick={() => run("delete", "刪除")}
-        className="rounded-md border border-red-200 px-3 py-1.5 text-sm text-red-500 hover:bg-red-50 disabled:opacity-50"
+        className="rounded-xl border border-red-200 px-3 py-1.5 text-sm text-red-500 hover:bg-red-50 disabled:opacity-50"
       >
         全部刪除
       </button>
-      {msg && <span className="text-sm text-neutral-600">{msg}</span>}
+      {msg && <span className="text-sm text-ink-2">{msg}</span>}
     </div>
   );
 }

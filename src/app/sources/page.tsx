@@ -12,7 +12,7 @@ export default async function SourcesPage() {
   // 爬蟲是管理者專屬功能
   if (user && !user.isOwner) {
     return (
-      <div className="rounded-lg border border-dashed p-10 text-center text-neutral-500">
+      <div className="rounded-2xl border border-dashed p-10 text-center text-ink-2">
         監看來源（爬蟲）僅限管理者使用。你可以到「素材庫」手動貼分潤連結建立內容。
       </div>
     );
@@ -28,15 +28,15 @@ export default async function SourcesPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-bold">監看來源</h1>
-      <p className="text-sm text-neutral-500">
+      <p className="text-sm text-ink-2">
         每個來源 = 監看一個 Threads 帳號的貼文，自動換成你的分潤連結後產出文案到指定發文帳號。
       </p>
 
       <SourceForm threadsAccounts={accounts} shopeeAccounts={shopee} />
 
-      <div className="overflow-hidden rounded-lg border bg-white">
+      <div className="overflow-hidden rounded-2xl border bg-surface">
         <table className="w-full text-sm">
-          <thead className="bg-neutral-50 text-left text-neutral-500">
+          <thead className="bg-surface-2 text-left text-ink-2">
             <tr>
               <th className="px-4 py-2">來源帳號</th>
               <th className="px-4 py-2">發文到</th>
@@ -70,7 +70,7 @@ export default async function SourcesPage() {
             ))}
             {sources.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-neutral-400">
+                <td colSpan={6} className="px-4 py-6 text-center text-ink-3">
                   尚無來源。連接 Supabase 後可在此新增。
                 </td>
               </tr>

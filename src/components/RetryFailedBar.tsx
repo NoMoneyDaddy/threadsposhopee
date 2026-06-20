@@ -33,16 +33,16 @@ export default function RetryFailedBar({ failedIds }: { failedIds: string[] }) {
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
+    <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 p-3">
       <span className="text-sm text-amber-800">{failedIds.length} 則發布失敗：</span>
       <button
         disabled={busy}
         onClick={run}
-        className="rounded-md border border-amber-300 px-3 py-1.5 text-sm text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+        className="rounded-xl border border-amber-300 px-3 py-1.5 text-sm text-amber-700 hover:bg-amber-100 disabled:opacity-50"
       >
         {busy ? "重排中…" : "全部重試（重排）"}
       </button>
-      {msg && <span className="text-sm text-neutral-600">{msg}</span>}
+      {msg && <span className="text-sm text-ink-2">{msg}</span>}
     </div>
   );
 }

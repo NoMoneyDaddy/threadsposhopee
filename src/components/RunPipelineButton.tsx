@@ -29,11 +29,11 @@ export default function RunPipelineButton() {
       <button
         onClick={run}
         disabled={loading}
-        className="rounded-md bg-shopee px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+        className="rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
       >
         {loading ? "執行中…" : "▶ 立即跑一次（爬 → 換連結 → AI 文案）"}
       </button>
-      {msg && <span className="text-sm text-neutral-600">{msg}</span>}
+      {msg && <span className="text-sm text-ink-2">{msg}</span>}
     </div>
   );
 }

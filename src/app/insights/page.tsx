@@ -33,14 +33,14 @@ export default async function InsightsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">成效統計</h1>
-        <p className="text-sm text-neutral-500">
-          近 {data.days} 天共發布 <b className="text-shopee">{data.totalPublished}</b> 篇。
+        <p className="text-sm text-ink-2">
+          近 {data.days} 天共發布 <b className="text-brand">{data.totalPublished}</b> 篇。
         </p>
       </div>
 
       {revenue && <RevenueSection r={revenue} />}
       {revenueErr && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
           分潤收益讀取失敗：{revenueErr}
         </div>
       )}
@@ -49,16 +49,16 @@ export default async function InsightsPage() {
       {engagement && engagement.fetched > 0 && <EngagementSection e={engagement} />}
       {engagement && engagement.fetched >= 3 && <BestTimesSection e={engagement} />}
 
-      <section className="rounded-lg border bg-white p-5">
+      <section className="rounded-2xl border bg-surface p-5">
         <h2 className="mb-3 font-semibold">每日發布量</h2>
         {data.byDay.length === 0 ? (
-          <p className="text-sm text-neutral-400">近 30 天尚無已發布貼文。</p>
+          <p className="text-sm text-ink-3">近 30 天尚無已發布貼文。</p>
         ) : (
           <div className="flex items-end gap-1" style={{ height: 120 }}>
             {data.byDay.map((d) => (
               <div key={d.date} className="flex flex-1 flex-col items-center justify-end gap-1" title={`${d.date}：${d.count} 篇`}>
-                <div className="w-full rounded-t bg-shopee" style={{ height: `${(d.count / maxDay) * 100}%` }} />
-                <span className="text-[10px] text-neutral-400">{d.date}</span>
+                <div className="w-full rounded-t bg-brand" style={{ height: `${(d.count / maxDay) * 100}%` }} />
+                <span className="text-[10px] text-ink-3">{d.date}</span>
               </div>
             ))}
           </div>
@@ -76,20 +76,20 @@ export default async function InsightsPage() {
 function RankCard({ title, rows, empty }: { title: string; rows: { name: string; count: number }[]; empty: string }) {
   const max = Math.max(1, ...rows.map((r) => r.count));
   return (
-    <section className="rounded-lg border bg-white p-5">
+    <section className="rounded-2xl border bg-surface p-5">
       <h2 className="mb-3 font-semibold">{title}</h2>
       {rows.length === 0 ? (
-        <p className="text-sm text-neutral-400">{empty}</p>
+        <p className="text-sm text-ink-3">{empty}</p>
       ) : (
         <ul className="space-y-2">
           {rows.map((r) => (
             <li key={r.name} className="text-sm">
               <div className="mb-0.5 flex justify-between">
                 <span className="truncate pr-2">{r.name}</span>
-                <span className="shrink-0 text-neutral-500">{r.count}</span>
+                <span className="shrink-0 text-ink-2">{r.count}</span>
               </div>
-              <div className="h-1.5 w-full overflow-hidden rounded bg-neutral-100">
-                <div className="h-full bg-shopee/70" style={{ width: `${(r.count / max) * 100}%` }} />
+              <div className="h-1.5 w-full overflow-hidden rounded bg-surface-2">
+                <div className="h-full bg-brand/70" style={{ width: `${(r.count / max) * 100}%` }} />
               </div>
             </li>
           ))}
@@ -109,7 +109,7 @@ function ReachDropBanner({ e }: { e: EngagementSummary }) {
   if (!d.hasSignal) return null;
   const pct = Math.round(d.ratio * 100);
   return (
-    <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800" role="alert">
+    <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800" role="alert">
       <div className="font-semibold">⚠️ 觸及疑似驟降（疑似被降觸及／shadowban）</div>
       <p className="mt-1">
         近期貼文中位觀看 <b>{num(d.recentMedian)}</b>，僅為基準 <b>{num(d.baselineMedian)}</b> 的 <b>{pct}%</b>。
@@ -134,16 +134,16 @@ function EngagementSection({ e }: { e: EngagementSummary }) {
   ];
   const maxViews = Math.max(1, ...e.posts.map((p) => p.views));
   return (
-    <section className="rounded-lg border bg-white p-5">
+    <section className="rounded-2xl border bg-surface p-5">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="font-semibold">Threads 互動成效</h2>
-        <span className="text-xs text-neutral-500">最近 {e.sampled} 篇，{e.fetched} 篇有數據</span>
+        <span className="text-xs text-ink-2">最近 {e.sampled} 篇，{e.fetched} 篇有數據</span>
       </div>
       <div className="mb-4 grid grid-cols-3 gap-2 sm:grid-cols-6">
         {cards.map((c) => (
-          <div key={c.label} className="rounded-md bg-neutral-50 p-2 text-center">
-            <div className="text-lg font-bold tabular-nums text-shopee">{num(c.value)}</div>
-            <div className="text-[11px] text-neutral-500">{c.label}</div>
+          <div key={c.label} className="rounded-xl bg-surface-2 p-2 text-center">
+            <div className="text-lg font-bold tabular-nums text-brand">{num(c.value)}</div>
+            <div className="text-[11px] text-ink-2">{c.label}</div>
           </div>
         ))}
       </div>
@@ -152,12 +152,12 @@ function EngagementSection({ e }: { e: EngagementSummary }) {
           <li key={p.id} className="text-sm">
             <div className="mb-0.5 flex justify-between gap-2">
               <span className="truncate pr-2">{p.productName ?? "（未命名貼文）"}</span>
-              <span className="shrink-0 text-xs text-neutral-500 tabular-nums">
+              <span className="shrink-0 text-xs text-ink-2 tabular-nums">
                 👁 {num(p.views)} · ♥ {num(p.likes)} · 💬 {num(p.replies)}
               </span>
             </div>
-            <div className="h-1.5 w-full overflow-hidden rounded bg-neutral-100">
-              <div className="h-full bg-shopee/70" style={{ width: `${(p.views / maxViews) * 100}%` }} />
+            <div className="h-1.5 w-full overflow-hidden rounded bg-surface-2">
+              <div className="h-full bg-brand/70" style={{ width: `${(p.views / maxViews) * 100}%` }} />
             </div>
           </li>
         ))}
@@ -173,16 +173,16 @@ function BestTimesSection({ e }: { e: EngagementSummary }) {
     const max = Math.max(1, ...rows.map((r) => r.avgViews));
     return (
       <div>
-        <h3 className="mb-2 text-sm font-medium text-neutral-600">{title}</h3>
+        <h3 className="mb-2 text-sm font-medium text-ink-2">{title}</h3>
         <ul className="space-y-2">
           {rows.slice(0, 5).map((r) => (
             <li key={r.label} className="text-sm">
               <div className="mb-0.5 flex justify-between gap-2">
                 <span>{r.label}</span>
-                <span className="shrink-0 text-xs text-neutral-500 tabular-nums">平均 {num(r.avgViews)} 觀看 · {r.posts} 篇</span>
+                <span className="shrink-0 text-xs text-ink-2 tabular-nums">平均 {num(r.avgViews)} 觀看 · {r.posts} 篇</span>
               </div>
-              <div className="h-1.5 w-full overflow-hidden rounded bg-neutral-100">
-                <div className="h-full bg-shopee/70" style={{ width: `${(r.avgViews / max) * 100}%` }} />
+              <div className="h-1.5 w-full overflow-hidden rounded bg-surface-2">
+                <div className="h-full bg-brand/70" style={{ width: `${(r.avgViews / max) * 100}%` }} />
               </div>
             </li>
           ))}
@@ -191,10 +191,10 @@ function BestTimesSection({ e }: { e: EngagementSummary }) {
     );
   };
   return (
-    <section className="rounded-lg border bg-white p-5">
+    <section className="rounded-2xl border bg-surface p-5">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="font-semibold">最佳發文時段</h2>
-        <span className="text-xs text-neutral-400">依最近 {e.fetched} 篇平均觀看，樣本少僅供參考（時區 Asia/Taipei）</span>
+        <span className="text-xs text-ink-3">依最近 {e.fetched} 篇平均觀看，樣本少僅供參考（時區 Asia/Taipei）</span>
       </div>
       <div className="grid gap-4 md:grid-cols-2">
         <TimeRank title="時段（每日）" rows={best.byHour} />
@@ -212,18 +212,18 @@ function RevenueSection({ r }: { r: AffiliateRevenue }) {
   const maxDay = Math.max(1, ...r.byDay.map((d) => d.commission));
   return (
     <div className="space-y-4">
-      <section className="rounded-lg border bg-white p-5">
+      <section className="rounded-2xl border bg-surface p-5">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="font-semibold">分潤收益（近 {r.days} 天，Shopee 分潤報表）</h2>
-          <div className="text-2xl font-bold text-shopee">{money(r.totalCommission)}</div>
+          <div className="text-2xl font-bold text-brand">{money(r.totalCommission)}</div>
         </div>
-        <div className="mt-1 text-xs text-neutral-500">
+        <div className="mt-1 text-xs text-ink-2">
           {r.totalConversions} 筆轉換
           {r.truncated && "（資料量大，僅統計前數頁）"}
         </div>
         <div className="mt-3 flex flex-wrap gap-2 text-xs">
           {r.byStatus.map((s) => (
-            <span key={s.status} className="rounded-md bg-neutral-100 px-2 py-1 text-neutral-600">
+            <span key={s.status} className="rounded-xl bg-surface-2 px-2 py-1 text-ink-2">
               {s.status}：{s.count} 筆 / {money(s.commission)}
             </span>
           ))}
@@ -233,7 +233,7 @@ function RevenueSection({ r }: { r: AffiliateRevenue }) {
             {r.byDay.map((d) => (
               <div key={d.date} className="flex flex-1 flex-col items-center justify-end gap-1" title={`${d.date}：${money(d.commission)}`}>
                 <div className="w-full rounded-t bg-green-500" style={{ height: `${(d.commission / maxDay) * 100}%` }} />
-                <span className="text-[10px] text-neutral-400">{d.date.slice(5)}</span>
+                <span className="text-[10px] text-ink-3">{d.date.slice(5)}</span>
               </div>
             ))}
           </div>
@@ -251,19 +251,19 @@ function RevenueSection({ r }: { r: AffiliateRevenue }) {
 function RevenueRank({ title, rows }: { title: string; rows: { name: string; value: number; sub: string }[] }) {
   const max = Math.max(1, ...rows.map((r) => r.value));
   return (
-    <section className="rounded-lg border bg-white p-5">
+    <section className="rounded-2xl border bg-surface p-5">
       <h2 className="mb-3 font-semibold">{title}</h2>
       {rows.length === 0 ? (
-        <p className="text-sm text-neutral-400">尚無資料</p>
+        <p className="text-sm text-ink-3">尚無資料</p>
       ) : (
         <ul className="space-y-2">
           {rows.map((r) => (
             <li key={r.name} className="text-sm">
               <div className="mb-0.5 flex justify-between gap-2">
                 <span className="truncate">{r.name}</span>
-                <span className="shrink-0 text-neutral-500">{money(r.value)} · {r.sub}</span>
+                <span className="shrink-0 text-ink-2">{money(r.value)} · {r.sub}</span>
               </div>
-              <div className="h-1.5 w-full overflow-hidden rounded bg-neutral-100">
+              <div className="h-1.5 w-full overflow-hidden rounded bg-surface-2">
                 <div className="h-full bg-green-500/70" style={{ width: `${(r.value / max) * 100}%` }} />
               </div>
             </li>

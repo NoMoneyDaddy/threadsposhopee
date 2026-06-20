@@ -125,16 +125,16 @@ export default function DraftCard({
       : "—";
 
   return (
-    <div className="flex flex-col rounded-lg border bg-white p-4">
+    <div className="flex flex-col rounded-2xl border bg-surface p-4">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="min-w-0 truncate text-sm font-medium text-neutral-700">{draft.product_name ?? "（未知商品）"}</span>
+        <span className="min-w-0 truncate text-sm font-medium text-ink">{draft.product_name ?? "（未知商品）"}</span>
         <span className="flex shrink-0 items-center gap-1">
           {accountLabel && (
-            <span className="max-w-[8rem] truncate rounded bg-shopee/10 px-2 py-0.5 text-xs text-shopee" title={`發到 ${accountLabel}`}>
+            <span className="max-w-[8rem] truncate rounded bg-brand/10 px-2 py-0.5 text-xs text-brand" title={`發到 ${accountLabel}`}>
               @{accountLabel}
             </span>
           )}
-          <span className="rounded bg-neutral-100 px-2 py-0.5 text-xs text-neutral-500">{draft.status}</span>
+          <span className="rounded bg-surface-2 px-2 py-0.5 text-xs text-ink-2">{draft.status}</span>
         </span>
       </div>
 
@@ -161,7 +161,7 @@ export default function DraftCard({
             <button
               disabled={busy === "edit"}
               onClick={() => call("edit", { main_text: mainText, reply_text: replyText })}
-              className="rounded bg-shopee px-3 py-1 text-xs text-white disabled:opacity-50"
+              className="rounded bg-brand px-3 py-1 text-xs text-white disabled:opacity-50"
             >
               {busy === "edit" ? "儲存中…" : "儲存"}
             </button>
@@ -186,7 +186,7 @@ export default function DraftCard({
         href={draft.shopee_short_link ?? "#"}
         target="_blank"
         rel="noreferrer"
-        className="mt-2 truncate text-xs text-shopee hover:underline"
+        className="mt-2 truncate text-xs text-brand hover:underline"
       >
         {draft.shopee_short_link}
       </a>
@@ -215,7 +215,7 @@ export default function DraftCard({
           <button
             disabled={!!busy}
             onClick={runCompliance}
-            className="rounded border px-2.5 py-1 text-xs text-neutral-600 hover:bg-neutral-50 disabled:opacity-50"
+            className="rounded border px-2.5 py-1 text-xs text-ink-2 hover:bg-surface-2 disabled:opacity-50"
           >
             {busy === "compliance" ? "AI 檢查中…" : "🛡️ AI 合規檢查"}
           </button>
@@ -241,7 +241,7 @@ export default function DraftCard({
           <button
             disabled={!!busy}
             onClick={() => call("publish")}
-            className="rounded bg-shopee px-3 py-1 text-xs text-white hover:opacity-90 disabled:opacity-50"
+            className="rounded bg-brand px-3 py-1 text-xs text-white hover:opacity-90 disabled:opacity-50"
           >
             {busy === "publish" ? "發布中…" : "核准並發布"}
           </button>
@@ -254,13 +254,13 @@ export default function DraftCard({
               {busy === "retry" ? "重置中…" : "重試（重排）"}
             </button>
           )}
-          <button disabled={!!busy} onClick={() => setEditing(true)} className="rounded border px-3 py-1 text-xs hover:bg-neutral-50">
+          <button disabled={!!busy} onClick={() => setEditing(true)} className="rounded border px-3 py-1 text-xs hover:bg-surface-2">
             編輯
           </button>
           <button
             disabled={!!busy}
             onClick={() => call("regenerate")}
-            className="rounded border px-3 py-1 text-xs hover:bg-neutral-50 disabled:opacity-50"
+            className="rounded border px-3 py-1 text-xs hover:bg-surface-2 disabled:opacity-50"
           >
             {busy === "regenerate" ? "重寫中…" : "AI 重寫"}
           </button>
@@ -268,11 +268,11 @@ export default function DraftCard({
             disabled={!!busy}
             onClick={genVariants}
             title="一次產生多個文案版本，挑一個套用（A/B）"
-            className="rounded border px-3 py-1 text-xs hover:bg-neutral-50 disabled:opacity-50"
+            className="rounded border px-3 py-1 text-xs hover:bg-surface-2 disabled:opacity-50"
           >
             {busy === "variants" ? "產生中…" : "AI 多版本"}
           </button>
-          <button disabled={!!busy} onClick={() => call("reject")} className="rounded border px-3 py-1 text-xs text-neutral-500 hover:bg-neutral-50">
+          <button disabled={!!busy} onClick={() => call("reject")} className="rounded border px-3 py-1 text-xs text-ink-2 hover:bg-surface-2">
             退回
           </button>
           <button
@@ -291,22 +291,22 @@ export default function DraftCard({
       {variants && !editing && (
         <div className="mt-3 space-y-2 border-t pt-2">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-neutral-600">AI 多版本（挑一個套用）</span>
-            <button onClick={() => setVariants(null)} className="text-xs text-neutral-400 hover:text-neutral-600">
+            <span className="text-xs font-medium text-ink-2">AI 多版本（挑一個套用）</span>
+            <button onClick={() => setVariants(null)} className="text-xs text-ink-3 hover:text-ink-2">
               收起
             </button>
           </div>
           {variants.map((v, i) => (
-            <div key={i} className="rounded border bg-neutral-50 p-2 text-xs">
-              <p className="whitespace-pre-wrap text-neutral-700">{v.mainText}</p>
-              {v.replyText && <p className="mt-1 whitespace-pre-wrap text-neutral-400">留言：{v.replyText}</p>}
+            <div key={i} className="rounded border bg-surface-2 p-2 text-xs">
+              <p className="whitespace-pre-wrap text-ink">{v.mainText}</p>
+              {v.replyText && <p className="mt-1 whitespace-pre-wrap text-ink-3">留言：{v.replyText}</p>}
               <button
                 disabled={!!busy}
                 onClick={() => {
                   setVariants(null);
                   call("edit", { main_text: v.mainText, reply_text: v.replyText });
                 }}
-                className="mt-1.5 rounded bg-shopee px-2.5 py-1 text-white hover:opacity-90 disabled:opacity-50"
+                className="mt-1.5 rounded bg-brand px-2.5 py-1 text-white hover:opacity-90 disabled:opacity-50"
               >
                 套用版本 {i + 1}
               </button>
@@ -317,7 +317,7 @@ export default function DraftCard({
 
       {/* 佇列中草稿可改排程時間（手動微調發布時段） */}
       {draft.status === "approved" && draft.scheduled_at && !editing && (
-        <div className="mt-2 flex flex-wrap items-center gap-2 border-t pt-2 text-xs text-neutral-500">
+        <div className="mt-2 flex flex-wrap items-center gap-2 border-t pt-2 text-xs text-ink-2">
           <label htmlFor={`sched-${draft.id}`}>排程：</label>
           <input
             id={`sched-${draft.id}`}
@@ -334,7 +334,7 @@ export default function DraftCard({
               if (Number.isNaN(t.getTime())) return setMsg("時間格式錯誤");
               call("reschedule", { scheduled_at: t.toISOString() });
             }}
-            className="rounded border px-3 py-1 text-shopee hover:bg-orange-50 disabled:opacity-50"
+            className="rounded border px-3 py-1 text-brand hover:bg-orange-50 disabled:opacity-50"
           >
             {busy === "reschedule" ? "改中…" : "改時間"}
           </button>
@@ -364,7 +364,7 @@ export default function DraftCard({
               onClick={() => {
                 if (confirm("確認該貼文「已經」發出、把這張草稿退回（不再重發）？")) call("reject");
               }}
-              className="rounded border px-3 py-1 text-neutral-600 hover:bg-neutral-50 disabled:opacity-50"
+              className="rounded border px-3 py-1 text-ink-2 hover:bg-surface-2 disabled:opacity-50"
             >
               {busy === "reject" ? "處理中…" : "已發出 → 退回"}
             </button>

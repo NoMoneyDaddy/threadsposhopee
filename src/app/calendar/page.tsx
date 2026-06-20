@@ -34,25 +34,25 @@ export default async function CalendarPage() {
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-bold">排程總覽</h1>
-        <p className="text-sm text-neutral-500">已核准、排定未來時間的草稿。發文 worker 會在時間到時依防封節奏發布。</p>
+        <p className="text-sm text-ink-2">已核准、排定未來時間的草稿。發文 worker 會在時間到時依防封節奏發布。</p>
       </div>
 
       {scheduled.length === 0 && (
-        <div className="rounded-lg border border-dashed p-10 text-center text-sm text-neutral-400">
+        <div className="rounded-2xl border border-dashed p-10 text-center text-sm text-ink-3">
           目前沒有排程中的貼文。到「快速發文」選「排程發布」即可加入。
         </div>
       )}
 
       {[...groups.entries()].map(([date, items]) => (
         <section key={date}>
-          <h2 className="mb-2 text-sm font-semibold text-neutral-600">
+          <h2 className="mb-2 text-sm font-semibold text-ink-2">
             {date}
-            <span className="ml-2 rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-500">{items.length} 篇</span>
+            <span className="ml-2 rounded-full bg-surface-2 px-2 py-0.5 text-xs text-ink-2">{items.length} 篇</span>
           </h2>
           <div className="space-y-2">
             {items.map((d) => (
-              <div key={d.id} className="flex items-center gap-3 rounded-lg border bg-white p-3">
-                <div className="shrink-0 text-sm font-medium tabular-nums text-shopee">
+              <div key={d.id} className="flex items-center gap-3 rounded-2xl border bg-surface p-3">
+                <div className="shrink-0 text-sm font-medium tabular-nums text-brand">
                   {new Date(d.scheduled_at!).toLocaleTimeString("zh-TW", {
                     hour: "2-digit",
                     minute: "2-digit",
@@ -67,7 +67,7 @@ export default async function CalendarPage() {
                 ) : null}
                 <div className="min-w-0">
                   <div className="truncate text-sm font-medium">{d.product_name ?? "（商品）"}</div>
-                  <div className="truncate text-xs text-neutral-500">{d.main_text}</div>
+                  <div className="truncate text-xs text-ink-2">{d.main_text}</div>
                 </div>
               </div>
             ))}

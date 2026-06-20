@@ -47,18 +47,18 @@ export default function BulkRepostButton({ threadsAccounts }: { threadsAccounts:
           ))}
         </select>
       )}
-      <label className="flex items-center gap-1 text-xs text-neutral-500" title="進佇列時依成效挑該帳號高觸及時段（資料不足則用預設時段）">
+      <label className="flex items-center gap-1 text-xs text-ink-2" title="進佇列時依成效挑該帳號高觸及時段（資料不足則用預設時段）">
         <input type="checkbox" checked={bestTime} onChange={(e) => setBestTime(e.target.checked)} disabled={busy} />
         最佳時段
       </label>
       <button
         onClick={run}
         disabled={busy}
-        className="rounded-md border border-shopee/40 px-3 py-1.5 text-sm text-shopee hover:bg-orange-50 disabled:opacity-50"
+        className="rounded-xl border border-brand/40 px-3 py-1.5 text-sm text-brand hover:bg-orange-50 disabled:opacity-50"
       >
         {busy ? "排入中…" : "全部再排（常青回收）"}
       </button>
-      {msg && <span className="text-xs text-neutral-500">{msg}</span>}
+      {msg && <span className="text-xs text-ink-2">{msg}</span>}
     </div>
   );
 }

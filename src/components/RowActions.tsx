@@ -62,7 +62,7 @@ export function ToggleButton({
   }
 
   return (
-    <button onClick={onClick} disabled={busy} className="text-xs text-neutral-500 hover:underline disabled:opacity-50">
+    <button onClick={onClick} disabled={busy} className="text-xs text-ink-2 hover:underline disabled:opacity-50">
       {busy ? "處理中…" : label}
     </button>
   );

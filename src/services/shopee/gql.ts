@@ -3,6 +3,7 @@
 import { buildShopeeAuth } from "./sign";
 import { fetchWithTimeout } from "@/lib/http";
 import { assertSafePublicUrl } from "@/lib/url-guard";
+import { log } from "@/lib/logger";
 
 export const SHOPEE_GQL = "https://open-api.affiliate.shopee.tw/graphql";
 
@@ -26,8 +27,21 @@ export async function callShopeeGql(appId: string, secret: string, payload: stri
     { method: "POST", headers: { "Content-Type": "application/json", Authorization: auth.authorization }, body: payload },
     timeoutMs
   );
-  if (!res.ok) throw new ShopeeApiError(`Shopee API ${res.status}: ${await res.text()}`, res.status);
+  if (!res.ok) {
+    // 上游回應本文只進 log，對外訊息僅保留狀態碼避免洩漏供應商細節。
+    log.error("Shopee API 非 2xx", { status: res.status, body: await res.text() });
+    throw new ShopeeApiError(`Shopee API 錯誤（${res.status}）`, res.status);
+  }
   const json = await res.json();
-  if (json.errors?.length) throw new ShopeeApiError(`Shopee GraphQL error: ${JSON.stringify(json.errors)}`);
+  if (json.errors?.length) {
+    log.error("Shopee GraphQL error", { errors: json.errors });
+    // 只取各 error 的 message（API 錯誤描述，如「Invalid Signature」，非機密且利於使用者修金鑰），
+    // 不 dump 整包 json.errors（可能含內部欄位）。呼叫端據此分類授權/簽章錯誤。
+    const detail = json.errors
+      .map((x: { message?: string }) => x?.message)
+      .filter(Boolean)
+      .join("; ");
+    throw new ShopeeApiError(`Shopee 查詢失敗：${detail}`);
+  }
   return json.data;
 }

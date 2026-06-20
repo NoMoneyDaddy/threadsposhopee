@@ -15,6 +15,7 @@ import { normalizeDraftMedia } from "@/lib/media";
 import { generateCopy } from "@/services/ai/provider";
 import { replyDelayMinutes } from "@/services/publish/reply-timing";
 import { getCurrentUser } from "@/lib/auth";
+import { apiError } from "@/lib/api-error";
 import { env, isDemoMode } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
@@ -71,7 +72,7 @@ export async function POST(req: Request) {
       });
       return NextResponse.json({ ok: true, draft: updated });
     } catch (e) {
-      return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 500 });
+      return apiError("草稿文案重產失敗", e, { clientMessage: "文案產生失敗，請稍後再試" });
     }
   }
 
@@ -98,7 +99,7 @@ export async function POST(req: Request) {
       }
       return NextResponse.json({ ok: true, variants });
     } catch (e) {
-      return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 500 });
+      return apiError("A/B 文案產生失敗", e, { clientMessage: "文案產生失敗，請稍後再試" });
     }
   }
 
@@ -142,9 +143,10 @@ export async function POST(req: Request) {
       });
       return NextResponse.json({ ok: true, postId, replyDeferred: deferReply });
     } catch (e) {
+      // 失敗原因存進草稿供本人在 UI 除錯（owner 限定）；對外回應收斂為固定文案。
       const msg = e instanceof Error ? e.message : String(e);
       await updateDraftStatus(id, "failed", { error: msg });
-      return NextResponse.json({ ok: false, error: msg }, { status: 500 });
+      return apiError("草稿發布失敗", e, { clientMessage: "發布失敗，請稍後再試或檢查帳號設定" });
     }
   }
 

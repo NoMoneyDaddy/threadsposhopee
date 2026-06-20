@@ -14,12 +14,16 @@ function safeStringify(o: unknown): string {
   }
 }
 
+// 縱深防禦：即使呼叫端誤把憑證放進 context，也不讓機密明文入 log。
+const SECRET_KEY = /token|secret|password|authorization|api[_-]?key|access_token|refresh_token/i;
+
 function emit(level: Level, msg: string, ctx?: LogContext): void {
   const rec: Record<string, unknown> = { t: new Date().toISOString(), level, msg };
   if (ctx) {
     for (const [k, v] of Object.entries(ctx)) {
+      if (SECRET_KEY.test(k)) rec[k] = "[redacted]";
       // Error 物件取 message，避免 JSON.stringify 後變成空物件 {}
-      rec[k] = v instanceof Error ? v.message : v;
+      else rec[k] = v instanceof Error ? v.message : v;
     }
   }
   const line = safeStringify(rec);

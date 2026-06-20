@@ -24,6 +24,28 @@ export default function DraftCard({
   const [replyText, setReplyText] = useState(draft.reply_text ?? "");
   const [msg, setMsg] = useState<string | null>(null);
   const [compliance, setCompliance] = useState<{ risk: string; advice: string } | null>(null);
+  const [variants, setVariants] = useState<{ mainText: string; replyText: string }[] | null>(null);
+
+  // A/B 文案：一次產生多版本供挑選；套用走既有 edit（寫回正文／留言）。
+  async function genVariants() {
+    setBusy("variants");
+    setMsg(null);
+    setVariants(null);
+    try {
+      const res = await fetch("/api/drafts/action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: draft.id, action: "variants", count: 2 })
+      });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error);
+      setVariants(json.variants);
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
+  }
 
   async function runCompliance() {
     setBusy("compliance");
@@ -242,6 +264,14 @@ export default function DraftCard({
           >
             {busy === "regenerate" ? "重寫中…" : "AI 重寫"}
           </button>
+          <button
+            disabled={!!busy}
+            onClick={genVariants}
+            title="一次產生多個文案版本，挑一個套用（A/B）"
+            className="rounded border px-3 py-1 text-xs hover:bg-neutral-50 disabled:opacity-50"
+          >
+            {busy === "variants" ? "產生中…" : "AI 多版本"}
+          </button>
           <button disabled={!!busy} onClick={() => call("reject")} className="rounded border px-3 py-1 text-xs text-neutral-500 hover:bg-neutral-50">
             退回
           </button>
@@ -254,6 +284,34 @@ export default function DraftCard({
           >
             刪除
           </button>
+        </div>
+      )}
+
+      {/* A/B 文案：多版本預覽，挑一個套用（寫回正文／留言，狀態不變） */}
+      {variants && !editing && (
+        <div className="mt-3 space-y-2 border-t pt-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-neutral-600">AI 多版本（挑一個套用）</span>
+            <button onClick={() => setVariants(null)} className="text-xs text-neutral-400 hover:text-neutral-600">
+              收起
+            </button>
+          </div>
+          {variants.map((v, i) => (
+            <div key={i} className="rounded border bg-neutral-50 p-2 text-xs">
+              <p className="whitespace-pre-wrap text-neutral-700">{v.mainText}</p>
+              {v.replyText && <p className="mt-1 whitespace-pre-wrap text-neutral-400">留言：{v.replyText}</p>}
+              <button
+                disabled={!!busy}
+                onClick={() => {
+                  setVariants(null);
+                  call("edit", { main_text: v.mainText, reply_text: v.replyText });
+                }}
+                className="mt-1.5 rounded bg-shopee px-2.5 py-1 text-white hover:opacity-90 disabled:opacity-50"
+              >
+                套用版本 {i + 1}
+              </button>
+            </div>
+          ))}
         </div>
       )}
 

@@ -20,8 +20,9 @@ import {
 } from "@/lib/store";
 import { publishToThreads, publishReply } from "@/services/threads/publish";
 import { normalizeDraftMedia } from "@/lib/media";
-import { effectiveGapMinutes, shardOf, warmupDailyCap } from "@/services/publish/cadence";
+import { effectiveGapMinutes, shardOf, warmupDailyCap, circuitOpen } from "@/services/publish/cadence";
 import { replyDelayMinutes } from "@/services/publish/reply-timing";
+import { sendAlert } from "@/lib/notify";
 
 export interface PublishResult {
   considered: number;
@@ -79,6 +80,10 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
   // 以 Threads 帳號為單位控制節奏；同一次執行內累積計數
   const startTime = Date.now();
   const publishedThisRun: Record<string, number> = {};
+  // 連續失敗斷路器：記本輪每帳號失敗數；達上限後跳過該帳號其餘草稿（並只示警一次）。
+  const failuresThisRun: Record<string, number> = {};
+  const alertedBroken = new Set<string>();
+  const failureLimit = env.publishAccountFailureLimit;
   const stateCache: Record<
     string,
     { lastPublishedAt: string | null; publishedLast24h: number; accountStatus: string; createdAt: string | null }
@@ -109,6 +114,12 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
     // 帳號非 active（如 token 展期失敗被標 error）→ 跳過，避免發文時崩潰
     if (state.accountStatus !== "active") {
       result.skipped.push({ id: draft.id, reason: `帳號狀態為 ${state.accountStatus}` });
+      continue;
+    }
+
+    // 斷路器：本輪該帳號連續失敗達上限 → 跳過其餘草稿，避免對壞掉/被封帳號連打 API
+    if (circuitOpen(failuresThisRun[accId] ?? 0, failureLimit)) {
+      result.skipped.push({ id: draft.id, reason: `帳號本輪連續失敗 ${failuresThisRun[accId]} 次，暫停發文` });
       continue;
     }
 
@@ -212,6 +223,12 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
       const msg = e instanceof Error ? e.message : String(e);
       await updateDraftStatus(draft.id, "failed", { error: msg });
       result.failed.push({ id: draft.id, error: msg });
+      // 累計本輪該帳號失敗；剛觸發斷路器時示警一次（提醒檢查 token/封號）
+      failuresThisRun[accId] = (failuresThisRun[accId] ?? 0) + 1;
+      if (circuitOpen(failuresThisRun[accId], failureLimit) && !alertedBroken.has(accId)) {
+        alertedBroken.add(accId);
+        await sendAlert(`⚠️ 帳號連續發文失敗 ${failuresThisRun[accId]} 次，本輪已暫停該帳號。最後錯誤：${msg}`).catch(() => {});
+      }
     }
   }
 

@@ -46,6 +46,9 @@ export const env = {
   // 新帳號暖機天數：帳號建立後前 N 天，每日發文上限自 1 線性遞增到 PUBLISH_MAX_PER_DAY，
   // 降低新號被封風險。0 = 關閉（向後相容）。
   accountWarmupDays: parseInt(process.env.ACCOUNT_WARMUP_DAYS || "0", 10),
+  // 帳號連續失敗斷路器：單輪同帳號發文失敗數達此上限，即跳過該帳號其餘草稿（避免對
+  // 壞掉/被封帳號連續打 API 升高風險），下輪自動重置。0 = 關閉（向後相容）。
+  publishAccountFailureLimit: parseInt(process.env.PUBLISH_ACCOUNT_FAILURE_LIMIT || "0", 10),
   // 留言（串文 2/2 分潤連結）延遲：主文發出後隔多久才補留言，避免「秒留言」固定行為被偵測。
   // 0 = 立即（向後相容）。逐則可用 draft.reply_delay_minutes 覆寫。
   replyDelayFloorMinutes: parseInt(process.env.REPLY_DELAY_MIN_MINUTES || "0", 10), // 留言延遲「保底」分鐘

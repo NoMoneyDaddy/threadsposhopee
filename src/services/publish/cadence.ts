@@ -89,6 +89,12 @@ export function planAccountQueue(input: PlanInput): QueuePlanItem[] {
   return out;
 }
 
+// 帳號發文連續失敗斷路器：本輪同帳號累積失敗數達上限即「開路」，跳過該帳號其餘草稿，
+// 避免對壞掉/被封帳號連續打 API 升高封號風險。limit<=0 表關閉（向後相容）。
+export function circuitOpen(failuresThisRun: number, limit: number): boolean {
+  return Number.isFinite(limit) && limit > 0 && failuresThisRun >= limit;
+}
+
 // 新帳號暖機：前 warmupDays 天內，每日發文上限自 1 線性遞增到 maxPerDay，降低新號被封風險。
 // warmupDays<=0 或帳號已滿暖機期 → 回 maxPerDay（不限制）。ageDays = 帳號建立至今天數。
 export function warmupDailyCap(maxPerDay: number, warmupDays: number, ageDays: number): number {

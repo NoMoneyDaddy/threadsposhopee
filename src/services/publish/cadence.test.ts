@@ -1,6 +1,16 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { gapJitterMinutes, effectiveGapMinutes, planAccountQueue, shardOf } from "./cadence";
+import { gapJitterMinutes, effectiveGapMinutes, planAccountQueue, shardOf, circuitOpen } from "./cadence";
+
+test("斷路器：達上限才開路，limit<=0 關閉", () => {
+  assert.equal(circuitOpen(0, 3), false);
+  assert.equal(circuitOpen(2, 3), false);
+  assert.equal(circuitOpen(3, 3), true);
+  assert.equal(circuitOpen(5, 3), true);
+  assert.equal(circuitOpen(10, 0), false); // 關閉
+  assert.equal(circuitOpen(10, -1), false);
+  assert.equal(circuitOpen(10, NaN), false); // env 解析失敗防禦
+});
 
 test("分片：穩定、落在 0..total-1，total<=1 一律 0", () => {
   assert.equal(shardOf("acc-1", 4), shardOf("acc-1", 4)); // 同帳號穩定同片

@@ -30,7 +30,15 @@ export async function GET(req: Request) {
 
   // 用 allSettled，單一步驟失敗不影響其他步驟
   const steps: { key: string; run: () => Promise<unknown>; warn?: (r: any) => string | null }[] = [
-    { key: "scrape", run: runAllSources },
+    {
+      key: "scrape",
+      run: runAllSources,
+      // runAllSources 已 per-source 容錯（不拋）→ 在此偵測失敗來源並告警，補足爬蟲可見性。
+      warn: (r) => {
+        const failed = (Array.isArray(r) ? r : []).filter((x) => x?.error);
+        return failed.length ? `🕷️ 爬取 ${failed.length} 個來源失敗：${failed.map((x) => x.sourceUsername).join("、")}` : null;
+      }
+    },
     {
       key: "publish",
       run: runPublishQueue,

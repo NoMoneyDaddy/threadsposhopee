@@ -21,10 +21,12 @@ function median(xs: number[]): number {
 
 export function detectReachDrop(
   posts: { publishedAt: string | null; views: number }[],
-  opts: { minSamples?: number; dropRatio?: number } = {}
+  opts: { minSamples?: number; dropRatio?: number; minBaselineViews?: number } = {}
 ): ReachDrop {
   const minSamples = opts.minSamples ?? 6;
   const dropRatio = opts.dropRatio ?? 0.5;
+  // 基準中位需達此門檻才示警：低觸及/新帳號隨機波動（如 2→0）易腰斬，避免虛警。
+  const minBaselineViews = opts.minBaselineViews ?? 10;
   const none: ReachDrop = { hasSignal: false, recentMedian: 0, baselineMedian: 0, ratio: 1, recentN: 0, baselineN: 0 };
 
   const dated = posts
@@ -41,7 +43,7 @@ export function detectReachDrop(
   const baselineMedian = median(baseline);
   const ratio = baselineMedian > 0 ? recentMedian / baselineMedian : 1;
   return {
-    hasSignal: baselineMedian > 0 && ratio < dropRatio,
+    hasSignal: baselineMedian >= minBaselineViews && ratio < dropRatio,
     recentMedian,
     baselineMedian,
     ratio,

@@ -148,6 +148,8 @@ supabase/migrations/   資料庫 schema（0001–0017）
 - [x] 重發可選「最佳時段」：依該帳號 Threads insights 算出的高觸及整點排程（資料不足退回預設時段）
 - [x] 大影片走 Gemini Files API（resumable upload）讓 AI 看得到影片生成文案；圖片維持 inline（大小守門）
 - [x] 每日成效摘要：總排程每日推一則 Telegram 摘要（發布量/互動/熱門貼文/分潤收益/待辦提醒），免登入掌握脈動
+- [x] 觸及驟降預警（疑似降觸及／shadowban）：比較近期 vs 基準中位觀看，驟降即在成效頁示警並帶入每日摘要主動推播，提醒放慢節奏
+- [x] 全域發文急停開關（owner）：儀表板一鍵暫停所有自動發文（cron + 立即跑一輪），不影響單篇手動發，緊急防封用
 - [x] 防封強化（皆 env 開關、預設關閉）：商品冷卻期 `PRODUCT_COOLDOWN_HOURS`、新帳號暖機 `ACCOUNT_WARMUP_DAYS`、重發可選 AI 重寫文案、近重複文案偵測、Threads 內容合規（500 字/1 hashtag）、發文 429 退避重試
 - [x] 測試：單元（Node 內建 test runner）+ Playwright E2E 整站冒煙/互動（Demo 模式，已入 CI）
 - [x] 安全：AES-256-GCM 入庫加密、Cron 安全驗證、SSRF 防護、發文佇列分布式鎖、發文憑證 owner 過濾防越權

@@ -4,6 +4,7 @@ import { env, isDemoMode } from "@/lib/env";
 import { getOwnerUserId } from "@/lib/auth";
 import { getDashboardStats } from "@/lib/store";
 import { getEngagementCached } from "@/services/threads/engagement";
+import { detectReachDrop } from "@/services/threads/reach";
 import { getAffiliateRevenue } from "@/services/shopee/report";
 
 export interface DailyDigestInput {
@@ -17,6 +18,7 @@ export interface DailyDigestInput {
   topPosts: { name: string; views: number }[];
   engagementTotals: { views: number; likes: number } | null;
   revenue: { commission: number; conversions: number } | null;
+  reachDrop: { recentMedian: number; baselineMedian: number; ratio: number } | null;
 }
 
 const n = (x: number) => x.toLocaleString("zh-TW");
@@ -31,6 +33,10 @@ export function composeDailyDigest(d: DailyDigestInput): string {
     for (const p of d.topPosts) lines.push(`   - ${p.name}（👁 ${n(p.views)}）`);
   }
   if (d.revenue) lines.push(`• 分潤收益：NT$ ${d.revenue.commission.toFixed(2)}（${n(d.revenue.conversions)} 筆轉換）`);
+  if (d.reachDrop)
+    lines.push(
+      `🚨 觸及驟降預警：近期中位觀看 ${n(d.reachDrop.recentMedian)}，僅基準 ${n(d.reachDrop.baselineMedian)} 的 ${Math.round(d.reachDrop.ratio * 100)}%（疑似被降觸及，建議放慢節奏）`
+    );
 
   const warns: string[] = [];
   if (d.draftsFailed) warns.push(`發布失敗 ${n(d.draftsFailed)}`);
@@ -56,6 +62,12 @@ export async function buildDailyDigest(): Promise<string | null> {
   const eng = await getEngagementCached(ownerId).catch(() => null);
   const topPosts = eng ? eng.posts.slice(0, 3).map((p) => ({ name: p.productName ?? "（未命名）", views: p.views })) : [];
   const engagementTotals = eng && eng.fetched > 0 ? { views: eng.totals.views, likes: eng.totals.likes } : null;
+  // 觸及驟降預警（防封訊號）：複用已抓的 insights，達樣本門檻且驟降才帶入摘要。
+  const drop = eng && eng.fetched >= 6 ? detectReachDrop(eng.posts) : null;
+  const reachDrop =
+    drop && drop.hasSignal
+      ? { recentMedian: drop.recentMedian, baselineMedian: drop.baselineMedian, ratio: drop.ratio }
+      : null;
 
   let revenue: { commission: number; conversions: number } | null = null;
   if (!isDemoMode && env.shopeeAppId && env.shopeeSecret) {
@@ -73,6 +85,7 @@ export async function buildDailyDigest(): Promise<string | null> {
     tokenExpiring: stats.accountIssues.tokenExpiring,
     topPosts,
     engagementTotals,
-    revenue
+    revenue,
+    reachDrop
   });
 }

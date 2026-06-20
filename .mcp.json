@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "zeabur": {
+      "command": "npx",
+      "args": ["-y", "@zeabur/mcp-server"],
+      "env": {
+        "ZEABUR_TOKEN": "${ZEABUR_TOKEN}"
+      }
+    }
+  }
+}

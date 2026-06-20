@@ -42,10 +42,13 @@ async function checkOne(m: MaterialToCheck, ownerUserId: string | null): Promise
   return "dead";
 }
 
+// ownerUserId：env 金鑰後備的歸屬判定（owner 素材才退環境金鑰）。
+// scopeOwnerId：有值時只檢查該 owner 的素材（owner 手動觸發）；null = 全租戶（cron worker）。
 export async function checkAffiliateLinks(
-  ownerUserId: string | null = null
+  ownerUserId: string | null = null,
+  scopeOwnerId: string | null = null
 ): Promise<{ checked: number; dead: number; revived: number }> {
-  const items = await listMaterialsToCheck();
+  const items = await listMaterialsToCheck(30, scopeOwnerId);
   let dead = 0;
   let revived = 0;
   // 分批檢查，每批最多 5 個並行，避免一次開過多外部連線

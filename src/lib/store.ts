@@ -173,18 +173,20 @@ export type MaterialToCheck = {
   link: string;
   affiliate_sub_id: string | null;
 };
+// ownerId 有值時只撈該 owner 的素材（owner 手動觸發健檢用）；null = 全租戶（cron worker）。
 export async function listMaterialsToCheck(
-  limit = 30
+  limit = 30,
+  ownerId: string | null = null
 ): Promise<MaterialToCheck[]> {
   if (isDemoMode) return [];
   const sb = getServiceClient()!;
-  const { data } = await sb
+  let q = sb
     .from("materials")
     .select("id, owner_id, shop_id, item_id, clean_product_url, affiliate_short_link, affiliate_sub_id, affiliate_checked_at")
     .eq("affiliate_valid", true)
-    .not("affiliate_short_link", "is", null)
-    .order("affiliate_checked_at", { ascending: true, nullsFirst: true })
-    .limit(limit);
+    .not("affiliate_short_link", "is", null);
+  if (ownerId) q = q.eq("owner_id", ownerId);
+  const { data } = await q.order("affiliate_checked_at", { ascending: true, nullsFirst: true }).limit(limit);
   return (data ?? [])
     .filter((m) => m.affiliate_short_link)
     .map((m) => ({
@@ -1287,6 +1289,8 @@ export async function getDashboardStats(ownerId: string): Promise<{
   accountIssues: { error: number; paused: number; tokenExpiring: number };
   // 延遲留言（串文 2/2）：待補(pending)／補發失敗(failed) 數，讓 owner 一眼看出是否卡住
   replies: { pending: number; failed: number };
+  // 健檢標記失效的素材數（連結已死、待重產/人工處理）
+  invalidMaterials: number;
 }> {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   // token 即將到期門檻：到期前 7 天（與展期視窗一致），含已過期
@@ -1306,7 +1310,8 @@ export async function getDashboardStats(ownerId: string): Promise<{
         paused: accBy("paused"),
         tokenExpiring: demo.threadsAccounts.filter((a) => a.token_expires_at && a.token_expires_at <= expSoon).length
       },
-      replies: { pending: replyBy("pending"), failed: replyBy("failed") }
+      replies: { pending: replyBy("pending"), failed: replyBy("failed") },
+      invalidMaterials: demo.materials.filter((m) => m.affiliate_valid === false).length
     };
   }
   const sb = getServiceClient()!;
@@ -1314,7 +1319,7 @@ export async function getDashboardStats(ownerId: string): Promise<{
     const { count: c } = await build(sb.from(table).select("*", { count: "exact", head: true }).eq("owner_id", ownerId));
     return c ?? 0;
   };
-  const [threadsAccounts, sources, materials, draft, approved, published, failed, publishedLast24h, accError, accPaused, replyPending, replyFailed, tokenExpiring] =
+  const [threadsAccounts, sources, materials, draft, approved, published, failed, publishedLast24h, accError, accPaused, replyPending, replyFailed, tokenExpiring, invalidMaterials] =
     await Promise.all([
       count("threads_accounts"),
       count("sources", (q) => q.eq("enabled", true)),
@@ -1328,7 +1333,8 @@ export async function getDashboardStats(ownerId: string): Promise<{
       count("threads_accounts", (q) => q.eq("status", "paused")),
       count("drafts", (q) => q.eq("reply_status", "pending")),
       count("drafts", (q) => q.eq("reply_status", "failed")),
-      count("threads_accounts", (q) => q.eq("status", "active").not("token_expires_at", "is", null).lte("token_expires_at", expSoon))
+      count("threads_accounts", (q) => q.eq("status", "active").not("token_expires_at", "is", null).lte("token_expires_at", expSoon)),
+      count("materials", (q) => q.eq("affiliate_valid", false))
     ]);
   return {
     threadsAccounts,
@@ -1337,7 +1343,8 @@ export async function getDashboardStats(ownerId: string): Promise<{
     drafts: { draft, approved, published, failed },
     publishedLast24h,
     accountIssues: { error: accError, paused: accPaused, tokenExpiring },
-    replies: { pending: replyPending, failed: replyFailed }
+    replies: { pending: replyPending, failed: replyFailed },
+    invalidMaterials
   };
 }
 

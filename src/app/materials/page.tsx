@@ -1,5 +1,7 @@
 import MaterialCreateForm from "@/components/MaterialCreateForm";
 import RepostButton from "@/components/RepostButton";
+import CheckLinksButton from "@/components/CheckLinksButton";
+import BulkRepostButton from "@/components/BulkRepostButton";
 import { listMaterials, listThreadsAccounts } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
 
@@ -12,7 +14,13 @@ export default async function MaterialsPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold">素材庫</h1>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h1 className="text-2xl font-bold">素材庫</h1>
+        <div className="flex flex-wrap items-center gap-3">
+          <BulkRepostButton threadsAccounts={accounts} />
+          <CheckLinksButton />
+        </div>
+      </div>
       <p className="text-sm text-neutral-500">
         每個素材 = 一個商品的分潤連結＋AI 文案＋媒體。可重複「再排一篇」而不重燒 token；連結失效才會重產。
       </p>

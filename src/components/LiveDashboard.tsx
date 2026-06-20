@@ -16,6 +16,7 @@ interface DashboardData {
     publishedLast24h: number;
     accountIssues: { error: number; paused: number; tokenExpiring?: number };
     replies?: { pending: number; failed: number };
+    invalidMaterials?: number;
   };
   threadsQuota: { label: string; used: number; limit: number }[];
   cloudinary: { creditsUsed: number; creditsLimit: number; storageBytes: number; resources: number } | null;
@@ -227,7 +228,8 @@ export default function LiveDashboard() {
   const d = data.stats;
   const issues = d.accountIssues ?? { error: 0, paused: 0, tokenExpiring: 0 };
   const tokenExpiring = issues.tokenExpiring ?? 0;
-  const needsAttention = issues.error > 0 || d.drafts.failed > 0 || issues.paused > 0 || tokenExpiring > 0;
+  const invalidMaterials = d.invalidMaterials ?? 0;
+  const needsAttention = issues.error > 0 || d.drafts.failed > 0 || issues.paused > 0 || tokenExpiring > 0 || invalidMaterials > 0;
   // 核心流程未走完（沒帳號、沒素材、或未曾發布）時，顯示上手引導，直到三步都完成才隱藏
   const setupIncomplete = d.threadsAccounts === 0 || d.materials === 0 || d.drafts.published === 0;
   const steps = [
@@ -278,6 +280,11 @@ export default function LiveDashboard() {
             {tokenExpiring > 0 && (
               <Link href="/accounts" className="underline hover:opacity-80">
                 {tokenExpiring} 個帳號 token 即將到期/已過期
+              </Link>
+            )}
+            {invalidMaterials > 0 && (
+              <Link href="/materials" className="underline hover:opacity-80">
+                {invalidMaterials} 個素材連結失效（可重產）
               </Link>
             )}
             {d.drafts.failed > 0 && (

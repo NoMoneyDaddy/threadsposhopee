@@ -1,4 +1,5 @@
 import BulkDraftBar from "@/components/BulkDraftBar";
+import RetryFailedBar from "@/components/RetryFailedBar";
 import DraftsExplorer from "@/components/DraftsExplorer";
 import { listDrafts, listThreadsAccounts } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
@@ -10,6 +11,8 @@ export default async function DraftsPage() {
   const ownerId = user?.id ?? "demo-user";
   const [drafts, accounts] = await Promise.all([listDrafts(ownerId), listThreadsAccounts(ownerId)]);
   const pendingIds = drafts.filter((d) => d.status === "draft").map((d) => d.id);
+  // 失敗或卡在 publishing（程序中斷）的草稿 → 可一鍵批次重試重排
+  const failedIds = drafts.filter((d) => d.status === "failed" || d.status === "publishing").map((d) => d.id);
   // 帳號 id → 標籤：多帳號時草稿卡顯示「要發到哪個帳號」
   const accountLabels = Object.fromEntries(accounts.map((a) => [a.id, a.label]));
 
@@ -21,6 +24,7 @@ export default async function DraftsPage() {
       </p>
 
       <BulkDraftBar draftIds={pendingIds} />
+      <RetryFailedBar failedIds={failedIds} />
       <DraftsExplorer drafts={drafts} accountLabels={accountLabels} />
     </div>
   );

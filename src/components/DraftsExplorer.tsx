@@ -18,7 +18,13 @@ const STATUS_TABS: { value: string; label: string }[] = [
 ];
 
 // 草稿搜尋／篩選：依狀態分頁 + 關鍵字（商品名／正文）即時過濾。
-export default function DraftsExplorer({ drafts }: { drafts: Draft[] }) {
+export default function DraftsExplorer({
+  drafts,
+  accountLabels = {}
+}: {
+  drafts: Draft[];
+  accountLabels?: Record<string, string>;
+}) {
   const [status, setStatus] = useState("all");
   const [q, setQ] = useState("");
 
@@ -86,7 +92,12 @@ export default function DraftsExplorer({ drafts }: { drafts: Draft[] }) {
 
       <div className="grid gap-4 md:grid-cols-2">
         {filtered.map((d) => (
-          <DraftCard key={d.id} draft={d} dupSimilarity={dupMap[d.id] >= DUP_THRESHOLD ? dupMap[d.id] : undefined} />
+          <DraftCard
+            key={d.id}
+            draft={d}
+            dupSimilarity={dupMap[d.id] >= DUP_THRESHOLD ? dupMap[d.id] : undefined}
+            accountLabel={d.threads_account_id ? accountLabels[d.threads_account_id] : undefined}
+          />
         ))}
         {filtered.length === 0 && (
           <div className="col-span-2 rounded-lg border border-dashed p-10 text-center text-neutral-400">

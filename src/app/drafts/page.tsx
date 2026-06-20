@@ -1,14 +1,17 @@
 import BulkDraftBar from "@/components/BulkDraftBar";
 import DraftsExplorer from "@/components/DraftsExplorer";
-import { listDrafts } from "@/lib/store";
+import { listDrafts, listThreadsAccounts } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function DraftsPage() {
   const user = await getCurrentUser();
-  const drafts = await listDrafts(user?.id ?? "demo-user");
+  const ownerId = user?.id ?? "demo-user";
+  const [drafts, accounts] = await Promise.all([listDrafts(ownerId), listThreadsAccounts(ownerId)]);
   const pendingIds = drafts.filter((d) => d.status === "draft").map((d) => d.id);
+  // 帳號 id → 標籤：多帳號時草稿卡顯示「要發到哪個帳號」
+  const accountLabels = Object.fromEntries(accounts.map((a) => [a.id, a.label]));
 
   return (
     <div className="space-y-4">
@@ -18,7 +21,7 @@ export default async function DraftsPage() {
       </p>
 
       <BulkDraftBar draftIds={pendingIds} />
-      <DraftsExplorer drafts={drafts} />
+      <DraftsExplorer drafts={drafts} accountLabels={accountLabels} />
     </div>
   );
 }

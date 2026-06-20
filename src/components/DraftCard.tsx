@@ -8,7 +8,15 @@ import ThreadsPreview from "@/components/ThreadsPreview";
 import { normalizeDraftMedia } from "@/lib/media";
 import { checkThreadsContent, THREADS_MAX_HASHTAGS } from "@/lib/threads-content";
 
-export default function DraftCard({ draft, dupSimilarity }: { draft: Draft; dupSimilarity?: number }) {
+export default function DraftCard({
+  draft,
+  dupSimilarity,
+  accountLabel
+}: {
+  draft: Draft;
+  dupSimilarity?: number;
+  accountLabel?: string;
+}) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -64,9 +72,16 @@ export default function DraftCard({ draft, dupSimilarity }: { draft: Draft; dupS
 
   return (
     <div className="flex flex-col rounded-lg border bg-white p-4">
-      <div className="mb-2 flex items-center justify-between">
-        <span className="text-sm font-medium text-neutral-700">{draft.product_name ?? "（未知商品）"}</span>
-        <span className="rounded bg-neutral-100 px-2 py-0.5 text-xs text-neutral-500">{draft.status}</span>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span className="min-w-0 truncate text-sm font-medium text-neutral-700">{draft.product_name ?? "（未知商品）"}</span>
+        <span className="flex shrink-0 items-center gap-1">
+          {accountLabel && (
+            <span className="max-w-[8rem] truncate rounded bg-shopee/10 px-2 py-0.5 text-xs text-shopee" title={`發到 ${accountLabel}`}>
+              @{accountLabel}
+            </span>
+          )}
+          <span className="rounded bg-neutral-100 px-2 py-0.5 text-xs text-neutral-500">{draft.status}</span>
+        </span>
       </div>
 
       {editing ? (

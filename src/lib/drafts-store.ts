@@ -440,6 +440,7 @@ export async function listApprovedDraftsForShard(
       .eq("status", "approved")
       .or(`scheduled_at.is.null,scheduled_at.lte.${nowIso}`)
       .order("created_at", { ascending: true })
+      .order("id", { ascending: true }) // 穩定次排序：created_at 相同時防跨頁 range 漏抓/重複
       .range(from, from + pageSize - 1);
     const rows = (data ?? []) as Draft[];
     for (const d of rows) {

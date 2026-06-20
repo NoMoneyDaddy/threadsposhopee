@@ -5,7 +5,8 @@ import {
   hasGeminiKey,
   getCopyPrefs,
   getShopeeAffiliateId,
-  getUserCloudinary
+  getUserCloudinary,
+  getUserTelegramChatId
 } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
 import { env, isDemoMode } from "@/lib/env";
@@ -17,6 +18,7 @@ import GeminiForm from "@/components/GeminiForm";
 import CopyPrefsForm from "@/components/CopyPrefsForm";
 import AffiliateIdForm from "@/components/AffiliateIdForm";
 import CloudinaryForm from "@/components/CloudinaryForm";
+import TelegramForm from "@/components/TelegramForm";
 import { DeleteButton, ToggleButton } from "@/components/RowActions";
 
 export const dynamic = "force-dynamic";
@@ -36,6 +38,7 @@ export default async function AccountsPage({
   const copyPrefs = await getCopyPrefs(ownerId);
   const affiliateId = await getShopeeAffiliateId(ownerId);
   const cloudinary = user ? await getUserCloudinary(ownerId) : null;
+  const telegramBound = user ? Boolean(await getUserTelegramChatId(user.id)) : false;
 
   return (
     <div className="space-y-6">
@@ -89,6 +92,8 @@ export default async function AccountsPage({
         {user?.isOwner && <ApifyForm bound={apify.bound} actor={apify.actor} />}
         {user && <GeminiForm bound={geminiBound} />}
       </div>
+
+      {user && <TelegramForm bound={telegramBound} botConfigured={!isDemoMode && Boolean(env.telegramBotToken)} />}
 
       <CopyPrefsForm initial={copyPrefs} />
 

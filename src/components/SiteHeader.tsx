@@ -31,7 +31,7 @@ export default function SiteHeader({
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-surface/80 backdrop-blur-md">
       <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
           <Link href="/" className="flex items-center gap-2" aria-label="ThreadsPoShopee 首頁">
             <span
               aria-hidden
@@ -44,7 +44,7 @@ export default function SiteHeader({
               <span className="text-ink">Shopee</span>
             </span>
           </Link>
-          {isDemo && <span className="badge-warn">Demo 模式（未連接金鑰）</span>}
+          {isDemo && <span className="badge-warn whitespace-nowrap">Demo 模式（未連接金鑰）</span>}
           {user && (
             <form action="/auth/signout" method="post" className="ml-auto sm:hidden">
               <button className="btn btn-ghost btn-sm" type="submit">

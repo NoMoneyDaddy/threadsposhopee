@@ -167,7 +167,7 @@ export default function DraftCard({
         );
       })()}
 
-      {!done && !editing && (
+      {!done && draft.status !== "needs_verification" && !editing && (
         <div className="mt-3 flex flex-wrap gap-2">
           <button
             disabled={!!busy}
@@ -238,6 +238,33 @@ export default function DraftCard({
 
       {draft.status === "failed" && draft.error && (
         <p className="mt-2 rounded bg-red-50 p-2 text-xs text-red-600">發布失敗：{draft.error}</p>
+      )}
+
+      {draft.status === "needs_verification" && !editing && (
+        <div className="mt-2 rounded border border-orange-300 bg-orange-50 p-2 text-xs text-orange-800" role="alert">
+          <p className="font-medium">⚠️ 發布狀態待確認</p>
+          <p className="mt-1">{draft.error ?? "發文中途中斷，可能已發出。"}請先到該 Threads 帳號確認是否已發布，再選擇下方動作（避免重複發文被降觸及／封號）。</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              disabled={!!busy}
+              onClick={() => {
+                if (confirm("確認該貼文「沒有」發出、要重新發布？")) call("retry");
+              }}
+              className="rounded border border-amber-300 px-3 py-1 text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+            >
+              {busy === "retry" ? "重排中…" : "沒發出 → 重發"}
+            </button>
+            <button
+              disabled={!!busy}
+              onClick={() => {
+                if (confirm("確認該貼文「已經」發出、把這張草稿退回（不再重發）？")) call("reject");
+              }}
+              className="rounded border px-3 py-1 text-neutral-600 hover:bg-neutral-50 disabled:opacity-50"
+            >
+              {busy === "reject" ? "處理中…" : "已發出 → 退回"}
+            </button>
+          </div>
+        </div>
       )}
 
       {showReply && rs === "pending" && (

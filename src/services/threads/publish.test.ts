@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { publishToThreads, parseRetryAfterMs } from "./publish";
+import { publishToThreads, parseRetryAfterMs, PublishUncertainError } from "./publish";
 
 test("parseRetryAfterMs：秒數格式", () => {
   assert.equal(parseRetryAfterMs("120"), 120_000);
@@ -97,6 +97,46 @@ test("不安全的內網 media URL 應被擋下", async () => {
   try {
     await assert.rejects(
       () => publishToThreads({ ...base, text: "x", media: [{ url: "http://127.0.0.1/a.jpg", type: "image" }] })
+    );
+  } finally {
+    restore();
+  }
+});
+
+// 依 URL 決定哪個端點回失敗，用來驗證「發布步驟失敗 → 不確定」vs「建容器失敗 → 確定未發」。
+function stubGraphFail(failOn: "publish" | "create"): () => void {
+  const original = globalThis.fetch;
+  globalThis.fetch = (async (input: string) => {
+    const url = String(input);
+    const isPublish = url.includes("threads_publish");
+    const shouldFail = failOn === "publish" ? isPublish : !isPublish;
+    if (shouldFail) {
+      return { ok: false, status: 500, json: async () => ({}), text: async () => "boom" };
+    }
+    const json = isPublish ? { id: "post_123" } : { id: "container_1" };
+    return { ok: true, status: 200, json: async () => json, text: async () => JSON.stringify(json) };
+  }) as unknown as typeof fetch;
+  return () => { globalThis.fetch = original; };
+}
+
+test("發布步驟回 5xx → PublishUncertainError（可能已發出，待確認）", async () => {
+  const restore = stubGraphFail("publish");
+  try {
+    await assert.rejects(
+      () => publishToThreads({ ...base, text: "hi", media: [] }),
+      (e: unknown) => e instanceof PublishUncertainError
+    );
+  } finally {
+    restore();
+  }
+});
+
+test("建容器步驟回 5xx → 一般錯誤（確定未發出，可安全重試）", async () => {
+  const restore = stubGraphFail("create");
+  try {
+    await assert.rejects(
+      () => publishToThreads({ ...base, text: "hi", media: [] }),
+      (e: unknown) => e instanceof Error && !(e instanceof PublishUncertainError)
     );
   } finally {
     restore();

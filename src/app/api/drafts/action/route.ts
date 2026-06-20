@@ -146,10 +146,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   }
 
-  // 重試：把卡在 publishing（程序中斷）或 failed 的草稿重置回 approved，重新進發文佇列
+  // 重試：把 failed、卡住的 publishing、或人工確認「未發出」的 needs_verification
+  // 重置回 approved，重新進發文佇列。
   if (action === "retry") {
-    if (draft.status !== "failed" && draft.status !== "publishing") {
-      return NextResponse.json({ ok: false, error: "只有失敗或卡住的草稿可重試" }, { status: 400 });
+    if (draft.status !== "failed" && draft.status !== "publishing" && draft.status !== "needs_verification") {
+      return NextResponse.json({ ok: false, error: "只有失敗、卡住或待確認的草稿可重試" }, { status: 400 });
     }
     await updateDraftStatus(id, "approved", { error: null });
     return NextResponse.json({ ok: true });

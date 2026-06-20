@@ -14,6 +14,7 @@ const STATUS_TABS: { value: string; label: string }[] = [
   { value: "approved", label: "已核准" },
   { value: "published", label: "已發布" },
   { value: "failed", label: "失敗" },
+  { value: "needs_verification", label: "待確認" },
   { value: "rejected", label: "已退回" }
 ];
 

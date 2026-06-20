@@ -56,6 +56,7 @@ export type DraftStatus =
   | "publishing"
   | "published"
   | "failed"
+  | "needs_verification" // 發布步驟回應遺失/中斷，可能已發出 → 需人工到 Threads 確認，不自動重發
   | "rejected";
 
 export interface DraftMedia {

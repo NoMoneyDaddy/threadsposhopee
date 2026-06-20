@@ -1002,16 +1002,18 @@ export async function updateDraftStatus(id: string, status: Draft["status"], pat
   return data as Draft;
 }
 
-// 回收卡住的草稿：publishing 超過 staleMinutes（多半是程序中斷）→ 標 failed 待人工重試。
-// 保守不自動改回 approved，避免「其實已發出但 DB 沒寫到」時被重發造成雙貼。
+// 回收卡住的草稿：publishing 超過 staleMinutes（多半是程序中斷）→ 標 needs_verification。
+// 卡在 publishing 代表發布步驟途中斷線，「可能已發出但 DB 沒寫到」→ 不可自動重發（會雙貼），
+// 也不可放進批次重試，須由人工到 Threads 確認後再決定重發或放棄（needs_verification 狀態）。
 export async function reclaimStalePublishing(staleMinutes = 15): Promise<number> {
   const cutoff = new Date(Date.now() - staleMinutes * 60_000).toISOString();
+  const msg = "發文程序中斷，可能已發出，請到 Threads 確認後再決定重發或退回";
   if (isDemoMode) {
     let n = 0;
     for (const d of demo.drafts) {
       if (d.status === "publishing" && d.created_at < cutoff) {
-        d.status = "failed";
-        d.error = "發文程序中斷，請確認後重試";
+        d.status = "needs_verification";
+        d.error = msg;
         n++;
       }
     }
@@ -1020,7 +1022,7 @@ export async function reclaimStalePublishing(staleMinutes = 15): Promise<number>
   const sb = getServiceClient()!;
   const { data } = await sb
     .from("drafts")
-    .update({ status: "failed", error: "發文程序中斷，請確認後重試" })
+    .update({ status: "needs_verification", error: msg })
     .eq("status", "publishing")
     .lt("updated_at", cutoff)
     .select("id");
@@ -1344,6 +1346,8 @@ export async function getDashboardStats(ownerId: string): Promise<{
   replies: { pending: number; failed: number };
   // 健檢標記失效的素材數（連結已死、待重產/人工處理）
   invalidMaterials: number;
+  // 發布狀態待人工確認（可能已發出）的草稿數——需盡快處理以免重複發文或漏發
+  needsVerification: number;
 }> {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   // token 即將到期門檻：到期前 7 天（與展期視窗一致），含已過期
@@ -1364,7 +1368,8 @@ export async function getDashboardStats(ownerId: string): Promise<{
         tokenExpiring: demo.threadsAccounts.filter((a) => a.token_expires_at && a.token_expires_at <= expSoon).length
       },
       replies: { pending: replyBy("pending"), failed: replyBy("failed") },
-      invalidMaterials: demo.materials.filter((m) => m.affiliate_valid === false).length
+      invalidMaterials: demo.materials.filter((m) => m.affiliate_valid === false).length,
+      needsVerification: by("needs_verification")
     };
   }
   const sb = getServiceClient()!;
@@ -1372,7 +1377,7 @@ export async function getDashboardStats(ownerId: string): Promise<{
     const { count: c } = await build(sb.from(table).select("*", { count: "exact", head: true }).eq("owner_id", ownerId));
     return c ?? 0;
   };
-  const [threadsAccounts, sources, materials, draft, approved, published, failed, publishedLast24h, accError, accPaused, replyPending, replyFailed, tokenExpiring, invalidMaterials] =
+  const [threadsAccounts, sources, materials, draft, approved, published, failed, publishedLast24h, accError, accPaused, replyPending, replyFailed, tokenExpiring, invalidMaterials, needsVerification] =
     await Promise.all([
       count("threads_accounts"),
       count("sources", (q) => q.eq("enabled", true)),
@@ -1387,7 +1392,8 @@ export async function getDashboardStats(ownerId: string): Promise<{
       count("drafts", (q) => q.eq("reply_status", "pending")),
       count("drafts", (q) => q.eq("reply_status", "failed")),
       count("threads_accounts", (q) => q.eq("status", "active").not("token_expires_at", "is", null).lte("token_expires_at", expSoon)),
-      count("materials", (q) => q.eq("affiliate_valid", false))
+      count("materials", (q) => q.eq("affiliate_valid", false)),
+      count("drafts", (q) => q.eq("status", "needs_verification"))
     ]);
   return {
     threadsAccounts,
@@ -1397,7 +1403,8 @@ export async function getDashboardStats(ownerId: string): Promise<{
     publishedLast24h,
     accountIssues: { error: accError, paused: accPaused, tokenExpiring },
     replies: { pending: replyPending, failed: replyFailed },
-    invalidMaterials
+    invalidMaterials,
+    needsVerification
   };
 }
 

@@ -18,7 +18,7 @@ import {
   wasProductPublishedSince,
   isPublishPaused
 } from "@/lib/store";
-import { publishToThreads, publishReply } from "@/services/threads/publish";
+import { publishToThreads, publishReply, PublishUncertainError } from "@/services/threads/publish";
 import { normalizeDraftMedia } from "@/lib/media";
 import { effectiveGapMinutes, shardOf, warmupDailyCap, circuitOpen } from "@/services/publish/cadence";
 import { replyDelayMinutes } from "@/services/publish/reply-timing";
@@ -29,6 +29,7 @@ export interface PublishResult {
   published: { id: string; postId: string }[];
   skipped: { id: string; reason: string }[];
   failed: { id: string; error: string }[];
+  needsVerification?: { id: string; error: string }[]; // 發布不確定（可能已發出），待人工確認
   reclaimed: number;
   replies?: { published: number; failed: number }; // 延遲留言補發結果
   lockBusy?: boolean; // true 表示另一輪（cron 或手動）正在跑，本次未執行
@@ -221,9 +222,16 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
       result.published.push({ id: draft.id, postId });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      await updateDraftStatus(draft.id, "failed", { error: msg });
-      result.failed.push({ id: draft.id, error: msg });
-      // 累計本輪該帳號失敗；剛觸發斷路器時示警一次（提醒檢查 token/封號）
+      // 發布步驟不確定（可能已發出）→ needs_verification，不進 failed、不可被批次重試自動重發；
+      // 其餘（建容器/等就緒等尚未發布）→ failed，可安全重試。
+      if (e instanceof PublishUncertainError) {
+        await updateDraftStatus(draft.id, "needs_verification", { error: msg });
+        (result.needsVerification ??= []).push({ id: draft.id, error: msg });
+      } else {
+        await updateDraftStatus(draft.id, "failed", { error: msg });
+        result.failed.push({ id: draft.id, error: msg });
+      }
+      // 累計本輪該帳號失敗（含不確定）；剛觸發斷路器時示警一次（提醒檢查 token/封號）
       failuresThisRun[accId] = (failuresThisRun[accId] ?? 0) + 1;
       if (circuitOpen(failuresThisRun[accId], failureLimit) && !alertedBroken.has(accId)) {
         alertedBroken.add(accId);

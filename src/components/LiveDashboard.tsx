@@ -17,6 +17,7 @@ interface DashboardData {
     accountIssues: { error: number; paused: number; tokenExpiring?: number };
     replies?: { pending: number; failed: number };
     invalidMaterials?: number;
+    needsVerification?: number;
   };
   threadsQuota: { label: string; used: number; limit: number }[];
   cloudinary: { creditsUsed: number; creditsLimit: number; storageBytes: number; resources: number } | null;
@@ -272,7 +273,9 @@ export default function LiveDashboard() {
   const issues = d.accountIssues ?? { error: 0, paused: 0, tokenExpiring: 0 };
   const tokenExpiring = issues.tokenExpiring ?? 0;
   const invalidMaterials = d.invalidMaterials ?? 0;
-  const needsAttention = issues.error > 0 || d.drafts.failed > 0 || issues.paused > 0 || tokenExpiring > 0 || invalidMaterials > 0;
+  const needsVerification = d.needsVerification ?? 0;
+  const needsAttention =
+    issues.error > 0 || d.drafts.failed > 0 || issues.paused > 0 || tokenExpiring > 0 || invalidMaterials > 0 || needsVerification > 0;
   // 核心流程未走完（沒帳號、沒素材、或未曾發布）時，顯示上手引導，直到三步都完成才隱藏
   const setupIncomplete = d.threadsAccounts === 0 || d.materials === 0 || d.drafts.published === 0;
   const steps = [
@@ -344,6 +347,11 @@ export default function LiveDashboard() {
             {d.drafts.failed > 0 && (
               <Link href="/drafts" className="underline hover:opacity-80">
                 {d.drafts.failed} 則草稿發布失敗（可重試）
+              </Link>
+            )}
+            {needsVerification > 0 && (
+              <Link href="/drafts" className="font-medium text-orange-700 underline hover:opacity-80">
+                {needsVerification} 則發布待確認（可能已發出，請盡快確認）
               </Link>
             )}
           </span>

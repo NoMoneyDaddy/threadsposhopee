@@ -6,6 +6,15 @@ import type { DraftMedia } from "@/lib/types";
 
 const GRAPH = "https://graph.threads.net/v1.0";
 
+// 發布步驟（threads_publish）失敗時拋此錯：該步驟一旦送出，貼文「可能已發出」，
+// 呼叫端應標 needs_verification（人工確認）而非 failed（會被重發造成雙貼）。
+export class PublishUncertainError extends Error {
+  constructor(cause: unknown) {
+    super(cause instanceof Error ? cause.message : String(cause));
+    this.name = "PublishUncertainError";
+  }
+}
+
 interface PublishInput {
   threadsUserId: string;
   accessToken: string;
@@ -155,9 +164,17 @@ export async function publishToThreads(
   input: PublishInput
 ): Promise<{ postId: string; replyDeferred?: boolean; replyFailed?: boolean }> {
   const media = resolveMedia(input);
+  // 建容器/等就緒：失敗代表「尚未發布」，可安全重試（沿用原錯誤 → 呼叫端標 failed）。
   const { creationId, needWait } = await buildCreation(input, media);
   if (needWait) await waitForContainerReady(creationId, input.accessToken);
-  const postId = await publishContainer(input.threadsUserId, input.accessToken, creationId);
+  // 發布步驟：一旦送出 threads_publish 即「可能已發出」，失敗包成 PublishUncertainError，
+  // 讓呼叫端標 needs_verification（人工確認）而非 failed，避免重發雙貼。
+  let postId: string;
+  try {
+    postId = await publishContainer(input.threadsUserId, input.accessToken, creationId);
+  } catch (e) {
+    throw new PublishUncertainError(e);
+  }
 
   if (!input.replyText) return { postId };
 

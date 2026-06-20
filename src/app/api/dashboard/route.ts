@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import {
   getDashboardStats,
   listActiveThreadsCredentials,
+  listThreadsAccounts,
   getHeartbeat,
   hasApifyCredentials,
   hasGeminiKey,
@@ -11,6 +12,7 @@ import {
   getPublishPlan,
   isPublishPaused
 } from "@/lib/store";
+import { accountHealth, sortByHealth, type AccountHealth } from "@/lib/account-health";
 import { getPublishingLimit } from "@/services/threads/limit";
 import { getCloudinaryUsage } from "@/services/media/cloudinary-usage";
 import { env, isDemoMode } from "@/lib/env";
@@ -60,6 +62,11 @@ export async function GET() {
   const lastCronAt = await getHeartbeat().catch(() => null);
   const publishPaused = await isPublishPaused().catch(() => false);
 
+  // 帳號健康分：每個 Threads 帳號的狀態＋token 到期彙整成單一等級（問題優先排序）。
+  const accountsHealth: AccountHealth[] = sortByHealth(
+    (await listThreadsAccounts(ownerId).catch(() => [])).map((a) => accountHealth(a))
+  );
+
   // 發文進度/ETA：排隊中的草稿預計何時發（含塞車提示）。取前 20 筆即可。
   // 失敗不擋整個儀表板，但記 log 以利診斷（不靜默吞）。
   const publishPlan = (
@@ -99,6 +106,7 @@ export async function GET() {
     lastCronAt,
     binds,
     publishPlan,
-    publishPaused
+    publishPaused,
+    accountsHealth
   });
 }

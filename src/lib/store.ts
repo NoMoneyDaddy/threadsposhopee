@@ -340,86 +340,15 @@ export async function createShopeeAccount(
   return data as ShopeeAccount;
 }
 
-// 監看來源是 owner 專屬。listSources 無參數版供背景排程（取全部啟用來源 = owner 的）。
-export async function listSources(ownerId?: string): Promise<Source[]> {
-  if (isDemoMode) return demo.sources;
-  const sb = getServiceClient()!;
-  let q = sb.from("sources").select("*");
-  if (ownerId) q = q.eq("owner_id", ownerId);
-  const { data } = await q;
-  return (data ?? []) as Source[];
-}
-
-export async function createSource(
-  input: {
-    threads_account_id: string;
-    shopee_account_id?: string | null;
-    source_username: string;
-    poll_interval_minutes?: number;
-    auto_publish?: boolean;
-    posts_limit?: number;
-  },
-  ownerId: string
-): Promise<Source> {
-  const row = {
-    owner_id: ownerId,
-    threads_account_id: input.threads_account_id,
-    shopee_account_id: input.shopee_account_id ?? null,
-    source_username: input.source_username.trim().replace(/^@/, ""),
-    enabled: true,
-    poll_interval_minutes: input.poll_interval_minutes ?? 15,
-    auto_publish: input.auto_publish ?? false,
-    posts_limit: input.posts_limit ?? 1
-  };
-  if (isDemoMode) {
-    const src: Source = { id: randomUUID(), last_polled_at: null, ...row };
-    demo.sources.unshift(src);
-    return src;
-  }
-  const sb = getServiceClient()!;
-  const { data, error } = await sb.from("sources").insert(row).select("*").single();
-  if (error) throw error;
-  return data as Source;
-}
-
-// 啟用／停用來源（回傳是否有命中該 owner 的 row，達成擁有權檢查）
-export async function setSourceEnabled(id: string, ownerId: string, enabled: boolean): Promise<boolean> {
-  if (isDemoMode) {
-    const s = demo.sources.find((x) => x.id === id);
-    if (!s) return false;
-    s.enabled = enabled;
-    return true;
-  }
-  const sb = getServiceClient()!;
-  const { data, error } = await sb
-    .from("sources")
-    .update({ enabled })
-    .eq("id", id)
-    .eq("owner_id", ownerId)
-    .select("id")
-    .maybeSingle();
-  if (error) throw error;
-  return Boolean(data);
-}
-
-export async function deleteSource(id: string, ownerId: string): Promise<boolean> {
-  if (isDemoMode) {
-    const i = demo.sources.findIndex((x) => x.id === id);
-    if (i < 0) return false;
-    demo.sources.splice(i, 1);
-    return true;
-  }
-  const sb = getServiceClient()!;
-  const { data, error } = await sb
-    .from("sources")
-    .delete()
-    .eq("id", id)
-    .eq("owner_id", ownerId)
-    .select("id")
-    .maybeSingle();
-  if (error) throw error;
-  return Boolean(data);
-}
+// 監看來源資料層 + 來源貼文去重已拆到 ./sources-store；re-export 維持匯入點不變。
+export {
+  listSources,
+  createSource,
+  setSourceEnabled,
+  deleteSource,
+  isPostProcessed,
+  markPostProcessed
+} from "./sources-store";
 
 // 設定 Threads 帳號狀態（active=啟用、paused=暫停排程）
 export async function setThreadsAccountStatus(
@@ -1156,21 +1085,3 @@ export async function markThreadsAccountError(id: string): Promise<void> {
   await sb.from("threads_accounts").update({ status: "error" }).eq("id", id);
 }
 
-// 去重：來源貼文是否已處理過
-export async function isPostProcessed(sourceId: string, postId: string): Promise<boolean> {
-  if (isDemoMode) return demo.drafts.some((d) => d.source_id === sourceId && d.source_post_id === postId);
-  const sb = getServiceClient()!;
-  const { data } = await sb
-    .from("processed_posts")
-    .select("id")
-    .eq("source_id", sourceId)
-    .eq("post_id", postId)
-    .maybeSingle();
-  return Boolean(data);
-}
-
-export async function markPostProcessed(sourceId: string, postId: string) {
-  if (isDemoMode) return;
-  const sb = getServiceClient()!;
-  await sb.from("processed_posts").upsert({ source_id: sourceId, post_id: postId }, { onConflict: "source_id,post_id" });
-}

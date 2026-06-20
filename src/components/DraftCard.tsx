@@ -8,7 +8,7 @@ import ThreadsPreview from "@/components/ThreadsPreview";
 import { normalizeDraftMedia } from "@/lib/media";
 import { checkThreadsContent, THREADS_MAX_HASHTAGS } from "@/lib/threads-content";
 
-export default function DraftCard({ draft }: { draft: Draft }) {
+export default function DraftCard({ draft, dupSimilarity }: { draft: Draft; dupSimilarity?: number }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -121,6 +121,12 @@ export default function DraftCard({ draft }: { draft: Draft }) {
       >
         {draft.shopee_short_link}
       </a>
+
+      {typeof dupSimilarity === "number" && (
+        <div className="mt-2 rounded bg-amber-50 p-2 text-xs text-amber-700" role="alert">
+          ⚠️ 文案與同帳號近期貼文高度相似（{Math.round(dupSimilarity * 100)}%），重複措辭易被降觸及，建議改寫再發。
+        </div>
+      )}
 
       {(() => {
         const c = checkThreadsContent(mainText);

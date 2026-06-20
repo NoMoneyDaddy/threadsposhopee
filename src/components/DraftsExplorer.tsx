@@ -3,6 +3,10 @@
 import { useMemo, useState } from "react";
 import DraftCard from "@/components/DraftCard";
 import type { Draft } from "@/lib/types";
+import { maxSimilarity } from "@/lib/text-similarity";
+
+// 與「同帳號近期已發布貼文」高度相似才示警（重複措辭易被降觸及）。
+const DUP_THRESHOLD = 0.8;
 
 const STATUS_TABS: { value: string; label: string }[] = [
   { value: "all", label: "全部" },
@@ -22,6 +26,24 @@ export default function DraftsExplorer({ drafts }: { drafts: Draft[] }) {
     const c: Record<string, number> = { all: drafts.length };
     for (const d of drafts) c[d.status] = (c[d.status] ?? 0) + 1;
     return c;
+  }, [drafts]);
+
+  // 近重複偵測：未發布草稿 vs 同帳號已發布貼文的最高文案相似度（純前端，零後端成本）。
+  const dupMap = useMemo(() => {
+    const publishedByAcc = new Map<string, string[]>();
+    for (const d of drafts) {
+      if (d.status === "published" && d.main_text) {
+        const k = d.threads_account_id ?? "";
+        (publishedByAcc.get(k) ?? publishedByAcc.set(k, []).get(k)!).push(d.main_text);
+      }
+    }
+    const m: Record<string, number> = {};
+    for (const d of drafts) {
+      if (!d.main_text || d.status === "published" || d.status === "rejected") continue;
+      const others = publishedByAcc.get(d.threads_account_id ?? "") ?? [];
+      m[d.id] = maxSimilarity(d.main_text, others);
+    }
+    return m;
   }, [drafts]);
 
   const filtered = useMemo(() => {
@@ -64,7 +86,7 @@ export default function DraftsExplorer({ drafts }: { drafts: Draft[] }) {
 
       <div className="grid gap-4 md:grid-cols-2">
         {filtered.map((d) => (
-          <DraftCard key={d.id} draft={d} />
+          <DraftCard key={d.id} draft={d} dupSimilarity={dupMap[d.id] >= DUP_THRESHOLD ? dupMap[d.id] : undefined} />
         ))}
         {filtered.length === 0 && (
           <div className="col-span-2 rounded-lg border border-dashed p-10 text-center text-neutral-400">

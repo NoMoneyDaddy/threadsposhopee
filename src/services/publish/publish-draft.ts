@@ -38,7 +38,7 @@ export async function publishDraftNow(draft: Draft, ownerId: string): Promise<{ 
       published_post_id: postId,
       published_at: new Date(nowMs).toISOString(),
       ...replyPatch
-    });
+    }, ownerId);
     return { postId, deferReply };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

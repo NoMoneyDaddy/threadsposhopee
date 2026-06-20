@@ -7,6 +7,7 @@ import { scrapeLatestPosts } from "@/services/scraper/threads";
 import { expandShopeeLink } from "@/services/shopee/expand";
 import { buildMaterialForProduct } from "@/services/materials/build";
 import { env } from "@/lib/env";
+import { log } from "@/lib/logger";
 import { getOwnerUserId } from "@/lib/auth";
 import {
   isPostProcessed,
@@ -142,7 +143,23 @@ export async function runAllSources(): Promise<PipelineResult[]> {
   const sources = (await listSources()).filter((s) => s.enabled);
   const results: PipelineResult[] = [];
   for (const s of sources) {
-    results.push(await runSourcePipeline(s, ownerId));
+    // 單一來源拋錯不該中斷整批後續來源（fail-isolation，對齊 cron/all 的 allSettled 精神）。
+    try {
+      results.push(await runSourcePipeline(s, ownerId));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      log.error("來源爬取流程失敗", { ownerId, sourceId: s.id, sourceUsername: s.source_username, err: msg });
+      results.push({
+        sourceId: s.id,
+        sourceUsername: s.source_username,
+        scanned: 0,
+        created: 0,
+        skipped: 0,
+        reusedMaterial: 0,
+        drafts: [],
+        notes: [`來源流程失敗：${msg}`]
+      });
+    }
   }
   return results;
 }

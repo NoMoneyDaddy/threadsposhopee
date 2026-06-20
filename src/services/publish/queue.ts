@@ -15,7 +15,8 @@ import {
   reclaimStaleReplies,
   markReplyPublished,
   markReplyFailed,
-  wasProductPublishedSince
+  wasProductPublishedSince,
+  isPublishPaused
 } from "@/lib/store";
 import { publishToThreads, publishReply } from "@/services/threads/publish";
 import { normalizeDraftMedia } from "@/lib/media";
@@ -30,6 +31,7 @@ export interface PublishResult {
   reclaimed: number;
   replies?: { published: number; failed: number }; // 延遲留言補發結果
   lockBusy?: boolean; // true 表示另一輪（cron 或手動）正在跑，本次未執行
+  paused?: boolean; // true 表示全域發文暫停中，本次整批跳過
 }
 
 // 分片：多條 cron 並行發文時，各自只處理自己那片帳號（同帳號永遠落同片，防封節奏不被打散）。
@@ -63,6 +65,11 @@ export async function runPublishQueue(shard?: ShardOpts): Promise<PublishResult>
 }
 
 async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): Promise<PublishResult> {
+  // 全域急停：暫停中整批跳過（含主文與延遲留言），不做任何外部發布動作。
+  if (await isPublishPaused()) {
+    result.paused = true;
+    return result;
+  }
   // 先回收上次中斷卡在 publishing 的草稿（標 failed 待人工重試）
   result.reclaimed = await reclaimStalePublishing();
   // 分片模式只處理本片帳號的草稿（同帳號穩定落同片）；未綁帳號者歸片 0，至少有人記錄略過

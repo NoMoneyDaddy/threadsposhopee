@@ -7,7 +7,8 @@ import {
   hasApifyCredentials,
   hasGeminiKey,
   getShopeeCredentials,
-  getPublishPlan
+  getPublishPlan,
+  isPublishPaused
 } from "@/lib/store";
 import { getPublishingLimit } from "@/services/threads/limit";
 import { getCloudinaryUsage } from "@/services/media/cloudinary-usage";
@@ -56,6 +57,7 @@ export async function GET() {
   }
 
   const lastCronAt = await getHeartbeat().catch(() => null);
+  const publishPaused = await isPublishPaused().catch(() => false);
 
   // 發文進度/ETA：排隊中的草稿預計何時發（含塞車提示）。取前 20 筆即可。
   // 失敗不擋整個儀表板，但記 log 以利診斷（不靜默吞）。
@@ -95,6 +97,7 @@ export async function GET() {
     cloudinary,
     lastCronAt,
     binds,
-    publishPlan
+    publishPlan,
+    publishPaused
   });
 }

@@ -21,6 +21,28 @@ const demo = {
 
 // 排程心跳（demo 用記憶體）
 let demoHeartbeat: string | null = null;
+let demoPublishPaused = false;
+
+// 全域發文暫停旗標（app_state）：開啟時發文佇列（cron + 立即跑一輪）整批跳過，緊急急停用。
+// 註：不影響草稿頁「核准並發布」單篇手動發（那是操作者明確意圖）。
+export async function isPublishPaused(): Promise<boolean> {
+  if (isDemoMode) return demoPublishPaused;
+  const sb = getServiceClient();
+  if (!sb) return false;
+  const { data } = await sb.from("app_state").select("value").eq("key", "publish_paused").maybeSingle();
+  return data?.value === "1";
+}
+export async function setPublishPaused(paused: boolean): Promise<void> {
+  if (isDemoMode) {
+    demoPublishPaused = paused;
+    return;
+  }
+  const sb = getServiceClient()!;
+  const { error } = await sb
+    .from("app_state")
+    .upsert({ key: "publish_paused", value: paused ? "1" : "0", updated_at: new Date().toISOString() }, { onConflict: "key" });
+  if (error) throw new Error(`設定發文暫停失敗：${error.message}`);
+}
 
 // 寫入排程心跳（任一 cron 成功時呼叫），給儀表板顯示自動駕駛是否運轉。
 export async function setHeartbeat(): Promise<void> {

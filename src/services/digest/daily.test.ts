@@ -55,3 +55,13 @@ test("composeDailyDigest：觸及驟降時帶預警行", () => {
   assert.match(s, /觸及驟降預警/);
   assert.match(s, /15%/);
 });
+
+test("composeDailyDigest：近期有發但佇列見底 → 缺稿預警", () => {
+  const s = composeDailyDigest({ ...baseInput, approved: 0, publishedLast24h: 4 });
+  assert.match(s, /佇列見底/);
+});
+
+test("composeDailyDigest：佇列見底但近期沒在發 → 不預警（避免新/閒置帳號噪音）", () => {
+  const s = composeDailyDigest({ ...baseInput, approved: 0, publishedLast24h: 0 });
+  assert.doesNotMatch(s, /佇列見底/);
+});

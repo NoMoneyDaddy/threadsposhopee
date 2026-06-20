@@ -16,7 +16,10 @@ import {
   markReplyPublished,
   markReplyFailed,
   wasProductPublishedSince,
-  isPublishPaused
+  isPublishPaused,
+  getAccountCircuitUntil,
+  tripAccountCircuit,
+  clearAccountCircuit
 } from "@/lib/store";
 import { publishToThreads, publishReply, PublishUncertainError } from "@/services/threads/publish";
 import { log } from "@/lib/logger";
@@ -87,6 +90,10 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
   const failuresThisRun: Record<string, number> = {};
   const alertedBroken = new Set<string>();
   const failureLimit = env.publishAccountFailureLimit;
+  // 跨輪斷路器冷卻：>0 才啟用「跨 cron 輪次」記憶。本輪快取各帳號冷卻狀態，避免重複查 app_state。
+  const circuitCooldown = env.publishCircuitCooldownMinutes;
+  const circuitUntilCache: Record<string, number | null> = {};
+  const circuitCleared = new Set<string>(); // 本輪已解除冷卻的帳號（成功發文後），避免重複寫
   const stateCache: Record<
     string,
     { lastPublishedAt: string | null; publishedLast24h: number; accountStatus: string; createdAt: string | null }
@@ -118,6 +125,19 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
     if (state.accountStatus !== "active") {
       result.skipped.push({ id: draft.id, reason: `帳號狀態為 ${state.accountStatus}` });
       continue;
+    }
+
+    // 跨輪斷路器冷卻：上一輪觸發斷路器且仍在冷卻期 → 整批跳過該帳號（不每輪重新試探壞帳號）。
+    if (failureLimit > 0 && circuitCooldown > 0) {
+      if (!(accId in circuitUntilCache)) {
+        circuitUntilCache[accId] = await getAccountCircuitUntil(accId).catch(() => null);
+      }
+      const until = circuitUntilCache[accId];
+      if (until) {
+        const mins = Math.ceil((until - Date.now()) / 60000);
+        result.skipped.push({ id: draft.id, reason: `帳號連續失敗冷卻中（約 ${mins} 分後恢復）` });
+        continue;
+      }
     }
 
     // 斷路器：本輪該帳號連續失敗達上限 → 跳過其餘草稿，避免對壞掉/被封帳號連打 API
@@ -222,6 +242,12 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
       state.lastPublishedAt = nowIso;
       if (cleanUrl) publishedProductsThisRun.add(cleanUrl); // 同輪同商品冷卻
       result.published.push({ id: draft.id, postId });
+      // 帳號恢復正常發文 → 解除跨輪斷路器冷卻（本輪每帳號至多清一次）
+      if (failureLimit > 0 && circuitCooldown > 0 && !circuitCleared.has(accId)) {
+        circuitCleared.add(accId);
+        circuitUntilCache[accId] = null;
+        await clearAccountCircuit(accId).catch((e) => log.warn("解除帳號斷路器冷卻失敗", { accountId: accId, err: e }));
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       // 發布步驟不確定（可能已發出）→ needs_verification，不進 failed、不可被批次重試自動重發；
@@ -237,7 +263,15 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
       failuresThisRun[accId] = (failuresThisRun[accId] ?? 0) + 1;
       if (circuitOpen(failuresThisRun[accId], failureLimit) && !alertedBroken.has(accId)) {
         alertedBroken.add(accId);
-        await sendAlert(`⚠️ 帳號連續發文失敗 ${failuresThisRun[accId]} 次，本輪已暫停該帳號。最後錯誤：${msg}`).catch(() => {});
+        // 跨輪冷卻：寫入冷卻到期，後續輪次整批跳過該帳號直到冷卻過或成功發文。
+        if (circuitCooldown > 0) {
+          circuitUntilCache[accId] = Date.now() + circuitCooldown * 60_000;
+          await tripAccountCircuit(accId, circuitCooldown).catch((e) =>
+            log.warn("寫入帳號斷路器冷卻失敗", { accountId: accId, err: e })
+          );
+        }
+        const cd = circuitCooldown > 0 ? `，冷卻 ${circuitCooldown} 分` : "";
+        await sendAlert(`⚠️ 帳號連續發文失敗 ${failuresThisRun[accId]} 次，已暫停該帳號${cd}。最後錯誤：${msg}`).catch(() => {});
       }
     }
   }

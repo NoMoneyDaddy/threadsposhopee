@@ -49,6 +49,9 @@ export const env = {
   // 帳號連續失敗斷路器：單輪同帳號發文失敗數達此上限，即跳過該帳號其餘草稿（避免對
   // 壞掉/被封帳號連續打 API 升高風險），下輪自動重置。0 = 關閉（向後相容）。
   publishAccountFailureLimit: parseInt(process.env.PUBLISH_ACCOUNT_FAILURE_LIMIT || "0", 10),
+  // 斷路器跨輪冷卻（分鐘）：帳號觸發斷路器後，冷卻期內「跨 cron 輪次」整批跳過，
+  // 不每輪重新試探壞帳號；發文成功則解除。0 = 只在單輪內生效（向後相容）。
+  publishCircuitCooldownMinutes: parseInt(process.env.PUBLISH_CIRCUIT_COOLDOWN_MINUTES || "0", 10),
   // 留言（串文 2/2 分潤連結）延遲：主文發出後隔多久才補留言，避免「秒留言」固定行為被偵測。
   // 0 = 立即（向後相容）。逐則可用 draft.reply_delay_minutes 覆寫。
   replyDelayFloorMinutes: parseInt(process.env.REPLY_DELAY_MIN_MINUTES || "0", 10), // 留言延遲「保底」分鐘

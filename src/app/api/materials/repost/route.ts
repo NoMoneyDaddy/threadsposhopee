@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { log } from "@/lib/logger";
 import { getMaterial, createDraftFromMaterial, updateDraft, getGeminiKey, getCopyPrefs, userOwnsThreadsAccount } from "@/lib/store";
 import { withNextSlot, nextOpenSlotAtHours } from "@/services/publish/slots";
 import { getEngagementCached, bestPostingTimes } from "@/services/threads/engagement";
@@ -38,7 +39,7 @@ async function maybeVary(draft: Draft, material: Material, ownerId: string): Pro
     return { draft: updated ?? draft };
   } catch (e) {
     // 細節只記伺服器端 log，對外回固定文案（不洩漏內部/供應商錯誤）
-    console.error("repost 文案重寫失敗：", e instanceof Error ? e.message : e);
+    log.error("repost 文案重寫失敗", { err: e });
     return { draft, note: "文案重寫失敗，沿用原文案" };
   }
 }

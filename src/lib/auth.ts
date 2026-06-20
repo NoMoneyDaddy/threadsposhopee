@@ -1,4 +1,5 @@
 import { getSessionClient } from "@/lib/supabase/clients";
+import { log } from "@/lib/logger";
 import { getServiceClient } from "@/lib/supabase/server";
 import { env, isDemoMode } from "@/lib/env";
 import type { User } from "@supabase/supabase-js";
@@ -42,7 +43,7 @@ export async function getOwnerUserId(): Promise<string | null> {
   for (let page = 1; page <= 20; page++) {
     const { data, error } = await sb.auth.admin.listUsers({ page, perPage: 200 });
     if (error) {
-      console.error("getOwnerUserId listUsers 失敗:", error.message);
+      log.error("getOwnerUserId listUsers 失敗", { err: error.message });
       return null;
     }
     const owner = data.users.find((u) => u.email?.toLowerCase() === env.ownerEmail);

@@ -1,4 +1,5 @@
 import { fetchWithTimeout } from "@/lib/http";
+import { log } from "@/lib/logger";
 import { assertSafePublicUrl } from "@/lib/url-guard";
 
 // 綁定即驗證：存金鑰前先打對方 API 確認有效。
@@ -21,7 +22,7 @@ export async function validateApifyToken(token: string): Promise<KeyCheck> {
     return { ok: true };
   } catch (e) {
     // 連不上 Apify，無法確認 → 放行（記 log 便於排查，不含金鑰）
-    console.warn("validateApifyToken 無法確認，放行存檔：", e instanceof Error ? e.message : e);
+    log.warn("validateApifyToken 無法確認，放行存檔", { err: e });
     return { ok: true };
   }
 }
@@ -37,7 +38,7 @@ export async function validateGeminiKey(key: string): Promise<KeyCheck> {
     }
     return { ok: true };
   } catch (e) {
-    console.warn("validateGeminiKey 無法確認，放行存檔：", e instanceof Error ? e.message : e);
+    log.warn("validateGeminiKey 無法確認，放行存檔", { err: e });
     return { ok: true };
   }
 }

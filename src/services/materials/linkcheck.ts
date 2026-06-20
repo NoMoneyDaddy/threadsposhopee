@@ -3,6 +3,7 @@
 // 上限：蝦皮「商品下架」有時仍回 200 導向其他頁，這種軟失效抓不到；
 //       升級路徑為改用 Shopee productOfferV2 重查商品是否存在。
 import { fetchWithTimeout } from "@/lib/http";
+import { log } from "@/lib/logger";
 import { assertSafePublicUrl } from "@/lib/url-guard";
 import { listMaterialsToCheck, setAffiliateChecked, reviveAffiliateLink, type MaterialToCheck } from "@/lib/store";
 import { regenerateAffiliateLink } from "./regen";
@@ -23,7 +24,7 @@ type Outcome = "ok" | "revived" | "dead";
 // 失效連結先嘗試重產（短連結過期常見）：重產出新連結且確認非失效 → 復活；否則標失效。
 async function checkOne(m: MaterialToCheck, ownerUserId: string | null): Promise<Outcome> {
   const logFail = (what: string) => (e: unknown) =>
-    console.warn(`連結健檢 ${what} 失敗（material ${m.id}）：`, e instanceof Error ? e.message : e);
+    log.warn("連結健檢失敗", { what, materialId: m.id, err: e });
   if (!(await isLinkDead(m.link))) {
     await setAffiliateChecked(m.id, false).catch(logFail("標記已檢查"));
     return "ok";

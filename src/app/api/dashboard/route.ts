@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { log } from "@/lib/logger";
 import { getCurrentUser } from "@/lib/auth";
 import {
   getDashboardStats,
@@ -63,7 +64,7 @@ export async function GET() {
   // 失敗不擋整個儀表板，但記 log 以利診斷（不靜默吞）。
   const publishPlan = (
     await getPublishPlan(ownerId).catch((e) => {
-      console.error("getPublishPlan 失敗：", e instanceof Error ? e.message : e);
+      log.error("getPublishPlan 失敗", { ownerId, err: e });
       return [];
     })
   ).slice(0, 20);

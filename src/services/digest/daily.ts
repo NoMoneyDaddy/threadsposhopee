@@ -1,6 +1,7 @@
 // 每日成效摘要：把昨日發布量、互動、熱門貼文、分潤收益與待辦提醒打包成一則訊息，
 // 由總排程在每日固定時段推到 Telegram，讓操作者免登入就掌握脈動。
 import { env, isDemoMode } from "@/lib/env";
+import { log } from "@/lib/logger";
 import { getOwnerUserId } from "@/lib/auth";
 import { getDashboardStats, getGeminiKey } from "@/lib/store";
 import { getEngagementCached } from "@/services/threads/engagement";
@@ -60,7 +61,7 @@ export async function buildDailyDigest(): Promise<string | null> {
   const ownerId = await getOwnerUserId();
   if (!ownerId) return null;
   const stats = await getDashboardStats(ownerId).catch((e) => {
-    console.error("每日摘要 getDashboardStats 失敗：", e instanceof Error ? e.message : e);
+    log.error("每日摘要 getDashboardStats 失敗", { ownerId, err: e });
     return null;
   });
   if (!stats) return null;

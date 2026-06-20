@@ -1,6 +1,7 @@
 // Threads 發文：建立媒體容器 → 發布 → （可選）在自己貼文下留言放分潤連結。
 // 支援單圖/單片、純文字，以及多媒體輪播（carousel）。
 import { fetchWithTimeout } from "@/lib/http";
+import { log } from "@/lib/logger";
 import { assertSafePublicUrl } from "@/lib/url-guard";
 import type { DraftMedia } from "@/lib/types";
 
@@ -186,7 +187,7 @@ export async function publishToThreads(
   try {
     await publishReply(input.threadsUserId, input.accessToken, postId, input.replyText);
   } catch (e) {
-    console.warn(`貼文 ${postId} 的留言發布失敗:`, e instanceof Error ? e.message : e);
+    log.warn("留言發布失敗", { postId, err: e });
     return { postId, replyFailed: true };
   }
   return { postId };

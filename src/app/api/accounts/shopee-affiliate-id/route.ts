@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { log } from "@/lib/logger";
 import { setShopeeAffiliateId } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
 
@@ -31,7 +32,7 @@ export async function POST(req: Request) {
     await setShopeeAffiliateId(user.id, affiliateId || null);
     return NextResponse.json({ ok: true });
   } catch (e) {
-    console.error("儲存 affiliate_id 失敗", e);
+    log.error("儲存 affiliate_id 失敗", { err: e });
     return NextResponse.json({ ok: false, error: "伺服器暫時無法處理，請稍後再試" }, { status: 500 });
   }
 }

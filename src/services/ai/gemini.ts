@@ -1,4 +1,5 @@
 import { env } from "@/lib/env";
+import { log } from "@/lib/logger";
 import { assertSafePublicUrl } from "@/lib/url-guard";
 import { fetchWithTimeout, fetchWithRetry } from "@/lib/http";
 import { uploadToGeminiFiles } from "./gemini-files";
@@ -31,44 +32,44 @@ export async function generateWithGemini(
       // 非 2xx（如 404/500）→ 跳過 inline、純文字生成（fetch 不丟例外，需自行判斷，
       // 否則會把錯誤頁內容當媒體送進 Gemini 導致整體生成失敗）。不可 return：後面還要呼叫 Gemini。
       if (!res.ok) {
-        console.warn(`媒體抓取回應異常（${res.status}）跳過，純文字生成：${mediaUrl}`);
+        log.warn("媒體抓取回應異常，純文字生成", { status: res.status, mediaUrl });
       } else if (mediaType === "video") {
         // 影片走 Files API：先看 content-length，超過記憶體上限就跳過；否則下載→上傳→取 fileUri。
         const declared = parseInt(res.headers.get("content-length") ?? "", 10);
         const key = apiKey || env.geminiApiKey;
         if (Number.isFinite(declared) && declared > MAX_FILES_MEDIA_BYTES) {
-          console.warn(`影片過大（${declared} bytes）跳過，純文字生成：${mediaUrl}`);
+          log.warn("影片過大跳過，純文字生成", { bytes: declared, mediaUrl });
         } else if (!key) {
-          console.warn(`無 Gemini 金鑰，影片跳過，純文字生成：${mediaUrl}`);
+          log.warn("無 Gemini 金鑰，影片跳過，純文字生成", { mediaUrl });
         } else {
           const buf = Buffer.from(await res.arrayBuffer());
           if (buf.length > MAX_FILES_MEDIA_BYTES) {
-            console.warn(`影片過大（${buf.length} bytes）跳過，純文字生成：${mediaUrl}`);
+            log.warn("影片過大跳過，純文字生成", { bytes: buf.length, mediaUrl });
           } else {
             const mime = res.headers.get("content-type") ?? "video/mp4";
             const fileUri = await uploadToGeminiFiles(buf, mime, key);
             if (fileUri) parts.push({ fileData: { mimeType: mime, fileUri } });
-            else console.warn(`影片上傳 Files API 失敗，純文字生成：${mediaUrl}`);
+            else log.warn("影片上傳 Files API 失敗，純文字生成", { mediaUrl });
           }
         }
       } else {
         // 圖片走 inline（base64）：先看 content-length，過大就不讀 body（省頻寬/記憶體）
         const declared = parseInt(res.headers.get("content-length") ?? "", 10);
         if (Number.isFinite(declared) && declared > MAX_INLINE_MEDIA_BYTES) {
-          console.warn(`圖片過大（${declared} bytes）跳過 inline，純文字生成：${mediaUrl}`);
+          log.warn("圖片過大跳過 inline，純文字生成", { bytes: declared, mediaUrl });
         } else {
           const buf = Buffer.from(await res.arrayBuffer());
           if (mediaFitsInline(buf.length)) {
             const mime = res.headers.get("content-type") ?? "image/jpeg";
             parts.push({ inlineData: { mimeType: mime, data: buf.toString("base64") } });
           } else {
-            console.warn(`圖片過大（${buf.length} bytes）跳過 inline，純文字生成：${mediaUrl}`);
+            log.warn("圖片過大跳過 inline，純文字生成", { bytes: buf.length, mediaUrl });
           }
         }
       }
     } catch (e) {
       // 媒體抓取失敗 → 記 log 後純文字生成（不擋文案產出）
-      console.warn(`媒體抓取失敗，純文字生成：${mediaUrl}`, e instanceof Error ? e.message : e);
+      log.warn("媒體抓取失敗，純文字生成", { mediaUrl, err: e });
     }
   }
 

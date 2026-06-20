@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { log } from "@/lib/logger";
 import { getCurrentUser } from "@/lib/auth";
 import { runPublishQueue } from "@/services/publish/queue";
 
@@ -20,7 +21,7 @@ export async function POST() {
     const result = await runPublishQueue();
     return NextResponse.json({ ok: true, result });
   } catch (e) {
-    console.error("手動跑佇列失敗", e);
+    log.error("手動跑佇列失敗", { err: e });
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 500 });
   }
 }

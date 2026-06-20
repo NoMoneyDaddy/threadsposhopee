@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { log } from "@/lib/logger";
 import { setUserCloudinary } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
 import { parseCloudinaryInput } from "@/services/media/cloudinary-config";
@@ -23,7 +24,7 @@ export async function POST(req: Request) {
     await setUserCloudinary(user.id, parsed.cloud, parsed.preset);
     return NextResponse.json({ ok: true });
   } catch (e) {
-    console.error("儲存 Cloudinary 設定失敗", e);
+    log.error("儲存 Cloudinary 設定失敗", { err: e });
     return NextResponse.json({ ok: false, error: "伺服器暫時無法處理，請稍後再試" }, { status: 500 });
   }
 }

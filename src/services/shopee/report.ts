@@ -3,6 +3,7 @@
 import { buildShopeeAuth } from "@/services/shopee/sign";
 import { fetchWithTimeout } from "@/lib/http";
 import { env } from "@/lib/env";
+import { getCachedJson, setCachedJson } from "@/lib/store";
 
 const GQL = "https://open-api.affiliate.shopee.tw/graphql";
 
@@ -141,4 +142,41 @@ export async function getAffiliateRevenue(days = 30): Promise<AffiliateRevenue> 
     bySubId: topSubs,
     truncated
   };
+}
+
+export interface ItemRevenue {
+  commission: number;
+  count: number;
+}
+
+// 依 itemId 彙整實際佣金（數值對應素材 item_id，比 itemName 模糊比對可靠）。純函式可測。
+export function aggregateItemRevenue(
+  nodes: { orders?: { items?: { itemId: number | null; itemTotalCommission: string | null }[] }[] }[]
+): Record<string, ItemRevenue> {
+  const map: Record<string, ItemRevenue> = {};
+  for (const n of nodes) {
+    for (const o of n.orders ?? []) {
+      for (const it of o.items ?? []) {
+        if (it.itemId == null) continue;
+        const key = String(it.itemId);
+        const cur = map[key] ?? { commission: 0, count: 0 };
+        cur.commission = Math.round((cur.commission + num(it.itemTotalCommission)) * 100) / 100;
+        cur.count++;
+        map[key] = cur;
+      }
+    }
+  }
+  return map;
+}
+
+// 素材成效回灌用：itemId → 佣金/筆數 對照（owner 限定，app_state 快取省 API 額度）。
+// 失敗/未設金鑰由呼叫端 catch 成空物件，不擋素材頁。
+export async function getItemRevenueMap(ownerId: string, days = 30): Promise<Record<string, ItemRevenue>> {
+  const key = `item_revenue:${ownerId}:${days}`;
+  const cached = await getCachedJson<Record<string, ItemRevenue>>(key, 6 * 3600_000).catch(() => null);
+  if (cached) return cached;
+  const { nodes } = await fetchConversions(days);
+  const map = aggregateItemRevenue(nodes);
+  await setCachedJson(key, map).catch(() => {});
+  return map;
 }

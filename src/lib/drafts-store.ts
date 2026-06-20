@@ -202,7 +202,9 @@ export async function deleteDraft(id: string, ownerId: string): Promise<boolean>
   return !error;
 }
 
-export async function updateDraftStatus(id: string, status: Draft["status"], patch: Partial<Draft> = {}) {
+// ownerId 可選：背景 worker（跨租戶）傳入做縱深防禦，確保更新不越界到他人列；
+// API route 端已先以 getDraft(id, ownerId) 驗證歸屬，可不帶。
+export async function updateDraftStatus(id: string, status: Draft["status"], patch: Partial<Draft> = {}, ownerId?: string) {
   // error 訊息截斷到 500 字，避免外部 API 巨量錯誤撐爆欄位
   if (typeof patch.error === "string") patch = { ...patch, error: patch.error.slice(0, 500) };
   if (isDemoMode) {
@@ -211,7 +213,9 @@ export async function updateDraftStatus(id: string, status: Draft["status"], pat
     return d;
   }
   const sb = getServiceClient()!;
-  const { data } = await sb.from("drafts").update({ status, ...patch }).eq("id", id).select().single();
+  let q = sb.from("drafts").update({ status, ...patch }).eq("id", id);
+  if (ownerId) q = q.eq("owner_id", ownerId);
+  const { data } = await q.select().single();
   return data as Draft;
 }
 
@@ -363,11 +367,13 @@ export async function requeueReply(id: string, ownerId: string): Promise<boolean
 }
 
 // 原子性狀態更新（compare-and-swap）：只有當目前狀態 == expectedStatus 才更新。
+// ownerId 可選（背景 worker 傳入做縱深防禦，見 updateDraftStatus 註解）。
 export async function updateDraftStatusAtomic(
   id: string,
   status: Draft["status"],
   expectedStatus: Draft["status"],
-  patch: Partial<Draft> = {}
+  patch: Partial<Draft> = {},
+  ownerId?: string
 ): Promise<Draft | null> {
   if (isDemoMode) {
     const d = demo.drafts.find((x) => x.id === id);
@@ -378,13 +384,9 @@ export async function updateDraftStatusAtomic(
     return null;
   }
   const sb = getServiceClient()!;
-  const { data } = await sb
-    .from("drafts")
-    .update({ status, ...patch })
-    .eq("id", id)
-    .eq("status", expectedStatus)
-    .select()
-    .maybeSingle();
+  let q = sb.from("drafts").update({ status, ...patch }).eq("id", id).eq("status", expectedStatus);
+  if (ownerId) q = q.eq("owner_id", ownerId);
+  const { data } = await q.select().maybeSingle();
   return (data as Draft) ?? null;
 }
 

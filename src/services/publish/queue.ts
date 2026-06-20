@@ -58,8 +58,8 @@ export async function runPublishQueue(shard?: ShardOpts): Promise<PublishResult>
   const result: PublishResult = { considered: 0, published: [], skipped: [], failed: [], reclaimed: 0 };
   // 分布式鎖：避免同一片（或全域）同時跑而各自繞過防封間隔。不同片用不同鎖鍵 → 可並行。
   const lockKey = shard ? `publish_queue_lock:s${shard.index}of${shard.total}` : "publish_queue_lock";
-  const locked = await acquirePublishLock(5, lockKey);
-  if (!locked) {
+  const lockToken = await acquirePublishLock(5, lockKey);
+  if (!lockToken) {
     result.lockBusy = true;
     return result;
   }
@@ -67,7 +67,8 @@ export async function runPublishQueue(shard?: ShardOpts): Promise<PublishResult>
     return await runPublishQueueLocked(result, shard);
   } finally {
     // 釋放鎖失敗不該炸上層，但需可見：否則下一輪 cron 會卡 lockBusy 直到 TTL 過期難以察覺。
-    await releasePublishLock(lockKey).catch((e) => log.warn("釋放發文鎖失敗", { lockKey, err: e }));
+    // 帶 token 釋放：若本輪超時、鎖已被他輪搶走則不誤放（見 releasePublishLock）。
+    await releasePublishLock(lockKey, lockToken).catch((e) => log.warn("釋放發文鎖失敗", { lockKey, err: e }));
   }
 }
 
@@ -79,6 +80,12 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
   }
   // 先回收上次中斷卡在 publishing 的草稿（標 failed 待人工重試）
   result.reclaimed = await reclaimStalePublishing();
+  // 跨租戶批次回收：單輪回收量異常偏高多半代表系統性故障（非個別中斷），告警以利及早察覺。
+  if (result.reclaimed >= 10) {
+    await sendAlert(`⚠️ 發文回收量異常：單輪有 ${result.reclaimed} 篇卡住的 publishing 被回收，請檢查發文流程是否系統性故障。`).catch(
+      () => {}
+    );
+  }
   // 分片模式只處理本片帳號的草稿（同帳號穩定落同片）；未綁帳號者歸片 0，至少有人記錄略過
   const drafts = (await listApprovedDrafts()).filter((d) => inShard(d.threads_account_id, shard));
   result.considered = drafts.length;
@@ -179,7 +186,7 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
     }
 
     // 原子鎖定：只有狀態仍是 approved 才搶得到；搶不到代表已被其他排程處理 → 跳過
-    const locked = await updateDraftStatusAtomic(draft.id, "publishing", "approved");
+    const locked = await updateDraftStatusAtomic(draft.id, "publishing", "approved", {}, draft.owner_id ?? undefined);
     if (!locked) {
       result.skipped.push({ id: draft.id, reason: "草稿已被其他程序處理" });
       continue;
@@ -219,7 +226,14 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
         : draft.reply_text
           ? { reply_status: replyFailedInline ? ("failed" as const) : ("published" as const) }
           : {};
-      await updateDraftStatus(draft.id, "published", { published_post_id: postId, published_at: nowIso, ...replyPatch });
+      // CAS 落地：只在仍是 publishing 時寫 published，避免覆寫掉並行 reclaim 已改成的
+      // needs_verification（貼文確實已送出，postId 在手，保守留待人工確認即可）。
+      const saved = await updateDraftStatusAtomic(draft.id, "published", "publishing", {
+        published_post_id: postId,
+        published_at: nowIso,
+        ...replyPatch
+      }, draft.owner_id ?? undefined);
+      if (!saved) log.warn("發布成功但草稿已非 publishing，保留現狀不覆寫", { draftId: draft.id, postId });
       // 更新本地節奏狀態，讓同帳號的下一篇遵守間隔/上限
       publishedThisRun[accId] = doneThisRun + 1;
       state.lastPublishedAt = nowIso;

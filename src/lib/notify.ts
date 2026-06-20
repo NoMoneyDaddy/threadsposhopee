@@ -1,7 +1,8 @@
 import { env } from "./env";
 import { fetchWithTimeout } from "./http";
+import { assertSafePublicUrl } from "./url-guard";
 import { log } from "./logger";
-import { getUserTelegramChatId } from "./store";
+import { getUserTelegramChatId, getUserDiscordWebhook } from "./store";
 
 // 共用底層：對指定 chat 發 Telegram 訊息。回傳是否成功（供「測試」按鈕判斷）。
 // 絕不丟錯（告警失敗不該再炸上層）。
@@ -37,11 +38,37 @@ export async function sendAlert(text: string): Promise<void> {
   await sendTelegram(env.telegramBotToken, env.telegramChatId, text);
 }
 
-// 個人通知：發到某使用者自綁的 chat（用平台共用 bot token）。
-// 未設 bot token 或該使用者未綁 chat → 靜默略過（個人通知為選配，缺了不該報錯）。
+// 共用底層：對 Discord webhook 發訊（POST {content}）。URL 來自使用者，先過 SSRF 守衛。
+// 絕不丟錯。回傳是否成功（供「測試」按鈕判斷）。
+export async function sendDiscord(webhookUrl: string, text: string): Promise<boolean> {
+  try {
+    const safe = assertSafePublicUrl(webhookUrl).href;
+    const res = await fetchWithTimeout(
+      safe,
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: text }) },
+      8000
+    );
+    if (!res.ok) {
+      log.warn("Discord webhook 非 2xx", { status: res.status });
+      return false;
+    }
+    return true;
+  } catch (e) {
+    log.warn("Discord webhook 失敗", { err: e instanceof Error ? e.message : e });
+    return false;
+  }
+}
+
+// 個人通知：發到某使用者自綁的所有通道（Telegram + Discord，各自選配）。
+// 未綁任何通道 → 靜默略過（個人通知為選配，缺了不該報錯）。並行送、互不影響。
 export async function sendUserAlert(ownerId: string | null | undefined, text: string): Promise<void> {
-  if (!ownerId || !env.telegramBotToken) return;
-  const chatId = await getUserTelegramChatId(ownerId).catch(() => null);
-  if (!chatId) return;
-  await sendTelegram(env.telegramBotToken, chatId, text);
+  if (!ownerId) return;
+  const [chatId, discordUrl] = await Promise.all([
+    getUserTelegramChatId(ownerId).catch(() => null),
+    getUserDiscordWebhook(ownerId).catch(() => null)
+  ]);
+  const jobs: Promise<unknown>[] = [];
+  if (chatId && env.telegramBotToken) jobs.push(sendTelegram(env.telegramBotToken, chatId, text));
+  if (discordUrl) jobs.push(sendDiscord(discordUrl, text));
+  await Promise.all(jobs);
 }

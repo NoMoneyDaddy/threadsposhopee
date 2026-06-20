@@ -603,6 +603,30 @@ export async function setUserTelegramChatId(ownerId: string, chatId: string | nu
   if (error) throw error;
 }
 
+// ── 個人 Discord 通知：每人綁自己的 Discord webhook URL（非機密；伺服器發送前過 SSRF 守衛）──
+const demoDiscordWebhook: Record<string, string> = {};
+
+export async function getUserDiscordWebhook(ownerId: string): Promise<string | null> {
+  if (isDemoMode) return demoDiscordWebhook[ownerId] ?? null;
+  const sb = getServiceClient();
+  if (!sb) return null;
+  const { data } = await sb.from("profiles").select("discord_webhook_url").eq("id", ownerId).maybeSingle();
+  const v = data?.discord_webhook_url;
+  return typeof v === "string" && v.trim() ? v.trim() : null;
+}
+
+// url 傳 null 解除綁定。
+export async function setUserDiscordWebhook(ownerId: string, url: string | null): Promise<void> {
+  if (isDemoMode) {
+    if (url) demoDiscordWebhook[ownerId] = url;
+    else delete demoDiscordWebhook[ownerId];
+    return;
+  }
+  const sb = getServiceClient()!;
+  const { error } = await sb.from("profiles").upsert({ id: ownerId, discord_webhook_url: url }, { onConflict: "id" });
+  if (error) throw error;
+}
+
 export async function hasGeminiKey(ownerId: string): Promise<boolean> {
   if (isDemoMode) return false;
   const sb = getServiceClient()!;

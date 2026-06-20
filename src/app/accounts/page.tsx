@@ -6,7 +6,8 @@ import {
   getCopyPrefs,
   getShopeeAffiliateId,
   getUserCloudinary,
-  getUserTelegramChatId
+  getUserTelegramChatId,
+  getUserDiscordWebhook
 } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
 import { env, isDemoMode } from "@/lib/env";
@@ -19,6 +20,7 @@ import CopyPrefsForm from "@/components/CopyPrefsForm";
 import AffiliateIdForm from "@/components/AffiliateIdForm";
 import CloudinaryForm from "@/components/CloudinaryForm";
 import TelegramForm from "@/components/TelegramForm";
+import DiscordForm from "@/components/DiscordForm";
 import { DeleteButton, ToggleButton } from "@/components/RowActions";
 
 export const dynamic = "force-dynamic";
@@ -39,6 +41,7 @@ export default async function AccountsPage({
   const affiliateId = await getShopeeAffiliateId(ownerId);
   const cloudinary = user ? await getUserCloudinary(ownerId) : null;
   const telegramBound = user ? Boolean(await getUserTelegramChatId(user.id)) : false;
+  const discordBound = user ? Boolean(await getUserDiscordWebhook(user.id)) : false;
 
   return (
     <div className="space-y-6">
@@ -93,7 +96,10 @@ export default async function AccountsPage({
         {user && <GeminiForm bound={geminiBound} />}
       </div>
 
-      {user && <TelegramForm bound={telegramBound} botConfigured={!isDemoMode && Boolean(env.telegramBotToken)} />}
+      <div className="grid gap-4 md:grid-cols-2">
+        {user && <TelegramForm bound={telegramBound} botConfigured={!isDemoMode && Boolean(env.telegramBotToken)} />}
+        {user && <DiscordForm bound={discordBound} />}
+      </div>
 
       <CopyPrefsForm initial={copyPrefs} />
 

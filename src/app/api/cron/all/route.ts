@@ -5,7 +5,9 @@ import { runAllSources } from "@/services/pipeline/run";
 import { runPublishQueue } from "@/services/publish/queue";
 import { refreshExpiringTokens } from "@/services/threads/refresh";
 import { checkAffiliateLinks } from "@/services/materials/linkcheck";
+import { buildDailyDigest } from "@/services/digest/daily";
 import { getOwnerUserId } from "@/lib/auth";
+import { env } from "@/lib/env";
 import { setHeartbeat } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
@@ -49,6 +51,17 @@ export async function GET(req: Request) {
       key: "checkLinks",
       run: async () => checkAffiliateLinks(await getOwnerUserId()),
       warn: (r) => (r?.revived || r?.dead ? `🔗 連結重產 ${r.revived ?? 0}、仍失效 ${r.dead ?? 0}` : null)
+    });
+  }
+  // 每日成效摘要（台北 09:00 = UTC 01:00–01:14），僅在有設 Telegram 時才組（省 API）
+  if (h === 1 && min < 15 && env.telegramBotToken && env.telegramChatId) {
+    steps.push({
+      key: "dailyDigest",
+      run: async () => {
+        const msg = await buildDailyDigest();
+        if (msg) await sendAlert(msg);
+        return { sent: Boolean(msg) };
+      }
     });
   }
 

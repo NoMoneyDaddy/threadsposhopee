@@ -42,6 +42,28 @@ export async function getHeartbeat(): Promise<string | null> {
   return data?.value ?? null;
 }
 
+// app_state 上的泛用 JSON 快取（給「即時但可短暫舊」的外部資料用，如 Threads insights，省 API 額度）。
+export async function getCachedJson<T>(key: string, maxAgeMs: number): Promise<T | null> {
+  if (isDemoMode) return null;
+  const sb = getServiceClient()!;
+  const { data } = await sb.from("app_state").select("value, updated_at").eq("key", key).maybeSingle();
+  if (!data?.value || !data.updated_at) return null;
+  if (Date.now() - new Date(data.updated_at).getTime() > maxAgeMs) return null;
+  try {
+    return JSON.parse(data.value) as T;
+  } catch {
+    return null;
+  }
+}
+
+export async function setCachedJson(key: string, value: unknown): Promise<void> {
+  if (isDemoMode) return;
+  const sb = getServiceClient()!;
+  await sb
+    .from("app_state")
+    .upsert({ key, value: JSON.stringify(value), updated_at: new Date().toISOString() }, { onConflict: "key" });
+}
+
 // 發文佇列分布式鎖：避免手動「立即跑一輪」與 cron 排程同時執行 runPublishQueue，
 // 各自讀到相同的節奏狀態而同時放行，繞過每帳號最小間隔（防封）。
 // 用 app_state 單列做 compare-and-set：value 存「鎖到期時間（ISO）」，
@@ -141,21 +163,66 @@ export async function createMaterial(input: Partial<Material>, ownerId: string):
 }
 
 // 連結健檢 worker 用：取最久沒檢查、目前仍有效的素材（跨租戶）。
+// 健檢用的精簡素材投影（含重產所需欄位）。
+export type MaterialToCheck = {
+  id: string;
+  owner_id: string | null;
+  shop_id: string;
+  item_id: string;
+  clean_product_url: string | null;
+  link: string;
+  affiliate_sub_id: string | null;
+};
+// ownerId 有值時只撈該 owner 的素材（owner 手動觸發健檢用）；null = 全租戶（cron worker）。
 export async function listMaterialsToCheck(
-  limit = 30
-): Promise<{ id: string; link: string }[]> {
+  limit = 30,
+  ownerId: string | null = null
+): Promise<MaterialToCheck[]> {
   if (isDemoMode) return [];
   const sb = getServiceClient()!;
-  const { data } = await sb
+  let q = sb
     .from("materials")
-    .select("id, affiliate_short_link, affiliate_checked_at")
+    .select("id, owner_id, shop_id, item_id, clean_product_url, affiliate_short_link, affiliate_sub_id, affiliate_checked_at")
     .eq("affiliate_valid", true)
-    .not("affiliate_short_link", "is", null)
-    .order("affiliate_checked_at", { ascending: true, nullsFirst: true })
-    .limit(limit);
+    .not("affiliate_short_link", "is", null);
+  if (ownerId) q = q.eq("owner_id", ownerId);
+  const { data } = await q.order("affiliate_checked_at", { ascending: true, nullsFirst: true }).limit(limit);
   return (data ?? [])
     .filter((m) => m.affiliate_short_link)
-    .map((m) => ({ id: m.id, link: m.affiliate_short_link as string }));
+    .map((m) => ({
+      id: m.id,
+      owner_id: m.owner_id ?? null,
+      shop_id: m.shop_id,
+      item_id: m.item_id,
+      clean_product_url: m.clean_product_url ?? null,
+      link: m.affiliate_short_link as string,
+      affiliate_sub_id: m.affiliate_sub_id ?? null
+    }));
+}
+
+// 重產成功：寫回新短連結＋subId，並把 valid/checked_at 一併更新（單次寫入）。
+// 多租戶：service-role 繞 RLS，故以 owner_id 應用層過濾（ownerId 為 null 時退回僅 id，理論上素材必有 owner）。
+export async function reviveAffiliateLink(
+  id: string,
+  ownerId: string | null,
+  shortLink: string,
+  subId: string | null
+): Promise<void> {
+  if (isDemoMode) return;
+  const sb = getServiceClient()!;
+  let q = sb
+    .from("materials")
+    .update({
+      affiliate_short_link: shortLink,
+      affiliate_sub_id: subId,
+      affiliate_generated_at: new Date().toISOString(),
+      affiliate_valid: true,
+      affiliate_checked_at: new Date().toISOString()
+    })
+    .eq("id", id);
+  if (ownerId) q = q.eq("owner_id", ownerId);
+  const { error } = await q;
+  if (error) throw new Error(`寫回重產連結失敗：${error.message}`);
 }
 
 // 寫回健檢結果：更新 checked_at；dead=true 才標 affiliate_valid=false（保守）。
@@ -239,6 +306,62 @@ export async function userOwnsThreadsAccount(accountId: string, ownerId: string)
     .eq("owner_id", ownerId)
     .maybeSingle();
   return Boolean(data);
+}
+
+// 該使用者所有啟用帳號的解密 token（依 account id 索引）。貼文互動數據需逐帳號 token 查 insights。
+export async function listThreadsAccountTokens(ownerId: string): Promise<{ id: string; accessToken: string }[]> {
+  if (isDemoMode) return [];
+  const sb = getServiceClient()!;
+  const { data } = await sb
+    .from("threads_accounts")
+    .select("id, access_token_enc, status")
+    .eq("owner_id", ownerId)
+    .eq("status", "active");
+  return (data ?? [])
+    .filter((r) => r.access_token_enc)
+    .map((r) => {
+      try {
+        return { id: r.id, accessToken: decrypt(r.access_token_enc) };
+      } catch (e) {
+        console.error(`解密帳號 ${r.id} token 失敗：`, e);
+        return null;
+      }
+    })
+    .filter((x): x is { id: string; accessToken: string } => x !== null);
+}
+
+// 最近已發布、且有 Threads 貼文 id 的草稿（查互動數據用）。
+export type PublishedPostRef = {
+  id: string;
+  product_name: string | null;
+  published_post_id: string;
+  threads_account_id: string | null;
+  published_at: string | null;
+};
+export async function listRecentPublishedPosts(ownerId: string, limit = 15): Promise<PublishedPostRef[]> {
+  if (isDemoMode) {
+    return demo.drafts
+      .filter((d) => d.status === "published" && d.published_post_id)
+      .sort((a, b) => (b.published_at ?? b.created_at).localeCompare(a.published_at ?? a.created_at))
+      .slice(0, limit)
+      .map((d) => ({
+        id: d.id,
+        product_name: d.product_name ?? null,
+        published_post_id: d.published_post_id as string,
+        threads_account_id: d.threads_account_id ?? null,
+        published_at: d.published_at ?? d.created_at
+      }));
+  }
+  const sb = getServiceClient()!;
+  const { data } = await sb
+    .from("drafts")
+    .select("id, product_name, published_post_id, threads_account_id, published_at")
+    .eq("owner_id", ownerId)
+    .eq("status", "published")
+    .not("published_post_id", "is", null)
+    .order("published_at", { ascending: false })
+    .limit(limit);
+  return (data ?? []) as PublishedPostRef[];
 }
 
 // 新增 Threads 發文帳號（access token / client secret 加密後存放）
@@ -748,6 +871,28 @@ export async function listTakenScheduledSlots(ownerId: string): Promise<Set<stri
   return new Set((data ?? []).map((r) => new Date(r.scheduled_at as string).toISOString()));
 }
 
+// 商品冷卻：該 owner 是否在 sinceIso 之後已發過同一分潤商品（跨任一帳號）。
+export async function wasProductPublishedSince(ownerId: string, cleanUrl: string, sinceIso: string): Promise<boolean> {
+  if (isDemoMode) {
+    return demo.drafts.some(
+      (d) =>
+        d.owner_id === ownerId &&
+        d.status === "published" &&
+        d.clean_product_url === cleanUrl &&
+        (d.published_at ?? d.created_at) >= sinceIso
+    );
+  }
+  const sb = getServiceClient()!;
+  const { count } = await sb
+    .from("drafts")
+    .select("id", { count: "exact", head: true })
+    .eq("owner_id", ownerId)
+    .eq("status", "published")
+    .eq("clean_product_url", cleanUrl)
+    .gte("published_at", sinceIso);
+  return (count ?? 0) > 0;
+}
+
 export async function getDraft(id: string, ownerId: string): Promise<Draft | null> {
   if (isDemoMode) return demo.drafts.find((d) => d.id === id) ?? null;
   const sb = getServiceClient()!;
@@ -924,6 +1069,31 @@ export async function markReplyFailed(id: string, ownerId: string, err: string):
   if (error) throw new Error(`標記留言失敗失敗：${error.message}`);
 }
 
+// 人工重試「補留言失敗」：reply_status failed → pending、reply_due_at 設為現在，下輪 cron 立即重補。
+// 原子守門（只認 failed），避免與正在補發的狀態打架；回傳是否搶到。
+export async function requeueReply(id: string, ownerId: string): Promise<boolean> {
+  const nowIso = new Date().toISOString();
+  if (isDemoMode) {
+    const d = demo.drafts.find((x) => x.id === id);
+    if (d && d.reply_status === "failed") {
+      Object.assign(d, { reply_status: "pending", reply_due_at: nowIso, error: null });
+      return true;
+    }
+    return false;
+  }
+  const sb = getServiceClient()!;
+  const { data, error } = await sb
+    .from("drafts")
+    .update({ reply_status: "pending", reply_due_at: nowIso, error: null })
+    .eq("id", id)
+    .eq("owner_id", ownerId)
+    .eq("reply_status", "failed")
+    .select("id")
+    .maybeSingle();
+  if (error) throw new Error(`重排補留言失敗：${error.message}`);
+  return Boolean(data);
+}
+
 // 原子性狀態更新（compare-and-swap）：只有當目前狀態 == expectedStatus 才更新。
 export async function updateDraftStatusAtomic(
   id: string,
@@ -1065,7 +1235,7 @@ export async function getPublishPlan(ownerId: string): Promise<PublishPlanRow[]>
 export async function getAccountPublishState(
   threadsAccountId: string,
   ownerId?: string
-): Promise<{ lastPublishedAt: string | null; publishedLast24h: number; accountStatus: string }> {
+): Promise<{ lastPublishedAt: string | null; publishedLast24h: number; accountStatus: string; createdAt: string | null }> {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   if (isDemoMode) {
     const acc = demo.threadsAccounts.find((a) => a.id === threadsAccountId);
@@ -1074,15 +1244,15 @@ export async function getAccountPublishState(
     return {
       lastPublishedAt: last ?? null,
       publishedLast24h: published.filter((d) => (d.published_at ?? d.created_at) >= since).length,
-      accountStatus: acc?.status ?? "active"
+      accountStatus: acc?.status ?? "active",
+      createdAt: (acc as { created_at?: string } | undefined)?.created_at ?? null
     };
   }
   const sb = getServiceClient()!;
-  const { data: acc, error: accError } = await sb
-    .from("threads_accounts")
-    .select("status")
-    .eq("id", threadsAccountId)
-    .maybeSingle();
+  // 多租戶：有 ownerId 時一併過濾帳號歸屬（service-role 繞 RLS）
+  let accQ = sb.from("threads_accounts").select("status, created_at").eq("id", threadsAccountId);
+  if (ownerId) accQ = accQ.eq("owner_id", ownerId);
+  const { data: acc, error: accError } = await accQ.maybeSingle();
   if (accError) throw accError;
   if (!acc) throw new Error(`找不到 ID 為 ${threadsAccountId} 的 Threads 帳號`);
   let latestQ = sb
@@ -1103,7 +1273,8 @@ export async function getAccountPublishState(
   return {
     lastPublishedAt: latest?.[0]?.published_at ?? null,
     publishedLast24h: count ?? 0,
-    accountStatus: acc.status
+    accountStatus: acc.status,
+    createdAt: acc.created_at ?? null
   };
 }
 
@@ -1114,20 +1285,33 @@ export async function getDashboardStats(ownerId: string): Promise<{
   materials: number;
   drafts: { draft: number; approved: number; published: number; failed: number };
   publishedLast24h: number;
-  // 需要注意：token 展期失敗(error)、手動暫停(paused) 的帳號數
-  accountIssues: { error: number; paused: number };
+  // 需要注意：token 展期失敗(error)、手動暫停(paused)、token 即將到期/已過期(tokenExpiring) 的帳號數
+  accountIssues: { error: number; paused: number; tokenExpiring: number };
+  // 延遲留言（串文 2/2）：待補(pending)／補發失敗(failed) 數，讓 owner 一眼看出是否卡住
+  replies: { pending: number; failed: number };
+  // 健檢標記失效的素材數（連結已死、待重產/人工處理）
+  invalidMaterials: number;
 }> {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  // token 即將到期門檻：到期前 7 天（與展期視窗一致），含已過期
+  const expSoon = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
   if (isDemoMode) {
     const by = (s: string) => demo.drafts.filter((d) => d.status === s).length;
     const accBy = (s: string) => demo.threadsAccounts.filter((a) => a.status === s).length;
+    const replyBy = (s: string) => demo.drafts.filter((d) => d.reply_status === s).length;
     return {
       threadsAccounts: demo.threadsAccounts.length,
       sources: demo.sources.filter((s) => s.enabled).length,
       materials: demo.materials.length,
       drafts: { draft: by("draft"), approved: by("approved"), published: by("published"), failed: by("failed") },
       publishedLast24h: demo.drafts.filter((d) => d.status === "published").length,
-      accountIssues: { error: accBy("error"), paused: accBy("paused") }
+      accountIssues: {
+        error: accBy("error"),
+        paused: accBy("paused"),
+        tokenExpiring: demo.threadsAccounts.filter((a) => a.token_expires_at && a.token_expires_at <= expSoon).length
+      },
+      replies: { pending: replyBy("pending"), failed: replyBy("failed") },
+      invalidMaterials: demo.materials.filter((m) => m.affiliate_valid === false).length
     };
   }
   const sb = getServiceClient()!;
@@ -1135,7 +1319,7 @@ export async function getDashboardStats(ownerId: string): Promise<{
     const { count: c } = await build(sb.from(table).select("*", { count: "exact", head: true }).eq("owner_id", ownerId));
     return c ?? 0;
   };
-  const [threadsAccounts, sources, materials, draft, approved, published, failed, publishedLast24h, accError, accPaused] =
+  const [threadsAccounts, sources, materials, draft, approved, published, failed, publishedLast24h, accError, accPaused, replyPending, replyFailed, tokenExpiring, invalidMaterials] =
     await Promise.all([
       count("threads_accounts"),
       count("sources", (q) => q.eq("enabled", true)),
@@ -1146,7 +1330,11 @@ export async function getDashboardStats(ownerId: string): Promise<{
       count("drafts", (q) => q.eq("status", "failed")),
       count("drafts", (q) => q.eq("status", "published").gte("published_at", since)),
       count("threads_accounts", (q) => q.eq("status", "error")),
-      count("threads_accounts", (q) => q.eq("status", "paused"))
+      count("threads_accounts", (q) => q.eq("status", "paused")),
+      count("drafts", (q) => q.eq("reply_status", "pending")),
+      count("drafts", (q) => q.eq("reply_status", "failed")),
+      count("threads_accounts", (q) => q.eq("status", "active").not("token_expires_at", "is", null).lte("token_expires_at", expSoon)),
+      count("materials", (q) => q.eq("affiliate_valid", false))
     ]);
   return {
     threadsAccounts,
@@ -1154,7 +1342,9 @@ export async function getDashboardStats(ownerId: string): Promise<{
     materials,
     drafts: { draft, approved, published, failed },
     publishedLast24h,
-    accountIssues: { error: accError, paused: accPaused }
+    accountIssues: { error: accError, paused: accPaused, tokenExpiring },
+    replies: { pending: replyPending, failed: replyFailed },
+    invalidMaterials
   };
 }
 

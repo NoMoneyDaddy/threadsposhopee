@@ -14,11 +14,12 @@ import {
   claimReplyForPublish,
   reclaimStaleReplies,
   markReplyPublished,
-  markReplyFailed
+  markReplyFailed,
+  wasProductPublishedSince
 } from "@/lib/store";
 import { publishToThreads, publishReply } from "@/services/threads/publish";
 import { normalizeDraftMedia } from "@/lib/media";
-import { effectiveGapMinutes, shardOf } from "@/services/publish/cadence";
+import { effectiveGapMinutes, shardOf, warmupDailyCap } from "@/services/publish/cadence";
 import { replyDelayMinutes } from "@/services/publish/reply-timing";
 
 export interface PublishResult {
@@ -71,7 +72,13 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
   // 以 Threads 帳號為單位控制節奏；同一次執行內累積計數
   const startTime = Date.now();
   const publishedThisRun: Record<string, number> = {};
-  const stateCache: Record<string, { lastPublishedAt: string | null; publishedLast24h: number; accountStatus: string }> = {};
+  const stateCache: Record<
+    string,
+    { lastPublishedAt: string | null; publishedLast24h: number; accountStatus: string; createdAt: string | null }
+  > = {};
+  // 商品冷卻：記住本輪已發過的商品（跨帳號），避免同輪／DB 尚未可見時重複放行。
+  const cooldownHours = env.productCooldownHours;
+  const publishedProductsThisRun = new Set<string>();
 
   for (const draft of drafts) {
     // 接近 maxDuration(60s) 上限就停手，避免草稿卡在 publishing 狀態，留待下次排程
@@ -104,8 +111,17 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
       result.skipped.push({ id: draft.id, reason: "本次批次已達上限" });
       continue;
     }
-    if (state.publishedLast24h + doneThisRun >= env.publishMaxPerDay) {
-      result.skipped.push({ id: draft.id, reason: "已達每日上限" });
+    // 每日上限：新帳號暖機期內自動調降（前 N 天 1→max 線性遞增），降低新號被封風險。
+    const dailyCap =
+      env.accountWarmupDays > 0 && state.createdAt
+        ? warmupDailyCap(
+            env.publishMaxPerDay,
+            env.accountWarmupDays,
+            Math.floor((Date.now() - new Date(state.createdAt).getTime()) / 86_400_000)
+          )
+        : env.publishMaxPerDay;
+    if (state.publishedLast24h + doneThisRun >= dailyCap) {
+      result.skipped.push({ id: draft.id, reason: `已達每日上限（${dailyCap}）` });
       continue;
     }
     if (state.lastPublishedAt) {
@@ -118,6 +134,22 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
       );
       if (gapMin < required) {
         result.skipped.push({ id: draft.id, reason: `未達最小間隔（${Math.round(gapMin)}/${required} 分）` });
+        continue;
+      }
+    }
+
+    // 商品冷卻：同一分潤商品在冷卻期內已發過（本輪或近期 DB）就先不發，待冷卻過後下輪再發。
+    // 注意：此為 best-effort 軟性防護（預設關閉）。全域模式（多數情境）在分布式鎖內無併發競態；
+    // 分片並行模式下，不同片可能同窗各發一次同商品（無跨片原子保留），這是刻意的取捨——
+    // 不為一個 default-off 的防刷軟限制引入跨片分布式保留的複雜度。
+    const cleanUrl = draft.clean_product_url;
+    if (cooldownHours > 0 && cleanUrl) {
+      const sinceIso = new Date(Date.now() - cooldownHours * 3600_000).toISOString();
+      const onCooldown =
+        publishedProductsThisRun.has(cleanUrl) ||
+        (await wasProductPublishedSince(draft.owner_id ?? "", cleanUrl, sinceIso).catch(() => false));
+      if (onCooldown) {
+        result.skipped.push({ id: draft.id, reason: `商品冷卻中（${cooldownHours}h 內已發過）` });
         continue;
       }
     }
@@ -167,6 +199,7 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
       // 更新本地節奏狀態，讓同帳號的下一篇遵守間隔/上限
       publishedThisRun[accId] = doneThisRun + 1;
       state.lastPublishedAt = nowIso;
+      if (cleanUrl) publishedProductsThisRun.add(cleanUrl); // 同輪同商品冷卻
       result.published.push({ id: draft.id, postId });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);

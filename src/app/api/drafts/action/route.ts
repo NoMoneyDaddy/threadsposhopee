@@ -6,7 +6,8 @@ import {
   getDraft,
   getThreadsCredentials,
   getGeminiKey,
-  getCopyPrefs
+  getCopyPrefs,
+  requeueReply
 } from "@/lib/store";
 import { publishToThreads } from "@/services/threads/publish";
 import { normalizeDraftMedia } from "@/lib/media";
@@ -117,6 +118,16 @@ export async function POST(req: Request) {
       await updateDraftStatus(id, "failed", { error: msg });
       return NextResponse.json({ ok: false, error: msg }, { status: 500 });
     }
+  }
+
+  // 重試補留言：把「補留言失敗」的草稿重排回 pending，下輪 cron 立即重補（主文已發、不重貼）
+  if (action === "retry-reply") {
+    if (draft.reply_status !== "failed") {
+      return NextResponse.json({ ok: false, error: "只有補留言失敗的草稿可重試" }, { status: 400 });
+    }
+    const ok = await requeueReply(id, user.id);
+    if (!ok) return NextResponse.json({ ok: false, error: "重排失敗（狀態已變動）" }, { status: 409 });
+    return NextResponse.json({ ok: true });
   }
 
   // 重試：把卡在 publishing（程序中斷）或 failed 的草稿重置回 approved，重新進發文佇列

@@ -5,6 +5,9 @@ import { runAllSources } from "@/services/pipeline/run";
 import { runPublishQueue } from "@/services/publish/queue";
 import { refreshExpiringTokens } from "@/services/threads/refresh";
 import { checkAffiliateLinks } from "@/services/materials/linkcheck";
+import { buildDailyDigest } from "@/services/digest/daily";
+import { getOwnerUserId } from "@/lib/auth";
+import { env } from "@/lib/env";
 import { setHeartbeat } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
@@ -30,7 +33,12 @@ export async function GET(req: Request) {
     {
       key: "publish",
       run: runPublishQueue,
-      warn: (r) => (r?.failed?.length ? `⚠️ 發文 ${r.failed.length} 則失敗` : null)
+      warn: (r) => {
+        const parts: string[] = [];
+        if (r?.failed?.length) parts.push(`發文 ${r.failed.length} 則失敗`);
+        if (r?.replies?.failed) parts.push(`補留言 ${r.replies.failed} 則失敗`);
+        return parts.length ? `⚠️ ${parts.join("；")}` : null;
+      }
     }
   ];
   // 每天展期一次（03:00–03:14 視窗，避免每 15 分重複）
@@ -39,7 +47,22 @@ export async function GET(req: Request) {
   }
   // 每週一健檢一次（04:00–04:14）
   if (dow === 1 && h === 4 && min < 15) {
-    steps.push({ key: "checkLinks", run: checkAffiliateLinks, warn: (r) => (r?.dead ? `⚠️ ${r.dead} 個連結失效` : null) });
+    steps.push({
+      key: "checkLinks",
+      run: async () => checkAffiliateLinks(await getOwnerUserId()),
+      warn: (r) => (r?.revived || r?.dead ? `🔗 連結重產 ${r.revived ?? 0}、仍失效 ${r.dead ?? 0}` : null)
+    });
+  }
+  // 每日成效摘要（台北 09:00 = UTC 01:00–01:14），僅在有設 Telegram 時才組（省 API）
+  if (h === 1 && min < 15 && env.telegramBotToken && env.telegramChatId) {
+    steps.push({
+      key: "dailyDigest",
+      run: async () => {
+        const msg = await buildDailyDigest();
+        if (msg) await sendAlert(msg);
+        return { sent: Boolean(msg) };
+      }
+    });
   }
 
   for (const s of steps) {

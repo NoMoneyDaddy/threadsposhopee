@@ -88,3 +88,11 @@ export function planAccountQueue(input: PlanInput): QueuePlanItem[] {
   }
   return out;
 }
+
+// 新帳號暖機：前 warmupDays 天內，每日發文上限自 1 線性遞增到 maxPerDay，降低新號被封風險。
+// warmupDays<=0 或帳號已滿暖機期 → 回 maxPerDay（不限制）。ageDays = 帳號建立至今天數。
+export function warmupDailyCap(maxPerDay: number, warmupDays: number, ageDays: number): number {
+  if (warmupDays <= 0 || ageDays >= warmupDays) return maxPerDay;
+  const frac = Math.min(1, (Math.max(0, ageDays) + 1) / warmupDays);
+  return Math.max(1, Math.min(maxPerDay, Math.ceil(maxPerDay * frac)));
+}

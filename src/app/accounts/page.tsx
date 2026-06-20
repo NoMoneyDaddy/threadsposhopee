@@ -9,6 +9,7 @@ import {
 } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
 import { env, isDemoMode } from "@/lib/env";
+import { tokenExpiryState } from "@/lib/token-expiry";
 import ThreadsAccountForm from "@/components/ThreadsAccountForm";
 import ShopeeAccountForm from "@/components/ShopeeAccountForm";
 import ApifyForm from "@/components/ApifyForm";
@@ -101,11 +102,17 @@ export default async function AccountsPage({
                 <span className="text-xs text-neutral-500">{a.status}</span>
               </div>
               <div className="mt-1 text-sm text-neutral-500">user id: {a.threads_user_id}</div>
-              {a.token_expires_at && (
-                <div className="text-xs text-neutral-400">
-                  token 到期：{new Date(a.token_expires_at).toLocaleDateString("zh-TW", { timeZone: "Asia/Taipei" })}（自動展期）
-                </div>
-              )}
+              {a.token_expires_at && (() => {
+                const exp = tokenExpiryState(a.token_expires_at);
+                if (exp.level === "unknown")
+                  return <div className="text-xs font-medium text-neutral-500">⚠️ token 到期日格式異常，請重新授權</div>;
+                const date = new Date(a.token_expires_at).toLocaleDateString("zh-TW", { timeZone: "Asia/Taipei" });
+                if (exp.level === "expired")
+                  return <div className="text-xs font-medium text-red-600">⚠️ token 已過期（{date}）— 請重新授權</div>;
+                if (exp.level === "soon")
+                  return <div className="text-xs font-medium text-amber-600">⏳ token {exp.daysLeft} 天後到期（{date}）— 自動展期中，若仍失敗請重新授權</div>;
+                return <div className="text-xs text-neutral-400">token 到期：{date}（自動展期）</div>;
+              })()}
               <div className="mt-2 flex items-center gap-3 border-t pt-2">
                 {a.status === "paused" ? (
                   <ToggleButton endpoint={`/api/accounts/threads/${a.id}`} body={{ status: "active" }} label="▶ 恢復排程" />

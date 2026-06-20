@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ThreadsAccount, Material } from "@/lib/types";
 import ThreadsPreview, { CharCount } from "@/components/ThreadsPreview";
+import { checkThreadsContent, THREADS_MAX_HASHTAGS } from "@/lib/threads-content";
 
 const input = "w-full rounded-md border px-3 py-2 text-sm";
 const THREADS_LIMIT = 500;
@@ -158,7 +159,12 @@ export default function ComposerForm({ threadsAccounts }: { threadsAccounts: Thr
 
           <div>
             <textarea className={input} rows={3} value={mainText} onChange={(e) => setMainText(e.target.value)} placeholder="正文" />
-            <div className="mt-1 flex justify-end">
+            <div className="mt-1 flex items-center justify-end gap-2">
+              {checkThreadsContent(mainText).tooManyHashtags && (
+                <span role="status" aria-live="polite" className="mr-auto text-xs text-amber-600">
+                  ⚠️ hashtag 過多（Threads 建議最多 {THREADS_MAX_HASHTAGS} 個）
+                </span>
+              )}
               <CharCount text={mainText} limit={THREADS_LIMIT} />
             </div>
           </div>

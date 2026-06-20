@@ -24,8 +24,10 @@ function parseShard(req: Request): ShardOpts | undefined {
 export const GET = createCronHandler(
   "發文",
   (req) => runPublishQueue(parseShard(req)),
-  (r) =>
-    r.failed.length > 0
-      ? `⚠️ 發文佇列有 ${r.failed.length} 則失敗：${r.failed.map((f) => f.error).join("; ").slice(0, 300)}`
-      : null
+  (r) => {
+    const parts: string[] = [];
+    if (r.failed.length > 0) parts.push(`發文 ${r.failed.length} 則失敗：${r.failed.map((f) => f.error).join("; ").slice(0, 250)}`);
+    if (r.replies && r.replies.failed > 0) parts.push(`補留言 ${r.replies.failed} 則失敗`);
+    return parts.length ? `⚠️ 發文佇列：${parts.join("；")}` : null;
+  }
 );

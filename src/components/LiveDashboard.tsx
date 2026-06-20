@@ -14,7 +14,9 @@ interface DashboardData {
     materials: number;
     drafts: { draft: number; approved: number; published: number; failed: number };
     publishedLast24h: number;
-    accountIssues: { error: number; paused: number };
+    accountIssues: { error: number; paused: number; tokenExpiring?: number };
+    replies?: { pending: number; failed: number };
+    invalidMaterials?: number;
   };
   threadsQuota: { label: string; used: number; limit: number }[];
   cloudinary: { creditsUsed: number; creditsLimit: number; storageBytes: number; resources: number } | null;
@@ -224,8 +226,10 @@ export default function LiveDashboard() {
   if (!data) return null;
 
   const d = data.stats;
-  const issues = d.accountIssues ?? { error: 0, paused: 0 };
-  const needsAttention = issues.error > 0 || d.drafts.failed > 0 || issues.paused > 0;
+  const issues = d.accountIssues ?? { error: 0, paused: 0, tokenExpiring: 0 };
+  const tokenExpiring = issues.tokenExpiring ?? 0;
+  const invalidMaterials = d.invalidMaterials ?? 0;
+  const needsAttention = issues.error > 0 || d.drafts.failed > 0 || issues.paused > 0 || tokenExpiring > 0 || invalidMaterials > 0;
   // 核心流程未走完（沒帳號、沒素材、或未曾發布）時，顯示上手引導，直到三步都完成才隱藏
   const setupIncomplete = d.threadsAccounts === 0 || d.materials === 0 || d.drafts.published === 0;
   const steps = [
@@ -273,6 +277,16 @@ export default function LiveDashboard() {
               </Link>
             )}
             {issues.paused > 0 && <span>{issues.paused} 個帳號已暫停</span>}
+            {tokenExpiring > 0 && (
+              <Link href="/accounts" className="underline hover:opacity-80">
+                {tokenExpiring} 個帳號 token 即將到期/已過期
+              </Link>
+            )}
+            {invalidMaterials > 0 && (
+              <Link href="/materials" className="underline hover:opacity-80">
+                {invalidMaterials} 個素材連結失效（可重產）
+              </Link>
+            )}
             {d.drafts.failed > 0 && (
               <Link href="/drafts" className="underline hover:opacity-80">
                 {d.drafts.failed} 則草稿發布失敗（可重試）
@@ -321,6 +335,17 @@ export default function LiveDashboard() {
             </span>
           ))}
         </div>
+        {d.replies && (d.replies.pending > 0 || d.replies.failed > 0) && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 border-t pt-3 text-sm">
+            <span className="text-neutral-500">延遲留言：</span>
+            {d.replies.pending > 0 && (
+              <span className="rounded-md bg-amber-50 px-3 py-1.5 text-amber-700">待補 <b>{d.replies.pending}</b></span>
+            )}
+            {d.replies.failed > 0 && (
+              <span className="rounded-md bg-red-50 px-3 py-1.5 text-red-600">補發失敗 <b>{d.replies.failed}</b></span>
+            )}
+          </div>
+        )}
       </div>
 
       {data.isOwner && data.threadsQuota.length > 0 && (

@@ -21,6 +21,11 @@ next-env.d.ts
 /n8n-export/
 *Threads_Token*.json
 
+# playwright e2e 產物
+/test-results/
+/playwright-report/
+/playwright/.cache/
+
 # misc
 .DS_Store
 *.pem

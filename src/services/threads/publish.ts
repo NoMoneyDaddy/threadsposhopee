@@ -49,9 +49,33 @@ function setMediaParams(params: URLSearchParams, item: DraftMedia): void {
   }
 }
 
+// Retry-After 可能是「秒數」或「HTTP-date」；都支援，回傳等待毫秒（無法解析回 null）。
+export function parseRetryAfterMs(header: string | null, now = Date.now()): number | null {
+  if (!header) return null;
+  const secs = Number(header.trim());
+  if (Number.isFinite(secs)) return secs > 0 ? secs * 1000 : 0;
+  const date = Date.parse(header);
+  if (!Number.isNaN(date)) return Math.max(0, date - now);
+  return null;
+}
+
+// Threads POST 遇 429（rate limited、請求未被處理）時退避重試，遵守 Retry-After。
+// 只重試 429——5xx/網路錯誤可能其實已成功，重試會造成重複貼文，故不重試。
+// SSRF 防護收斂於此：所有外部 POST 在送出前統一過 assertSafePublicUrl。
+async function fetchThreadsPost(url: string, init: RequestInit, attempts = 3): Promise<Response> {
+  const safe = assertSafePublicUrl(url).href;
+  let res = await fetchWithTimeout(safe, init);
+  for (let i = 1; i < attempts && res.status === 429; i++) {
+    const waitMs = parseRetryAfterMs(res.headers.get("retry-after")) ?? 1000 * 2 ** (i - 1);
+    await new Promise((r) => setTimeout(r, Math.min(waitMs, 16_000)));
+    res = await fetchWithTimeout(safe, init);
+  }
+  return res;
+}
+
 async function postThreads(userId: string, token: string, params: URLSearchParams): Promise<string> {
   params.set("access_token", token);
-  const res = await fetchWithTimeout(`${GRAPH}/${userId}/threads`, { method: "POST", body: params });
+  const res = await fetchThreadsPost(`${GRAPH}/${userId}/threads`, { method: "POST", body: params });
   if (!res.ok) throw new Error(`建立容器失敗 ${res.status}: ${await res.text()}`);
   return (await res.json()).id;
 }
@@ -101,7 +125,7 @@ async function buildCreation(input: PublishInput, media: DraftMedia[]): Promise<
 
 async function publishContainer(userId: string, token: string, creationId: string): Promise<string> {
   const params = new URLSearchParams({ access_token: token, creation_id: creationId });
-  const res = await fetchWithTimeout(`${GRAPH}/${userId}/threads_publish`, { method: "POST", body: params });
+  const res = await fetchThreadsPost(`${GRAPH}/${userId}/threads_publish`, { method: "POST", body: params });
   if (!res.ok) throw new Error(`發布失敗 ${res.status}: ${await res.text()}`);
   return (await res.json()).id;
 }
@@ -120,8 +144,8 @@ export async function publishReply(
     text: replyText,
     reply_to_id: postId
   });
-  const replyUrl = assertSafePublicUrl(`${GRAPH}/${threadsUserId}/threads`).href;
-  const c = await fetchWithTimeout(replyUrl, { method: "POST", body: replyParams });
+  // URL 安全驗證已收斂於 fetchThreadsPost
+  const c = await fetchThreadsPost(`${GRAPH}/${threadsUserId}/threads`, { method: "POST", body: replyParams });
   if (!c.ok) throw new Error(`留言容器建立失敗 ${c.status}: ${await c.text()}`);
   const replyCreation = (await c.json()).id;
   return publishContainer(threadsUserId, accessToken, replyCreation);

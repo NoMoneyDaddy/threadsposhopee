@@ -6,8 +6,17 @@ import type { Draft } from "@/lib/types";
 import { CharCount } from "@/components/ThreadsPreview";
 import ThreadsPreview from "@/components/ThreadsPreview";
 import { normalizeDraftMedia } from "@/lib/media";
+import { checkThreadsContent, THREADS_MAX_HASHTAGS } from "@/lib/threads-content";
 
-export default function DraftCard({ draft }: { draft: Draft }) {
+export default function DraftCard({
+  draft,
+  dupSimilarity,
+  accountLabel
+}: {
+  draft: Draft;
+  dupSimilarity?: number;
+  accountLabel?: string;
+}) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -47,11 +56,32 @@ export default function DraftCard({ draft }: { draft: Draft }) {
 
   const done = draft.status === "published" || draft.status === "rejected";
 
+  // 延遲留言（串文 2/2）狀態：主文已發、留言由 cron 之後補。只在有設定留言時提示。
+  const rs = draft.reply_status;
+  const showReply = draft.status === "published" && rs && rs !== "none";
+  const fmtEta = (iso?: string | null) =>
+    iso
+      ? new Date(iso).toLocaleString("zh-TW", {
+          timeZone: "Asia/Taipei",
+          month: "numeric",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit"
+        })
+      : "—";
+
   return (
     <div className="flex flex-col rounded-lg border bg-white p-4">
-      <div className="mb-2 flex items-center justify-between">
-        <span className="text-sm font-medium text-neutral-700">{draft.product_name ?? "（未知商品）"}</span>
-        <span className="rounded bg-neutral-100 px-2 py-0.5 text-xs text-neutral-500">{draft.status}</span>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span className="min-w-0 truncate text-sm font-medium text-neutral-700">{draft.product_name ?? "（未知商品）"}</span>
+        <span className="flex shrink-0 items-center gap-1">
+          {accountLabel && (
+            <span className="max-w-[8rem] truncate rounded bg-shopee/10 px-2 py-0.5 text-xs text-shopee" title={`發到 ${accountLabel}`}>
+              @{accountLabel}
+            </span>
+          )}
+          <span className="rounded bg-neutral-100 px-2 py-0.5 text-xs text-neutral-500">{draft.status}</span>
+        </span>
       </div>
 
       {editing ? (
@@ -107,6 +137,25 @@ export default function DraftCard({ draft }: { draft: Draft }) {
         {draft.shopee_short_link}
       </a>
 
+      {typeof dupSimilarity === "number" && (
+        <div className="mt-2 rounded bg-amber-50 p-2 text-xs text-amber-700" role="alert">
+          ⚠️ 文案與同帳號近期貼文高度相似（{Math.round(dupSimilarity * 100)}%），重複措辭易被降觸及，建議改寫再發。
+        </div>
+      )}
+
+      {(() => {
+        const c = checkThreadsContent(mainText);
+        if (c.ok) return null;
+        return (
+          <div className="mt-2 rounded bg-amber-50 p-2 text-xs text-amber-700" role="alert">
+            {c.overLimit && <div>⚠️ 正文超過 500 字（目前 {c.chars}），Threads 會發布失敗。</div>}
+            {c.tooManyHashtags && (
+              <div>⚠️ 有 {c.hashtags} 個 hashtag，Threads 建議最多 {THREADS_MAX_HASHTAGS} 個（過多易被降觸及）。</div>
+            )}
+          </div>
+        );
+      })()}
+
       {!done && !editing && (
         <div className="mt-3 flex flex-wrap gap-2">
           <button
@@ -151,6 +200,28 @@ export default function DraftCard({ draft }: { draft: Draft }) {
       )}
       {draft.status === "failed" && draft.error && (
         <p className="mt-2 rounded bg-red-50 p-2 text-xs text-red-600">發布失敗：{draft.error}</p>
+      )}
+
+      {showReply && rs === "pending" && (
+        <p className="mt-2 rounded bg-amber-50 p-2 text-xs text-amber-700">🕒 留言補發排隊中（預計 {fmtEta(draft.reply_due_at)}）</p>
+      )}
+      {showReply && rs === "publishing-reply" && (
+        <p className="mt-2 rounded bg-amber-50 p-2 text-xs text-amber-700">⏳ 留言補發中…</p>
+      )}
+      {showReply && rs === "published" && (
+        <p className="mt-2 rounded bg-emerald-50 p-2 text-xs text-emerald-700">✅ 留言已補發</p>
+      )}
+      {showReply && rs === "failed" && (
+        <div className="mt-2 rounded bg-red-50 p-2 text-xs text-red-600">
+          <p>⚠️ 留言補發失敗{draft.error ? `：${draft.error}` : ""}</p>
+          <button
+            disabled={!!busy}
+            onClick={() => call("retry-reply")}
+            className="mt-1.5 rounded border border-amber-300 px-3 py-1 text-amber-700 hover:bg-amber-50 disabled:opacity-50"
+          >
+            {busy === "retry-reply" ? "重排中…" : "重試補留言"}
+          </button>
+        </div>
       )}
       {msg && <p className="mt-2 text-xs text-red-500">❌ {msg}</p>}
     </div>

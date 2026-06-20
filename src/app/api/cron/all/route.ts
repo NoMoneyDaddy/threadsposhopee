@@ -5,6 +5,7 @@ import { runAllSources } from "@/services/pipeline/run";
 import { runPublishQueue } from "@/services/publish/queue";
 import { refreshExpiringTokens } from "@/services/threads/refresh";
 import { checkAffiliateLinks } from "@/services/materials/linkcheck";
+import { getOwnerUserId } from "@/lib/auth";
 import { setHeartbeat } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
@@ -39,7 +40,11 @@ export async function GET(req: Request) {
   }
   // 每週一健檢一次（04:00–04:14）
   if (dow === 1 && h === 4 && min < 15) {
-    steps.push({ key: "checkLinks", run: checkAffiliateLinks, warn: (r) => (r?.dead ? `⚠️ ${r.dead} 個連結失效` : null) });
+    steps.push({
+      key: "checkLinks",
+      run: async () => checkAffiliateLinks(await getOwnerUserId()),
+      warn: (r) => (r?.revived || r?.dead ? `🔗 連結重產 ${r.revived ?? 0}、仍失效 ${r.dead ?? 0}` : null)
+    });
   }
 
   for (const s of steps) {

@@ -141,21 +141,55 @@ export async function createMaterial(input: Partial<Material>, ownerId: string):
 }
 
 // 連結健檢 worker 用：取最久沒檢查、目前仍有效的素材（跨租戶）。
+// 健檢用的精簡素材投影（含重產所需欄位）。
+export type MaterialToCheck = {
+  id: string;
+  owner_id: string | null;
+  shop_id: string;
+  item_id: string;
+  clean_product_url: string | null;
+  link: string;
+  affiliate_sub_id: string | null;
+};
 export async function listMaterialsToCheck(
   limit = 30
-): Promise<{ id: string; link: string }[]> {
+): Promise<MaterialToCheck[]> {
   if (isDemoMode) return [];
   const sb = getServiceClient()!;
   const { data } = await sb
     .from("materials")
-    .select("id, affiliate_short_link, affiliate_checked_at")
+    .select("id, owner_id, shop_id, item_id, clean_product_url, affiliate_short_link, affiliate_sub_id, affiliate_checked_at")
     .eq("affiliate_valid", true)
     .not("affiliate_short_link", "is", null)
     .order("affiliate_checked_at", { ascending: true, nullsFirst: true })
     .limit(limit);
   return (data ?? [])
     .filter((m) => m.affiliate_short_link)
-    .map((m) => ({ id: m.id, link: m.affiliate_short_link as string }));
+    .map((m) => ({
+      id: m.id,
+      owner_id: m.owner_id ?? null,
+      shop_id: m.shop_id,
+      item_id: m.item_id,
+      clean_product_url: m.clean_product_url ?? null,
+      link: m.affiliate_short_link as string,
+      affiliate_sub_id: m.affiliate_sub_id ?? null
+    }));
+}
+
+// 重產成功：寫回新短連結＋subId，並把 valid/checked_at 一併更新（單次寫入）。
+export async function reviveAffiliateLink(id: string, shortLink: string, subId: string | null): Promise<void> {
+  if (isDemoMode) return;
+  const sb = getServiceClient()!;
+  await sb
+    .from("materials")
+    .update({
+      affiliate_short_link: shortLink,
+      affiliate_sub_id: subId,
+      affiliate_generated_at: new Date().toISOString(),
+      affiliate_valid: true,
+      affiliate_checked_at: new Date().toISOString()
+    })
+    .eq("id", id);
 }
 
 // 寫回健檢結果：更新 checked_at；dead=true 才標 affiliate_valid=false（保守）。

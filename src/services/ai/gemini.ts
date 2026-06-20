@@ -1,6 +1,6 @@
 import { env } from "@/lib/env";
 import { assertSafePublicUrl } from "@/lib/url-guard";
-import { fetchWithTimeout } from "@/lib/http";
+import { fetchWithTimeout, fetchWithRetry } from "@/lib/http";
 import { uploadToGeminiFiles } from "./gemini-files";
 
 // Gemini inline data 上限約 20MB（含 base64 膨脹約 1.34x）→ 二進位設 12MB 安全門檻。
@@ -73,14 +73,15 @@ export async function generateWithGemini(
   }
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${env.geminiModel}:generateContent?key=${apiKey || env.geminiApiKey}`;
-  const res = await fetchWithTimeout(url, {
+  // 生成無副作用（產文字）→ 429 退避重試安全；放寬逾時 30s（生成較慢）。
+  const res = await fetchWithRetry(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       contents: [{ role: "user", parts }],
       generationConfig: { temperature, maxOutputTokens: 512 }
     })
-  }, 30000); // 生成較慢，放寬到 30s
+  }, 30000);
   if (!res.ok) throw new Error(`Gemini ${res.status}: ${await res.text()}`);
   const json = await res.json();
   const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;

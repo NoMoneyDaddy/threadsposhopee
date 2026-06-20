@@ -35,9 +35,12 @@ export async function POST(req: Request) {
       } else if (action === "approve") {
         await updateDraftStatus(id, "approved", { scheduled_at: null });
       } else if (action === "retry") {
-        // 只重試失敗或卡在 publishing（程序中斷）的草稿，重置回 approved 並清錯誤；其餘略過。
-        if (draft.status !== "failed" && draft.status !== "publishing") {
-          errors.push(`${id}: 非失敗/卡住，略過`);
+        // 只重試 failed 的草稿，重置回 approved 並清錯誤；其餘略過。
+        // 卡在 publishing 的草稿「不」在此重置：可能正被 worker 發布中，強制改回 approved
+        // 會與正在進行的發布競態造成重複發文（封號風險）。交由 reclaimStalePublishing
+        // （逾時自動回收為 failed）處理後，再由使用者批次重試。
+        if (draft.status !== "failed") {
+          errors.push(`${id}: 非失敗狀態，略過`);
           continue;
         }
         await updateDraftStatus(id, "approved", { error: null });

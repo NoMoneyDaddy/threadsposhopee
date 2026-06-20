@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-// 一鍵重試所有失敗／卡住的草稿（重置回 approved 重進佇列）。
+// 一鍵重試所有發布失敗的草稿（重置回 approved 重進佇列）。
 // token 中斷或暫時性錯誤造成一批失敗時，免逐筆點重試。
 export default function RetryFailedBar({ failedIds }: { failedIds: string[] }) {
   const router = useRouter();
@@ -34,7 +34,7 @@ export default function RetryFailedBar({ failedIds }: { failedIds: string[] }) {
 
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
-      <span className="text-sm text-amber-800">{failedIds.length} 則發布失敗／卡住：</span>
+      <span className="text-sm text-amber-800">{failedIds.length} 則發布失敗：</span>
       <button
         disabled={busy}
         onClick={run}

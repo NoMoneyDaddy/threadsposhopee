@@ -1,6 +1,6 @@
 import { getPublishInsights } from "@/lib/store";
 import { getAffiliateRevenue, type AffiliateRevenue } from "@/services/shopee/report";
-import { getEngagement, type EngagementSummary } from "@/services/threads/engagement";
+import { getEngagement, bestPostingTimes, type EngagementSummary } from "@/services/threads/engagement";
 import { getCurrentUser } from "@/lib/auth";
 import { env, isDemoMode } from "@/lib/env";
 
@@ -45,6 +45,7 @@ export default async function InsightsPage() {
       )}
 
       {engagement && engagement.fetched > 0 && <EngagementSection e={engagement} />}
+      {engagement && engagement.fetched >= 3 && <BestTimesSection e={engagement} />}
 
       <section className="rounded-lg border bg-white p-5">
         <h2 className="mb-3 font-semibold">每日發布量</h2>
@@ -140,6 +141,44 @@ function EngagementSection({ e }: { e: EngagementSummary }) {
           </li>
         ))}
       </ul>
+    </section>
+  );
+}
+
+function BestTimesSection({ e }: { e: EngagementSummary }) {
+  const best = bestPostingTimes(e.posts);
+  if (best.byHour.length === 0) return null;
+  const TimeRank = ({ title, rows }: { title: string; rows: { label: string; avgViews: number; posts: number }[] }) => {
+    const max = Math.max(1, ...rows.map((r) => r.avgViews));
+    return (
+      <div>
+        <h3 className="mb-2 text-sm font-medium text-neutral-600">{title}</h3>
+        <ul className="space-y-2">
+          {rows.slice(0, 5).map((r) => (
+            <li key={r.label} className="text-sm">
+              <div className="mb-0.5 flex justify-between gap-2">
+                <span>{r.label}</span>
+                <span className="shrink-0 text-xs text-neutral-500 tabular-nums">平均 {num(r.avgViews)} 觀看 · {r.posts} 篇</span>
+              </div>
+              <div className="h-1.5 w-full overflow-hidden rounded bg-neutral-100">
+                <div className="h-full bg-shopee/70" style={{ width: `${(r.avgViews / max) * 100}%` }} />
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  };
+  return (
+    <section className="rounded-lg border bg-white p-5">
+      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="font-semibold">最佳發文時段</h2>
+        <span className="text-xs text-neutral-400">依最近 {e.fetched} 篇平均觀看，樣本少僅供參考（時區 Asia/Taipei）</span>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <TimeRank title="時段（每日）" rows={best.byHour} />
+        <TimeRank title="星期" rows={best.byWeekday} />
+      </div>
     </section>
   );
 }

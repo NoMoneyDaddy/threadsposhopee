@@ -25,6 +25,28 @@ interface DashboardData {
   binds?: { apify: boolean; gemini: boolean; shopee: boolean } | null;
   publishPlan?: { id: string; productName: string | null; accountLabel: string; etaIso: string | null; reason: string }[];
   publishPaused?: boolean;
+  accountsHealth?: { label: string; level: "ok" | "warn" | "error"; summary: string }[];
+}
+
+// 帳號健康分：每個 Threads 帳號的狀態＋token 到期一眼看出哪個要處理（問題優先）。
+function AccountsHealth({ rows }: { rows: DashboardData["accountsHealth"] }) {
+  if (!rows || rows.length === 0) return null;
+  const dot: Record<string, string> = { ok: "bg-green-500", warn: "bg-amber-500", error: "bg-red-500" };
+  const text: Record<string, string> = { ok: "text-neutral-500", warn: "text-amber-700", error: "text-red-600" };
+  return (
+    <div className="rounded-lg border bg-white p-5">
+      <h2 className="mb-3 font-semibold">帳號健康</h2>
+      <ul className="space-y-2">
+        {rows.map((r) => (
+          <li key={r.label} className="flex items-center gap-2 text-sm">
+            <span className={`h-2 w-2 shrink-0 rounded-full ${dot[r.level]}`} />
+            <span className="min-w-0 truncate font-medium text-neutral-700">{r.label}</span>
+            <span className={`ml-auto shrink-0 text-xs ${text[r.level]}`}>{r.summary}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 // 發文進度：排隊中的草稿預計何時發。多到一定量視為「塞車」。
@@ -299,6 +321,7 @@ export default function LiveDashboard() {
         </div>
       )}
       <MissingBinds binds={data.binds} />
+      <AccountsHealth rows={data.accountsHealth} />
       <PublishPlan rows={data.publishPlan} />
       {setupIncomplete && (
         <div className="rounded-lg border border-shopee/30 bg-orange-50 p-5">

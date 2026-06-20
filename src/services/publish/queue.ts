@@ -139,6 +139,9 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
     }
 
     // 商品冷卻：同一分潤商品在冷卻期內已發過（本輪或近期 DB）就先不發，待冷卻過後下輪再發。
+    // 注意：此為 best-effort 軟性防護（預設關閉）。全域模式（多數情境）在分布式鎖內無併發競態；
+    // 分片並行模式下，不同片可能同窗各發一次同商品（無跨片原子保留），這是刻意的取捨——
+    // 不為一個 default-off 的防刷軟限制引入跨片分布式保留的複雜度。
     const cleanUrl = draft.clean_product_url;
     if (cooldownHours > 0 && cleanUrl) {
       const sinceIso = new Date(Date.now() - cooldownHours * 3600_000).toISOString();

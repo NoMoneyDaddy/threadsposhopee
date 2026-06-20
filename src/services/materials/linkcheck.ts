@@ -22,20 +22,23 @@ type Outcome = "ok" | "revived" | "dead";
 
 // 失效連結先嘗試重產（短連結過期常見）：重產出新連結且確認非失效 → 復活；否則標失效。
 async function checkOne(m: MaterialToCheck, ownerUserId: string | null): Promise<Outcome> {
+  const logFail = (what: string) => (e: unknown) =>
+    console.warn(`連結健檢 ${what} 失敗（material ${m.id}）：`, e instanceof Error ? e.message : e);
   if (!(await isLinkDead(m.link))) {
-    await setAffiliateChecked(m.id, false).catch(() => {});
+    await setAffiliateChecked(m.id, false).catch(logFail("標記已檢查"));
     return "ok";
   }
   try {
     const regen = await regenerateAffiliateLink(m, ownerUserId);
     if (regen && !(await isLinkDead(regen.link))) {
-      await reviveAffiliateLink(m.id, regen.link, regen.subId);
+      await reviveAffiliateLink(m.id, m.owner_id, regen.link, regen.subId);
       return "revived";
     }
-  } catch {
-    // 重產失敗（金鑰/API 問題）→ 落到標失效，由告警提示人工處理
+  } catch (e) {
+    // 重產失敗（金鑰/API 問題）→ 記 log 後落到標失效，由告警提示人工處理
+    logFail("自動重產")(e);
   }
-  await setAffiliateChecked(m.id, true).catch(() => {});
+  await setAffiliateChecked(m.id, true).catch(logFail("標記失效"));
   return "dead";
 }
 

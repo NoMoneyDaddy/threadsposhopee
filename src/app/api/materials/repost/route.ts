@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getMaterial, createDraftFromMaterial, updateDraft, getGeminiKey, getCopyPrefs } from "@/lib/store";
+import { getMaterial, createDraftFromMaterial, updateDraft, getGeminiKey, getCopyPrefs, userOwnsThreadsAccount } from "@/lib/store";
 import { withNextSlot } from "@/services/publish/slots";
 import { generateCopy } from "@/services/ai/provider";
 import { getCurrentUser } from "@/lib/auth";
@@ -48,6 +48,11 @@ export async function POST(req: Request) {
     }
     const material = await getMaterial(body.material_id, ownerId);
     if (!material) return NextResponse.json({ ok: false, error: "找不到素材" }, { status: 404 });
+
+    // 多租戶：發文/建草稿前先驗證該 Threads 帳號確屬本人（擋跨租戶冒用 account id）
+    if (!(await userOwnsThreadsAccount(body.threads_account_id, ownerId))) {
+      return NextResponse.json({ ok: false, error: "找不到 Threads 帳號" }, { status: 404 });
+    }
 
     const action = body.action === "queue" ? "queue" : "draft";
     const vary = body.vary === true;

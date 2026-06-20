@@ -199,10 +199,16 @@ export async function listMaterialsToCheck(
 }
 
 // 重產成功：寫回新短連結＋subId，並把 valid/checked_at 一併更新（單次寫入）。
-export async function reviveAffiliateLink(id: string, shortLink: string, subId: string | null): Promise<void> {
+// 多租戶：service-role 繞 RLS，故以 owner_id 應用層過濾（ownerId 為 null 時退回僅 id，理論上素材必有 owner）。
+export async function reviveAffiliateLink(
+  id: string,
+  ownerId: string | null,
+  shortLink: string,
+  subId: string | null
+): Promise<void> {
   if (isDemoMode) return;
   const sb = getServiceClient()!;
-  await sb
+  let q = sb
     .from("materials")
     .update({
       affiliate_short_link: shortLink,
@@ -212,6 +218,9 @@ export async function reviveAffiliateLink(id: string, shortLink: string, subId: 
       affiliate_checked_at: new Date().toISOString()
     })
     .eq("id", id);
+  if (ownerId) q = q.eq("owner_id", ownerId);
+  const { error } = await q;
+  if (error) throw new Error(`寫回重產連結失敗：${error.message}`);
 }
 
 // 寫回健檢結果：更新 checked_at；dead=true 才標 affiliate_valid=false（保守）。
@@ -1238,11 +1247,10 @@ export async function getAccountPublishState(
     };
   }
   const sb = getServiceClient()!;
-  const { data: acc, error: accError } = await sb
-    .from("threads_accounts")
-    .select("status, created_at")
-    .eq("id", threadsAccountId)
-    .maybeSingle();
+  // 多租戶：有 ownerId 時一併過濾帳號歸屬（service-role 繞 RLS）
+  let accQ = sb.from("threads_accounts").select("status, created_at").eq("id", threadsAccountId);
+  if (ownerId) accQ = accQ.eq("owner_id", ownerId);
+  const { data: acc, error: accError } = await accQ.maybeSingle();
   if (accError) throw accError;
   if (!acc) throw new Error(`找不到 ID 為 ${threadsAccountId} 的 Threads 帳號`);
   let latestQ = sb

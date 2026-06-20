@@ -10,6 +10,7 @@ export function normalizeForSim(text: string): string {
 }
 
 export function charShingles(text: string, n = 3): Set<string> {
+  if (!Number.isInteger(n) || n < 1) throw new Error("charShingles: n 必須是正整數");
   const s = normalizeForSim(text);
   const out = new Set<string>();
   if (s.length === 0) return out;

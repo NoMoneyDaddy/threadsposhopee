@@ -104,6 +104,8 @@ export default async function AccountsPage({
               <div className="mt-1 text-sm text-neutral-500">user id: {a.threads_user_id}</div>
               {a.token_expires_at && (() => {
                 const exp = tokenExpiryState(a.token_expires_at);
+                if (exp.level === "unknown")
+                  return <div className="text-xs font-medium text-neutral-500">⚠️ token 到期日格式異常，請重新授權</div>;
                 const date = new Date(a.token_expires_at).toLocaleDateString("zh-TW", { timeZone: "Asia/Taipei" });
                 if (exp.level === "expired")
                   return <div className="text-xs font-medium text-red-600">⚠️ token 已過期（{date}）— 請重新授權</div>;

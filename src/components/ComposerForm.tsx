@@ -161,7 +161,9 @@ export default function ComposerForm({ threadsAccounts }: { threadsAccounts: Thr
             <textarea className={input} rows={3} value={mainText} onChange={(e) => setMainText(e.target.value)} placeholder="正文" />
             <div className="mt-1 flex items-center justify-end gap-2">
               {checkThreadsContent(mainText).tooManyHashtags && (
-                <span className="mr-auto text-xs text-amber-600">⚠️ hashtag 過多（Threads 建議最多 {THREADS_MAX_HASHTAGS} 個）</span>
+                <span role="status" aria-live="polite" className="mr-auto text-xs text-amber-600">
+                  ⚠️ hashtag 過多（Threads 建議最多 {THREADS_MAX_HASHTAGS} 個）
+                </span>
               )}
               <CharCount text={mainText} limit={THREADS_LIMIT} />
             </div>

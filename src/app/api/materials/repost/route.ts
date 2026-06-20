@@ -29,7 +29,9 @@ async function maybeVary(draft: Draft, material: Material, ownerId: string): Pro
     });
     return { draft: updated ?? draft };
   } catch (e) {
-    return { draft, note: `文案重寫失敗，沿用原文案：${e instanceof Error ? e.message : String(e)}` };
+    // 細節只記伺服器端 log，對外回固定文案（不洩漏內部/供應商錯誤）
+    console.error("repost 文案重寫失敗：", e instanceof Error ? e.message : e);
+    return { draft, note: "文案重寫失敗，沿用原文案" };
   }
 }
 

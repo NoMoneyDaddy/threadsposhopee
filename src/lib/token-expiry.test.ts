@@ -16,6 +16,12 @@ test("tokenExpiryState：已過期 → expired（daysLeft<0）", () => {
   assert.ok(r.daysLeft !== null && r.daysLeft < 0);
 });
 
+test("tokenExpiryState：當天到期（daysLeft=0）→ expired（契約：負或 0）", () => {
+  const r = tokenExpiryState(inDays(0), 7, now);
+  assert.equal(r.level, "expired");
+  assert.equal(r.daysLeft, 0);
+});
+
 test("tokenExpiryState：7 天內 → soon", () => {
   assert.equal(tokenExpiryState(inDays(3), 7, now).level, "soon");
   assert.equal(tokenExpiryState(inDays(7), 7, now).level, "soon");

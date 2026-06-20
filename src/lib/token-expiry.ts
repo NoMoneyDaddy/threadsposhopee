@@ -13,7 +13,7 @@ export function tokenExpiryState(iso: string | null | undefined, soonDays = 7, n
   const t = new Date(iso).getTime();
   if (Number.isNaN(t)) return { level: "unknown", daysLeft: null };
   const daysLeft = Math.floor((t - now) / 86_400_000);
-  if (daysLeft < 0) return { level: "expired", daysLeft };
+  if (daysLeft <= 0) return { level: "expired", daysLeft }; // 當天到期(0)亦視為已過期（契約：負或 0）
   if (daysLeft <= soonDays) return { level: "soon", daysLeft };
   return { level: "ok", daysLeft };
 }

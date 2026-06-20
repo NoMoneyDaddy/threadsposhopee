@@ -1,6 +1,23 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { publishToThreads } from "./publish";
+import { publishToThreads, parseRetryAfterMs } from "./publish";
+
+test("parseRetryAfterMs：秒數格式", () => {
+  assert.equal(parseRetryAfterMs("120"), 120_000);
+  assert.equal(parseRetryAfterMs("0"), 0);
+});
+
+test("parseRetryAfterMs：HTTP-date 格式 → 與 now 的差", () => {
+  const now = Date.parse("2026-06-20T00:00:00Z");
+  assert.equal(parseRetryAfterMs("Sat, 20 Jun 2026 00:00:30 GMT", now), 30_000);
+  // 過去時間夾到 0，不為負
+  assert.equal(parseRetryAfterMs("Sat, 20 Jun 2026 00:00:00 GMT", now + 5000), 0);
+});
+
+test("parseRetryAfterMs：無/壞值回 null", () => {
+  assert.equal(parseRetryAfterMs(null), null);
+  assert.equal(parseRetryAfterMs("abc"), null);
+});
 
 interface Call {
   url: string;

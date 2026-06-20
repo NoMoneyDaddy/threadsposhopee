@@ -32,3 +32,9 @@ test("charShingles：短於 n 時整串當一個 shingle", () => {
   assert.deepEqual([...charShingles("ab", 3)], ["ab"]);
   assert.equal(charShingles("", 3).size, 0);
 });
+
+test("charShingles：n 非正整數時拋錯", () => {
+  assert.throws(() => charShingles("abc", 0));
+  assert.throws(() => charShingles("abc", -1));
+  assert.throws(() => charShingles("abc", 1.5));
+});

@@ -109,7 +109,7 @@ export async function getEngagementCached(
   limit = 15,
   maxAgeMs = 30 * 60_000
 ): Promise<EngagementSummary> {
-  const key = `engagement:${ownerId}`;
+  const key = `engagement:${ownerId}:limit:${limit}`;
   const cached = await getCachedJson<EngagementSummary>(key, maxAgeMs).catch(() => null);
   if (cached) return cached;
   const fresh = await getEngagement(ownerId, limit);

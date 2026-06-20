@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { listMaterials, createDraftFromMaterial, userOwnsThreadsAccount } from "@/lib/store";
-import { withNextSlot } from "@/services/publish/slots";
+import { withNextSlot, nextOpenSlotAtHours } from "@/services/publish/slots";
+import { getBestHours } from "@/services/threads/engagement";
 import { getCurrentUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -31,16 +32,25 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "沒有可回收的有效素材（需有效連結與文案）" }, { status: 400 });
   }
 
+  // bestTime=true 且有足夠成效資料 → 整批改排在「最佳發文時段」整點；否則用預設 PUBLISH_SLOTS。
+  // 成效（getBestHours）只算一次，避免迴圈內逐筆重打 Threads insights API。
+  const hours = body.bestTime === true ? await getBestHours(user.id) : [];
+  const pick = hours.length ? (taken: Set<string>) => nextOpenSlotAtHours(taken, hours) : undefined;
+
   let queued = 0;
   let full = false;
   for (const m of materials.slice(0, MAX_BULK)) {
-    const draft = await withNextSlot(user.id, (slot) =>
-      createDraftFromMaterial(m, {
-        owner_id: user.id,
-        threads_account_id: body.threads_account_id,
-        status: "approved",
-        scheduled_at: slot
-      })
+    const draft = await withNextSlot(
+      user.id,
+      (slot) =>
+        createDraftFromMaterial(m, {
+          owner_id: user.id,
+          threads_account_id: body.threads_account_id,
+          status: "approved",
+          scheduled_at: slot
+        }),
+      5,
+      pick
     );
     if (!draft) {
       full = true; // 30 天內時段已滿，停止
@@ -49,5 +59,5 @@ export async function POST(req: Request) {
     queued += 1;
   }
 
-  return NextResponse.json({ ok: true, queued, full, candidates: materials.length });
+  return NextResponse.json({ ok: true, queued, full, candidates: materials.length, bestTime: hours.length > 0 });
 }

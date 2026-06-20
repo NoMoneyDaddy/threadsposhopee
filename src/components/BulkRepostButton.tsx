@@ -8,6 +8,7 @@ import type { ThreadsAccount } from "@/lib/types";
 export default function BulkRepostButton({ threadsAccounts }: { threadsAccounts: ThreadsAccount[] }) {
   const router = useRouter();
   const [accId, setAccId] = useState(threadsAccounts[0]?.id ?? "");
+  const [bestTime, setBestTime] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -22,11 +23,11 @@ export default function BulkRepostButton({ threadsAccounts }: { threadsAccounts:
       const res = await fetch("/api/materials/repost-bulk", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ threads_account_id: accId })
+        body: JSON.stringify({ threads_account_id: accId, bestTime })
       });
       const json = await res.json();
       if (!json.ok) throw new Error(json.error);
-      setMsg(`✅ 已排入 ${json.queued} 篇${json.full ? "（時段已滿，剩餘未排）" : ""}`);
+      setMsg(`✅ 已排入 ${json.queued} 篇${json.bestTime ? "（最佳時段）" : ""}${json.full ? "（時段已滿，剩餘未排）" : ""}`);
       router.refresh();
     } catch (e) {
       setMsg(`❌ ${e instanceof Error ? e.message : String(e)}`);
@@ -46,6 +47,10 @@ export default function BulkRepostButton({ threadsAccounts }: { threadsAccounts:
           ))}
         </select>
       )}
+      <label className="flex items-center gap-1 text-xs text-neutral-500" title="進佇列時依成效挑該帳號高觸及時段（資料不足則用預設時段）">
+        <input type="checkbox" checked={bestTime} onChange={(e) => setBestTime(e.target.checked)} disabled={busy} />
+        最佳時段
+      </label>
       <button
         onClick={run}
         disabled={busy}

@@ -3,14 +3,28 @@ import RepostButton from "@/components/RepostButton";
 import CheckLinksButton from "@/components/CheckLinksButton";
 import BulkRepostButton from "@/components/BulkRepostButton";
 import { listMaterials, listThreadsAccounts } from "@/lib/store";
+import { getItemRevenueMap, type ItemRevenue } from "@/services/shopee/report";
 import { getCurrentUser } from "@/lib/auth";
+import { env, isDemoMode } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
+
+const money = (n: number) => `NT$ ${n.toLocaleString("zh-TW", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default async function MaterialsPage() {
   const user = await getCurrentUser();
   const ownerId = user?.id ?? "demo-user";
-  const [materials, accounts] = await Promise.all([listMaterials(ownerId), listThreadsAccounts(ownerId)]);
+  const isOwner = user?.isOwner ?? isDemoMode;
+  const [materialsRaw, accounts] = await Promise.all([listMaterials(ownerId), listThreadsAccounts(ownerId)]);
+
+  // 成效回灌：owner 且有 Shopee 金鑰時，抓 itemId→佣金 對照（快取），把賺錢素材排前並標收益。
+  let itemRev: Record<string, ItemRevenue> = {};
+  if (isOwner && !isDemoMode && env.shopeeAppId && env.shopeeSecret) {
+    itemRev = await getItemRevenueMap(ownerId, 30).catch(() => ({}));
+  }
+  const revOf = (itemId: string) => itemRev[itemId]?.commission ?? 0;
+  // 有收益的排前（佣金高→低）；其餘維持原本（建立時間新→舊）順序，穩定排序不打亂無收益素材。
+  const materials = [...materialsRaw].sort((a, b) => revOf(b.item_id) - revOf(a.item_id));
 
   return (
     <div className="space-y-4">
@@ -30,9 +44,19 @@ export default async function MaterialsPage() {
       <div className="grid gap-4 md:grid-cols-2">
         {materials.map((m) => (
           <div key={m.id} className="flex flex-col rounded-lg border bg-white p-4">
-            <div className="mb-1 flex items-center justify-between">
-              <span className="text-sm font-medium text-neutral-700">{m.product_name ?? `商品 ${m.item_id}`}</span>
-              {!m.affiliate_valid && <span className="rounded bg-red-50 px-2 py-0.5 text-xs text-red-600">連結失效</span>}
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <span className="min-w-0 truncate text-sm font-medium text-neutral-700">{m.product_name ?? `商品 ${m.item_id}`}</span>
+              <span className="flex shrink-0 items-center gap-1">
+                {itemRev[m.item_id] && (
+                  <span
+                    className="rounded bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700"
+                    title={`近 30 天分潤：${itemRev[m.item_id].count} 筆`}
+                  >
+                    💰 {money(itemRev[m.item_id].commission)}
+                  </span>
+                )}
+                {!m.affiliate_valid && <span className="rounded bg-red-50 px-2 py-0.5 text-xs text-red-600">連結失效</span>}
+              </span>
             </div>
             {m.cloudinary_media_url && m.media_type !== "none" && (
               // eslint-disable-next-line @next/next/no-img-element

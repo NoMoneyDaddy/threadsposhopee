@@ -1,6 +1,71 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { gapJitterMinutes, effectiveGapMinutes, planAccountQueue, shardOf, circuitOpen } from "./cadence";
+import { gapJitterMinutes, effectiveGapMinutes, planAccountQueue, shardOf, circuitOpen, nextPacingSkipReason } from "./cadence";
+
+const NOW = Date.parse("2026-06-20T00:00:00Z");
+const basePacing = {
+  failuresThisRun: 0,
+  failureLimit: 0,
+  doneThisRun: 0,
+  batchPerRun: 1,
+  publishedLast24h: 0,
+  maxPerDay: 5,
+  warmupDays: 0,
+  createdAt: null,
+  lastPublishedAt: null,
+  minGapMinutes: 0,
+  gapJitterMinutes: 0,
+  accountId: "acc-1",
+  now: NOW
+};
+
+test("nextPacingSkipReason：全部過關回 null", () => {
+  assert.equal(nextPacingSkipReason(basePacing), null);
+});
+
+test("nextPacingSkipReason：斷路器最先觸發", () => {
+  const r = nextPacingSkipReason({ ...basePacing, failuresThisRun: 3, failureLimit: 3, doneThisRun: 9, batchPerRun: 1 });
+  assert.match(r ?? "", /連續失敗 3 次/);
+});
+
+test("nextPacingSkipReason：批次上限", () => {
+  assert.match(nextPacingSkipReason({ ...basePacing, doneThisRun: 1, batchPerRun: 1 }) ?? "", /批次已達上限/);
+});
+
+test("nextPacingSkipReason：每日上限（暖機調降）", () => {
+  // 新帳號暖機第 0 天 → cap=ceil(5*1/3)=2；已發 2 → 觸發
+  const r = nextPacingSkipReason({
+    ...basePacing,
+    warmupDays: 3,
+    createdAt: new Date(NOW).toISOString(),
+    publishedLast24h: 2,
+    maxPerDay: 5,
+    batchPerRun: 10
+  });
+  assert.match(r ?? "", /已達每日上限（2）/);
+});
+
+test("nextPacingSkipReason：最小間隔未到", () => {
+  const r = nextPacingSkipReason({
+    ...basePacing,
+    batchPerRun: 10,
+    maxPerDay: 10,
+    lastPublishedAt: new Date(NOW - 10 * 60000).toISOString(), // 10 分前
+    minGapMinutes: 240
+  });
+  assert.match(r ?? "", /未達最小間隔（10\/240 分）/);
+});
+
+test("nextPacingSkipReason：間隔已足 → 放行", () => {
+  const r = nextPacingSkipReason({
+    ...basePacing,
+    batchPerRun: 10,
+    maxPerDay: 10,
+    lastPublishedAt: new Date(NOW - 300 * 60000).toISOString(), // 300 分前
+    minGapMinutes: 240
+  });
+  assert.equal(r, null);
+});
 
 test("斷路器：達上限才開路，limit<=0 關閉", () => {
   assert.equal(circuitOpen(0, 3), false);

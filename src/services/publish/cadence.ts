@@ -102,3 +102,45 @@ export function warmupDailyCap(maxPerDay: number, warmupDays: number, ageDays: n
   const frac = Math.min(1, (Math.max(0, ageDays) + 1) / warmupDays);
   return Math.max(1, Math.min(maxPerDay, Math.ceil(maxPerDay * frac)));
 }
+
+export interface PacingInput {
+  failuresThisRun: number; // 本輪該帳號已累積失敗數
+  failureLimit: number; // 斷路器上限（0=關）
+  doneThisRun: number; // 本輪該帳號已發數
+  batchPerRun: number; // 每輪每帳號上限
+  publishedLast24h: number; // 近 24h 已發數
+  maxPerDay: number; // 每日上限
+  warmupDays: number; // 暖機天數（0=關）
+  createdAt: string | null; // 帳號建立時間（暖機計算用）
+  lastPublishedAt: string | null; // 上次發文時間（間隔計算用）
+  minGapMinutes: number; // 保底間隔
+  gapJitterMinutes: number; // 間隔抖動上限
+  accountId: string; // 抖動 seed 用
+  now: number; // 現在時間 ms
+}
+
+// 同步節奏守衛：回傳第一個觸發的「略過原因」，或 null（可發）。
+// 順序＝發文佇列原迴圈守衛順序（斷路器→批次→每日上限→最小間隔），抽出以利單元測試。
+export function nextPacingSkipReason(p: PacingInput): string | null {
+  if (circuitOpen(p.failuresThisRun, p.failureLimit)) {
+    return `帳號本輪連續失敗 ${p.failuresThisRun} 次，暫停發文`;
+  }
+  if (p.doneThisRun >= p.batchPerRun) {
+    return "本次批次已達上限";
+  }
+  const dailyCap =
+    p.warmupDays > 0 && p.createdAt
+      ? warmupDailyCap(p.maxPerDay, p.warmupDays, Math.floor((p.now - new Date(p.createdAt).getTime()) / 86_400_000))
+      : p.maxPerDay;
+  if (p.publishedLast24h + p.doneThisRun >= dailyCap) {
+    return `已達每日上限（${dailyCap}）`;
+  }
+  if (p.lastPublishedAt) {
+    const gapMin = (p.now - new Date(p.lastPublishedAt).getTime()) / 60000;
+    const required = effectiveGapMinutes(p.minGapMinutes, p.gapJitterMinutes, `${p.accountId}:${new Date(p.lastPublishedAt).getTime()}`);
+    if (gapMin < required) {
+      return `未達最小間隔（${Math.round(gapMin)}/${required} 分）`;
+    }
+  }
+  return null;
+}

@@ -140,7 +140,9 @@ export async function runSourcePipeline(source: Source, ownerId: string): Promis
 // 跑所有啟用中的來源（給排程 / 手動觸發用）。爬蟲是 owner 專屬，產出掛在 owner 名下。
 export async function runAllSources(): Promise<PipelineResult[]> {
   const ownerId = (await getOwnerUserId()) ?? "demo-user";
-  const sources = (await listSources()).filter((s) => s.enabled);
+  // owner-scope：只撈該 owner 自己的來源（爬蟲為 owner 限定子系統），確保用對的憑證、
+  // 草稿掛在對的 owner 名下，符合多租戶過濾鐵則（不可用 listSources() 撈到跨租戶來源）。
+  const sources = (await listSources(ownerId)).filter((s) => s.enabled);
   const results: PipelineResult[] = [];
   for (const s of sources) {
     // 單一來源拋錯不該中斷整批後續來源（fail-isolation，對齊 cron/all 的 allSettled 精神）。

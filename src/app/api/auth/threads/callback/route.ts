@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { connectThreadsAccount } from "@/services/threads/oauth";
-import { upsertThreadsAccountFromOAuth } from "@/lib/store";
+import { upsertThreadsAccountFromOAuth, canAddThreadsAccount } from "@/lib/store";
+import { PLAN_LABELS, type PlanId } from "@/lib/plans";
 import { getCurrentUser } from "@/lib/auth";
 import { env, isDemoMode } from "@/lib/env";
 
@@ -36,6 +37,11 @@ export async function GET(req: Request) {
       redirectUri: env.threadsRedirectUri,
       code
     });
+    // 方案配額：超過上限擋下（owner 不受限；重新授權既有帳號不占名額）
+    const quota = await canAddThreadsAccount(user.id, { isOwner: user.isOwner, threadsUserId: acc.userId });
+    if (!quota.ok) {
+      return back(`已達${PLAN_LABELS[quota.plan as PlanId]}上限（${quota.limit} 個發文帳號），請升級方案後再連結。`);
+    }
     await upsertThreadsAccountFromOAuth(
       {
         label: acc.username,

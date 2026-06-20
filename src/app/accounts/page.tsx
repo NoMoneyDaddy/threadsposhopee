@@ -7,9 +7,11 @@ import {
   getShopeeAffiliateId,
   getUserCloudinary,
   getUserTelegramChatId,
-  getUserDiscordWebhook
+  getUserDiscordWebhook,
+  getUserPlan
 } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
+import { PLAN_LABELS, planLimits } from "@/lib/plans";
 import { env, isDemoMode } from "@/lib/env";
 import { tokenExpiryState } from "@/lib/token-expiry";
 import ThreadsAccountForm from "@/components/ThreadsAccountForm";
@@ -42,6 +44,9 @@ export default async function AccountsPage({
   const cloudinary = user ? await getUserCloudinary(ownerId) : null;
   const telegramBound = user ? Boolean(await getUserTelegramChatId(user.id)) : false;
   const discordBound = user ? Boolean(await getUserDiscordWebhook(user.id)) : false;
+  // 方案配額（owner 不受限，顯示「無上限」）
+  const plan = user ? await getUserPlan(user.id) : "free";
+  const accountLimit = planLimits(plan).maxThreadsAccounts;
 
   return (
     <div className="space-y-6">
@@ -104,7 +109,13 @@ export default async function AccountsPage({
       <CopyPrefsForm initial={copyPrefs} />
 
       <section>
-        <h2 className="mb-2 font-semibold">Threads 發文帳號</h2>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <h2 className="font-semibold">Threads 發文帳號</h2>
+          <span className="rounded-full bg-shopee/10 px-3 py-1 text-xs text-shopee" title="可連結的發文帳號數，依方案而定">
+            {PLAN_LABELS[plan]}方案 ·{" "}
+            {user?.isOwner ? `${threads.length} 個（管理者無上限）` : `${threads.length} / ${accountLimit} 個發文帳號`}
+          </span>
+        </div>
         <div className="grid gap-3 md:grid-cols-2">
           {threads.map((a) => (
             <div key={a.id} className="rounded-lg border bg-white p-4">

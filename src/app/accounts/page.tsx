@@ -111,10 +111,14 @@ export default async function AccountsPage({
       <section>
         <div className="mb-2 flex items-center justify-between gap-2">
           <h2 className="font-semibold">Threads 發文帳號</h2>
-          <span className="rounded-full bg-shopee/10 px-3 py-1 text-xs text-shopee" title="可連結的發文帳號數，依方案而定">
+          <a
+            href="/pricing"
+            className="rounded-full bg-shopee/10 px-3 py-1 text-xs text-shopee hover:bg-shopee/20"
+            title="查看方案與升級（可連結的發文帳號數依方案而定）"
+          >
             {PLAN_LABELS[plan]}方案 ·{" "}
             {user?.isOwner ? `${threads.length} 個（管理者無上限）` : `${threads.length} / ${accountLimit} 個發文帳號`}
-          </span>
+          </a>
         </div>
         <div className="grid gap-3 md:grid-cols-2">
           {threads.map((a) => (

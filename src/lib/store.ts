@@ -1202,7 +1202,7 @@ export async function getPublishPlan(ownerId: string): Promise<PublishPlanRow[]>
 export async function getAccountPublishState(
   threadsAccountId: string,
   ownerId?: string
-): Promise<{ lastPublishedAt: string | null; publishedLast24h: number; accountStatus: string }> {
+): Promise<{ lastPublishedAt: string | null; publishedLast24h: number; accountStatus: string; createdAt: string | null }> {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   if (isDemoMode) {
     const acc = demo.threadsAccounts.find((a) => a.id === threadsAccountId);
@@ -1211,13 +1211,14 @@ export async function getAccountPublishState(
     return {
       lastPublishedAt: last ?? null,
       publishedLast24h: published.filter((d) => (d.published_at ?? d.created_at) >= since).length,
-      accountStatus: acc?.status ?? "active"
+      accountStatus: acc?.status ?? "active",
+      createdAt: (acc as { created_at?: string } | undefined)?.created_at ?? null
     };
   }
   const sb = getServiceClient()!;
   const { data: acc, error: accError } = await sb
     .from("threads_accounts")
-    .select("status")
+    .select("status, created_at")
     .eq("id", threadsAccountId)
     .maybeSingle();
   if (accError) throw accError;
@@ -1240,7 +1241,8 @@ export async function getAccountPublishState(
   return {
     lastPublishedAt: latest?.[0]?.published_at ?? null,
     publishedLast24h: count ?? 0,
-    accountStatus: acc.status
+    accountStatus: acc.status,
+    createdAt: acc.created_at ?? null
   };
 }
 

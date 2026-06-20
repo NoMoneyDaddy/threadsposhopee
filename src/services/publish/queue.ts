@@ -19,7 +19,7 @@ import {
 } from "@/lib/store";
 import { publishToThreads, publishReply } from "@/services/threads/publish";
 import { normalizeDraftMedia } from "@/lib/media";
-import { effectiveGapMinutes, shardOf } from "@/services/publish/cadence";
+import { effectiveGapMinutes, shardOf, warmupDailyCap } from "@/services/publish/cadence";
 import { replyDelayMinutes } from "@/services/publish/reply-timing";
 
 export interface PublishResult {
@@ -72,7 +72,10 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
   // 以 Threads 帳號為單位控制節奏；同一次執行內累積計數
   const startTime = Date.now();
   const publishedThisRun: Record<string, number> = {};
-  const stateCache: Record<string, { lastPublishedAt: string | null; publishedLast24h: number; accountStatus: string }> = {};
+  const stateCache: Record<
+    string,
+    { lastPublishedAt: string | null; publishedLast24h: number; accountStatus: string; createdAt: string | null }
+  > = {};
   // 商品冷卻：記住本輪已發過的商品（跨帳號），避免同輪／DB 尚未可見時重複放行。
   const cooldownHours = env.productCooldownHours;
   const publishedProductsThisRun = new Set<string>();
@@ -108,8 +111,17 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
       result.skipped.push({ id: draft.id, reason: "本次批次已達上限" });
       continue;
     }
-    if (state.publishedLast24h + doneThisRun >= env.publishMaxPerDay) {
-      result.skipped.push({ id: draft.id, reason: "已達每日上限" });
+    // 每日上限：新帳號暖機期內自動調降（前 N 天 1→max 線性遞增），降低新號被封風險。
+    const dailyCap =
+      env.accountWarmupDays > 0 && state.createdAt
+        ? warmupDailyCap(
+            env.publishMaxPerDay,
+            env.accountWarmupDays,
+            Math.floor((Date.now() - new Date(state.createdAt).getTime()) / 86_400_000)
+          )
+        : env.publishMaxPerDay;
+    if (state.publishedLast24h + doneThisRun >= dailyCap) {
+      result.skipped.push({ id: draft.id, reason: `已達每日上限（${dailyCap}）` });
       continue;
     }
     if (state.lastPublishedAt) {

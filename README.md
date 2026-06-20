@@ -140,11 +140,15 @@ supabase/migrations/   資料庫 schema（0001–0017）
 - [x] 各人自綁 Cloudinary（素材中轉進自己雲端，不佔共用額度）
 - [x] 發文預覽對齊 Threads 串文（主文 1/2 + 接續貼文 2/2）
 - [x] 延遲留言：串文 2/2 分潤連結延後補發（保底 + 隨機抖動 + 逐則覆寫），避免「秒留言」固定行為
+- [x] 延遲留言可視化：草稿頁狀態（待補/補發中/已補/失敗＋ETA）與一鍵重補、儀表板待補/失敗統計、cron 失敗告警
 - [x] 帳號分片並行：多條 cron 各跑一片帳號（`?shards=N&shard=i`），高量時擴展吞吐
+- [x] 成效統計：Shopee 分潤報表 + Threads 貼文互動數據（views/likes/…，含 app_state 快取省 API 額度）+ 最佳發文時段建議
+- [x] 失效分潤連結自動重產：健檢偵測失效 → 同 subId 重產 → 再驗 → 復活（重產不成才標失效）
+- [x] 防封強化（皆 env 開關、預設關閉）：商品冷卻期 `PRODUCT_COOLDOWN_HOURS`、新帳號暖機 `ACCOUNT_WARMUP_DAYS`、重發可選 AI 重寫文案、近重複文案偵測、Threads 內容合規（500 字/1 hashtag）、發文 429 退避重試
+- [x] 測試：單元（Node 內建 test runner）+ Playwright E2E 整站冒煙/互動（Demo 模式，已入 CI）
 - [x] 安全：AES-256-GCM 入庫加密、Cron 安全驗證、SSRF 防護、發文佇列分布式鎖、發文憑證 owner 過濾防越權
 
 ### 後續可選增強
 - [ ] 影片走 Gemini Files API（大檔）
-- [ ] 成效儀表板接 Shopee 報表 / Threads insights
-- [ ] 素材分潤連結到期自動偵測重產
+- [ ] 最佳發文時段自動套用到排程時段
 ```

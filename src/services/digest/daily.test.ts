@@ -12,7 +12,8 @@ const baseInput = {
   tokenExpiring: 0,
   topPosts: [],
   engagementTotals: null,
-  revenue: null
+  revenue: null,
+  reachDrop: null
 };
 
 test("composeDailyDigest：基本發布量一定有", () => {
@@ -47,4 +48,10 @@ test("composeDailyDigest：有問題時列出『需要注意』", () => {
 test("composeDailyDigest：全 0 無問題時不出現『需要注意』", () => {
   const s = composeDailyDigest(baseInput);
   assert.doesNotMatch(s, /需要注意/);
+});
+
+test("composeDailyDigest：觸及驟降時帶預警行", () => {
+  const s = composeDailyDigest({ ...baseInput, reachDrop: { recentMedian: 30, baselineMedian: 200, ratio: 0.15 } });
+  assert.match(s, /觸及驟降預警/);
+  assert.match(s, /15%/);
 });

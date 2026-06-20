@@ -1,6 +1,7 @@
 import { getPublishInsights } from "@/lib/store";
 import { getAffiliateRevenue, type AffiliateRevenue } from "@/services/shopee/report";
 import { getEngagementCached, bestPostingTimes, type EngagementSummary } from "@/services/threads/engagement";
+import { detectReachDrop } from "@/services/threads/reach";
 import { getCurrentUser } from "@/lib/auth";
 import { env, isDemoMode } from "@/lib/env";
 
@@ -44,6 +45,7 @@ export default async function InsightsPage() {
         </div>
       )}
 
+      {engagement && engagement.fetched >= 6 && <ReachDropBanner e={engagement} />}
       {engagement && engagement.fetched > 0 && <EngagementSection e={engagement} />}
       {engagement && engagement.fetched >= 3 && <BestTimesSection e={engagement} />}
 
@@ -99,6 +101,25 @@ function RankCard({ title, rows, empty }: { title: string; rows: { name: string;
 
 function num(n: number) {
   return n.toLocaleString("zh-TW");
+}
+
+// 觸及驟降預警：近期貼文中位觀看明顯低於基準 → 疑似被降觸及／shadowban，提醒放慢。
+function ReachDropBanner({ e }: { e: EngagementSummary }) {
+  const d = detectReachDrop(e.posts);
+  if (!d.hasSignal) return null;
+  const pct = Math.round(d.ratio * 100);
+  return (
+    <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800" role="alert">
+      <div className="font-semibold">⚠️ 觸及疑似驟降（疑似被降觸及／shadowban）</div>
+      <p className="mt-1">
+        近期貼文中位觀看 <b>{num(d.recentMedian)}</b>，僅為基準 <b>{num(d.baselineMedian)}</b> 的 <b>{pct}%</b>。
+        建議放慢發文節奏、檢查內容是否過度推廣或近似重複，並暫停一兩天觀察恢復情形。
+      </p>
+      <p className="mt-1 text-xs text-amber-600">
+        註：跨帳號綜合樣本（近 {d.recentN + d.baselineN} 篇有數據），僅供方向參考。
+      </p>
+    </div>
+  );
 }
 
 function EngagementSection({ e }: { e: EngagementSummary }) {

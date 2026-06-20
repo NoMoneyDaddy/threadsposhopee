@@ -24,7 +24,7 @@ import {
 import { publishToThreads, publishReply, PublishUncertainError } from "@/services/threads/publish";
 import { log } from "@/lib/logger";
 import { normalizeDraftMedia } from "@/lib/media";
-import { effectiveGapMinutes, shardOf, warmupDailyCap, circuitOpen } from "@/services/publish/cadence";
+import { shardOf, circuitOpen, nextPacingSkipReason } from "@/services/publish/cadence";
 import { replyDelayMinutes } from "@/services/publish/reply-timing";
 import { sendAlert } from "@/lib/notify";
 
@@ -140,43 +140,26 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
       }
     }
 
-    // 斷路器：本輪該帳號連續失敗達上限 → 跳過其餘草稿，避免對壞掉/被封帳號連打 API
-    if (circuitOpen(failuresThisRun[accId] ?? 0, failureLimit)) {
-      result.skipped.push({ id: draft.id, reason: `帳號本輪連續失敗 ${failuresThisRun[accId]} 次，暫停發文` });
-      continue;
-    }
-
     const doneThisRun = publishedThisRun[accId] ?? 0;
-
-    if (doneThisRun >= env.publishBatchPerRun) {
-      result.skipped.push({ id: draft.id, reason: "本次批次已達上限" });
+    // 同步節奏守衛（斷路器→批次→每日上限含暖機→最小間隔含抖動）抽成純函式，集中且可單測。
+    const pacingSkip = nextPacingSkipReason({
+      failuresThisRun: failuresThisRun[accId] ?? 0,
+      failureLimit,
+      doneThisRun,
+      batchPerRun: env.publishBatchPerRun,
+      publishedLast24h: state.publishedLast24h,
+      maxPerDay: env.publishMaxPerDay,
+      warmupDays: env.accountWarmupDays,
+      createdAt: state.createdAt,
+      lastPublishedAt: state.lastPublishedAt,
+      minGapMinutes: env.publishMinGapMinutes,
+      gapJitterMinutes: env.publishGapJitterMinutes,
+      accountId: accId,
+      now: Date.now()
+    });
+    if (pacingSkip) {
+      result.skipped.push({ id: draft.id, reason: pacingSkip });
       continue;
-    }
-    // 每日上限：新帳號暖機期內自動調降（前 N 天 1→max 線性遞增），降低新號被封風險。
-    const dailyCap =
-      env.accountWarmupDays > 0 && state.createdAt
-        ? warmupDailyCap(
-            env.publishMaxPerDay,
-            env.accountWarmupDays,
-            Math.floor((Date.now() - new Date(state.createdAt).getTime()) / 86_400_000)
-          )
-        : env.publishMaxPerDay;
-    if (state.publishedLast24h + doneThisRun >= dailyCap) {
-      result.skipped.push({ id: draft.id, reason: `已達每日上限（${dailyCap}）` });
-      continue;
-    }
-    if (state.lastPublishedAt) {
-      const gapMin = (Date.now() - new Date(state.lastPublishedAt).getTime()) / 60000;
-      // 有效間隔 = 保底 + 隨機抖動（以帳號+上次發文時間為穩定 seed，與前端 ETA 估算一致）
-      const required = effectiveGapMinutes(
-        env.publishMinGapMinutes,
-        env.publishGapJitterMinutes,
-        `${accId}:${new Date(state.lastPublishedAt).getTime()}`
-      );
-      if (gapMin < required) {
-        result.skipped.push({ id: draft.id, reason: `未達最小間隔（${Math.round(gapMin)}/${required} 分）` });
-        continue;
-      }
     }
 
     // 商品冷卻：同一分潤商品在冷卻期內已發過（本輪或近期 DB）就先不發，待冷卻過後下輪再發。

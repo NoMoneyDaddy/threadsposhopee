@@ -23,6 +23,27 @@ export default function DraftCard({
   const [mainText, setMainText] = useState(draft.main_text ?? "");
   const [replyText, setReplyText] = useState(draft.reply_text ?? "");
   const [msg, setMsg] = useState<string | null>(null);
+  const [compliance, setCompliance] = useState<{ risk: string; advice: string } | null>(null);
+
+  async function runCompliance() {
+    setBusy("compliance");
+    setMsg(null);
+    setCompliance(null);
+    try {
+      const res = await fetch("/api/drafts/compliance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: mainText })
+      });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error);
+      setCompliance({ risk: json.risk, advice: json.advice });
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
+  }
 
   // datetime-local 值（瀏覽器本地時區）↔ ISO 互轉
   const toLocalInput = (iso?: string | null) => {
@@ -166,6 +187,32 @@ export default function DraftCard({
           </div>
         );
       })()}
+
+      {!editing && mainText.trim() && (
+        <div className="mt-2">
+          <button
+            disabled={!!busy}
+            onClick={runCompliance}
+            className="rounded border px-2.5 py-1 text-xs text-neutral-600 hover:bg-neutral-50 disabled:opacity-50"
+          >
+            {busy === "compliance" ? "AI 檢查中…" : "🛡️ AI 合規檢查"}
+          </button>
+          {compliance && (
+            <div
+              className={`mt-1 rounded p-2 text-xs ${
+                compliance.risk === "高"
+                  ? "bg-red-50 text-red-700"
+                  : compliance.risk === "中"
+                    ? "bg-amber-50 text-amber-700"
+                    : "bg-emerald-50 text-emerald-700"
+              }`}
+              role="status"
+            >
+              風險：{compliance.risk}｜{compliance.advice}
+            </div>
+          )}
+        </div>
+      )}
 
       {!done && draft.status !== "needs_verification" && !editing && (
         <div className="mt-3 flex flex-wrap gap-2">

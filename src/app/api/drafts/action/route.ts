@@ -4,19 +4,16 @@ import {
   updateDraft,
   deleteDraft,
   getDraft,
-  getThreadsCredentials,
   getGeminiKey,
   getCopyPrefs,
   requeueReply,
   rescheduleDraft
 } from "@/lib/store";
-import { publishToThreads } from "@/services/threads/publish";
-import { normalizeDraftMedia } from "@/lib/media";
 import { generateCopy } from "@/services/ai/provider";
-import { replyDelayMinutes } from "@/services/publish/reply-timing";
 import { getCurrentUser } from "@/lib/auth";
 import { apiError } from "@/lib/api-error";
-import { env, isDemoMode } from "@/lib/env";
+import { publishDraftNow } from "@/services/publish/publish-draft";
+import { isDemoMode } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 
@@ -114,40 +111,12 @@ export async function POST(req: Request) {
       await updateDraftStatus(id, "published", { published_post_id: "demo_" + Date.now() });
       return NextResponse.json({ ok: true, demo: true });
     }
-    await updateDraftStatus(id, "publishing");
     try {
-      if (!draft.threads_account_id) throw new Error("草稿未綁定 Threads 帳號");
-      const creds = await getThreadsCredentials(draft.threads_account_id, user.id);
-      if (!creds) throw new Error("找不到 Threads 帳號憑證（請先設定 access token）");
-      // 留言延遲：>0 表示主文先發、留言之後由 cron 補（防「秒留言」固定行為）
-      const replyDelay = draft.reply_text
-        ? replyDelayMinutes(draft.id, env.replyDelayFloorMinutes, env.replyDelayJitterMinutes, draft.reply_delay_minutes)
-        : 0;
-      const deferReply = Boolean(draft.reply_text) && replyDelay > 0;
-      const { postId, replyFailed } = await publishToThreads({
-        threadsUserId: creds.threadsUserId,
-        accessToken: creds.accessToken,
-        text: draft.main_text ?? "",
-        media: normalizeDraftMedia(draft),
-        replyText: draft.reply_text,
-        deferReply
-      });
-      const nowMs = Date.now();
-      const replyPatch = deferReply
-        ? { reply_status: "pending" as const, reply_due_at: new Date(nowMs + replyDelay * 60000).toISOString() }
-        : draft.reply_text
-          ? { reply_status: replyFailed ? ("failed" as const) : ("published" as const) }
-          : {};
-      await updateDraftStatus(id, "published", {
-        published_post_id: postId,
-        published_at: new Date(nowMs).toISOString(),
-        ...replyPatch
-      });
+      // publishDraftNow 內部設 publishing→published／失敗落 failed（含失敗原因供本人除錯）；
+      // 對外回應收斂為固定文案，原始錯誤只進 log。
+      const { postId, deferReply } = await publishDraftNow(draft, user.id);
       return NextResponse.json({ ok: true, postId, replyDeferred: deferReply });
     } catch (e) {
-      // 失敗原因存進草稿供本人在 UI 除錯（owner 限定）；對外回應收斂為固定文案。
-      const msg = e instanceof Error ? e.message : String(e);
-      await updateDraftStatus(id, "failed", { error: msg });
       return apiError("草稿發布失敗", e, { clientMessage: "發布失敗，請稍後再試或檢查帳號設定" });
     }
   }

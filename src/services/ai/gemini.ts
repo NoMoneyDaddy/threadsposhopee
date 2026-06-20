@@ -26,17 +26,23 @@ export async function generateWithGemini(
       // SSRF 防護：媒體 URL 可能來自外部來源/使用者貼上，先擋內網位址，並用正規化 href fetch（防解析歧異）
       const safeUrl = assertSafePublicUrl(mediaUrl);
       const res = await fetchWithTimeout(safeUrl.href, {}, 10000);
-      // 先看 content-length，過大就不讀 body（省頻寬/記憶體）
-      const declared = parseInt(res.headers.get("content-length") ?? "", 10);
-      if (Number.isFinite(declared) && declared > MAX_INLINE_MEDIA_BYTES) {
-        console.warn(`媒體過大（${declared} bytes）跳過 inline，純文字生成：${mediaUrl}`);
+      // 非 2xx（如 404/500）→ 跳過 inline、純文字生成（fetch 不丟例外，需自行判斷，
+      // 否則會把錯誤頁內容當媒體送進 Gemini 導致整體生成失敗）。不可 return：後面還要呼叫 Gemini。
+      if (!res.ok) {
+        console.warn(`媒體抓取回應異常（${res.status}）跳過 inline，純文字生成：${mediaUrl}`);
       } else {
-        const buf = Buffer.from(await res.arrayBuffer());
-        if (mediaFitsInline(buf.length)) {
-          const mime = res.headers.get("content-type") ?? (mediaType === "video" ? "video/mp4" : "image/jpeg");
-          parts.push({ inlineData: { mimeType: mime, data: buf.toString("base64") } });
+        // 先看 content-length，過大就不讀 body（省頻寬/記憶體）
+        const declared = parseInt(res.headers.get("content-length") ?? "", 10);
+        if (Number.isFinite(declared) && declared > MAX_INLINE_MEDIA_BYTES) {
+          console.warn(`媒體過大（${declared} bytes）跳過 inline，純文字生成：${mediaUrl}`);
         } else {
-          console.warn(`媒體過大（${buf.length} bytes）跳過 inline，純文字生成：${mediaUrl}`);
+          const buf = Buffer.from(await res.arrayBuffer());
+          if (mediaFitsInline(buf.length)) {
+            const mime = res.headers.get("content-type") ?? (mediaType === "video" ? "video/mp4" : "image/jpeg");
+            parts.push({ inlineData: { mimeType: mime, data: buf.toString("base64") } });
+          } else {
+            console.warn(`媒體過大（${buf.length} bytes）跳過 inline，純文字生成：${mediaUrl}`);
+          }
         }
       }
     } catch (e) {

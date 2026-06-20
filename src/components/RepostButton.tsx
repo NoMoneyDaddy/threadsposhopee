@@ -14,6 +14,7 @@ export default function RepostButton({
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [accId, setAccId] = useState(threadsAccounts[0]?.id ?? "");
+  const [vary, setVary] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
   async function repost(action: "draft" | "queue") {
@@ -27,14 +28,15 @@ export default function RepostButton({
       const res = await fetch("/api/materials/repost", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ material_id: materialId, threads_account_id: accId, action })
+        body: JSON.stringify({ material_id: materialId, threads_account_id: accId, action, vary })
       });
       const json = await res.json();
       if (!json.ok) throw new Error(json.error);
       const slot = json.scheduledAt
         ? new Date(json.scheduledAt).toLocaleString("zh-TW", { timeZone: "Asia/Taipei", dateStyle: "short", timeStyle: "short" })
         : "";
-      setMsg(action === "queue" ? `✅ 已排入佇列（${slot}）` : "✅ 已產生草稿");
+      const base = action === "queue" ? `✅ 已排入佇列（${slot}）` : "✅ 已產生草稿";
+      setMsg(json.note ? `${base}；${json.note}` : base);
       router.refresh();
     } catch (e) {
       setMsg(`❌ ${e instanceof Error ? e.message : String(e)}`);
@@ -68,6 +70,10 @@ export default function RepostButton({
       >
         {busy === "draft" ? "…" : "存草稿"}
       </button>
+      <label className="flex items-center gap-1 text-xs text-neutral-500" title="用 AI 重寫文案，避免重複措辭被降觸及">
+        <input type="checkbox" checked={vary} onChange={(e) => setVary(e.target.checked)} disabled={!!busy} />
+        重寫文案
+      </label>
       {msg && <span className="text-xs text-neutral-500">{msg}</span>}
     </div>
   );

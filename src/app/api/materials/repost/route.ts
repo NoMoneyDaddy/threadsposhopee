@@ -1,12 +1,41 @@
 import { NextResponse } from "next/server";
-import { getMaterial, createDraftFromMaterial } from "@/lib/store";
+import { getMaterial, createDraftFromMaterial, updateDraft, getGeminiKey, getCopyPrefs } from "@/lib/store";
 import { withNextSlot } from "@/services/publish/slots";
+import { generateCopy } from "@/services/ai/provider";
 import { getCurrentUser } from "@/lib/auth";
+import type { Draft, Material } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-// 重發：從既有素材再產生一篇草稿（重用文案/連結/媒體，不重燒 token）。
+// vary=true：重發時用 AI 重寫文案，避免跨帳號/多次重發出現重複措辭（降觸及/封號頭號訊號）。
+// 重寫失敗（無金鑰/AI 故障）→ 優雅退回原文案，附 note 提示。
+async function maybeVary(draft: Draft, material: Material, ownerId: string): Promise<{ draft: Draft; note?: string }> {
+  try {
+    const [geminiKey, copyPrefs] = await Promise.all([getGeminiKey(ownerId), getCopyPrefs(ownerId)]);
+    const copy = await generateCopy(
+      {
+        productName: material.product_name ?? "這個好物",
+        shopeeShortLink: material.affiliate_short_link ?? "",
+        mediaUrl: material.cloudinary_media_url,
+        mediaType: (material.media_type as "image" | "video" | "none") ?? "none"
+      },
+      geminiKey,
+      copyPrefs
+    );
+    const updated = await updateDraft(draft.id, ownerId, {
+      main_text: copy.mainText,
+      reply_text: copy.replyText,
+      ai_raw: copy.raw
+    });
+    return { draft: updated ?? draft };
+  } catch (e) {
+    return { draft, note: `文案重寫失敗，沿用原文案：${e instanceof Error ? e.message : String(e)}` };
+  }
+}
+
+// 重發：從既有素材再產生一篇草稿（重用連結/媒體，不重燒 token）。
 // action: "queue"（排進下一個空時段，approved）｜"draft"（存待審，預設）。
+// vary: true 時用 AI 重寫文案（防重複措辭）。
 export async function POST(req: Request) {
   try {
     const user = await getCurrentUser();
@@ -21,9 +50,12 @@ export async function POST(req: Request) {
     if (!material) return NextResponse.json({ ok: false, error: "找不到素材" }, { status: 404 });
 
     const action = body.action === "queue" ? "queue" : "draft";
+    const vary = body.vary === true;
 
+    let draft: Draft | null;
+    let scheduledAt: string | null = null;
     if (action === "queue") {
-      const draft = await withNextSlot(ownerId, (slot) =>
+      draft = await withNextSlot(ownerId, (slot) =>
         createDraftFromMaterial(material, {
           owner_id: ownerId,
           threads_account_id: body.threads_account_id,
@@ -32,15 +64,19 @@ export async function POST(req: Request) {
         })
       );
       if (!draft) return NextResponse.json({ ok: false, error: "30 天內時段已滿" }, { status: 409 });
-      return NextResponse.json({ ok: true, draft, scheduledAt: draft.scheduled_at });
+      scheduledAt = draft.scheduled_at ?? null;
+    } else {
+      draft = await createDraftFromMaterial(material, {
+        owner_id: ownerId,
+        threads_account_id: body.threads_account_id,
+        status: "draft"
+      });
     }
 
-    const draft = await createDraftFromMaterial(material, {
-      owner_id: ownerId,
-      threads_account_id: body.threads_account_id,
-      status: "draft"
-    });
-    return NextResponse.json({ ok: true, draft, scheduledAt: null });
+    let note: string | undefined;
+    if (vary) ({ draft, note } = await maybeVary(draft, material, ownerId));
+
+    return NextResponse.json({ ok: true, draft, scheduledAt, note });
   } catch (e) {
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 500 });
   }

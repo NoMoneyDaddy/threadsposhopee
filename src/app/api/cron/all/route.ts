@@ -31,7 +31,12 @@ export async function GET(req: Request) {
     {
       key: "publish",
       run: runPublishQueue,
-      warn: (r) => (r?.failed?.length ? `⚠️ 發文 ${r.failed.length} 則失敗` : null)
+      warn: (r) => {
+        const parts: string[] = [];
+        if (r?.failed?.length) parts.push(`發文 ${r.failed.length} 則失敗`);
+        if (r?.replies?.failed) parts.push(`補留言 ${r.replies.failed} 則失敗`);
+        return parts.length ? `⚠️ ${parts.join("；")}` : null;
+      }
     }
   ];
   // 每天展期一次（03:00–03:14 視窗，避免每 15 分重複）

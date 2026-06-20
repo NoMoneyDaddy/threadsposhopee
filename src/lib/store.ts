@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { getServiceClient } from "./supabase/server";
 import { env, isDemoMode } from "./env";
 import { decrypt, encrypt } from "./crypto";
+import { log } from "./logger";
 import type { Draft, Material, Source, ThreadsAccount, ShopeeAccount } from "./types";
 import { DEFAULT_COPY_PREFS, normalizeCopyPrefs, type CopyPrefs } from "@/services/ai/prefs";
 import { planAccountQueue } from "@/services/publish/cadence";
@@ -347,7 +348,7 @@ export async function listThreadsAccountTokens(ownerId: string): Promise<{ id: s
       try {
         return { id: r.id, accessToken: decrypt(r.access_token_enc) };
       } catch (e) {
-        console.error(`解密帳號 ${r.id} token 失敗：`, e);
+        log.error("解密 Threads token 失敗", { ownerId, accountId: r.id, err: e });
         return null;
       }
     })
@@ -485,7 +486,7 @@ export async function getApifyCredentials(ownerId: string): Promise<{ token: str
   try {
     return { token: decrypt(data.apify_token_enc), actor: data.apify_actor ?? null };
   } catch (e) {
-    console.error("解密 Apify token 失敗:", e);
+    log.error("解密 Apify token 失敗", { ownerId, err: e });
     return null;
   }
 }
@@ -520,7 +521,7 @@ export async function getGeminiKey(ownerId: string): Promise<string | null> {
   try {
     return decrypt(data.gemini_api_key_enc);
   } catch (e) {
-    console.error("解密 Gemini key 失敗:", e);
+    log.error("解密 Gemini key 失敗", { ownerId, err: e });
     return null;
   }
 }
@@ -572,7 +573,7 @@ export async function getUserCloudinary(ownerId: string): Promise<{ cloud: strin
   // Cloudinary 綁定是「可選」功能：讀取失敗不該中斷整條發文/爬取流程（pipeline 在迴圈外取一次，
   // 拋出會讓整個 source run 失敗）。降級為記錄警告並回 null，自動退回 env 共用設定。
   if (error) {
-    console.warn(`讀取 Cloudinary 設定失敗，改用共用設定：${error.message}`);
+    log.warn("讀取 Cloudinary 設定失敗，改用共用設定", { ownerId, err: error.message });
     return null;
   }
   const cloud = data?.cloudinary_cloud?.trim();
@@ -1425,7 +1426,7 @@ export async function listActiveThreadsCredentials(
       try {
         return { label: r.label, threadsUserId: r.threads_user_id, accessToken: decrypt(r.access_token_enc) };
       } catch (e) {
-        console.error(`解密帳號 ${r.label} 的 token 失敗:`, e);
+        log.error("解密 Threads token 失敗", { ownerId, accountLabel: r.label, err: e });
         return null;
       }
     })
@@ -1451,7 +1452,7 @@ export async function listThreadsTokensToRefresh(
       try {
         return { id: r.id, label: r.label, accessToken: decrypt(r.access_token_enc) };
       } catch (e) {
-        console.error(`解密帳號 ${r.label} 的 token 失敗:`, e);
+        log.error("解密 Threads token 失敗（展期 worker）", { accountId: r.id, accountLabel: r.label, err: e });
         return null;
       }
     })

@@ -33,7 +33,7 @@ DB 遷移目前到 `supabase/migrations/0017_reply_delay.sql`（#60–#64 皆用
 - **流程**：本遠端／web session 在指派的 `claude/*` 分支開發 → 推上去 → 開 **draft PR** → CI（build + e2e + GitGuardian）綠 → **squash 合併** → 同步本機 `main`，再挖下一個。（CLAUDE.md 的「直接在 main」是本機情境；遠端走分支＋PR，因環境要求。）
 - **本機綠燈是合併前提**：每次提交前 `npx tsc --noEmit`、`node --import tsx --test $(find src -name '*.test.ts')`、`npm run build` 都要綠，務必嚴格。E2E（`npx playwright test --project=chromium`）動到頁面時跑一次。
 - **review bot**：CodeRabbit（草稿自動跳過）、Gemini、Qodo 會留言。Gemini 的具體修正建議通常合理且小（如輸入驗證、fail-safe、門檻防虛警）→ 評估後採納再合併；摘要類無需動作。
-- 重推同分支因遠端留有 PR 前一版 commit 而 non-fast-forward 時，用 `git push --force-with-lease=<branch>:origin/<branch>`。
+- 重推同分支因遠端留有 PR 前一版 commit 而 non-fast-forward 時，先 `git fetch origin <branch>` 更新追蹤 ref，再 `git push origin <branch> --force-with-lease`（以遠端追蹤 ref 為預期值，安全擋掉他人新推）。
 - commit 結尾加 `Co-Authored-By` 與 `Claude-Session` trailer（照既有 commit）。
 - **多租戶鐵則**：所有使用者資料函式吃 `ownerId` 並過濾；`getThreadsCredentials(id, ownerId)` 必帶 owner 過濾；建草稿/發文前先 `userOwnsThreadsAccount`。
 - 安全：金鑰永不入庫（env 或 AES-256-GCM）；外部 fetch 走 `fetchWithTimeout`、URL 先過 `assertSafePublicUrl`（SSRF）；時區一律 `Asia/Taipei`。

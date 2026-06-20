@@ -1,11 +1,8 @@
 // Shopee 分潤「轉換報表」：抓實際成交佣金，做收益儀表板。
 // 用 owner 的環境變數金鑰；沿用既有 HMAC 簽名與帶逾時的 fetch。
-import { buildShopeeAuth } from "@/services/shopee/sign";
-import { fetchWithTimeout } from "@/lib/http";
+import { callShopeeGql } from "@/services/shopee/gql";
 import { env } from "@/lib/env";
 import { getCachedJson, setCachedJson } from "@/lib/store";
-
-const GQL = "https://open-api.affiliate.shopee.tw/graphql";
 
 interface ReportItem {
   itemName: string | null;
@@ -60,16 +57,9 @@ async function fetchConversions(days: number, maxPages = 10): Promise<{ nodes: R
       ? `query($scrollId:String!){ conversionReport(purchaseTimeStart:${start}, purchaseTimeEnd:${end}, limit:100, scrollId:$scrollId) { ${selection} } }`
       : `{ conversionReport(purchaseTimeStart:${start}, purchaseTimeEnd:${end}, limit:100) { ${selection} } }`;
     const payload = JSON.stringify(scrollId ? { query, variables: { scrollId } } : { query });
-    const auth = buildShopeeAuth(appId, secret, payload);
-    const res = await fetchWithTimeout(
-      GQL,
-      { method: "POST", headers: { "Content-Type": "application/json", Authorization: auth.authorization }, body: payload },
-      15000
-    );
-    if (!res.ok) throw new Error(`Shopee 報表 API ${res.status}: ${(await res.text()).slice(0, 200)}`);
-    const json = await res.json();
-    if (json.errors?.length) throw new Error(`Shopee 報表錯誤: ${JSON.stringify(json.errors).slice(0, 200)}`);
-    const rep = json?.data?.conversionReport;
+    // 共用呼叫：含 HMAC 簽名（對 payload）＋ SSRF 守衛＋錯誤分類。報表較慢，逾時放寬 15s。
+    const data = await callShopeeGql(appId, secret, payload, 15000);
+    const rep = data?.conversionReport;
     nodes.push(...((rep?.nodes ?? []) as ReportNode[]));
     if (!rep?.pageInfo?.hasNextPage) break;
     scrollId = rep.pageInfo.scrollId ?? "";

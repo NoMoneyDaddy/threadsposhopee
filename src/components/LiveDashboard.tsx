@@ -23,6 +23,7 @@ interface DashboardData {
   lastCronAt?: string | null;
   binds?: { apify: boolean; gemini: boolean; shopee: boolean } | null;
   publishPlan?: { id: string; productName: string | null; accountLabel: string; etaIso: string | null; reason: string }[];
+  publishPaused?: boolean;
 }
 
 // 發文進度：排隊中的草稿預計何時發。多到一定量視為「塞車」。
@@ -157,6 +158,48 @@ function RunQueueButton({ onDone }: { onDone: () => void }) {
   );
 }
 
+// 全域發文急停開關（owner 限定）：暫停時所有自動發文整批跳過（cron + 立即跑一輪），
+// 不影響草稿頁單篇「核准並發布」（那是操作者明確意圖）。緊急防封用。
+function PauseToggle({ paused, onDone }: { paused: boolean; onDone: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  async function toggle() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/publish/pause", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paused: !paused })
+      });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error);
+      onDone();
+    } catch (e) {
+      setMsg(`❌ ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="flex items-center gap-2" role="status" aria-live="polite">
+      <button
+        onClick={toggle}
+        disabled={busy}
+        aria-busy={busy}
+        className={`rounded-md border px-3 py-1.5 text-sm disabled:opacity-50 ${
+          paused
+            ? "border-green-400 bg-green-50 text-green-700 hover:bg-green-100"
+            : "border-red-300 bg-red-50 text-red-600 hover:bg-red-100"
+        }`}
+      >
+        {busy ? "處理中…" : paused ? "▶️ 恢復自動發文" : "⏸️ 暫停自動發文"}
+      </button>
+      {msg && <span className="text-xs text-neutral-500">{msg}</span>}
+    </div>
+  );
+}
+
 const REFRESH_MS = 20000;
 
 function Chip({ label, on }: { label: string; on: boolean }) {
@@ -240,7 +283,18 @@ export default function LiveDashboard() {
   return (
     <div className="space-y-6">
       <Autopilot lastCronAt={data.lastCronAt} demo={data.demo} />
-      {data.isOwner && !data.demo && <RunQueueButton onDone={load} />}
+      {data.publishPaused && (
+        <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          <span className="h-2 w-2 rounded-full bg-red-500" />
+          ⏸️ 自動發文已暫停 — cron 與「立即跑一輪」整批跳過。草稿頁單篇「核准並發布」仍可手動發。
+        </div>
+      )}
+      {data.isOwner && !data.demo && (
+        <div className="flex flex-wrap items-center gap-3">
+          <RunQueueButton onDone={load} />
+          <PauseToggle paused={Boolean(data.publishPaused)} onDone={load} />
+        </div>
+      )}
       <MissingBinds binds={data.binds} />
       <PublishPlan rows={data.publishPlan} />
       {setupIncomplete && (

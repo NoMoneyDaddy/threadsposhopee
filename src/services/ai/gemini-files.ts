@@ -1,6 +1,7 @@
 // Gemini Files API（resumable upload）：把媒體上傳取得 fileUri，供 generateContent 以 fileData 引用。
 // 用於大影片——inline base64 會超過請求上限，Files API 才是正解。不額外裝 SDK，直接打 REST。
 import { fetchWithTimeout } from "@/lib/http";
+import { log } from "@/lib/logger";
 import { assertSafePublicUrl } from "@/lib/url-guard";
 
 const API = "https://generativelanguage.googleapis.com";
@@ -58,7 +59,7 @@ export async function uploadToGeminiFiles(bytes: Buffer, mime: string, apiKey: s
     }
     return file.state === "ACTIVE" ? file.uri ?? null : null;
   } catch (e) {
-    console.warn("Gemini Files 上傳失敗：", e instanceof Error ? e.message : e);
+    log.warn("Gemini Files 上傳失敗", { err: e });
     return null;
   }
 }

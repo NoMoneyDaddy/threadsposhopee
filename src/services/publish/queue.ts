@@ -269,7 +269,7 @@ async function publishDueReplies(startTime: number, shard?: ShardOpts): Promise<
   const out = { published: 0, failed: 0 };
   if (isDemoMode) return out;
   // 先回收上次中斷卡在 publishing-reply 的留言（標 failed），再撈到期待補的
-  await reclaimStaleReplies().catch((e) => console.warn("回收卡住留言失敗：", e instanceof Error ? e.message : e));
+  await reclaimStaleReplies().catch((e) => log.warn("回收卡住留言失敗", { err: e }));
   let due;
   try {
     // 分片模式下，前 N 筆到期留言可能都屬其他片 → 本片過濾後變空而「餓死」。
@@ -277,7 +277,7 @@ async function publishDueReplies(startTime: number, shard?: ShardOpts): Promise<
     const limit = shard ? 20 * shard.total : 20;
     due = (await listRepliesDue(limit)).filter((d) => inShard(d.threads_account_id, shard));
   } catch (e) {
-    console.warn("撈待補留言失敗：", e instanceof Error ? e.message : e);
+    log.warn("撈待補留言失敗", { err: e });
     return out;
   }
   for (const d of due) {

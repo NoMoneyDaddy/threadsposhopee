@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { log } from "@/lib/logger";
 import { setPublishPaused, isPublishPaused } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
 
@@ -18,7 +19,7 @@ export async function POST(req: Request) {
     await setPublishPaused(paused);
     return NextResponse.json({ ok: true, paused });
   } catch (e) {
-    console.error("設定發文暫停失敗：", e instanceof Error ? e.message : e);
+    log.error("設定發文暫停失敗", { err: e });
     return NextResponse.json({ ok: false, error: "設定失敗，請稍後再試" }, { status: 500 });
   }
 }

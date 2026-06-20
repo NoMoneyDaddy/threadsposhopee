@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { log } from "@/lib/logger";
 import { checkAffiliateLinks } from "@/services/materials/linkcheck";
 import { getCurrentUser } from "@/lib/auth";
 
@@ -13,7 +14,7 @@ export async function POST() {
     const r = await checkAffiliateLinks(user.id, user.id);
     return NextResponse.json({ ok: true, ...r });
   } catch (e) {
-    console.error("手動連結健檢失敗：", e instanceof Error ? e.message : e);
+    log.error("手動連結健檢失敗", { err: e });
     return NextResponse.json({ ok: false, error: "連結健檢失敗，請稍後再試" }, { status: 500 });
   }
 }

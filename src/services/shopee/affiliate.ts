@@ -1,4 +1,5 @@
 import { buildShopeeAuth } from "./sign";
+import { log } from "@/lib/logger";
 import { fetchWithTimeout } from "@/lib/http";
 import { assertSafePublicUrl } from "@/lib/url-guard";
 
@@ -48,7 +49,7 @@ export async function validateShopeeCredentials(
     }
     // 已知第三方/網路錯誤（含非授權 GraphQL 錯誤）放行但記 log；其餘非預期錯誤上拋
     if (e instanceof ShopeeApiError || /network|fetch|timeout|abort|ECONN|ETIMEDOUT|EAI_AGAIN/i.test(msg)) {
-      console.warn("Shopee 憑證驗證無法確認，放行存檔：", msg);
+      log.warn("Shopee 憑證驗證無法確認，放行存檔", { err: msg });
       return { ok: true };
     }
     throw e;

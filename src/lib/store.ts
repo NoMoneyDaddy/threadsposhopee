@@ -9,16 +9,7 @@ import { log } from "./logger";
 import type { Draft, Material, Source, ThreadsAccount, ShopeeAccount } from "./types";
 import { DEFAULT_COPY_PREFS, normalizeCopyPrefs, type CopyPrefs } from "@/services/ai/prefs";
 import { planAccountQueue } from "@/services/publish/cadence";
-import demoData from "@/fixtures/demo-data.json";
-
-// ── Demo 記憶體狀態（程序重啟即清空）──────────────────────────
-const demo = {
-  threadsAccounts: demoData.threadsAccounts as ThreadsAccount[],
-  shopeeAccounts: demoData.shopeeAccounts as ShopeeAccount[],
-  sources: demoData.sources as Source[],
-  drafts: [...(demoData.drafts as Draft[])],
-  materials: [] as Material[]
-};
+import { demo } from "./demo-store";
 
 // app_state 鍵值層（心跳/暫停/斷路器冷卻/JSON 快取/發文鎖）已拆到 ./app-state，
 // 此處 re-export 維持既有 `@/lib/store` 匯入點不變（God File 漸進拆分）。

@@ -49,7 +49,7 @@ npm run pipeline:demo
 
 ## 上線設定
 
-1. 建 Supabase 專案，**依序**跑 `supabase/migrations/` 下所有 SQL（`0001_init.sql` → `0018_profile_telegram.sql`）
+1. 建 Supabase 專案，**依序**跑 `supabase/migrations/` 下所有 SQL（`0001_init.sql` → `0019_profile_discord.sql`）
 2. 填環境變數（Supabase、`APP_ENCRYPTION_KEY`、`OWNER_EMAIL`、Apify、Shopee、Gemini、Cloudinary、`CRON_SECRET`，以及 Threads OAuth 的 `THREADS_APP_ID/SECRET/REDIRECT_URI`）
 3. 部署（擇一）：
 
@@ -114,7 +114,7 @@ src/
     publish/reply-timing.ts  留言延遲（保底 + 抖動 + 逐則覆寫）
     pipeline/run.ts      端到端編排
   lib/                 env / 加密 / 資料層 / cron 驗證 / SSRF 防護 / 型別
-supabase/migrations/   資料庫 schema（0001–0018）
+supabase/migrations/   資料庫 schema（0001–0019）
 ```
 
 ## ⚠️ 安全
@@ -150,7 +150,7 @@ supabase/migrations/   資料庫 schema（0001–0018）
 - [x] 每日成效摘要：總排程每日推一則 Telegram 摘要（發布量/互動/熱門貼文/分潤收益/待辦提醒＋缺稿預警），可選 AI 成效歸因分析（`DAILY_DIGEST_AI=1`，需 Gemini 金鑰），免登入掌握脈動
 - [x] 觸及驟降預警（疑似降觸及／shadowban）：比較近期 vs 基準中位觀看，驟降即在成效頁示警並帶入每日摘要主動推播，提醒放慢節奏
 - [x] 全域發文急停開關（owner）：儀表板一鍵暫停所有自動發文（cron + 立即跑一輪），不影響單篇手動發，緊急防封用
-- [x] 個人 Telegram 通知：每人在帳號管理綁自己的 chat_id（綁定即發測試訊息驗證可達），接收屬於自己的提醒（如貼文「可能已發出待確認」）；用平台共用 bot token 發送
+- [x] 個人通知多通道：每人在帳號管理綁自己的 Telegram chat_id 與／或 Discord webhook（綁定即發測試訊息驗證可達），接收屬於自己的提醒（貼文待確認／token 展期失敗／留言補發失敗）；Discord webhook 發送前過 SSRF 守衛＋網域限定
 - [x] 防封強化（皆 env 開關、預設關閉）：商品冷卻期 `PRODUCT_COOLDOWN_HOURS`、新帳號暖機 `ACCOUNT_WARMUP_DAYS`、連續失敗斷路器 `PUBLISH_ACCOUNT_FAILURE_LIMIT`（單輪同帳號失敗達上限即跳過其餘並 Telegram 示警）＋跨輪冷卻 `PUBLISH_CIRCUIT_COOLDOWN_MINUTES`（冷卻期內跨 cron 輪次整批跳過該帳號，成功發文即解除）、重發可選 AI 重寫文案、近重複文案偵測、Threads 內容合規（500 字/1 hashtag）、發文 429 退避重試
 - [x] 測試：單元（Node 內建 test runner）+ Playwright E2E 整站冒煙/互動（Demo 模式，已入 CI）
 - [x] 安全：AES-256-GCM 入庫加密、Cron 安全驗證、SSRF 防護、發文佇列分布式鎖、發文憑證 owner 過濾防越權

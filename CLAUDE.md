@@ -44,5 +44,5 @@
 - 多租戶：所有使用者資料函式都要吃 `ownerId` 並過濾。**含發文憑證**：`getThreadsCredentials(id, ownerId)` 必帶 owner 過濾（service-role 繞 RLS，只用 id 查＝跨租戶越權）；建草稿/發文前先 `userOwnsThreadsAccount` 驗證帳號歸屬。
 - 佇列時段唯一性靠 migration 0008 索引 + `withNextSlot` 重試。
 - 發文佇列用 `app_state` 分布式鎖（`acquirePublishLock`/`releasePublishLock`）序列化，避免 cron 與手動觸發同跑而繞過防封間隔。
-- 遷移檔依序累加（目前到 `supabase/migrations/0018_*`）。
+- 遷移檔依序累加（目前到 `supabase/migrations/0019_*`）。
 - 延遲留言用 `reply_status`（pending→publishing-reply→published/failed）原子認領＋`reclaimStaleReplies`（以 `updated_at` 判逾期）防中斷重複補。

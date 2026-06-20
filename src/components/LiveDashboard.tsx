@@ -15,6 +15,7 @@ interface DashboardData {
     drafts: { draft: number; approved: number; published: number; failed: number };
     publishedLast24h: number;
     accountIssues: { error: number; paused: number };
+    replies?: { pending: number; failed: number };
   };
   threadsQuota: { label: string; used: number; limit: number }[];
   cloudinary: { creditsUsed: number; creditsLimit: number; storageBytes: number; resources: number } | null;
@@ -321,6 +322,17 @@ export default function LiveDashboard() {
             </span>
           ))}
         </div>
+        {d.replies && (d.replies.pending > 0 || d.replies.failed > 0) && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 border-t pt-3 text-sm">
+            <span className="text-neutral-500">延遲留言：</span>
+            {d.replies.pending > 0 && (
+              <span className="rounded-md bg-amber-50 px-3 py-1.5 text-amber-700">待補 <b>{d.replies.pending}</b></span>
+            )}
+            {d.replies.failed > 0 && (
+              <span className="rounded-md bg-red-50 px-3 py-1.5 text-red-600">補發失敗 <b>{d.replies.failed}</b></span>
+            )}
+          </div>
+        )}
       </div>
 
       {data.isOwner && data.threadsQuota.length > 0 && (

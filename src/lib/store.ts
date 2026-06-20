@@ -1255,18 +1255,22 @@ export async function getDashboardStats(ownerId: string): Promise<{
   publishedLast24h: number;
   // 需要注意：token 展期失敗(error)、手動暫停(paused) 的帳號數
   accountIssues: { error: number; paused: number };
+  // 延遲留言（串文 2/2）：待補(pending)／補發失敗(failed) 數，讓 owner 一眼看出是否卡住
+  replies: { pending: number; failed: number };
 }> {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   if (isDemoMode) {
     const by = (s: string) => demo.drafts.filter((d) => d.status === s).length;
     const accBy = (s: string) => demo.threadsAccounts.filter((a) => a.status === s).length;
+    const replyBy = (s: string) => demo.drafts.filter((d) => d.reply_status === s).length;
     return {
       threadsAccounts: demo.threadsAccounts.length,
       sources: demo.sources.filter((s) => s.enabled).length,
       materials: demo.materials.length,
       drafts: { draft: by("draft"), approved: by("approved"), published: by("published"), failed: by("failed") },
       publishedLast24h: demo.drafts.filter((d) => d.status === "published").length,
-      accountIssues: { error: accBy("error"), paused: accBy("paused") }
+      accountIssues: { error: accBy("error"), paused: accBy("paused") },
+      replies: { pending: replyBy("pending"), failed: replyBy("failed") }
     };
   }
   const sb = getServiceClient()!;
@@ -1274,7 +1278,7 @@ export async function getDashboardStats(ownerId: string): Promise<{
     const { count: c } = await build(sb.from(table).select("*", { count: "exact", head: true }).eq("owner_id", ownerId));
     return c ?? 0;
   };
-  const [threadsAccounts, sources, materials, draft, approved, published, failed, publishedLast24h, accError, accPaused] =
+  const [threadsAccounts, sources, materials, draft, approved, published, failed, publishedLast24h, accError, accPaused, replyPending, replyFailed] =
     await Promise.all([
       count("threads_accounts"),
       count("sources", (q) => q.eq("enabled", true)),
@@ -1285,7 +1289,9 @@ export async function getDashboardStats(ownerId: string): Promise<{
       count("drafts", (q) => q.eq("status", "failed")),
       count("drafts", (q) => q.eq("status", "published").gte("published_at", since)),
       count("threads_accounts", (q) => q.eq("status", "error")),
-      count("threads_accounts", (q) => q.eq("status", "paused"))
+      count("threads_accounts", (q) => q.eq("status", "paused")),
+      count("drafts", (q) => q.eq("reply_status", "pending")),
+      count("drafts", (q) => q.eq("reply_status", "failed"))
     ]);
   return {
     threadsAccounts,
@@ -1293,7 +1299,8 @@ export async function getDashboardStats(ownerId: string): Promise<{
     materials,
     drafts: { draft, approved, published, failed },
     publishedLast24h,
-    accountIssues: { error: accError, paused: accPaused }
+    accountIssues: { error: accError, paused: accPaused },
+    replies: { pending: replyPending, failed: replyFailed }
   };
 }
 

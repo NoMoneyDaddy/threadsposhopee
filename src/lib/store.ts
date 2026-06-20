@@ -60,6 +60,7 @@ export {
   requeueReply,
   updateDraftStatusAtomic,
   listApprovedDrafts,
+  listApprovedDraftsForShard,
   type PublishedPostRef,
   type ReplyDueDraft
 } from "./drafts-store";

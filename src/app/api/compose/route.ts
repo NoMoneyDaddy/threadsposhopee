@@ -2,19 +2,17 @@ import { NextResponse } from "next/server";
 import {
   getMaterial,
   createDraft,
-  getThreadsCredentials,
   updateDraftStatus,
   userOwnsThreadsAccount,
   getUserCloudinary
 } from "@/lib/store";
-import { publishToThreads } from "@/services/threads/publish";
 import { uploadToCloudinary } from "@/services/media/cloudinary";
-import { normalizeDraftMedia } from "@/lib/media";
 import { withNextSlot } from "@/services/publish/slots";
-import { replyDelayMinutes } from "@/services/publish/reply-timing";
 import { assertSafePublicUrl } from "@/lib/url-guard";
 import { getCurrentUser } from "@/lib/auth";
-import { env, isDemoMode } from "@/lib/env";
+import { publishDraftNow } from "@/services/publish/publish-draft";
+import { apiError } from "@/lib/api-error";
+import { isDemoMode } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -160,44 +158,16 @@ export async function POST(req: Request) {
         await updateDraftStatus(draft.id, "published", { published_post_id: "demo_" + Date.now() });
         return NextResponse.json({ ok: true, draft, posted: true, demo: true });
       }
-      await updateDraftStatus(draft.id, "publishing");
       try {
-        const creds = await getThreadsCredentials(threads_account_id, user.id);
-        if (!creds) throw new Error("找不到 Threads 帳號憑證");
-        // 留言延遲：>0 表示主文先發、留言之後由 cron 補（防「秒留言」）
-        const replyDelay = draft.reply_text
-          ? replyDelayMinutes(draft.id, env.replyDelayFloorMinutes, env.replyDelayJitterMinutes, draft.reply_delay_minutes)
-          : 0;
-        const deferReply = Boolean(draft.reply_text) && replyDelay > 0;
-        const { postId, replyFailed } = await publishToThreads({
-          threadsUserId: creds.threadsUserId,
-          accessToken: creds.accessToken,
-          text: draft.main_text ?? "",
-          media: normalizeDraftMedia(draft),
-          replyText: draft.reply_text,
-          deferReply
-        });
-        const nowMs = Date.now();
-        const replyPatch = deferReply
-          ? { reply_status: "pending" as const, reply_due_at: new Date(nowMs + replyDelay * 60000).toISOString() }
-          : draft.reply_text
-            ? { reply_status: replyFailed ? ("failed" as const) : ("published" as const) }
-            : {};
-        await updateDraftStatus(draft.id, "published", {
-          published_post_id: postId,
-          published_at: new Date(nowMs).toISOString(),
-          ...replyPatch
-        });
+        const { postId, deferReply } = await publishDraftNow(draft, user.id);
         return NextResponse.json({ ok: true, draft, posted: true, postId, replyDeferred: deferReply });
       } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        await updateDraftStatus(draft.id, "failed", { error: msg });
-        return NextResponse.json({ ok: false, error: msg }, { status: 500 });
+        return apiError("快速發文失敗", e, { clientMessage: "發布失敗，請稍後再試或檢查帳號設定" });
       }
     }
 
     return NextResponse.json({ ok: true, draft, posted: false, queuedSlot });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 500 });
+    return apiError("快速發文流程失敗", e);
   }
 }

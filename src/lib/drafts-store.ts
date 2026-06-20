@@ -202,7 +202,9 @@ export async function deleteDraft(id: string, ownerId: string): Promise<boolean>
   return !error;
 }
 
-export async function updateDraftStatus(id: string, status: Draft["status"], patch: Partial<Draft> = {}) {
+// ownerId 可選：背景 worker（跨租戶）傳入做縱深防禦，確保更新不越界到他人列；
+// API route 端已先以 getDraft(id, ownerId) 驗證歸屬，可不帶。
+export async function updateDraftStatus(id: string, status: Draft["status"], patch: Partial<Draft> = {}, ownerId?: string) {
   // error 訊息截斷到 500 字，避免外部 API 巨量錯誤撐爆欄位
   if (typeof patch.error === "string") patch = { ...patch, error: patch.error.slice(0, 500) };
   if (isDemoMode) {
@@ -211,7 +213,9 @@ export async function updateDraftStatus(id: string, status: Draft["status"], pat
     return d;
   }
   const sb = getServiceClient()!;
-  const { data } = await sb.from("drafts").update({ status, ...patch }).eq("id", id).select().single();
+  let q = sb.from("drafts").update({ status, ...patch }).eq("id", id);
+  if (ownerId) q = q.eq("owner_id", ownerId);
+  const { data } = await q.select().single();
   return data as Draft;
 }
 
@@ -334,7 +338,7 @@ export async function markReplyFailed(id: string, ownerId: string, err: string):
     .update({ reply_status: "failed", error: err.slice(0, 500) })
     .eq("id", id)
     .eq("owner_id", ownerId);
-  if (error) throw new Error(`標記留言失敗失敗：${error.message}`);
+  if (error) throw new Error(`標記留言失敗時出錯：${error.message}`);
 }
 
 // 人工重試「補留言失敗」：reply_status failed → pending、reply_due_at 設為現在，下輪 cron 立即重補。
@@ -363,11 +367,13 @@ export async function requeueReply(id: string, ownerId: string): Promise<boolean
 }
 
 // 原子性狀態更新（compare-and-swap）：只有當目前狀態 == expectedStatus 才更新。
+// ownerId 可選（背景 worker 傳入做縱深防禦，見 updateDraftStatus 註解）。
 export async function updateDraftStatusAtomic(
   id: string,
   status: Draft["status"],
   expectedStatus: Draft["status"],
-  patch: Partial<Draft> = {}
+  patch: Partial<Draft> = {},
+  ownerId?: string
 ): Promise<Draft | null> {
   if (isDemoMode) {
     const d = demo.drafts.find((x) => x.id === id);
@@ -378,23 +384,23 @@ export async function updateDraftStatusAtomic(
     return null;
   }
   const sb = getServiceClient()!;
-  const { data } = await sb
-    .from("drafts")
-    .update({ status, ...patch })
-    .eq("id", id)
-    .eq("status", expectedStatus)
-    .select()
-    .maybeSingle();
+  let q = sb.from("drafts").update({ status, ...patch }).eq("id", id).eq("status", expectedStatus);
+  if (ownerId) q = q.eq("owner_id", ownerId);
+  const { data } = await q.select().maybeSingle();
   return (data as Draft) ?? null;
 }
 
 // 發文佇列：取出可發布的草稿（全租戶，發到各自綁定的 Threads 帳號）。背景 worker 用。
-export async function listApprovedDrafts(): Promise<Draft[]> {
+// 上限避免大量積壓時整批載入記憶體爆掉；oldest-first（FIFO）確保積壓會跨輪逐步排空。
+// ponytail: 分片過濾仍在 queue.ts 記憶體做；要 SQL 層分片需加預算 shard 欄位（migration），暫不做。
+const APPROVED_DRAFTS_BATCH = 2000;
+export async function listApprovedDrafts(limit = APPROVED_DRAFTS_BATCH): Promise<Draft[]> {
   const nowIso = new Date().toISOString();
   if (isDemoMode) {
     return demo.drafts
       .filter((d) => d.status === "approved" && (!d.scheduled_at || d.scheduled_at <= nowIso))
-      .sort((a, b) => a.created_at.localeCompare(b.created_at));
+      .sort((a, b) => a.created_at.localeCompare(b.created_at))
+      .slice(0, limit);
   }
   const sb = getServiceClient()!;
   const { data } = await sb
@@ -402,6 +408,48 @@ export async function listApprovedDrafts(): Promise<Draft[]> {
     .select("*")
     .eq("status", "approved")
     .or(`scheduled_at.is.null,scheduled_at.lte.${nowIso}`)
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: true })
+    .limit(limit);
   return (data ?? []) as Draft[];
+}
+
+// 分片模式專用：分頁掃描 approved 草稿、用 matches 過濾出屬於本片的，累積到 perShardLimit 或掃完。
+// 避免「全域 limit 先截斷再記憶體分片」造成某些 shard 反覆拿到 0 筆（starvation）：本片若不在
+// 全域最舊 N 筆內，仍能往後翻頁找到自己的草稿。maxPages×pageSize 為總掃描列數上限（記憶體封頂）。
+export async function listApprovedDraftsForShard(
+  matches: (accountId: string | null) => boolean,
+  perShardLimit = 500,
+  pageSize = 1000,
+  maxPages = 20
+): Promise<Draft[]> {
+  const nowIso = new Date().toISOString();
+  if (isDemoMode) {
+    return demo.drafts
+      .filter((d) => d.status === "approved" && (!d.scheduled_at || d.scheduled_at <= nowIso))
+      .sort((a, b) => a.created_at.localeCompare(b.created_at))
+      .filter((d) => matches(d.threads_account_id ?? null))
+      .slice(0, perShardLimit);
+  }
+  const sb = getServiceClient()!;
+  const out: Draft[] = [];
+  for (let page = 0; page < maxPages && out.length < perShardLimit; page++) {
+    const from = page * pageSize;
+    const { data } = await sb
+      .from("drafts")
+      .select("*")
+      .eq("status", "approved")
+      .or(`scheduled_at.is.null,scheduled_at.lte.${nowIso}`)
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true }) // 穩定次排序：created_at 相同時防跨頁 range 漏抓/重複
+      .range(from, from + pageSize - 1);
+    const rows = (data ?? []) as Draft[];
+    for (const d of rows) {
+      if (matches(d.threads_account_id ?? null)) {
+        out.push(d);
+        if (out.length >= perShardLimit) break;
+      }
+    }
+    if (rows.length < pageSize) break; // 已掃到尾
+  }
+  return out;
 }

@@ -1,6 +1,7 @@
 import { env } from "@/lib/env";
 import { assertSafePublicUrl } from "@/lib/url-guard";
-import { fetchWithTimeout } from "@/lib/http";
+import { fetchWithRetry } from "@/lib/http";
+import { log } from "@/lib/logger";
 
 // 把來源媒體（Threads CDN 短效 URL）中轉到 Cloudinary，取得穩定 URL 給 Threads 發文用。
 // 對應 n8n「下載影片/圖片 → 上傳 Cloudinary」節點。
@@ -23,8 +24,14 @@ export async function uploadToCloudinary(
   form.append("upload_preset", preset);
   form.append("folder", type === "video" ? "threads/videos" : "threads/images");
 
-  const res = await fetchWithTimeout(endpoint, { method: "POST", body: form }, 20000); // 影片上傳較慢，放寬到 20s
-  if (!res.ok) throw new Error(`Cloudinary 上傳失敗 ${res.status}: ${await res.text()}`);
+  // 影片上傳較慢放寬到 20s；只重試 429（被限流＝未處理，重試不會產生重複資產）。
+  // 外部 fetch 前一律過 SSRF 守衛（即使 endpoint 為固定常數，維持全站一致約定）。
+  const res = await fetchWithRetry(assertSafePublicUrl(endpoint).href, { method: "POST", body: form }, 20000);
+  if (!res.ok) {
+    // 上游回應本文可能含帳號細節：只進 log，對外訊息僅保留狀態碼避免洩漏。
+    log.error("Cloudinary 上傳失敗", { status: res.status, body: await res.text() });
+    throw new Error(`Cloudinary 上傳失敗（${res.status}）`);
+  }
   const json = await res.json();
   return json.secure_url as string;
 }

@@ -1,6 +1,6 @@
 // Threads 發文：建立媒體容器 → 發布 → （可選）在自己貼文下留言放分潤連結。
 // 支援單圖/單片、純文字，以及多媒體輪播（carousel）。
-import { fetchWithTimeout } from "@/lib/http";
+import { fetchWithTimeout, fetchWithRetry } from "@/lib/http";
 import { log } from "@/lib/logger";
 import { assertSafePublicUrl } from "@/lib/url-guard";
 import type { DraftMedia } from "@/lib/types";
@@ -69,28 +69,12 @@ function setMediaParams(params: URLSearchParams, item: DraftMedia): void {
   }
 }
 
-// Retry-After 可能是「秒數」或「HTTP-date」；都支援，回傳等待毫秒（無法解析回 null）。
-export function parseRetryAfterMs(header: string | null, now = Date.now()): number | null {
-  if (!header) return null;
-  const secs = Number(header.trim());
-  if (Number.isFinite(secs)) return secs > 0 ? secs * 1000 : 0;
-  const date = Date.parse(header);
-  if (!Number.isNaN(date)) return Math.max(0, date - now);
-  return null;
-}
-
 // Threads POST 遇 429（rate limited、請求未被處理）時退避重試，遵守 Retry-After。
-// 只重試 429——5xx/網路錯誤可能其實已成功，重試會造成重複貼文，故不重試。
+// 只重試 429——5xx/網路錯誤可能其實已成功，重試會造成重複貼文，故不重試（fetchWithRetry 的語意）。
 // SSRF 防護收斂於此：所有外部 POST 在送出前統一過 assertSafePublicUrl。
 async function fetchThreadsPost(url: string, init: RequestInit, attempts = 3): Promise<Response> {
   const safe = assertSafePublicUrl(url).href;
-  let res = await fetchWithTimeout(safe, init);
-  for (let i = 1; i < attempts && res.status === 429; i++) {
-    const waitMs = parseRetryAfterMs(res.headers.get("retry-after")) ?? 1000 * 2 ** (i - 1);
-    await new Promise((r) => setTimeout(r, Math.min(waitMs, 16_000)));
-    res = await fetchWithTimeout(safe, init);
-  }
-  return res;
+  return fetchWithRetry(safe, init, 8000, attempts);
 }
 
 async function postThreads(userId: string, token: string, params: URLSearchParams): Promise<string> {

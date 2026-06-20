@@ -1,5 +1,6 @@
 // app_state 鍵值層：心跳、全域發文暫停、斷路器跨輪冷卻、JSON 快取、發文佇列分布式鎖。
 // 由 store.ts 拆出（God File 漸進拆分）；皆以 Supabase `app_state` 單表做 KV，demo 走記憶體。
+import { randomUUID } from "node:crypto";
 import { getServiceClient } from "./supabase/server";
 import { isDemoMode } from "./env";
 
@@ -118,17 +119,26 @@ export async function setCachedJson(key: string, value: unknown): Promise<void> 
 
 // 發文佇列分布式鎖：避免手動「立即跑一輪」與 cron 排程同時執行 runPublishQueue，
 // 各自讀到相同的節奏狀態而同時放行，繞過每帳號最小間隔（防封）。
-// 用 app_state 單列做 compare-and-set：value 存「鎖到期時間（ISO）」，
-// 只有鎖不存在或已逾期（value < now）才搶得到。ISO UTC 字串可直接按字典序＝時序比較。
+// 用 app_state 單列做 compare-and-set：value 存「到期 ISO#持有者 token」，
+// 只有鎖不存在或已逾期（value < now）才搶得到。ISO UTC 固定寬度，後綴 token
+// 不影響字典序＝時序比較（比較在時戳段即分出勝負）。
 const PUBLISH_LOCK_KEY = "publish_queue_lock";
 const PAST_ISO = new Date(0).toISOString();
 
-export async function acquirePublishLock(ttlMinutes = 5, key: string = PUBLISH_LOCK_KEY): Promise<boolean> {
-  if (isDemoMode) return true; // demo 無併發
+// 鎖值格式：到期 ISO + 持有者 token。ISO 為固定寬度 → 後綴 token 不影響字典序＝時序比較
+// （CAS 的 `.lt(value, now)` 在時戳段就分出勝負）；release 用 `%#token` 比對只釋放自己持有的鎖。
+export function publishLockValue(expiresIso: string, token: string): string {
+  return `${expiresIso}#${token}`;
+}
+
+// 取得鎖回傳唯一 token（供釋放時驗證持有者）；搶不到回 null。
+export async function acquirePublishLock(ttlMinutes = 5, key: string = PUBLISH_LOCK_KEY): Promise<string | null> {
+  const token = randomUUID();
+  if (isDemoMode) return token; // demo 無併發
   const sb = getServiceClient()!;
   const now = Date.now();
   const nowIso = new Date(now).toISOString();
-  const expiresIso = new Date(now + ttlMinutes * 60000).toISOString();
+  const value = publishLockValue(new Date(now + ttlMinutes * 60000).toISOString(), token);
   // 先確保列存在（初值為過去時間，可立即搶）；已存在則不覆蓋
   await sb
     .from("app_state")
@@ -139,20 +149,20 @@ export async function acquirePublishLock(ttlMinutes = 5, key: string = PUBLISH_L
   // 原子 CAS：UPDATE 取列鎖，只有現有到期時間 < now 才搶得到（回傳該列代表成功）
   const { data } = await sb
     .from("app_state")
-    .update({ value: expiresIso, updated_at: nowIso })
+    .update({ value, updated_at: nowIso })
     .eq("key", key)
     .lt("value", nowIso)
     .select("key")
     .maybeSingle();
-  return Boolean(data);
+  return data ? token : null;
 }
 
-export async function releasePublishLock(key: string = PUBLISH_LOCK_KEY): Promise<void> {
+export async function releasePublishLock(key: string = PUBLISH_LOCK_KEY, token?: string): Promise<void> {
   if (isDemoMode) return;
   const sb = getServiceClient()!;
-  // 把到期時間設回過去，讓下一輪可立即搶（逾時則自動失效，毋須強制釋放）
-  await sb
-    .from("app_state")
-    .update({ value: PAST_ISO, updated_at: new Date().toISOString() })
-    .eq("key", key);
+  // 只有自己仍持有（value 帶本次 token）才把到期時間設回過去釋放；
+  // 若鎖早已逾期被他輪搶走（value 換成別的 token），則不動，避免誤放他人的鎖。
+  let q = sb.from("app_state").update({ value: PAST_ISO, updated_at: new Date().toISOString() }).eq("key", key);
+  if (token) q = q.like("value", `%#${token}`);
+  await q;
 }

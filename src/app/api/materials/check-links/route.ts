@@ -10,6 +10,7 @@ export const maxDuration = 60;
 export async function POST() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+  if (!user.isOwner) return NextResponse.json({ ok: false, error: "只有管理者可觸發連結健檢" }, { status: 403 });
   try {
     const r = await checkAffiliateLinks(user.id, user.id);
     return NextResponse.json({ ok: true, ...r });

@@ -37,6 +37,20 @@ test("擋掉 IPv6 迴環/ULA/link-local/multicast，但放行一般網域", () =
   assert.doesNotThrow(() => assertSafePublicUrl("https://fdic.gov/x"));
 });
 
+test("擋掉等價編碼繞過：十進位/十六進位整數、IPv4-mapped IPv6", () => {
+  for (const bad of [
+    "http://2130706433/x", // 十進位 127.0.0.1
+    "http://0x7f000001/x", // 十六進位 127.0.0.1
+    "http://3232235521/x", // 十進位 192.168.0.1
+    "http://[::ffff:127.0.0.1]/x", // IPv4-mapped IPv6（點分）
+    "http://[::ffff:7f00:1]/x" // IPv4-mapped IPv6（十六進位群組）
+  ]) {
+    assert.throws(() => assertSafePublicUrl(bad), `應擋下 ${bad}`);
+  }
+  // 公開 IP 的等價編碼不可誤擋（16843009 = 1.1.1.1）
+  assert.doesNotThrow(() => assertSafePublicUrl("http://16843009/x"));
+});
+
 test("無效字串丟錯", () => {
   assert.throws(() => assertSafePublicUrl("not a url"));
 });

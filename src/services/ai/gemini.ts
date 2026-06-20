@@ -21,6 +21,8 @@ export async function generateWithGemini(
   apiKey?: string | null,
   temperature = 0.9
 ): Promise<string> {
+  const key = apiKey || env.geminiApiKey;
+  if (!key) throw new Error("無 Gemini 金鑰"); // 先擋空金鑰，避免送出 key=undefined 的必失敗外呼
   const parts: any[] = [{ text: prompt }];
 
   // 有媒體就抓下來轉 base64 inline（小檔可行；超大檔跳過避免請求超限，純文字生成）
@@ -36,11 +38,8 @@ export async function generateWithGemini(
       } else if (mediaType === "video") {
         // 影片走 Files API：先看 content-length，超過記憶體上限就跳過；否則下載→上傳→取 fileUri。
         const declared = parseInt(res.headers.get("content-length") ?? "", 10);
-        const key = apiKey || env.geminiApiKey;
         if (Number.isFinite(declared) && declared > MAX_FILES_MEDIA_BYTES) {
           log.warn("影片過大跳過，純文字生成", { bytes: declared, mediaUrl });
-        } else if (!key) {
-          log.warn("無 Gemini 金鑰，影片跳過，純文字生成", { mediaUrl });
         } else {
           const buf = Buffer.from(await res.arrayBuffer());
           if (buf.length > MAX_FILES_MEDIA_BYTES) {
@@ -73,9 +72,9 @@ export async function generateWithGemini(
     }
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${env.geminiModel}:generateContent?key=${apiKey || env.geminiApiKey}`;
-  // 生成無副作用（產文字）→ 429 退避重試安全；放寬逾時 30s（生成較慢）。
-  const res = await fetchWithRetry(url, {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${env.geminiModel}:generateContent?key=${key}`;
+  // 生成無副作用（產文字）→ 429 退避重試安全；放寬逾時 30s（生成較慢）。SSRF 守衛收斂於 fetch 前。
+  const res = await fetchWithRetry(assertSafePublicUrl(url).href, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -101,7 +100,7 @@ export async function geminiText(prompt: string, apiKey?: string | null, tempera
   const key = apiKey || env.geminiApiKey;
   if (!key) throw new Error("無 Gemini 金鑰");
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${env.geminiModel}:generateContent?key=${key}`;
-  const res = await fetchWithRetry(url, {
+  const res = await fetchWithRetry(assertSafePublicUrl(url).href, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({

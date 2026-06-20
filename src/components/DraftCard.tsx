@@ -24,11 +24,22 @@ export default function DraftCard({
   const [replyText, setReplyText] = useState(draft.reply_text ?? "");
   const [msg, setMsg] = useState<string | null>(null);
 
+  // datetime-local 值（瀏覽器本地時區）↔ ISO 互轉
+  const toLocalInput = (iso?: string | null) => {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "";
+    const pad = (x: number) => String(x).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+  const [schedTime, setSchedTime] = useState(toLocalInput(draft.scheduled_at));
+
   // 父層資料（router.refresh / 背景更新）變動時同步本地狀態
   useEffect(() => {
     setMainText(draft.main_text ?? "");
     setReplyText(draft.reply_text ?? "");
-  }, [draft.main_text, draft.reply_text]);
+    setSchedTime(toLocalInput(draft.scheduled_at));
+  }, [draft.main_text, draft.reply_text, draft.scheduled_at]);
 
   async function call(action: string, extra: Record<string, unknown> = {}) {
     setBusy(action);
@@ -198,6 +209,33 @@ export default function DraftCard({
           </button>
         </div>
       )}
+
+      {/* 佇列中草稿可改排程時間（手動微調發布時段） */}
+      {draft.status === "approved" && draft.scheduled_at && !editing && (
+        <div className="mt-2 flex flex-wrap items-center gap-2 border-t pt-2 text-xs text-neutral-500">
+          <label htmlFor={`sched-${draft.id}`}>排程：</label>
+          <input
+            id={`sched-${draft.id}`}
+            type="datetime-local"
+            className="rounded border px-2 py-1"
+            value={schedTime}
+            onChange={(e) => setSchedTime(e.target.value)}
+            disabled={!!busy}
+          />
+          <button
+            disabled={!!busy || !schedTime || schedTime === toLocalInput(draft.scheduled_at)}
+            onClick={() => {
+              const t = new Date(schedTime);
+              if (Number.isNaN(t.getTime())) return setMsg("時間格式錯誤");
+              call("reschedule", { scheduled_at: t.toISOString() });
+            }}
+            className="rounded border px-3 py-1 text-shopee hover:bg-orange-50 disabled:opacity-50"
+          >
+            {busy === "reschedule" ? "改中…" : "改時間"}
+          </button>
+        </div>
+      )}
+
       {draft.status === "failed" && draft.error && (
         <p className="mt-2 rounded bg-red-50 p-2 text-xs text-red-600">發布失敗：{draft.error}</p>
       )}

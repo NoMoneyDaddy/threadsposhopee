@@ -7,7 +7,8 @@ import {
   getThreadsCredentials,
   getGeminiKey,
   getCopyPrefs,
-  requeueReply
+  requeueReply,
+  rescheduleDraft
 } from "@/lib/store";
 import { publishToThreads } from "@/services/threads/publish";
 import { normalizeDraftMedia } from "@/lib/media";
@@ -118,6 +119,21 @@ export async function POST(req: Request) {
       await updateDraftStatus(id, "failed", { error: msg });
       return NextResponse.json({ ok: false, error: msg }, { status: 500 });
     }
+  }
+
+  // 改排程時間：只允許佇列中（approved）的草稿，需未來時間；撞同帳號同時段回 409
+  if (action === "reschedule") {
+    const iso = typeof body.scheduled_at === "string" ? body.scheduled_at : "";
+    const t = Date.parse(iso);
+    if (Number.isNaN(t)) return NextResponse.json({ ok: false, error: "時間格式錯誤" }, { status: 400 });
+    if (t <= Date.now()) return NextResponse.json({ ok: false, error: "請選擇未來時間" }, { status: 400 });
+    const r = await rescheduleDraft(id, user.id, new Date(t).toISOString());
+    if (!r.ok) {
+      return r.reason === "taken"
+        ? NextResponse.json({ ok: false, error: "該時段已有貼文，請換個時間" }, { status: 409 })
+        : NextResponse.json({ ok: false, error: "只有佇列中的草稿可改時間" }, { status: 400 });
+    }
+    return NextResponse.json({ ok: true, draft: r.draft });
   }
 
   // 重試補留言：把「補留言失敗」的草稿重排回 pending，下輪 cron 立即重補（主文已發、不重貼）

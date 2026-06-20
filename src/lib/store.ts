@@ -871,6 +871,35 @@ export async function listTakenScheduledSlots(ownerId: string): Promise<Set<stri
   return new Set((data ?? []).map((r) => new Date(r.scheduled_at as string).toISOString()));
 }
 
+// 人工改排程時間：只允許佇列中（approved）的草稿。撞 migration 0008 唯一索引（同帳號同時段）回 taken。
+export async function rescheduleDraft(
+  id: string,
+  ownerId: string,
+  iso: string
+): Promise<{ ok: true; draft: Draft } | { ok: false; reason: "notfound" | "taken" }> {
+  if (isDemoMode) {
+    const d = demo.drafts.find((x) => x.id === id && x.status === "approved");
+    if (!d) return { ok: false, reason: "notfound" };
+    d.scheduled_at = iso;
+    return { ok: true, draft: d };
+  }
+  const sb = getServiceClient()!;
+  const { data, error } = await sb
+    .from("drafts")
+    .update({ scheduled_at: iso })
+    .eq("id", id)
+    .eq("owner_id", ownerId)
+    .eq("status", "approved")
+    .select()
+    .maybeSingle();
+  if (error) {
+    if ((error as { code?: string }).code === "23505") return { ok: false, reason: "taken" };
+    throw new Error(`改排程失敗：${error.message}`);
+  }
+  if (!data) return { ok: false, reason: "notfound" };
+  return { ok: true, draft: data as Draft };
+}
+
 // 商品冷卻：該 owner 是否在 sinceIso 之後已發過同一分潤商品（跨任一帳號）。
 export async function wasProductPublishedSince(ownerId: string, cleanUrl: string, sinceIso: string): Promise<boolean> {
   if (isDemoMode) {

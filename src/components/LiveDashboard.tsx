@@ -14,7 +14,7 @@ interface DashboardData {
     materials: number;
     drafts: { draft: number; approved: number; published: number; failed: number };
     publishedLast24h: number;
-    accountIssues: { error: number; paused: number };
+    accountIssues: { error: number; paused: number; tokenExpiring?: number };
     replies?: { pending: number; failed: number };
   };
   threadsQuota: { label: string; used: number; limit: number }[];
@@ -225,8 +225,9 @@ export default function LiveDashboard() {
   if (!data) return null;
 
   const d = data.stats;
-  const issues = d.accountIssues ?? { error: 0, paused: 0 };
-  const needsAttention = issues.error > 0 || d.drafts.failed > 0 || issues.paused > 0;
+  const issues = d.accountIssues ?? { error: 0, paused: 0, tokenExpiring: 0 };
+  const tokenExpiring = issues.tokenExpiring ?? 0;
+  const needsAttention = issues.error > 0 || d.drafts.failed > 0 || issues.paused > 0 || tokenExpiring > 0;
   // 核心流程未走完（沒帳號、沒素材、或未曾發布）時，顯示上手引導，直到三步都完成才隱藏
   const setupIncomplete = d.threadsAccounts === 0 || d.materials === 0 || d.drafts.published === 0;
   const steps = [
@@ -274,6 +275,11 @@ export default function LiveDashboard() {
               </Link>
             )}
             {issues.paused > 0 && <span>{issues.paused} 個帳號已暫停</span>}
+            {tokenExpiring > 0 && (
+              <Link href="/accounts" className="underline hover:opacity-80">
+                {tokenExpiring} 個帳號 token 即將到期/已過期
+              </Link>
+            )}
             {d.drafts.failed > 0 && (
               <Link href="/drafts" className="underline hover:opacity-80">
                 {d.drafts.failed} 則草稿發布失敗（可重試）

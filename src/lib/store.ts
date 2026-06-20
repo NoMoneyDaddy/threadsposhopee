@@ -1275,12 +1275,14 @@ export async function getDashboardStats(ownerId: string): Promise<{
   materials: number;
   drafts: { draft: number; approved: number; published: number; failed: number };
   publishedLast24h: number;
-  // 需要注意：token 展期失敗(error)、手動暫停(paused) 的帳號數
-  accountIssues: { error: number; paused: number };
+  // 需要注意：token 展期失敗(error)、手動暫停(paused)、token 即將到期/已過期(tokenExpiring) 的帳號數
+  accountIssues: { error: number; paused: number; tokenExpiring: number };
   // 延遲留言（串文 2/2）：待補(pending)／補發失敗(failed) 數，讓 owner 一眼看出是否卡住
   replies: { pending: number; failed: number };
 }> {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  // token 即將到期門檻：到期前 7 天（與展期視窗一致），含已過期
+  const expSoon = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
   if (isDemoMode) {
     const by = (s: string) => demo.drafts.filter((d) => d.status === s).length;
     const accBy = (s: string) => demo.threadsAccounts.filter((a) => a.status === s).length;
@@ -1291,7 +1293,11 @@ export async function getDashboardStats(ownerId: string): Promise<{
       materials: demo.materials.length,
       drafts: { draft: by("draft"), approved: by("approved"), published: by("published"), failed: by("failed") },
       publishedLast24h: demo.drafts.filter((d) => d.status === "published").length,
-      accountIssues: { error: accBy("error"), paused: accBy("paused") },
+      accountIssues: {
+        error: accBy("error"),
+        paused: accBy("paused"),
+        tokenExpiring: demo.threadsAccounts.filter((a) => a.token_expires_at && a.token_expires_at <= expSoon).length
+      },
       replies: { pending: replyBy("pending"), failed: replyBy("failed") }
     };
   }
@@ -1300,7 +1306,7 @@ export async function getDashboardStats(ownerId: string): Promise<{
     const { count: c } = await build(sb.from(table).select("*", { count: "exact", head: true }).eq("owner_id", ownerId));
     return c ?? 0;
   };
-  const [threadsAccounts, sources, materials, draft, approved, published, failed, publishedLast24h, accError, accPaused, replyPending, replyFailed] =
+  const [threadsAccounts, sources, materials, draft, approved, published, failed, publishedLast24h, accError, accPaused, replyPending, replyFailed, tokenExpiring] =
     await Promise.all([
       count("threads_accounts"),
       count("sources", (q) => q.eq("enabled", true)),
@@ -1313,7 +1319,8 @@ export async function getDashboardStats(ownerId: string): Promise<{
       count("threads_accounts", (q) => q.eq("status", "error")),
       count("threads_accounts", (q) => q.eq("status", "paused")),
       count("drafts", (q) => q.eq("reply_status", "pending")),
-      count("drafts", (q) => q.eq("reply_status", "failed"))
+      count("drafts", (q) => q.eq("reply_status", "failed")),
+      count("threads_accounts", (q) => q.eq("status", "active").not("token_expires_at", "is", null).lte("token_expires_at", expSoon))
     ]);
   return {
     threadsAccounts,
@@ -1321,7 +1328,7 @@ export async function getDashboardStats(ownerId: string): Promise<{
     materials,
     drafts: { draft, approved, published, failed },
     publishedLast24h,
-    accountIssues: { error: accError, paused: accPaused },
+    accountIssues: { error: accError, paused: accPaused, tokenExpiring },
     replies: { pending: replyPending, failed: replyFailed }
   };
 }

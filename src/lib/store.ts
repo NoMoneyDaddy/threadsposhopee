@@ -838,6 +838,28 @@ export async function listTakenScheduledSlots(ownerId: string): Promise<Set<stri
   return new Set((data ?? []).map((r) => new Date(r.scheduled_at as string).toISOString()));
 }
 
+// 商品冷卻：該 owner 是否在 sinceIso 之後已發過同一分潤商品（跨任一帳號）。
+export async function wasProductPublishedSince(ownerId: string, cleanUrl: string, sinceIso: string): Promise<boolean> {
+  if (isDemoMode) {
+    return demo.drafts.some(
+      (d) =>
+        d.owner_id === ownerId &&
+        d.status === "published" &&
+        d.clean_product_url === cleanUrl &&
+        (d.published_at ?? d.created_at) >= sinceIso
+    );
+  }
+  const sb = getServiceClient()!;
+  const { count } = await sb
+    .from("drafts")
+    .select("id", { count: "exact", head: true })
+    .eq("owner_id", ownerId)
+    .eq("status", "published")
+    .eq("clean_product_url", cleanUrl)
+    .gte("published_at", sinceIso);
+  return (count ?? 0) > 0;
+}
+
 export async function getDraft(id: string, ownerId: string): Promise<Draft | null> {
   if (isDemoMode) return demo.drafts.find((d) => d.id === id) ?? null;
   const sb = getServiceClient()!;

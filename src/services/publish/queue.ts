@@ -14,7 +14,8 @@ import {
   claimReplyForPublish,
   reclaimStaleReplies,
   markReplyPublished,
-  markReplyFailed
+  markReplyFailed,
+  wasProductPublishedSince
 } from "@/lib/store";
 import { publishToThreads, publishReply } from "@/services/threads/publish";
 import { normalizeDraftMedia } from "@/lib/media";
@@ -72,6 +73,9 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
   const startTime = Date.now();
   const publishedThisRun: Record<string, number> = {};
   const stateCache: Record<string, { lastPublishedAt: string | null; publishedLast24h: number; accountStatus: string }> = {};
+  // 商品冷卻：記住本輪已發過的商品（跨帳號），避免同輪／DB 尚未可見時重複放行。
+  const cooldownHours = env.productCooldownHours;
+  const publishedProductsThisRun = new Set<string>();
 
   for (const draft of drafts) {
     // 接近 maxDuration(60s) 上限就停手，避免草稿卡在 publishing 狀態，留待下次排程
@@ -122,6 +126,19 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
       }
     }
 
+    // 商品冷卻：同一分潤商品在冷卻期內已發過（本輪或近期 DB）就先不發，待冷卻過後下輪再發。
+    const cleanUrl = draft.clean_product_url;
+    if (cooldownHours > 0 && cleanUrl) {
+      const sinceIso = new Date(Date.now() - cooldownHours * 3600_000).toISOString();
+      const onCooldown =
+        publishedProductsThisRun.has(cleanUrl) ||
+        (await wasProductPublishedSince(draft.owner_id ?? "", cleanUrl, sinceIso).catch(() => false));
+      if (onCooldown) {
+        result.skipped.push({ id: draft.id, reason: `商品冷卻中（${cooldownHours}h 內已發過）` });
+        continue;
+      }
+    }
+
     // 原子鎖定：只有狀態仍是 approved 才搶得到；搶不到代表已被其他排程處理 → 跳過
     const locked = await updateDraftStatusAtomic(draft.id, "publishing", "approved");
     if (!locked) {
@@ -167,6 +184,7 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
       // 更新本地節奏狀態，讓同帳號的下一篇遵守間隔/上限
       publishedThisRun[accId] = doneThisRun + 1;
       state.lastPublishedAt = nowIso;
+      if (cleanUrl) publishedProductsThisRun.add(cleanUrl); // 同輪同商品冷卻
       result.published.push({ id: draft.id, postId });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);

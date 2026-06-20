@@ -125,6 +125,12 @@ export async function setCachedJson(key: string, value: unknown): Promise<void> 
 const PUBLISH_LOCK_KEY = "publish_queue_lock";
 const PAST_ISO = new Date(0).toISOString();
 
+// 鎖值格式：到期 ISO + 持有者 token。ISO 為固定寬度 → 後綴 token 不影響字典序＝時序比較
+// （CAS 的 `.lt(value, now)` 在時戳段就分出勝負）；release 用 `%#token` 比對只釋放自己持有的鎖。
+export function publishLockValue(expiresIso: string, token: string): string {
+  return `${expiresIso}#${token}`;
+}
+
 // 取得鎖回傳唯一 token（供釋放時驗證持有者）；搶不到回 null。
 export async function acquirePublishLock(ttlMinutes = 5, key: string = PUBLISH_LOCK_KEY): Promise<string | null> {
   const token = randomUUID();
@@ -132,7 +138,7 @@ export async function acquirePublishLock(ttlMinutes = 5, key: string = PUBLISH_L
   const sb = getServiceClient()!;
   const now = Date.now();
   const nowIso = new Date(now).toISOString();
-  const value = `${new Date(now + ttlMinutes * 60000).toISOString()}#${token}`;
+  const value = publishLockValue(new Date(now + ttlMinutes * 60000).toISOString(), token);
   // 先確保列存在（初值為過去時間，可立即搶）；已存在則不覆蓋
   await sb
     .from("app_state")

@@ -25,7 +25,8 @@ export async function uploadToCloudinary(
   form.append("folder", type === "video" ? "threads/videos" : "threads/images");
 
   // 影片上傳較慢放寬到 20s；只重試 429（被限流＝未處理，重試不會產生重複資產）。
-  const res = await fetchWithRetry(endpoint, { method: "POST", body: form }, 20000);
+  // 外部 fetch 前一律過 SSRF 守衛（即使 endpoint 為固定常數，維持全站一致約定）。
+  const res = await fetchWithRetry(assertSafePublicUrl(endpoint).href, { method: "POST", body: form }, 20000);
   if (!res.ok) {
     // 上游回應本文可能含帳號細節：只進 log，對外訊息僅保留狀態碼避免洩漏。
     log.error("Cloudinary 上傳失敗", { status: res.status, body: await res.text() });

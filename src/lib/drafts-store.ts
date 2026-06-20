@@ -412,3 +412,43 @@ export async function listApprovedDrafts(limit = APPROVED_DRAFTS_BATCH): Promise
     .limit(limit);
   return (data ?? []) as Draft[];
 }
+
+// 分片模式專用：分頁掃描 approved 草稿、用 matches 過濾出屬於本片的，累積到 perShardLimit 或掃完。
+// 避免「全域 limit 先截斷再記憶體分片」造成某些 shard 反覆拿到 0 筆（starvation）：本片若不在
+// 全域最舊 N 筆內，仍能往後翻頁找到自己的草稿。maxPages×pageSize 為總掃描列數上限（記憶體封頂）。
+export async function listApprovedDraftsForShard(
+  matches: (accountId: string | null) => boolean,
+  perShardLimit = 500,
+  pageSize = 1000,
+  maxPages = 20
+): Promise<Draft[]> {
+  const nowIso = new Date().toISOString();
+  if (isDemoMode) {
+    return demo.drafts
+      .filter((d) => d.status === "approved" && (!d.scheduled_at || d.scheduled_at <= nowIso))
+      .sort((a, b) => a.created_at.localeCompare(b.created_at))
+      .filter((d) => matches(d.threads_account_id ?? null))
+      .slice(0, perShardLimit);
+  }
+  const sb = getServiceClient()!;
+  const out: Draft[] = [];
+  for (let page = 0; page < maxPages && out.length < perShardLimit; page++) {
+    const from = page * pageSize;
+    const { data } = await sb
+      .from("drafts")
+      .select("*")
+      .eq("status", "approved")
+      .or(`scheduled_at.is.null,scheduled_at.lte.${nowIso}`)
+      .order("created_at", { ascending: true })
+      .range(from, from + pageSize - 1);
+    const rows = (data ?? []) as Draft[];
+    for (const d of rows) {
+      if (matches(d.threads_account_id ?? null)) {
+        out.push(d);
+        if (out.length >= perShardLimit) break;
+      }
+    }
+    if (rows.length < pageSize) break; // 已掃到尾
+  }
+  return out;
+}

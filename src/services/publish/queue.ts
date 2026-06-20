@@ -3,6 +3,7 @@
 import { env, isDemoMode } from "@/lib/env";
 import {
   listApprovedDrafts,
+  listApprovedDraftsForShard,
   getAccountPublishState,
   getThreadsCredentials,
   updateDraftStatus,
@@ -86,8 +87,11 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
       () => {}
     );
   }
-  // 分片模式只處理本片帳號的草稿（同帳號穩定落同片）；未綁帳號者歸片 0，至少有人記錄略過
-  const drafts = (await listApprovedDrafts()).filter((d) => inShard(d.threads_account_id, shard));
+  // 分片模式只處理本片帳號的草稿（同帳號穩定落同片）；未綁帳號者歸片 0，至少有人記錄略過。
+  // 分片時用 shard-aware 分頁抓取，避免「全域 limit 先截斷再記憶體分片」造成某些 shard 拿到 0 筆（starvation）。
+  const drafts = shard
+    ? await listApprovedDraftsForShard((accId) => inShard(accId, shard))
+    : await listApprovedDrafts();
   result.considered = drafts.length;
 
   // 以 Threads 帳號為單位控制節奏；同一次執行內累積計數
@@ -250,7 +254,7 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
       // 發布步驟不確定（可能已發出）→ needs_verification，不進 failed、不可被批次重試自動重發；
       // 其餘（建容器/等就緒等尚未發布）→ failed，可安全重試。
       if (e instanceof PublishUncertainError) {
-        await updateDraftStatus(draft.id, "needs_verification", { error: msg });
+        await updateDraftStatus(draft.id, "needs_verification", { error: msg }, draft.owner_id ?? undefined);
         (result.needsVerification ??= []).push({ id: draft.id, error: msg });
         // 個人通知：發布不確定需人工確認 → 推給該草稿擁有者（已綁 Telegram 才送）。
         await sendUserAlert(
@@ -258,7 +262,7 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
           `⚠️ 你的貼文「${draft.product_name ?? draft.id}」可能已發出但回應遺失，請到 Threads 確認後再決定重發或退回（草稿頁→待確認）。`
         ).catch(() => {});
       } else {
-        await updateDraftStatus(draft.id, "failed", { error: msg });
+        await updateDraftStatus(draft.id, "failed", { error: msg }, draft.owner_id ?? undefined);
         result.failed.push({ id: draft.id, error: msg });
       }
       // 累計本輪該帳號失敗（含不確定）；剛觸發斷路器時示警一次（提醒檢查 token/封號）

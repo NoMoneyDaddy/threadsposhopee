@@ -63,7 +63,12 @@ export default function ComposerForm({ threadsAccounts }: { threadsAccounts: Thr
         setMsg("請選擇排程時間");
         return;
       }
-      if (parseTaipeiDateTimeLocal(scheduledAt).getTime() <= Date.now()) {
+      const when = parseTaipeiDateTimeLocal(scheduledAt);
+      if (Number.isNaN(when.getTime())) {
+        setMsg("排程時間格式不正確");
+        return;
+      }
+      if (when.getTime() <= Date.now()) {
         setMsg("排程時間必須是未來的時間");
         return;
       }

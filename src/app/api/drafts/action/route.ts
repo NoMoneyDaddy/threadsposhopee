@@ -22,7 +22,10 @@ export async function POST(req: Request) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
 
-  const body = await req.json();
+  const body = await req.json().catch(() => null);
+  if (!body || typeof body !== "object") {
+    return NextResponse.json({ ok: false, error: "缺少或格式錯誤的 id / action" }, { status: 400 });
+  }
   const { id, action } = body;
   if (typeof id !== "string" || typeof action !== "string") {
     return NextResponse.json({ ok: false, error: "缺少或格式錯誤的 id / action" }, { status: 400 });

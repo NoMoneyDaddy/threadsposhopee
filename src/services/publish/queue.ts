@@ -26,7 +26,7 @@ import { log } from "@/lib/logger";
 import { normalizeDraftMedia } from "@/lib/media";
 import { shardOf, circuitOpen, nextPacingSkipReason } from "@/services/publish/cadence";
 import { replyDelayMinutes } from "@/services/publish/reply-timing";
-import { sendAlert } from "@/lib/notify";
+import { sendAlert, sendUserAlert } from "@/lib/notify";
 
 export interface PublishResult {
   considered: number;
@@ -238,6 +238,11 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
       if (e instanceof PublishUncertainError) {
         await updateDraftStatus(draft.id, "needs_verification", { error: msg });
         (result.needsVerification ??= []).push({ id: draft.id, error: msg });
+        // 個人通知：發布不確定需人工確認 → 推給該草稿擁有者（已綁 Telegram 才送）。
+        await sendUserAlert(
+          draft.owner_id,
+          `⚠️ 你的貼文「${draft.product_name ?? draft.id}」可能已發出但回應遺失，請到 Threads 確認後再決定重發或退回（草稿頁→待確認）。`
+        ).catch(() => {});
       } else {
         await updateDraftStatus(draft.id, "failed", { error: msg });
         result.failed.push({ id: draft.id, error: msg });

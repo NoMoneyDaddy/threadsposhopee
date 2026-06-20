@@ -579,6 +579,30 @@ export async function setGeminiKey(ownerId: string, key: string): Promise<void> 
   if (error) throw error;
 }
 
+// ── 個人 Telegram 通知：每人綁自己的 chat_id（非機密，明文存）。平台共用 bot token 發送 ──
+const demoTelegramChatId: Record<string, string> = {};
+
+export async function getUserTelegramChatId(ownerId: string): Promise<string | null> {
+  if (isDemoMode) return demoTelegramChatId[ownerId] ?? null;
+  const sb = getServiceClient();
+  if (!sb) return null;
+  const { data } = await sb.from("profiles").select("telegram_chat_id").eq("id", ownerId).maybeSingle();
+  const v = data?.telegram_chat_id;
+  return typeof v === "string" && v.trim() ? v.trim() : null;
+}
+
+// chatId 傳 null 解除綁定。
+export async function setUserTelegramChatId(ownerId: string, chatId: string | null): Promise<void> {
+  if (isDemoMode) {
+    if (chatId) demoTelegramChatId[ownerId] = chatId;
+    else delete demoTelegramChatId[ownerId];
+    return;
+  }
+  const sb = getServiceClient()!;
+  const { error } = await sb.from("profiles").upsert({ id: ownerId, telegram_chat_id: chatId }, { onConflict: "id" });
+  if (error) throw error;
+}
+
 export async function hasGeminiKey(ownerId: string): Promise<boolean> {
   if (isDemoMode) return false;
   const sb = getServiceClient()!;

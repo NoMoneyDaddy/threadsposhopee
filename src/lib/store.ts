@@ -60,6 +60,50 @@ export async function setHeartbeat(): Promise<void> {
     .upsert({ key: "cron_heartbeat", value: nowIso, updated_at: nowIso }, { onConflict: "key" });
 }
 
+// ── 帳號發文斷路器「跨輪」冷卻（app_state key=circuit:<accountId>，value=冷卻到期 ISO）──
+// 與單輪 failuresThisRun 互補：壞掉/被封帳號觸發斷路器後寫入冷卻，期內跨 cron 輪次整批跳過，
+// 不每輪重新試探；發文成功則解除。demo 模式用記憶體。
+const demoCircuit: Record<string, string> = {};
+
+// 回傳冷卻到期的 epoch ms（仍在冷卻中）；未冷卻或已過期回 null。
+export async function getAccountCircuitUntil(accountId: string): Promise<number | null> {
+  const parse = (v?: string | null) => {
+    if (!v) return null;
+    const until = Date.parse(v);
+    return Number.isFinite(until) && until > Date.now() ? until : null;
+  };
+  if (isDemoMode) return parse(demoCircuit[accountId]);
+  const sb = getServiceClient();
+  if (!sb) return null;
+  const { data } = await sb.from("app_state").select("value").eq("key", `circuit:${accountId}`).maybeSingle();
+  return parse(data?.value);
+}
+
+// 觸發冷卻：寫入「now + cooldownMinutes」到期時戳。cooldownMinutes<=0 視為不啟用跨輪冷卻。
+export async function tripAccountCircuit(accountId: string, cooldownMinutes: number): Promise<void> {
+  if (cooldownMinutes <= 0) return;
+  const until = new Date(Date.now() + cooldownMinutes * 60_000).toISOString();
+  if (isDemoMode) {
+    demoCircuit[accountId] = until;
+    return;
+  }
+  const sb = getServiceClient()!;
+  await sb
+    .from("app_state")
+    .upsert({ key: `circuit:${accountId}`, value: until, updated_at: new Date().toISOString() }, { onConflict: "key" });
+}
+
+// 解除冷卻（帳號恢復正常發文時呼叫）。
+export async function clearAccountCircuit(accountId: string): Promise<void> {
+  if (isDemoMode) {
+    delete demoCircuit[accountId];
+    return;
+  }
+  const sb = getServiceClient();
+  if (!sb) return;
+  await sb.from("app_state").delete().eq("key", `circuit:${accountId}`);
+}
+
 export async function getHeartbeat(): Promise<string | null> {
   if (isDemoMode) return demoHeartbeat;
   const sb = getServiceClient()!;

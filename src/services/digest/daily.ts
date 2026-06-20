@@ -38,6 +38,11 @@ export function composeDailyDigest(d: DailyDigestInput): string {
       `🚨 觸及驟降預警：近期中位觀看 ${n(d.reachDrop.recentMedian)}，僅基準 ${n(d.reachDrop.baselineMedian)} 的 ${Math.round(d.reachDrop.ratio * 100)}%（疑似被降觸及，建議放慢節奏）`
     );
 
+  // 缺稿預警：近期還在發、但佇列已見底（0 待發）→ 提醒補稿，避免自動發文斷流。
+  if (d.approved === 0 && d.publishedLast24h > 0) {
+    lines.push("📭 佇列見底：目前 0 篇待發，請盡快補稿（核准草稿或常青回收），以免自動發文斷流。");
+  }
+
   const warns: string[] = [];
   if (d.draftsFailed) warns.push(`發布失敗 ${n(d.draftsFailed)}`);
   if (d.replyPending) warns.push(`留言待補 ${n(d.replyPending)}`);

@@ -10,8 +10,8 @@ import { env } from "@/lib/env";
 import { log } from "@/lib/logger";
 import { getOwnerUserId } from "@/lib/auth";
 import {
-  isPostProcessed,
   markPostProcessed,
+  listProcessedPostIds,
   listSources,
   findMaterial,
   createDraftFromMaterial,
@@ -69,13 +69,18 @@ export async function runSourcePipeline(source: Source, ownerId: string): Promis
   const cloudinaryCreds = await getUserCloudinary(ownerId);
   const posts = await scrapeLatestPosts(source.source_username, source.posts_limit, apify);
   result.scanned = posts.length;
+  // 一次預載本來源已處理的貼文 id（取代逐篇 isPostProcessed 查詢，消除 N+1）
+  const processedIds = await listProcessedPostIds(
+    source.id,
+    posts.map((p) => p.postId)
+  );
 
   for (const post of posts) {
     if (post.isReply) continue;
 
     // 單篇容錯：任一外部 API 失敗只略過該篇，不中斷整條流程
     try {
-      if (await isPostProcessed(source.id, post.postId)) {
+      if (processedIds.has(post.postId)) {
         result.skipped++;
         continue;
       }

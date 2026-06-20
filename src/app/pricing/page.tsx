@@ -82,12 +82,7 @@ export default async function PricingPage() {
                 ) : id === "free" ? (
                   <span className="btn btn-outline pointer-events-none w-full opacity-60">基本方案</span>
                 ) : (
-                  <a
-                    href="mailto:leo810512@gmail.com?subject=ThreadsPoShopee 升級方案"
-                    className={"btn w-full " + (featured ? "btn-brand" : "btn-primary")}
-                  >
-                    聯絡升級
-                  </a>
+                  <span className="btn btn-outline pointer-events-none w-full opacity-60">升級即將推出</span>
                 )}
               </div>
             </div>

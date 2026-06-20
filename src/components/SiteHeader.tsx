@@ -32,16 +32,16 @@ export default function SiteHeader({
     <header className="sticky top-0 z-40 border-b border-border bg-surface/80 backdrop-blur-md">
       <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-          <Link href="/" className="flex items-center gap-2" aria-label="ThreadsPoShopee 首頁">
-            <span
-              aria-hidden
-              className="grid h-8 w-8 place-items-center rounded-xl bg-ink text-[17px] font-bold leading-none text-bg"
-            >
-              @
+          <Link href="/" className="flex items-center gap-2" aria-label="IwantPo 首頁">
+            <span aria-hidden className="grid h-8 w-8 place-items-center rounded-xl bg-ink text-bg">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 2 11 13" />
+                <path d="m22 2-7 20-4-9-9-4Z" />
+              </svg>
             </span>
             <span className="text-[15px] font-bold tracking-tight">
-              <span className="text-brand">ThreadsPo</span>
-              <span className="text-ink">Shopee</span>
+              <span className="text-ink">Iwant</span>
+              <span className="text-brand">Po</span>
             </span>
           </Link>
           {isDemo && <span className="badge-warn whitespace-nowrap">Demo 模式（未連接金鑰）</span>}

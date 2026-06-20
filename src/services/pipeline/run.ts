@@ -43,6 +43,7 @@ export interface PipelineResult {
   reusedMaterial: number; // 重用素材的次數（省下的 AI/Shopee 呼叫）
   drafts: { id: string; productName: string | null }[];
   notes: string[];
+  error?: string; // 整條來源流程失敗（非單篇略過）時的錯誤訊息，供 cron 告警
 }
 
 export async function runSourcePipeline(source: Source, ownerId: string): Promise<PipelineResult> {
@@ -159,7 +160,8 @@ export async function runAllSources(): Promise<PipelineResult[]> {
         skipped: 0,
         reusedMaterial: 0,
         drafts: [],
-        notes: [`來源流程失敗：${msg}`]
+        notes: [`來源流程失敗：${msg}`],
+        error: msg
       });
     }
   }

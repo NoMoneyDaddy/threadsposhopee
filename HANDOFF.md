@@ -20,13 +20,20 @@
 | #56 | 延遲留言（保底 + 隨機抖動 + 逐則覆寫 + 原子認領補發） |
 | #57 | 發文佇列帳號分片並行（`?shards=N&shard=i`） |
 | #55 / #58 | 文檔同步至 migrations 0017 |
+| #60 | 成效/防封/常青回收/最佳時段/影片 Files API/每日摘要 組合 + Playwright E2E（入 CI） |
+| #61 | 佇列草稿可改排程時間（手動微調發布時段） |
+| #62 | 全域發文急停開關（owner 一鍵暫停/恢復自動發文） |
+| #63 | 觸及驟降預警（疑似 shadowban／降觸及偵測，成效頁 + 每日摘要推播） |
+| #64 | 帳號連續失敗斷路器（單輪失敗達上限自動暫停該帳號＋示警） |
 
-DB 遷移目前到 `supabase/migrations/0017_reply_delay.sql`。
+DB 遷移目前到 `supabase/migrations/0017_reply_delay.sql`（#60–#64 皆用 `app_state` 或單輪記憶體邏輯，未新增遷移）。
 
 ## 守則（見 CLAUDE.md，務必遵守）
 
-- **直接在 `main` 上開發、提交、推送**（不開 feature 分支、不走 PR）。
-- 因為沒有 PR 審查把關，**本機綠燈是唯一閘門**：每次提交前 `npx tsc --noEmit`、`node --import tsx --test $(find src -name '*.test.ts')`、`npm run build` 都要綠，務必嚴格。推 main 後 GitHub Actions `build` 仍會跑，紅燈立刻修並補推。
+- **流程**：本遠端／web session 在指派的 `claude/*` 分支開發 → 推上去 → 開 **draft PR** → CI（build + e2e + GitGuardian）綠 → **squash 合併** → 同步本機 `main`，再挖下一個。（CLAUDE.md 的「直接在 main」是本機情境；遠端走分支＋PR，因環境要求。）
+- **本機綠燈是合併前提**：每次提交前 `npx tsc --noEmit`、`node --import tsx --test $(find src -name '*.test.ts')`、`npm run build` 都要綠，務必嚴格。E2E（`npx playwright test --project=chromium`）動到頁面時跑一次。
+- **review bot**：CodeRabbit（草稿自動跳過）、Gemini、Qodo 會留言。Gemini 的具體修正建議通常合理且小（如輸入驗證、fail-safe、門檻防虛警）→ 評估後採納再合併；摘要類無需動作。
+- 重推同分支因遠端留有 PR 前一版 commit 而 non-fast-forward 時，先 `git fetch origin <branch>` 更新追蹤 ref，再 `git push origin <branch> --force-with-lease`（以遠端追蹤 ref 為預期值，安全擋掉他人新推）。
 - commit 結尾加 `Co-Authored-By` 與 `Claude-Session` trailer（照既有 commit）。
 - **多租戶鐵則**：所有使用者資料函式吃 `ownerId` 並過濾；`getThreadsCredentials(id, ownerId)` 必帶 owner 過濾；建草稿/發文前先 `userOwnsThreadsAccount`。
 - 安全：金鑰永不入庫（env 或 AES-256-GCM）；外部 fetch 走 `fetchWithTimeout`、URL 先過 `assertSafePublicUrl`（SSRF）；時區一律 `Asia/Taipei`。
@@ -38,8 +45,11 @@ DB 遷移目前到 `supabase/migrations/0017_reply_delay.sql`。
 
 ## 候選工作（自行評估優先序，先確認 YAGNI）
 
-- 延遲留言狀態在儀表板/草稿頁可視化（pending/failed 提示與重試）。
-- 本地檔案 client-side 直傳到使用者自綁 Cloudinary（unsigned，免經我方伺服器）。
-- 成效面板：接 Shopee 報表 / Threads insights。
-- 素材分潤連結到期自動偵測重產。
-- 影片走 Gemini Files API（大檔）。
+已完成：延遲留言可視化、成效面板（Shopee 報表＋Threads insights）、連結到期重產、影片 Files API、急停開關、觸及驟降預警、失敗斷路器。
+
+待挖：
+- 觸及驟降／斷路器**每帳號**化（目前驟降偵測為跨帳號綜合；可逐帳號算 baseline 更精準）。
+- 自動防護閉環：偵測觸及驟降時，選配自動觸發急停 N 小時（需 pause 加 expiry 狀態）。
+- 本地檔案 client-side 直傳自綁 Cloudinary（unsigned，免經我方伺服器）。
+- 草稿審核效率：鍵盤快捷／批次 AI 重寫。
+- 收益歸因：subId 編碼帳號/草稿，讓分潤報表能歸因到「哪個帳號／哪篇」。

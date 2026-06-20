@@ -147,7 +147,7 @@ supabase/migrations/   資料庫 schema（0001–0017）
 - [x] 常青回收：素材庫「全部再排（常青回收）」一次把有效素材排入佇列（依空時段，不重燒 token）
 - [x] 重發可選「最佳時段」：依該帳號 Threads insights 算出的高觸及整點排程（資料不足退回預設時段）
 - [x] 大影片走 Gemini Files API（resumable upload）讓 AI 看得到影片生成文案；圖片維持 inline（大小守門）
-- [x] 每日成效摘要：總排程每日推一則 Telegram 摘要（發布量/互動/熱門貼文/分潤收益/待辦提醒），免登入掌握脈動
+- [x] 每日成效摘要：總排程每日推一則 Telegram 摘要（發布量/互動/熱門貼文/分潤收益/待辦提醒＋缺稿預警），可選 AI 成效歸因分析（`DAILY_DIGEST_AI=1`，需 Gemini 金鑰），免登入掌握脈動
 - [x] 觸及驟降預警（疑似降觸及／shadowban）：比較近期 vs 基準中位觀看，驟降即在成效頁示警並帶入每日摘要主動推播，提醒放慢節奏
 - [x] 全域發文急停開關（owner）：儀表板一鍵暫停所有自動發文（cron + 立即跑一輪），不影響單篇手動發，緊急防封用
 - [x] 防封強化（皆 env 開關、預設關閉）：商品冷卻期 `PRODUCT_COOLDOWN_HOURS`、新帳號暖機 `ACCOUNT_WARMUP_DAYS`、連續失敗斷路器 `PUBLISH_ACCOUNT_FAILURE_LIMIT`（單輪同帳號失敗達上限即跳過其餘並 Telegram 示警）＋跨輪冷卻 `PUBLISH_CIRCUIT_COOLDOWN_MINUTES`（冷卻期內跨 cron 輪次整批跳過該帳號，成功發文即解除）、重發可選 AI 重寫文案、近重複文案偵測、Threads 內容合規（500 字/1 hashtag）、發文 429 退避重試

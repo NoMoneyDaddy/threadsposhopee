@@ -2,10 +2,11 @@
 // 由總排程在每日固定時段推到 Telegram，讓操作者免登入就掌握脈動。
 import { env, isDemoMode } from "@/lib/env";
 import { getOwnerUserId } from "@/lib/auth";
-import { getDashboardStats } from "@/lib/store";
+import { getDashboardStats, getGeminiKey } from "@/lib/store";
 import { getEngagementCached } from "@/services/threads/engagement";
 import { detectReachDrop } from "@/services/threads/reach";
 import { getAffiliateRevenue } from "@/services/shopee/report";
+import { summarizeInsights } from "./insight-summary";
 
 export interface DailyDigestInput {
   publishedLast24h: number;
@@ -80,7 +81,7 @@ export async function buildDailyDigest(): Promise<string | null> {
     if (r) revenue = { commission: r.totalCommission, conversions: r.totalConversions };
   }
 
-  return composeDailyDigest({
+  const input = {
     publishedLast24h: stats.publishedLast24h,
     approved: stats.drafts.approved,
     draftsFailed: stats.drafts.failed,
@@ -92,5 +93,16 @@ export async function buildDailyDigest(): Promise<string | null> {
     engagementTotals,
     revenue,
     reachDrop
-  });
+  };
+  let digest = composeDailyDigest(input);
+
+  // 成效歸因 AI 摘要（opt-in：DAILY_DIGEST_AI=1 且 owner 有 Gemini 金鑰）。失敗則略過、不擋摘要。
+  if (env.dailyDigestAi && !isDemoMode) {
+    const key = (await getGeminiKey(ownerId).catch(() => null)) || env.geminiApiKey;
+    if (key) {
+      const analysis = await summarizeInsights(input, key);
+      if (analysis) digest += `\n\n🧠 AI 分析建議：\n${analysis}`;
+    }
+  }
+  return digest;
 }

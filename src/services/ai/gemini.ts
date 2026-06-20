@@ -94,3 +94,23 @@ export async function generateWithGemini(
   }
   return text;
 }
+
+// 純文字生成（無媒體）：給「成效歸因摘要」等非文案用途共用。失敗會拋錯，由呼叫端決定降級。
+export async function geminiText(prompt: string, apiKey?: string | null, temperature = 0.4, maxOutputTokens = 400): Promise<string> {
+  const key = apiKey || env.geminiApiKey;
+  if (!key) throw new Error("無 Gemini 金鑰");
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${env.geminiModel}:generateContent?key=${key}`;
+  const res = await fetchWithRetry(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: { temperature, maxOutputTokens }
+    })
+  }, 30000);
+  if (!res.ok) throw new Error(`Gemini ${res.status}: ${await res.text()}`);
+  const json = await res.json();
+  const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error("Gemini 回傳空內容");
+  return String(text).trim();
+}

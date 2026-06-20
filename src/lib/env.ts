@@ -62,7 +62,9 @@ export const env = {
     .map((s) => s.trim())
     .filter((s) => /^\d{1,2}:\d{2}$/.test(s)),
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN ?? "",
-  telegramChatId: process.env.TELEGRAM_CHAT_ID ?? ""
+  telegramChatId: process.env.TELEGRAM_CHAT_ID ?? "",
+  // 每日摘要附 AI 成效歸因分析（需 owner Gemini 金鑰）。1/true 開啟，預設關（多一次 LLM 呼叫）。
+  dailyDigestAi: /^(1|true)$/i.test(process.env.DAILY_DIGEST_AI ?? "")
 };
 
 export const isSupabaseConfigured = Boolean(env.supabaseUrl && env.supabaseServiceKey);

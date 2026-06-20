@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { assertCron } from "@/lib/cron-auth";
-import { sendAlert } from "@/lib/notify";
+import { sendAlert, sendUserAlert } from "@/lib/notify";
 import { runAllSources } from "@/services/pipeline/run";
 import { runPublishQueue } from "@/services/publish/queue";
 import { refreshExpiringTokens } from "@/services/threads/refresh";
@@ -8,7 +8,7 @@ import { checkAffiliateLinks } from "@/services/materials/linkcheck";
 import { buildDailyDigest } from "@/services/digest/daily";
 import { getOwnerUserId } from "@/lib/auth";
 import { env } from "@/lib/env";
-import { setHeartbeat } from "@/lib/store";
+import { setHeartbeat, getUserTelegramChatId, getUserDiscordWebhook } from "@/lib/store";
 import { log } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
@@ -62,14 +62,29 @@ export async function GET(req: Request) {
       warn: (r) => (r?.revived || r?.dead ? `🔗 連結重產 ${r.revived ?? 0}、仍失效 ${r.dead ?? 0}` : null)
     });
   }
-  // 每日成效摘要（台北 09:00 = UTC 01:00–01:14），僅在有設 Telegram 時才組（省 API）
-  if (h === 1 && min < 15 && env.telegramBotToken && env.telegramChatId) {
+  // 每日成效摘要（台北 09:00 = UTC 01:00–01:14）。
+  // 有「全域 ops 通道」或 owner「個人通道」任一存在才組（省 API）；組好後優先送個人通道，
+  // 否則退回全域 ops 通道（避免同一人收到兩份）。個人 Telegram 仍需全域 bot token。
+  if (h === 1 && min < 15) {
     steps.push({
       key: "dailyDigest",
       run: async () => {
+        const ownerId = await getOwnerUserId();
+        const [personalTg, personalDiscord] = ownerId
+          ? await Promise.all([
+              getUserTelegramChatId(ownerId).catch(() => null),
+              getUserDiscordWebhook(ownerId).catch(() => null)
+            ])
+          : [null, null];
+        const personalSink = Boolean((personalTg && env.telegramBotToken) || personalDiscord);
+        const globalSink = Boolean(env.telegramBotToken && env.telegramChatId);
+        if (!personalSink && !globalSink) return { sent: false };
         const msg = await buildDailyDigest();
-        if (msg) await sendAlert(msg);
-        return { sent: Boolean(msg) };
+        if (!msg) return { sent: false };
+        // 優先個人通道；沒有個人通道才送全域 ops（兩者皆有時不重複發給同一人）
+        if (personalSink) await sendUserAlert(ownerId, msg);
+        else await sendAlert(msg);
+        return { sent: true, via: personalSink ? "personal" : "global" };
       }
     });
   }

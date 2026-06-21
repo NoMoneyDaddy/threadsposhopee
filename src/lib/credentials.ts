@@ -155,6 +155,24 @@ export async function setShopeeAffiliateId(ownerId: string, affiliateId: string 
   if (error) throw new Error(`儲存 shopee_affiliate_id 失敗：${error.message}`);
 }
 
+// 連結失效時是否自動替換為有效分潤連結（用 clean_product_url 重產）。預設關。
+export async function getAutoReviveLinks(ownerId: string): Promise<boolean> {
+  if (isDemoMode) return false;
+  const sb = getServiceClient()!;
+  const { data, error } = await sb.from("profiles").select("auto_revive_links").eq("id", ownerId).maybeSingle();
+  if (error) throw new Error(`讀取 auto_revive_links 失敗：${error.message}`);
+  return Boolean(data?.auto_revive_links);
+}
+
+export async function setAutoReviveLinks(ownerId: string, enabled: boolean): Promise<void> {
+  if (isDemoMode) return;
+  const sb = getServiceClient()!;
+  const { error } = await sb
+    .from("profiles")
+    .upsert({ id: ownerId, auto_revive_links: enabled }, { onConflict: "id" });
+  if (error) throw new Error(`儲存 auto_revive_links 失敗：${error.message}`);
+}
+
 // 使用者自訂分潤 subId（套用到 API 短連結與 an_redir 長連結）。非機密，明文存。
 export async function getShopeeSubId(ownerId: string): Promise<string | null> {
   if (isDemoMode) return null;

@@ -169,7 +169,7 @@ function ReachDropBanner({ e }: { e: EngagementSummary }) {
   const pct = Math.round(d.ratio * 100);
   return (
     <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800" role="alert">
-      <div className="font-semibold">⚠️ 觸及疑似驟降（疑似被降觸及／shadowban）</div>
+      <div className="font-semibold">⚠️ 近期觀看數疑似大幅下降（可能被系統減少曝光）</div>
       <p className="mt-1">
         近期貼文中位觀看 <b>{num(d.recentMedian)}</b>，僅為基準 <b>{num(d.baselineMedian)}</b> 的 <b>{pct}%</b>。
         建議放慢發文節奏、檢查內容是否過度推廣或近似重複，並暫停一兩天觀察恢復情形。
@@ -308,7 +308,7 @@ function RevenueSection({ r }: { r: AffiliateRevenue }) {
 
       <div className="grid gap-4 md:grid-cols-2">
         <RevenueRank title="收益最高商品" rows={r.byItem.map((i) => ({ name: i.name, value: i.commission, sub: `${i.count} 筆` }))} />
-        <RevenueRank title="收益來源（subId / utm）" rows={r.bySubId.map((s) => ({ name: s.subId, value: s.commission, sub: `${s.count} 筆` }))} />
+        <RevenueRank title="收益來源（依連結標記）" rows={r.bySubId.map((s) => ({ name: s.subId, value: s.commission, sub: `${s.count} 筆` }))} />
       </div>
     </div>
   );

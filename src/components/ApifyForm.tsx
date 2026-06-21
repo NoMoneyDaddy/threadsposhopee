@@ -40,7 +40,7 @@ export default function ApifyForm({ bound, actor }: { bound: boolean; actor: str
   return (
     <div className="rounded-2xl border bg-surface p-4">
       <div className="mb-2 flex items-center justify-between">
-        <span className="font-medium">爬蟲（Apify）綁定</span>
+        <span className="font-medium">自動抓文（Apify）綁定</span>
         {bound ? (
           <span className="rounded bg-green-100 px-2 py-0.5 text-xs text-green-700">已綁定</span>
         ) : (

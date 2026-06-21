@@ -33,10 +33,10 @@ export default function SubIdForm({ initial }: { initial: string | null }) {
 
   return (
     <div className="rounded-2xl border bg-surface p-4">
-      <div className="mb-1 font-medium">自訂分潤 subId（選填）</div>
+      <div className="mb-1 font-medium">自訂連結來源標記（選填）</div>
       <p className="mb-2 text-xs text-ink-2">
-        套用到你的 API 短連結與 an_redir 長連結，蝦皮分潤報表會依此 subId 分流統計。
-        留空＝用預設。<b>僅能含英數與底線</b>、長度上限 50（依官方規範）。
+        會加在你的分潤連結上，出現在蝦皮分潤報表，方便分辨哪個帳號／活動帶來成交。
+        留空＝用預設。<b>僅能含英數與底線</b>、長度上限 50（依蝦皮規範）。
         可用範本變數：<code className="font-mono">{"{date}"}</code>（發文日期）、
         <code className="font-mono">{"{platform}"}</code>（平台）、<code className="font-mono">{"{account}"}</code>（帳號）。
       </p>

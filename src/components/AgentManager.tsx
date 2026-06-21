@@ -127,7 +127,7 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
           </div>
           <label className="flex items-end gap-2 pb-2 text-sm text-ink-2">
             <input type="checkbox" checked={useRedirect} onChange={(e) => setUseRedirect(e.target.checked)} />
-            來源連結走 go2read 短連結（可附分潤）
+            來源連結改用短連結（可順便附分潤）
           </label>
         </div>
         <button type="submit" disabled={busy === "create"} className="btn btn-brand">

@@ -323,7 +323,7 @@ function DraftCard({
             disabled={!!busy}
             onClick={() => call("shorten")}
             className="rounded border px-3 py-1 text-xs hover:bg-surface-2 disabled:opacity-50"
-            title="把文中連結轉成 go2read 短連結（中轉頁可附分潤）"
+            title="把文章裡的連結換成你的短連結（可順便附分潤）"
           >
             {busy === "shorten" ? "轉換中…" : "套用短連結"}
           </button>

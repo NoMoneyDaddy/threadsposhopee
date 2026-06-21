@@ -34,8 +34,8 @@ export default function AffiliateIdForm({ initial }: { initial: string | null })
     <div className="rounded-2xl border bg-surface p-4">
       <div className="mb-1 font-medium">分潤連結（免 API）</div>
       <p className="mb-2 text-xs text-ink-2">
-        沒有蝦皮分潤 Open API 也能追蹤分潤：填你的 affiliate_id，系統會用官方 an_redir 做法自組追蹤短連結（含 subId 分流）。
-        綁了上方 Shopee API 則優先用 API。
+        沒有蝦皮分潤 API 也能追蹤：填你的分潤 ID，系統會自動幫每個連結加上來源標記，方便在蝦皮報表分辨成效。
+        若上方已綁 Shopee API，會優先用 API。
       </p>
       <div className="flex flex-wrap gap-2">
         <input

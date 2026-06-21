@@ -53,15 +53,15 @@ export async function getSetupSteps(user: AppUser): Promise<SetupStep[]> {
     {
       key: "shopee",
       title: "綁定蝦皮分潤金鑰",
-      desc: "換成你自己 subId 的分潤連結；未綁也能直接貼現成分潤連結。",
+      desc: "用你自己的蝦皮分潤帳號產生連結；未綁也能直接貼現成的分潤連結。",
       done: shopeeAccts.length > 0 || Boolean(affId),
       required: user.isOwner,
       href: "/accounts#setup-shopee"
     },
     {
       key: "cloudinary",
-      title: "綁定 Cloudinary（媒體）",
-      desc: "素材／本機上傳直傳進你自己的雲端，不耗伺服器流量。必綁，無共用後備。",
+      title: "綁定圖片／影片存放（Cloudinary）",
+      desc: "圖片／影片會存進你自己的 Cloudinary 帳號，不耗伺服器流量。必綁，無共用後備。",
       done: Boolean(cloud),
       required: true,
       href: "/accounts#setup-cloudinary"
@@ -80,8 +80,8 @@ export async function getSetupSteps(user: AppUser): Promise<SetupStep[]> {
   if (user.isOwner) {
     steps.splice(3, 0, {
       key: "apify",
-      title: "綁定 Apify（爬蟲）",
-      desc: "管理者專屬：綁你自己的 Apify token 才能監看來源。",
+      title: "綁定自動抓文（Apify）",
+      desc: "管理者專屬：綁你自己的 Apify 帳號才能自動監看來源。",
       done: apify.bound,
       required: true,
       href: "/accounts#setup-apify"

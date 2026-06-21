@@ -9,6 +9,13 @@ test("splitCopy：正文／留言區 標記正確切分並去前綴", () => {
   });
 });
 
+test("splitCopy：相容半形冒號與空格（LLM 常見輸出）", () => {
+  assert.deepEqual(splitCopy("正文: 今天介紹好物\n留言區: 連結 https://x"), {
+    mainText: "今天介紹好物",
+    replyText: "連結 https://x"
+  });
+});
+
 test("splitCopy：無留言區 → 留言用預設語", () => {
   assert.deepEqual(splitCopy("正文：只有正文"), {
     mainText: "只有正文",

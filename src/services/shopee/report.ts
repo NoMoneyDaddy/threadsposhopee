@@ -38,12 +38,14 @@ export function attributeRevenueByAccount(
   subs: { subId: string; commission: number; count: number }[],
   accounts: { id: string; label: string | null }[]
 ): { name: string; commission: number; count: number }[] {
+  // token 與 subId 一律轉小寫比對：utm 可能因平台/手動輸入大小寫不一致，避免漏歸因。
   const tokens = accounts
-    .map((a) => ({ token: normalizeSubId(`sp_${a.id.slice(0, 8)}`), name: a.label || a.id.slice(0, 8) }))
+    .map((a) => ({ token: normalizeSubId(`sp_${a.id.slice(0, 8)}`).toLowerCase(), name: a.label || a.id.slice(0, 8) }))
     .filter((t) => t.token.length > 0);
   const map = new Map<string, { commission: number; count: number }>();
   for (const s of subs) {
-    const hit = tokens.find((t) => s.subId.includes(t.token));
+    const lower = s.subId.toLowerCase();
+    const hit = tokens.find((t) => lower.includes(t.token));
     const key = hit ? hit.name : "其他／未對應";
     const cur = map.get(key) ?? { commission: 0, count: 0 };
     cur.commission += s.commission;

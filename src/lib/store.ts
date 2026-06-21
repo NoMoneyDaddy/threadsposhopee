@@ -82,6 +82,7 @@ export {
   deleteThreadsAccountsByThreadsUserId,
   deleteShopeeAccount,
   listActiveThreadsCredentials,
+  listActiveThreadsAccountsAll,
   listThreadsTokensToRefresh,
   updateThreadsToken,
   markThreadsAccountError,

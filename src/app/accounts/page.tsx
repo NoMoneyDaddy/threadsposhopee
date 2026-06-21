@@ -11,6 +11,8 @@ import {
   getUserPlan
 } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
+import { getSponsorConfig } from "@/lib/sponsor";
+import SponsorConfigForm from "@/components/SponsorConfigForm";
 import { PLAN_LABELS, planLimits } from "@/lib/plans";
 import { env, isDemoMode } from "@/lib/env";
 import { tokenExpiryState } from "@/lib/token-expiry";
@@ -47,6 +49,7 @@ export default async function AccountsPage({
   // 方案配額（owner 不受限，顯示「無上限」）
   const plan = user ? await getUserPlan(user.id) : "free";
   const accountLimit = planLimits(plan).maxThreadsAccounts;
+  const sponsor = await getSponsorConfig();
 
   return (
     <div className="space-y-6">
@@ -119,6 +122,16 @@ export default async function AccountsPage({
         {user && <TelegramForm bound={telegramBound} botConfigured={!isDemoMode && Boolean(env.telegramBotToken)} />}
         {user && <DiscordForm bound={discordBound} />}
       </div>
+
+      {user?.isOwner && <SponsorConfigForm initial={sponsor} />}
+
+      {user && !user.isOwner && sponsor.enabled && (
+        <div className="rounded-2xl border border-border bg-surface-2 p-3 text-sm text-ink-2">
+          ℹ️ 免費使用：你的每個發文帳號每天會有 1 篇於冷門時段（{sponsor.offPeakStart}–{sponsor.offPeakEnd} 時）以平台分潤連結發布，
+          系統會事前標示、發後還原你的連結。詳見{" "}
+          <a href="/sponsored" className="text-brand underline">《贊助文章規則》</a>。
+        </div>
+      )}
 
       <CopyPrefsForm initial={copyPrefs} />
 

@@ -37,12 +37,26 @@ export default function SubIdForm({ initial }: { initial: string | null }) {
       <p className="mb-2 text-xs text-ink-2">
         套用到你的 API 短連結與 an_redir 長連結，蝦皮分潤報表會依此 subId 分流統計。
         留空＝用預設。<b>僅能含英數與底線</b>、長度上限 50（依官方規範）。
+        可用範本變數：<code className="font-mono">{"{date}"}</code>（發文日期）、
+        <code className="font-mono">{"{platform}"}</code>（平台）、<code className="font-mono">{"{account}"}</code>（帳號）。
       </p>
+      <div className="mb-2 flex flex-wrap gap-1.5 text-xs">
+        {["{platform}_{date}", "{account}_{date}", "{account}", "{date}"].map((tpl) => (
+          <button
+            key={tpl}
+            type="button"
+            onClick={() => setSubId(tpl)}
+            className="rounded-lg border px-2 py-1 font-mono hover:bg-surface-2"
+          >
+            {tpl}
+          </button>
+        ))}
+      </div>
       <div className="flex flex-wrap gap-2">
         <input
           className="min-w-0 flex-1 rounded-xl border px-3 py-2 text-sm"
           aria-label="自訂分潤 subId"
-          placeholder="例如 myshop_2026"
+          placeholder="例如 myshop_{date}"
           value={subId}
           onChange={(e) => setSubId(e.target.value)}
           maxLength={50}

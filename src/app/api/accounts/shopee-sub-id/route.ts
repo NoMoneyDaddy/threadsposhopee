@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { log } from "@/lib/logger";
 import { setShopeeSubId } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
-import { normalizeSubId } from "@/services/shopee/subid";
+import { isValidSubIdTemplate } from "@/services/shopee/subid";
 
 export const dynamic = "force-dynamic";
 
@@ -23,13 +23,16 @@ export async function POST(req: Request) {
     if (typeof raw !== "string") {
       return NextResponse.json({ ok: false, error: "缺少或型別錯誤的 sub_id" }, { status: 400 });
     }
-    const cleaned = normalizeSubId(raw);
-    // 有輸入但清洗後全空（全是非法字元）→ 擋下提示，而非靜默存空。
-    if (raw.trim() && !cleaned) {
-      return NextResponse.json({ ok: false, error: "subId 僅能含英數與底線" }, { status: 400 });
+    // 儲存「範本」原文（含 {date}/{platform}/{account}）；實值在發文建連結時解析。
+    const tpl = raw.trim();
+    if (tpl && !isValidSubIdTemplate(tpl)) {
+      return NextResponse.json(
+        { ok: false, error: "subId 僅能含英數、底線與變數 {date}/{platform}/{account}（上限 50）" },
+        { status: 400 }
+      );
     }
-    await setShopeeSubId(user.id, cleaned || null);
-    return NextResponse.json({ ok: true, subId: cleaned || null });
+    await setShopeeSubId(user.id, tpl || null);
+    return NextResponse.json({ ok: true, subId: tpl || null });
   } catch (e) {
     log.error("儲存 shopee_sub_id 失敗", { err: e });
     return NextResponse.json({ ok: false, error: "伺服器暫時無法處理，請稍後再試" }, { status: 500 });

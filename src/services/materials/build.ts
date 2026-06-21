@@ -2,6 +2,7 @@
 // (可選)AI 文案 → 存素材。自動爬取流程與手動建立流程共用此函式。
 import { isDemoMode } from "@/lib/env";
 import { generateAffiliateLink, getProductName, buildSubIds, buildAffiliateRedirectLink } from "@/services/shopee/affiliate";
+import { resolveSubIdTemplate } from "@/services/shopee/subid";
 import { generateCopy } from "@/services/ai/provider";
 import { uploadToCloudinary } from "@/services/media/cloudinary";
 import { createMaterial, getCopyPrefs } from "@/lib/store";
@@ -37,9 +38,16 @@ export async function buildMaterialForProduct(
   let subId: string | null = null;
   let productName: string | null = null;
 
+  // 自訂 subId 支援範本：{date}（台北 YYYYMMDD）/{platform}/{account}（subIdTag）智能帶入。
+  const account = input.subIdTag ?? "manual";
+  const dateStr = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Taipei" }).replace(/-/g, "");
+  const resolvedSubId = input.customSubId
+    ? resolveSubIdTemplate(input.customSubId, { date: dateStr, platform: "threads", account })
+    : "";
+
   if (!isDemoMode && shopeeCreds) {
     try {
-      const subIds = buildSubIds(input.customSubId || shopeeCreds.subId, input.subIdTag ?? "manual", input.itemId);
+      const subIds = buildSubIds(resolvedSubId || shopeeCreds.subId, account, input.itemId);
       subId = subIds.join(",");
       shortLink = await generateAffiliateLink(shopeeCreds.appId, shopeeCreds.secret, input.cleanUrl, subIds);
       productName = await getProductName(shopeeCreds.appId, shopeeCreds.secret, input.shopId, input.itemId);
@@ -48,7 +56,7 @@ export async function buildMaterialForProduct(
     }
   } else if (!isDemoMode && affiliateId) {
     // 無 Open API，但有 affiliate_id：用官方 an_redir 做法自組追蹤連結（仍可分潤＋subId 分流）
-    const subIds = buildSubIds(input.customSubId || null, input.subIdTag ?? "manual", input.itemId);
+    const subIds = buildSubIds(resolvedSubId || null, account, input.itemId);
     subId = subIds.join("-");
     shortLink = buildAffiliateRedirectLink(input.cleanUrl, affiliateId, subIds);
     productName = `商品 ${input.itemId}`;

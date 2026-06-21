@@ -21,6 +21,7 @@ test("normalizeRepostLimitsInput: 擋非整數（小數/尾隨垃圾），不靜
   assert.equal(normalizeRepostLimitsInput({ perAccount: "3.9" }).ok, false); // 舊 parseInt 會誤判 3
   assert.equal(normalizeRepostLimitsInput({ total: "5abc" }).ok, false); // 舊 parseInt 會誤判 5
   assert.equal(normalizeRepostLimitsInput({ perAccount: 2.5 }).ok, false);
+  assert.equal(normalizeRepostLimitsInput({ perAccount: [3] }).ok, false); // 陣列隱式轉型繞過
 });
 
 test("exceedsRepostLimit: 0 不限、達標即擋", () => {

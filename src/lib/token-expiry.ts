@@ -15,7 +15,7 @@ export function tokenExpiryState(iso: string | null | undefined, soonDays = 7, n
   const ms = t - now;
   // 以毫秒判定是否過期：尚未到期者（即使剩不到一天）不得誤判 expired。
   // （舊版用 Math.floor 天數<=0，剩 23h→floor=0→誤判 expired，提早一天把好帳號打成 error。）
-  if (ms <= 0) return { level: "expired", daysLeft: Math.ceil(ms / 86_400_000) }; // 0 或負
+  if (ms <= 0) return { level: "expired", daysLeft: Math.floor(ms / 86_400_000) }; // 0 或負（floor 避免 -0）
   // 顯示用剩餘天數：無條件進位（剩 23h 顯示「1 天」而非 0，且不低估）。
   const daysLeft = Math.ceil(ms / 86_400_000);
   if (daysLeft <= soonDays) return { level: "soon", daysLeft };

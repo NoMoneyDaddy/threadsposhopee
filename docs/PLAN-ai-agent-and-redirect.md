@@ -47,21 +47,27 @@
 
 預設提供 3–5 個內建人格（科技、健康、AI、理財、生活），可複製改。
 
-## A3. 來源：AI 內建網路搜尋（取代付費 API／RSS）
+## A3. 來源：RSS ＋ AI 內建搜尋（兩者皆免費可靠，可並用）
 
-**主來源 = 讓 AI 自己上網搜尋**，用 owner 自綁金鑰的內建搜尋工具，免 RSS、免付費新聞 API、免額外爬蟲：
+每個 agent 的來源 `mode` 可選（或混用），**都不採付費新聞 API**：
 
-- **Gemini（專案預設）**：Google Search grounding（`tools: [{google_search:{}}]`），回應附 `groundingMetadata` 的引用來源 URL。
-- **Claude（專案也支援 anthropic provider）**：`web_search` server tool，回應附 citations。
-- 領域只需存一個**搜尋意圖**（query template），如「今日 台灣/全球 <domain> 最新、可信的新聞或文章」。
+### (1) RSS（免費、穩定、低風險，推薦預設）
+- 各領域精選 RSS：科技 iThome/TechCrunch 中文、健康 康健/Heho、AI 機器之心/Hugging Face blog、財經…。
+- 內建一份「領域 → 推薦 RSS」清單，使用者可增刪。
+- 解析：抓 feed（`fetchWithTimeout` ＋ `assertSafePublicUrl`），取 title/summary/link/pubDate。XML 解析用輕量解析（無重依賴）。
+- 優點：合法授權摘要、零 AI 搜尋成本、結果穩定可預期、來源 URL 明確。
 
-流程：模型帶搜尋 → 要求輸出 JSON「[{title, summary, sourceUrl, date}]」（取 5–10 筆，當日優先）→ 去重 → 改寫。**來源連結用模型回傳的 citation URL**（非自己貼整段內文）。
+### (2) AI 內建網路搜尋（即時、廣度大）
+- **Gemini（預設）**：Google Search grounding（`tools:[{google_search:{}}]`），回應附 `groundingMetadata` 引用 URL。
+- **Claude（anthropic provider）**：`web_search` server tool，附 citations。
+- 領域存一句**搜尋意圖**，如「今日 台灣/全球 <domain> 最新、可信新聞」。
+- 成本走**使用者金鑰**。
 
-注意：
-- 搜尋＝API 用量，成本走**使用者金鑰**（與現況一致）。
-- citation URL 寫入/若後續要抓 OG 預覽，一律過 `assertSafePublicUrl`（SSRF）。
-- 新鮮度依搜尋結果；仍做 A4 去重避免同主題重複。
-- （選用後備）若使用者未開金鑰搜尋，才退回 RSS；不採付費新聞 API。
+### 共用後處理
+- 兩者皆產出 `[{title, summary, sourceUrl, date}]`（取 5–10 筆、當日優先）→ A4 去重 → 改寫。
+- 來源連結用 RSS 的 link 或 AI 的 citation URL（**不貼整段內文**，避著作權）。
+- 寫入/抓 OG 一律過 `assertSafePublicUrl`（SSRF）。
+- 建議：**RSS 為主（穩、免費）＋ AI 搜尋為輔（補廣度/即時）**，agent 可二選一或先 RSS 不足再用搜尋。
 
 ## A4. 去重（簡易、夠用）
 
@@ -75,7 +81,7 @@
 
 ```
 for each enabled agent (daily, off-peak):
-  items = aiWebSearch(agent.domain, queryTemplate)   # A3：Gemini grounding / Claude web_search
+  items = fetchSource(agent)        # A3：RSS / AI 搜尋 / 先 RSS 不足再搜尋
   items = dedup(items)            # A4 第 1、2 層
   pick = rankByFreshness(items)[0]
   draft = ai.generate(persona=agent, material=pick)   # 重用 humanizer 口吻
@@ -111,7 +117,9 @@ create table ai_agents (
   emoji_level text not null default 'light',
   hashtag_pool text[] not null default '{}',
   length int not null default 200,
-  search_query text not null default '',    -- AI 網路搜尋意圖（A3），空則用 domain 預設
+  source_mode text not null default 'rss',  -- 'rss' | 'ai_search' | 'rss_then_ai'（A3）
+  rss_feeds text[] not null default '{}',   -- RSS 來源清單（source_mode 含 rss 時）
+  search_query text not null default '',    -- AI 搜尋意圖（source_mode 含 ai_search 時）
   threads_account_id uuid,                  -- 預設發哪個帳號（仍待核准）
   enabled boolean not null default false,
   created_at timestamptz default now()

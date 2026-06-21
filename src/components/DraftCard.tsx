@@ -206,6 +206,7 @@ function DraftCard({
             value={mainText}
             onChange={(e) => setMainText(e.target.value)}
             placeholder="正文"
+            aria-label="正文"
           />
           <div className="-mt-1 flex justify-end">
             <CharCount text={mainText} limit={500} />
@@ -216,6 +217,7 @@ function DraftCard({
             value={replyText}
             onChange={(e) => setReplyText(e.target.value)}
             placeholder="留言區（含分潤連結）"
+            aria-label="留言區（含分潤連結）"
           />
           <div className="flex gap-2">
             <button

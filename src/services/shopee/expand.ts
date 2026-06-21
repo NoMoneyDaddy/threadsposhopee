@@ -11,6 +11,15 @@ export interface ExpandedProduct {
   itemId: string;
 }
 
+// 從（展開後的）蝦皮網址抽出 shop_id / item_id：支援 /product/<shop>/<item> 與 i.<shop>.<item>
+// 兩種格式，並先還原 &amp; 實體。純函式可測。
+export function parseShopeeIds(url: string): { shopId: string; itemId: string } | null {
+  const cleaned = url.replace(/&amp;/g, "&");
+  const match = cleaned.match(/\/product\/(\d+)\/(\d+)/) ?? cleaned.match(/i\.(\d+)\.(\d+)/);
+  if (!match) return null;
+  return { shopId: match[1], itemId: match[2] };
+}
+
 export async function expandShopeeLink(shortLink: string): Promise<ExpandedProduct | null> {
   // Demo 模式不打網路，回固定假商品
   if (isDemoMode) {
@@ -42,13 +51,11 @@ export async function expandShopeeLink(shortLink: string): Promise<ExpandedProdu
     // 網路失敗時退回原連結，仍嘗試從中解析
   }
 
-  const cleaned = location.replace(/&amp;/g, "&");
-  const match = cleaned.match(/\/product\/(\d+)\/(\d+)/) ?? cleaned.match(/i\.(\d+)\.(\d+)/);
-  if (!match) return null;
-
-  const [, shopId, itemId] = match;
+  const ids = parseShopeeIds(location);
+  if (!ids) return null;
+  const { shopId, itemId } = ids;
   return {
-    expandedUrl: cleaned,
+    expandedUrl: location.replace(/&amp;/g, "&"),
     cleanUrl: `https://shopee.tw/product/${shopId}/${itemId}`,
     shopId,
     itemId

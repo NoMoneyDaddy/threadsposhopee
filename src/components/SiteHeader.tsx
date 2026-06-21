@@ -76,7 +76,11 @@ export default function SiteHeader({
           {user && (
             <span className="ml-2 hidden shrink-0 items-center gap-2 border-l border-border pl-3 text-xs text-ink-3 sm:flex">
               <span className="max-w-[12rem] truncate">{user.email}</span>
-              {user.isOwner && <span className="badge-brand">owner</span>}
+              {user.isOwner ? (
+                <span className="badge-brand">管理者</span>
+              ) : (
+                <span className="rounded bg-surface-2 px-2 py-0.5 text-ink-2">成員</span>
+              )}
               <form action="/auth/signout" method="post">
                 <button className="btn btn-ghost btn-sm" type="submit">
                   登出

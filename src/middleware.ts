@@ -14,7 +14,8 @@ const PUBLIC_PREFIXES = [
   "/api/auth/threads/data-deletion",
   "/privacy",
   "/terms",
-  "/data-deletion"
+  "/data-deletion",
+  "/sponsored"
 ];
 
 export async function middleware(req: NextRequest) {

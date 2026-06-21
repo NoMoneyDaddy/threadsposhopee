@@ -8,7 +8,8 @@ export const NOTIFY_TYPES = [
   { key: "account_paused", label: "帳號被暫停" },
   { key: "sponsor_violation", label: "贊助文章違規" },
   { key: "daily_digest", label: "每日成效摘要" },
-  { key: "weekly_digest", label: "每週績效摘要" }
+  { key: "weekly_digest", label: "每週績效摘要" },
+  { key: "monthly_digest", label: "每月績效摘要" }
 ] as const;
 
 export type NotifyType = (typeof NOTIFY_TYPES)[number]["key"];

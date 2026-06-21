@@ -32,7 +32,7 @@ export default function SiteHeader({
       <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
           <Link href="/" className="flex items-center gap-2" aria-label="IwantPo 首頁">
-            <span aria-hidden className="grid h-8 w-8 place-items-center rounded-xl bg-ink text-bg">
+            <span aria-hidden className="accent-line grid h-8 w-8 place-items-center rounded-xl text-white">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M22 2 11 13" />
                 <path d="m22 2-7 20-4-9-9-4Z" />

@@ -30,12 +30,12 @@ export default async function DashboardPage() {
       {weekly && (
         <a href="/insights?days=7" className="block rounded-2xl border bg-surface p-4 hover:border-brand/40">
           <div className="mb-2 flex items-baseline justify-between">
-            <h2 className="font-semibold">本週概覽</h2>
+            <h2 className="section-title text-base">本週概覽</h2>
             <span className="text-xs text-brand">查看成效 →</span>
           </div>
           <div className="grid grid-cols-3 gap-2 text-center">
             <div className="rounded-xl bg-surface-2 p-2">
-              <div className="text-lg font-bold tabular-nums text-brand">{weekly.totalPublished}</div>
+              <div className="stat-num text-xl text-brand">{weekly.totalPublished}</div>
               <div className="text-[11px] text-ink-2">近 7 天發布</div>
             </div>
             <div className="rounded-xl bg-surface-2 p-2">

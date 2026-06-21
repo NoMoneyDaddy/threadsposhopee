@@ -102,7 +102,7 @@ export default async function InsightsPage({
       {engagement && engagement.fetched >= 3 && <BestTimesSection e={engagement} />}
 
       <section className="rounded-2xl border bg-surface p-5">
-        <h2 className="mb-3 font-semibold">每日發布量</h2>
+        <h2 className="section-title mb-3">每日發布量</h2>
         {data.byDay.length === 0 ? (
           <p className="text-sm text-ink-3">此區間尚無已發布貼文。</p>
         ) : (
@@ -131,7 +131,7 @@ function RankCard({ title, rows, empty }: { title: string; rows: { name: string;
   const max = Math.max(1, ...rows.map((r) => r.count));
   return (
     <section className="rounded-2xl border bg-surface p-5">
-      <h2 className="mb-3 font-semibold">{title}</h2>
+      <h2 className="section-title mb-3">{title}</h2>
       {rows.length === 0 ? (
         <p className="text-sm text-ink-3">{empty}</p>
       ) : (
@@ -190,13 +190,13 @@ function EngagementSection({ e }: { e: EngagementSummary }) {
   return (
     <section className="rounded-2xl border bg-surface p-5">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="font-semibold">Threads 互動成效</h2>
+        <h2 className="section-title">Threads 互動成效</h2>
         <span className="text-xs text-ink-2">最近 {e.sampled} 篇，{e.fetched} 篇有數據</span>
       </div>
       <div className="mb-4 grid grid-cols-3 gap-2 sm:grid-cols-6">
         {cards.map((c) => (
           <div key={c.label} className="rounded-xl bg-surface-2 p-2 text-center">
-            <div className="text-lg font-bold tabular-nums text-brand">{num(c.value)}</div>
+            <div className="stat-num text-lg text-brand">{num(c.value)}</div>
             <div className="text-[11px] text-ink-2">{c.label}</div>
           </div>
         ))}
@@ -247,7 +247,7 @@ function BestTimesSection({ e }: { e: EngagementSummary }) {
   return (
     <section className="rounded-2xl border bg-surface p-5">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="font-semibold">最佳發文時段</h2>
+        <h2 className="section-title">最佳發文時段</h2>
         <span className="text-xs text-ink-3">依最近 {e.fetched} 篇平均觀看，樣本少僅供參考（時區 Asia/Taipei）</span>
       </div>
       <div className="grid gap-4 md:grid-cols-2">
@@ -268,8 +268,8 @@ function RevenueSection({ r }: { r: AffiliateRevenue }) {
     <div className="space-y-4">
       <section className="rounded-2xl border bg-surface p-5">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="font-semibold">分潤收益（近 {r.days} 天，Shopee 分潤報表）</h2>
-          <div className="text-2xl font-bold text-brand">{money(r.totalCommission)}</div>
+          <h2 className="section-title">分潤收益（近 {r.days} 天，Shopee 分潤報表）</h2>
+          <div className="stat-num text-2xl text-brand">{money(r.totalCommission)}</div>
         </div>
         <div className="mt-1 text-xs text-ink-2">
           {r.totalConversions} 筆轉換
@@ -313,7 +313,7 @@ function RevenueRank({ title, rows }: { title: string; rows: { name: string; val
   const max = Math.max(1, ...rows.map((r) => r.value));
   return (
     <section className="rounded-2xl border bg-surface p-5">
-      <h2 className="mb-3 font-semibold">{title}</h2>
+      <h2 className="section-title mb-3">{title}</h2>
       {rows.length === 0 ? (
         <p className="text-sm text-ink-3">尚無資料</p>
       ) : (

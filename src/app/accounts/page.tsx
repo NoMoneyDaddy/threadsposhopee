@@ -32,6 +32,7 @@ import AutoReviveForm from "@/components/AutoReviveForm";
 import PublishPrefsForm from "@/components/PublishPrefsForm";
 import RepostLimitsForm from "@/components/RepostLimitsForm";
 import NotifyPrefsForm from "@/components/NotifyPrefsForm";
+import PushToggle from "@/components/PushToggle";
 import CloudinaryForm from "@/components/CloudinaryForm";
 import TelegramForm from "@/components/TelegramForm";
 import DiscordForm from "@/components/DiscordForm";
@@ -143,6 +144,8 @@ export default async function AccountsPage({
         {user && <TelegramForm bound={telegramBound} botConfigured={!isDemoMode && Boolean(env.telegramBotToken)} />}
         {user && <DiscordForm bound={discordBound} />}
       </div>
+
+      {user && env.vapidPublicKey && <PushToggle vapidPublicKey={env.vapidPublicKey} />}
 
       {user && notifyPrefs && <NotifyPrefsForm initial={notifyPrefs} />}
 

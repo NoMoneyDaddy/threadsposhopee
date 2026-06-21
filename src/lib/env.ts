@@ -63,6 +63,10 @@ export const env = {
     .filter((s) => /^\d{1,2}:\d{2}$/.test(s)),
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN ?? "",
   telegramChatId: process.env.TELEGRAM_CHAT_ID ?? "",
+  // Web Push（VAPID）：設了公私鑰才啟用瀏覽器推播。公鑰用 NEXT_PUBLIC 前綴供前端訂閱。
+  vapidPublicKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "",
+  vapidPrivateKey: process.env.VAPID_PRIVATE_KEY ?? "",
+  vapidSubject: process.env.VAPID_SUBJECT || "mailto:admin@example.com",
   // 每日摘要附 AI 成效歸因分析（需 owner Gemini 金鑰）。1/true 開啟，預設關（多一次 LLM 呼叫）。
   dailyDigestAi: /^(1|true)$/i.test(process.env.DAILY_DIGEST_AI ?? "")
 };

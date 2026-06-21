@@ -47,15 +47,21 @@
 
 預設提供 3–5 個內建人格（科技、健康、AI、理財、生活），可複製改。
 
-## A3. 領域來源（Source Set）
+## A3. 來源：AI 內建網路搜尋（取代付費 API／RSS）
 
-每個領域對應一組「來源清單」。**優先用 RSS（免費、穩定、合法授權摘要）**，其次才考慮付費新聞 API：
+**主來源 = 讓 AI 自己上網搜尋**，用 owner 自綁金鑰的內建搜尋工具，免 RSS、免付費新聞 API、免額外爬蟲：
 
-- **RSS（推薦預設）**：各領域精選 RSS（科技：iThome/TechCrunch 中文；健康：康健/Heho；AI：Hugging Face blog/機器之心…）。
-- **付費 API（選用）**：NewsAPI / GNews（有免費額度），或沿用 owner 的 **Apify**（已綁）跑通用爬蟲。
-- 每來源存 `url`、`type`(rss/api/apify)、`enabled`、`weight`。
+- **Gemini（專案預設）**：Google Search grounding（`tools: [{google_search:{}}]`），回應附 `groundingMetadata` 的引用來源 URL。
+- **Claude（專案也支援 anthropic provider）**：`web_search` server tool，回應附 citations。
+- 領域只需存一個**搜尋意圖**（query template），如「今日 台灣/全球 <domain> 最新、可信的新聞或文章」。
 
-抓取一律走現有 `fetchWithTimeout` ＋ `assertSafePublicUrl`（SSRF 防護）。
+流程：模型帶搜尋 → 要求輸出 JSON「[{title, summary, sourceUrl, date}]」（取 5–10 筆，當日優先）→ 去重 → 改寫。**來源連結用模型回傳的 citation URL**（非自己貼整段內文）。
+
+注意：
+- 搜尋＝API 用量，成本走**使用者金鑰**（與現況一致）。
+- citation URL 寫入/若後續要抓 OG 預覽，一律過 `assertSafePublicUrl`（SSRF）。
+- 新鮮度依搜尋結果；仍做 A4 去重避免同主題重複。
+- （選用後備）若使用者未開金鑰搜尋，才退回 RSS；不採付費新聞 API。
 
 ## A4. 去重（簡易、夠用）
 
@@ -69,14 +75,16 @@
 
 ```
 for each enabled agent (daily, off-peak):
-  items = fetchLatest(agent.source_set, limit=10)
+  items = aiWebSearch(agent.domain, queryTemplate)   # A3：Gemini grounding / Claude web_search
   items = dedup(items)            # A4 第 1、2 層
   pick = rankByFreshness(items)[0]
-  draft = gemini.generate(persona=agent, material=pick)   # 重用 humanizer 口吻
+  draft = ai.generate(persona=agent, material=pick)   # 重用 humanizer 口吻
   if similarTooHigh(draft): continue   # A4 第 3 層
-  draft.body += "\n\n📎 來源：" + sourceLine(pick)   # A6
+  draft.body += "\n\n📎 來源：" + sourceLine(pick)   # A6（連結可走 go2read 短連結）
   createDraft(status="draft", owner, agentId, sourceUrl)   # 待人工核准
 ```
+
+> 可一次呼叫完成「搜尋＋產文」（grounded 生成直接產出貼文＋引用），或兩段式（先搜尋拿來源、再產文）。兩段式較好做去重與來源控管，建議。
 
 - **產文 prompt**：注入 persona.tone + 領域 + 來源「標題＋摘要」（**只用摘要不整段複製**，降著作權風險），要求輸出「正文＋（選）留言區」格式，沿用 `splitCopy`。
 - **maxDuration / 批次上限**：每 agent 每輪最多產 N 篇（預設 1），吃滿時間預算就停。
@@ -103,7 +111,7 @@ create table ai_agents (
   emoji_level text not null default 'light',
   hashtag_pool text[] not null default '{}',
   length int not null default 200,
-  source_set jsonb not null default '[]',   -- [{url,type,enabled,weight}]
+  search_query text not null default '',    -- AI 網路搜尋意圖（A3），空則用 domain 預設
   threads_account_id uuid,                  -- 預設發哪個帳號（仍待核准）
   enabled boolean not null default false,
   created_at timestamptz default now()
@@ -201,8 +209,22 @@ create index on redirect_links(owner_id);
 
 ## B5. App 導流彈窗（你提到的「跳轉 App 彈窗感」）
 
-- 用 deep link（如 `shopee://`）嘗試喚起 App，失敗 fallback 到網頁分潤連結。
+- 喚 App 優先用 **Universal Link（iOS）/ App Link（Android）**，比 custom scheme（`shopee://`）穩；一律帶**網頁分潤連結 fallback**（喚起失敗就走網頁）。
 - 仍維持揭露；不做「假系統彈窗」。
+
+## B5-1. 跨平台可行性與降級（重要）
+
+「核心轉址＋分潤曝光」**全平台可行**；但「**同時雙開＋自動喚 App**」會因環境而異，需偵測 user-agent 後降級：
+
+| 環境 | 行為 |
+|---|---|
+| 桌機 / 手機原生瀏覽器（Safari、Chrome） | 點「繼續」→ `window.open(affiliate, _blank, noopener)`（新分頁/彈窗）＋ 本頁 `location=source`。雙開可行（在 user gesture 內）。 |
+| **社群 App 內建瀏覽器（Threads/IG/FB/LINE WebView）** | 常**擋 popup/雙開**、custom-scheme deep link **常失效**。改「**單一流**」：先導分潤頁（或 Universal Link 試喚 App），頁面顯眼處放「**繼續閱讀原文 →**」按鈕回到來源；**不假設雙開成功**。 |
+
+實作要點：
+- 中轉頁前端偵測 `navigator.userAgent`（Threads/Instagram/FBAN/FBAV/Line…）判斷是否 in-app webview。
+- 雙開失敗時不可卡住使用者：永遠保留可見的「前往原文」與「前往優惠」兩個明確連結（揭露式）。
+- 因為 Threads 連結預設在 Threads webview 開，**多數流量會走「單一流」降級** —— 設計時以此為主、雙開為加分。
 
 ## B6. 統計
 

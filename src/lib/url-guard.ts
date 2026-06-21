@@ -4,6 +4,7 @@
 // 堵掉 http://2130706433、http://0x7f000001、::ffff:127.0.0.1 之類繞過。
 // ponytail: 仍不解析 DNS（擋不了 DNS rebinding——攻擊者用解析到內網的網域）。
 // 升級路徑：若要防 rebinding，改為解析 IP 後再比對，或走出站 proxy 白名單。
+import { fetchWithTimeout } from "./http";
 
 // 將整數/十六進位等非點分形式的主機名正規化為點分 IPv4（無法判定則回 null）。
 function numericHostToIPv4(h: string): string | null {
@@ -52,6 +53,37 @@ function isPrivateOrReservedHost(hostname: string): boolean {
     if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT
   }
   return false;
+}
+
+// 安全對外 fetch：手動跟隨重定向，且「每一跳」都重過 assertSafePublicUrl。
+// 堵住「公網域名 → 302 → 內網/雲端 metadata」的 SSRF 繞過（assertSafePublicUrl 只驗第一跳）。
+// 跳數上限 MAX_REDIRECTS；3xx 無 Location 直接把該回應交回呼叫端。
+const MAX_REDIRECTS = 5;
+export async function fetchSafePublicUrl(
+  raw: string | URL,
+  init: RequestInit = {},
+  timeoutMs = 8000
+): Promise<Response> {
+  let current = typeof raw === "string" ? raw : raw.href;
+  const startOrigin = new URL(current).origin;
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    assertSafePublicUrl(current); // 每跳驗證（含初始 URL）
+    const reqInit: RequestInit = { ...init, redirect: "manual" };
+    // 跨網域時剝除敏感 Header（瀏覽器原生行為）：避免重定向把憑證送往第三方域名。
+    if (init.headers && new URL(current).origin !== startOrigin) {
+      const h = new Headers(init.headers);
+      h.delete("authorization");
+      h.delete("cookie");
+      h.delete("proxy-authorization");
+      reqInit.headers = h;
+    }
+    const res = await fetchWithTimeout(current, reqInit, timeoutMs);
+    if (res.status < 300 || res.status >= 400) return res;
+    const loc = res.headers.get("location");
+    if (!loc) return res; // 3xx 但無導向目標：交回呼叫端判斷
+    current = new URL(loc, current).href; // 相對導向解析為絕對 URL
+  }
+  throw new Error("重定向次數過多");
 }
 
 // 驗證 URL 可安全對外 fetch；不合法則丟出錯誤。

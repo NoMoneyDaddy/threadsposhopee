@@ -1,7 +1,7 @@
 import { env } from "@/lib/env";
 import { log } from "@/lib/logger";
-import { assertSafePublicUrl } from "@/lib/url-guard";
-import { fetchWithTimeout, fetchWithRetry } from "@/lib/http";
+import { assertSafePublicUrl, fetchSafePublicUrl } from "@/lib/url-guard";
+import { fetchWithRetry } from "@/lib/http";
 import { uploadToGeminiFiles } from "./gemini-files";
 
 // Gemini inline data 上限約 20MB（含 base64 膨脹約 1.34x）→ 二進位設 12MB 安全門檻。
@@ -28,9 +28,9 @@ export async function generateWithGemini(
   // 有媒體就抓下來轉 base64 inline（小檔可行；超大檔跳過避免請求超限，純文字生成）
   if (mediaUrl && mediaType !== "none") {
     try {
-      // SSRF 防護：媒體 URL 可能來自外部來源/使用者貼上，先擋內網位址，並用正規化 href fetch（防解析歧異）
-      const safeUrl = assertSafePublicUrl(mediaUrl);
-      const res = await fetchWithTimeout(safeUrl.href, {}, 10000);
+      // SSRF 防護：媒體 URL 來自外部/使用者，逐跳驗證的安全 fetch（含跟隨重定向每跳重驗），
+      // 避免「公網域名 → 302 → 內網」把內網內容讀進記憶體送 Gemini。
+      const res = await fetchSafePublicUrl(mediaUrl, {}, 10000);
       // 非 2xx（如 404/500）→ 跳過 inline、純文字生成（fetch 不丟例外，需自行判斷，
       // 否則會把錯誤頁內容當媒體送進 Gemini 導致整體生成失敗）。不可 return：後面還要呼叫 Gemini。
       if (!res.ok) {

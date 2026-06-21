@@ -3,25 +3,15 @@ import { getCurrentUser } from "@/lib/auth";
 import { getPublishInsights } from "@/lib/store";
 import { getAffiliateRevenue } from "@/services/shopee/report";
 import { resolveInsightsRange } from "@/lib/insights-range";
+import { csvCell as cell, csvRows as rows } from "@/lib/csv";
 import { env, isDemoMode } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
-// CSV 欄位逸出：含逗號/引號/換行（含 \r）則用雙引號包起並把內部引號加倍。
-function cell(v: string | number): string {
-  const s = String(v);
-  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
 // 台北時區日期（YYYY-MM-DD）。en-CA 輸出 ISO 形式，避免用 UTC 造成跨日偏差。
 function taipeiDate(ms: number): string {
   return new Date(ms).toLocaleDateString("en-CA", { timeZone: "Asia/Taipei" });
-}
-function rows(list: { name?: string; date?: string; count?: number; commission?: number }[], cols: string[]): string {
-  return list
-    .map((r) => cols.map((c) => cell((r as Record<string, string | number>)[c] ?? "")).join(","))
-    .join("\n");
 }
 
 // 成效報表 CSV 匯出（依目前區間）。發布數據為自家資料；分潤收益僅 owner 且有金鑰時附上（best-effort）。

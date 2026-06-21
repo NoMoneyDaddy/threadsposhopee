@@ -69,6 +69,7 @@ export interface Draft {
   owner_id?: string | null;
   material_id?: string | null;
   source_id?: string | null;
+  source_agent_id?: string | null; // 由哪個 AI 代理人產生（null=非代理人）
   threads_account_id?: string | null;
   source_post_id?: string | null;
   product_name?: string | null;

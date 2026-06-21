@@ -7,6 +7,7 @@ import { buildDailyDigest } from "@/services/digest/daily";
 import { buildPeriodicDigest } from "@/services/digest/periodic";
 import type { NotifyType } from "@/lib/notify-prefs";
 import { verifySponsorPosts, ensureSponsorPosts } from "@/services/sponsor/run";
+import { runAiAgents } from "@/services/ai/agent-run";
 import { getOwnerUserId } from "@/lib/auth";
 import { env } from "@/lib/env";
 import { setHeartbeat, getUserTelegramChatId, getUserDiscordWebhook } from "@/lib/store";
@@ -52,6 +53,11 @@ export async function runCronAll(now: Date = new Date()): Promise<Record<string,
       key: "verifySponsor",
       run: verifySponsorPosts,
       warn: (r) => (r?.violations ? `🔒 贊助文 ${r.violations} 則連結被竄改/刪除，已暫停對應帳號` : null)
+    },
+    {
+      key: "aiAgents",
+      run: runAiAgents, // 內部以 last_run_at 守門，每代理人每日約一次；產出進草稿待審
+      warn: (r) => (r?.created ? `🤖 AI 代理人新增 ${r.created} 篇草稿（待審）` : null)
     }
   ];
   // 每天展期一次（03:00–03:14 視窗，避免每 15 分重複）

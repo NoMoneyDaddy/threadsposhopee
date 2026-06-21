@@ -9,6 +9,7 @@ type NavItem = { href: string; label: string };
 const NAV: NavItem[] = [
   { href: "/", label: "儀表板" },
   { href: "/compose", label: "發文" },
+  { href: "/agents", label: "AI 代理人" },
   { href: "/drafts", label: "草稿" },
   { href: "/insights", label: "成效" },
   { href: "/links", label: "短連結" },

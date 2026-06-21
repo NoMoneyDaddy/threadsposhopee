@@ -4,6 +4,7 @@ import { runPublishQueue } from "@/services/publish/queue";
 import { refreshExpiringTokens } from "@/services/threads/refresh";
 import { checkAffiliateLinks } from "@/services/materials/linkcheck";
 import { buildDailyDigest } from "@/services/digest/daily";
+import { buildPeriodicDigest } from "@/services/digest/periodic";
 import { verifySponsorPosts, ensureSponsorPosts } from "@/services/sponsor/run";
 import { getOwnerUserId } from "@/lib/auth";
 import { env } from "@/lib/env";
@@ -80,6 +81,29 @@ export async function runCronAll(now: Date = new Date()): Promise<Record<string,
         const msg = await buildDailyDigest();
         if (!msg) return { sent: false };
         if (personalSink) await sendUserAlert(ownerId, msg, "daily_digest");
+        else await sendAlert(msg);
+        return { sent: true, via: personalSink ? "personal" : "global" };
+      }
+    });
+  }
+  // 每週績效摘要（每週一台北 10:00 = UTC 02:00–02:14）。
+  if (dow === 1 && h === 2 && min < 15) {
+    steps.push({
+      key: "weeklyDigest",
+      run: async () => {
+        const ownerId = await getOwnerUserId();
+        const [personalTg, personalDiscord] = ownerId
+          ? await Promise.all([
+              getUserTelegramChatId(ownerId).catch(() => null),
+              getUserDiscordWebhook(ownerId).catch(() => null)
+            ])
+          : [null, null];
+        const personalSink = Boolean((personalTg && env.telegramBotToken) || personalDiscord);
+        const globalSink = Boolean(env.telegramBotToken && env.telegramChatId);
+        if (!personalSink && !globalSink) return { sent: false };
+        const msg = await buildPeriodicDigest("本週", 7);
+        if (!msg) return { sent: false };
+        if (personalSink) await sendUserAlert(ownerId, msg, "weekly_digest");
         else await sendAlert(msg);
         return { sent: true, via: personalSink ? "personal" : "global" };
       }

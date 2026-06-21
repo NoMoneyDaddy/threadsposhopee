@@ -74,6 +74,34 @@ export async function listRecentPublishedPosts(ownerId: string, limit = 15): Pro
   return (data ?? []) as PublishedPostRef[];
 }
 
+// 同素材「已排入／已發布」的重複發文計數（給重發上限把關用）。
+// 只計已承諾發文的狀態（approved/publishing/published/needs_verification）；
+// 未承諾的 draft 與 failed/rejected 不算。回傳跨帳號合計與指定帳號的計數。
+const REPOST_COUNTED_STATUSES = ["approved", "publishing", "published", "needs_verification"];
+
+export async function countMaterialReposts(
+  ownerId: string,
+  materialId: string,
+  accountId: string
+): Promise<{ perAccount: number; total: number }> {
+  if (isDemoMode) {
+    const rows = demo.drafts.filter(
+      (d) => d.material_id === materialId && REPOST_COUNTED_STATUSES.includes(d.status)
+    );
+    return { total: rows.length, perAccount: rows.filter((d) => d.threads_account_id === accountId).length };
+  }
+  const sb = getServiceClient()!;
+  const { data } = await sb
+    .from("drafts")
+    .select("threads_account_id")
+    .eq("owner_id", ownerId)
+    .eq("material_id", materialId)
+    .in("status", REPOST_COUNTED_STATUSES)
+    .limit(1000);
+  const rows = data ?? [];
+  return { total: rows.length, perAccount: rows.filter((r) => r.threads_account_id === accountId).length };
+}
+
 export async function listDrafts(ownerId: string): Promise<Draft[]> {
   if (isDemoMode) return [...demo.drafts].sort((a, b) => b.created_at.localeCompare(a.created_at));
   const sb = getServiceClient()!;

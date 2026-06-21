@@ -17,12 +17,36 @@ const PERIODS: { days: number; label: string }[] = [
   { days: 365, label: "近一年" }
 ];
 
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+// 把台北日期（YYYY-MM-DD）轉成 epoch ms。台北固定 UTC+8、無日光節約。
+function taipeiMs(date: string, end: boolean): number | null {
+  if (!DATE_RE.test(date)) return null;
+  const t = Date.parse(`${date}T${end ? "23:59:59" : "00:00:00"}+08:00`);
+  return Number.isNaN(t) ? null : t;
+}
+
 // 成效統計：自家發布數據 + Shopee 分潤實際收益（owner 限定）。
-export default async function InsightsPage({ searchParams }: { searchParams: { days?: string } }) {
+// 支援預設區間（days）與自訂日期區間（from/to，台北）。
+export default async function InsightsPage({
+  searchParams
+}: {
+  searchParams: { days?: string; from?: string; to?: string };
+}) {
   const user = await getCurrentUser();
   if (!user) return <div className="text-center text-sm text-red-500">請先登入。</div>;
+
+  // 自訂區間優先；無效則退回預設 days。
+  const fromMs = searchParams.from ? taipeiMs(searchParams.from, false) : null;
+  const toMs = searchParams.to ? taipeiMs(searchParams.to, true) : null;
+  const custom = fromMs !== null && toMs !== null && fromMs <= toMs;
   const days = PERIODS.some((p) => p.days === Number(searchParams.days)) ? Number(searchParams.days) : 30;
-  const data = await getPublishInsights(user.id, days);
+  const endMs = custom ? (toMs as number) : Date.now();
+  const startMs = custom ? (fromMs as number) : endMs - days * 86400_000;
+  const rangeLabel = custom
+    ? `${searchParams.from} ~ ${searchParams.to}`
+    : PERIODS.find((p) => p.days === days)?.label ?? `近 ${days} 天`;
+
+  const data = await getPublishInsights(user.id, { startMs, endMs });
   const maxDay = Math.max(1, ...data.byDay.map((d) => d.count));
 
   // 分潤收益（僅 owner、且有設金鑰時才抓；失敗則優雅降級）
@@ -30,7 +54,7 @@ export default async function InsightsPage({ searchParams }: { searchParams: { d
   let revenueErr: string | null = null;
   if (user.isOwner && !isDemoMode && env.shopeeAppId && env.shopeeSecret) {
     try {
-      revenue = await getAffiliateRevenue(days);
+      revenue = await getAffiliateRevenue({ startMs, endMs });
     } catch (e) {
       revenueErr = e instanceof Error ? e.message : String(e);
     }
@@ -44,7 +68,7 @@ export default async function InsightsPage({ searchParams }: { searchParams: { d
       <div>
         <h1 className="text-2xl font-bold">成效</h1>
         <p className="text-sm text-ink-2">
-          近 {data.days} 天共發布 <b className="text-brand">{data.totalPublished}</b> 篇。
+          {rangeLabel}共發布 <b className="text-brand">{data.totalPublished}</b> 篇。
         </p>
         <div className="mt-2 flex flex-wrap gap-1.5">
           {PERIODS.map((p) => (
@@ -52,13 +76,30 @@ export default async function InsightsPage({ searchParams }: { searchParams: { d
               key={p.days}
               href={`/insights?days=${p.days}`}
               className={`rounded-full px-3 py-1 text-xs ${
-                p.days === days ? "bg-brand text-white" : "bg-surface-2 text-ink-2 hover:bg-neutral-200"
+                !custom && p.days === days ? "bg-brand text-white" : "bg-surface-2 text-ink-2 hover:bg-neutral-200"
               }`}
             >
               {p.label}
             </a>
           ))}
         </div>
+        {/* 自訂日期區間（GET 表單；台北日期） */}
+        <form method="get" className="mt-2 flex flex-wrap items-end gap-2">
+          <label className="text-xs text-ink-2">
+            起<input type="date" name="from" defaultValue={searchParams.from ?? ""} className="ml-1 rounded-lg border px-2 py-1 text-xs" />
+          </label>
+          <label className="text-xs text-ink-2">
+            迄<input type="date" name="to" defaultValue={searchParams.to ?? ""} className="ml-1 rounded-lg border px-2 py-1 text-xs" />
+          </label>
+          <button type="submit" className="rounded-lg bg-surface-2 px-3 py-1 text-xs text-ink-2 hover:bg-neutral-200">
+            套用區間
+          </button>
+          {custom && (
+            <a href="/insights" className="rounded-lg px-2 py-1 text-xs text-ink-3 hover:text-ink">
+              清除
+            </a>
+          )}
+        </form>
       </div>
 
       {revenue && <RevenueSection r={revenue} />}
@@ -75,7 +116,7 @@ export default async function InsightsPage({ searchParams }: { searchParams: { d
       <section className="rounded-2xl border bg-surface p-5">
         <h2 className="mb-3 font-semibold">每日發布量</h2>
         {data.byDay.length === 0 ? (
-          <p className="text-sm text-ink-3">近 30 天尚無已發布貼文。</p>
+          <p className="text-sm text-ink-3">此區間尚無已發布貼文。</p>
         ) : (
           <div className="flex items-end gap-1" style={{ height: 120 }}>
             {data.byDay.map((d) => (
@@ -87,6 +128,8 @@ export default async function InsightsPage({ searchParams }: { searchParams: { d
           </div>
         )}
       </section>
+
+      <RankCard title="各帳號發布次數" rows={data.byAccount} empty="尚無資料" />
 
       <div className="grid gap-4 md:grid-cols-2">
         <RankCard title="熱門商品（發布次數）" rows={data.byProduct} empty="尚無資料" />

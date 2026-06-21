@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { listMaterials, createDraftFromMaterial, userOwnsThreadsAccount } from "@/lib/store";
+import { listMaterials, createDraftFromMaterial, userOwnsThreadsAccount, getRepostLimits, countMaterialReposts } from "@/lib/store";
+import { exceedsRepostLimit } from "@/lib/repost-limits";
 import { withNextSlot, nextOpenSlotAtHours } from "@/services/publish/slots";
 import { getBestHours } from "@/services/threads/engagement";
 import { getCurrentUser } from "@/lib/auth";
@@ -37,9 +38,21 @@ export async function POST(req: Request) {
   const hours = body.bestTime === true ? await getBestHours(user.id) : [];
   const pick = hours.length ? (taken: Set<string>) => nextOpenSlotAtHours(taken, hours) : undefined;
 
+  // 重複發文上限（0＝不限）：逐筆檢查該素材於此帳號是否已達上限，達標則略過不排。
+  const limits = await getRepostLimits(user.id);
+  const enforce = limits.perAccount > 0 || limits.total > 0;
+
   let queued = 0;
+  let skipped = 0;
   let full = false;
   for (const m of materials.slice(0, MAX_BULK)) {
+    if (enforce) {
+      const cnt = await countMaterialReposts(user.id, m.id, body.threads_account_id);
+      if (exceedsRepostLimit(limits, cnt).blocked) {
+        skipped += 1;
+        continue;
+      }
+    }
     const draft = await withNextSlot(
       user.id,
       (slot) =>
@@ -59,5 +72,5 @@ export async function POST(req: Request) {
     queued += 1;
   }
 
-  return NextResponse.json({ ok: true, queued, full, candidates: materials.length, bestTime: hours.length > 0 });
+  return NextResponse.json({ ok: true, queued, skipped, full, candidates: materials.length, bestTime: hours.length > 0 });
 }

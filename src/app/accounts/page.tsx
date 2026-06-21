@@ -9,6 +9,7 @@ import {
   getAutoReviveLinks,
   getPublishPrefs,
   getNotifyPrefs,
+  getRepostLimits,
   getUserCloudinary,
   getUserTelegramChatId,
   getUserDiscordWebhook,
@@ -29,6 +30,7 @@ import AffiliateIdForm from "@/components/AffiliateIdForm";
 import SubIdForm from "@/components/SubIdForm";
 import AutoReviveForm from "@/components/AutoReviveForm";
 import PublishPrefsForm from "@/components/PublishPrefsForm";
+import RepostLimitsForm from "@/components/RepostLimitsForm";
 import NotifyPrefsForm from "@/components/NotifyPrefsForm";
 import CloudinaryForm from "@/components/CloudinaryForm";
 import TelegramForm from "@/components/TelegramForm";
@@ -54,6 +56,7 @@ export default async function AccountsPage({
   const customSubId = user ? await getShopeeSubId(ownerId) : null;
   const autoRevive = user ? await getAutoReviveLinks(ownerId) : false;
   const publishPrefs = user ? await getPublishPrefs(ownerId) : null;
+  const repostLimits = user ? await getRepostLimits(ownerId) : null;
   const notifyPrefs = user ? await getNotifyPrefs(ownerId) : null;
   const cloudinary = user ? await getUserCloudinary(ownerId) : null;
   const telegramBound = user ? Boolean(await getUserTelegramChatId(user.id)) : false;
@@ -154,6 +157,8 @@ export default async function AccountsPage({
       )}
 
       {user && publishPrefs && <PublishPrefsForm initial={publishPrefs} />}
+
+      {user && repostLimits && <RepostLimitsForm initial={repostLimits} />}
 
       <CopyPrefsForm initial={copyPrefs} />
 

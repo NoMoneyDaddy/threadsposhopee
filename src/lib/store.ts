@@ -41,6 +41,7 @@ export {
 // 此處 re-export 維持既有 `@/lib/store` 匯入點不變（God File 漸進拆分）。
 export {
   createDraftFromMaterial,
+  countMaterialReposts,
   listRecentPublishedPosts,
   listDrafts,
   listTakenScheduledSlots,
@@ -112,6 +113,8 @@ export {
   setPublishPrefs,
   getNotifyPrefs,
   setNotifyPrefs,
+  getRepostLimits,
+  setRepostLimits,
   getUserCloudinary,
   setUserCloudinary,
   getUserPlan,
@@ -149,30 +152,50 @@ export {
   listProcessedPostIds
 } from "./sources-store";
 
-// 成效統計：近 N 日已發布貼文，依日期/商品/來源/帳號彙總（從自家發布資料，不需外部報表 API）。
+// 成效統計：指定時間窗內已發布貼文，依日期/商品/來源/帳號彙總（從自家發布資料，不需外部報表 API）。
+export interface InsightsRange {
+  startMs: number;
+  endMs: number;
+}
 export interface PublishInsights {
-  days: number;
+  startMs: number;
+  endMs: number;
   totalPublished: number;
   byDay: { date: string; count: number }[];
   byProduct: { name: string; count: number }[];
   bySource: { name: string; count: number }[];
+  byAccount: { name: string; count: number }[];
 }
 
-export async function getPublishInsights(ownerId: string, days = 30): Promise<PublishInsights> {
-  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-  let rows: { product_name: string | null; source_id: string | null; published_at: string | null }[];
+export async function getPublishInsights(ownerId: string, range: InsightsRange): Promise<PublishInsights> {
+  const sinceIso = new Date(range.startMs).toISOString();
+  const untilIso = new Date(range.endMs).toISOString();
+  let rows: { product_name: string | null; source_id: string | null; threads_account_id: string | null; published_at: string | null }[];
+  // 帳號 id→label 對照（分項報表用）
+  const accounts = await listThreadsAccounts(ownerId);
+  const accLabel = new Map(accounts.map((a) => [a.id, a.label]));
   if (isDemoMode) {
     rows = demo.drafts
-      .filter((d) => d.status === "published")
-      .map((d) => ({ product_name: d.product_name ?? null, source_id: d.source_id ?? null, published_at: d.published_at ?? d.created_at }));
+      .filter((d) => {
+        if (d.status !== "published") return false;
+        const t = new Date(d.published_at ?? d.created_at).getTime();
+        return t >= range.startMs && t <= range.endMs;
+      })
+      .map((d) => ({
+        product_name: d.product_name ?? null,
+        source_id: d.source_id ?? null,
+        threads_account_id: d.threads_account_id ?? null,
+        published_at: d.published_at ?? d.created_at
+      }));
   } else {
     const sb = getServiceClient()!;
     const { data } = await sb
       .from("drafts")
-      .select("product_name, source_id, published_at")
+      .select("product_name, source_id, threads_account_id, published_at")
       .eq("owner_id", ownerId)
       .eq("status", "published")
-      .gte("published_at", since)
+      .gte("published_at", sinceIso)
+      .lte("published_at", untilIso)
       .limit(5000); // 上限，避免極大量發布時撐爆記憶體
     rows = data ?? [];
   }
@@ -180,6 +203,7 @@ export async function getPublishInsights(ownerId: string, days = 30): Promise<Pu
   const dayMap = new Map<string, number>();
   const prodMap = new Map<string, number>();
   const srcMap = new Map<string, number>();
+  const accMap = new Map<string, number>();
   for (const r of rows) {
     const day = r.published_at
       ? new Date(r.published_at).toLocaleDateString("zh-TW", {
@@ -194,16 +218,20 @@ export async function getPublishInsights(ownerId: string, days = 30): Promise<Pu
     prodMap.set(p, (prodMap.get(p) ?? 0) + 1);
     const s = r.source_id ?? "手動／批次";
     srcMap.set(s, (srcMap.get(s) ?? 0) + 1);
+    const a = r.threads_account_id ? accLabel.get(r.threads_account_id) ?? "（已移除帳號）" : "未指定帳號";
+    accMap.set(a, (accMap.get(a) ?? 0) + 1);
   }
   const top = (m: Map<string, number>, n: number) =>
     [...m.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, n);
 
   return {
-    days,
+    startMs: range.startMs,
+    endMs: range.endMs,
     totalPublished: rows.length,
     byDay: [...dayMap.entries()].map(([date, count]) => ({ date, count })).sort((a, b) => a.date.localeCompare(b.date)),
     byProduct: top(prodMap, 10),
-    bySource: top(srcMap, 10)
+    bySource: top(srcMap, 10),
+    byAccount: top(accMap, 20)
   };
 }
 

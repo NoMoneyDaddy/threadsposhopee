@@ -27,7 +27,10 @@ export default function BulkRepostButton({ threadsAccounts }: { threadsAccounts:
       });
       const json = await res.json();
       if (!json.ok) throw new Error(json.error);
-      setMsg(`✅ 已排入 ${json.queued} 篇${json.bestTime ? "（最佳時段）" : ""}${json.full ? "（時段已滿，剩餘未排）" : ""}`);
+      setMsg(
+        `✅ 已排入 ${json.queued} 篇${json.bestTime ? "（最佳時段）" : ""}` +
+          `${json.skipped ? `（${json.skipped} 篇達重發上限略過）` : ""}${json.full ? "（時段已滿，剩餘未排）" : ""}`
+      );
       router.refresh();
     } catch (e) {
       setMsg(`❌ ${e instanceof Error ? e.message : String(e)}`);

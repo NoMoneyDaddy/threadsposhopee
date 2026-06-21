@@ -167,13 +167,17 @@ export interface PublishInsights {
   byAccount: { name: string; count: number }[];
 }
 
-export async function getPublishInsights(ownerId: string, range: InsightsRange): Promise<PublishInsights> {
+export async function getPublishInsights(
+  ownerId: string,
+  range: InsightsRange,
+  accounts?: { id: string; label: string | null }[]
+): Promise<PublishInsights> {
   const sinceIso = new Date(range.startMs).toISOString();
   const untilIso = new Date(range.endMs).toISOString();
   let rows: { product_name: string | null; source_id: string | null; threads_account_id: string | null; published_at: string | null }[];
-  // 帳號 id→label 對照（分項報表用）
-  const accounts = await listThreadsAccounts(ownerId);
-  const accLabel = new Map(accounts.map((a) => [a.id, a.label]));
+  // 帳號 id→label 對照（分項報表用）。呼叫端可帶入已查好的清單，避免同請求重複查 threads_accounts。
+  const accs = accounts ?? (await listThreadsAccounts(ownerId));
+  const accLabel = new Map(accs.map((a) => [a.id, a.label]));
   if (isDemoMode) {
     rows = demo.drafts
       .filter((d) => {

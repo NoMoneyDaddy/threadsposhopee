@@ -22,17 +22,18 @@ export default async function InsightsPage({
 
   const { startMs, endMs, days, label: rangeLabel, custom } = resolveInsightsRange(searchParams);
 
+  // 帳號清單查一次，供 getPublishInsights（分項報表）與分潤歸因共用，避免同請求重複查 threads_accounts。
+  const accounts = await listThreadsAccounts(user.id).catch(() => []);
   // 三項彼此無依賴（發布統計／分潤收益／互動數據），改 Promise.all 並行避免序列瀑布。
   const [data, revResult, engagement] = await Promise.all([
-    getPublishInsights(user.id, { startMs, endMs }),
+    getPublishInsights(user.id, { startMs, endMs }, accounts.map((a) => ({ id: a.id, label: a.label }))),
     // 分潤收益（僅 owner、且有設金鑰時才抓；失敗則優雅降級），用 IIFE 保留自身 try/catch。
     (async (): Promise<{ revenue: AffiliateRevenue | null; revenueErr: string | null }> => {
       if (!(user.isOwner && !isDemoMode && env.shopeeAppId && env.shopeeSecret)) {
         return { revenue: null, revenueErr: null };
       }
       try {
-        // 帶入發文帳號清單 → 依 sp_<帳號碼> 把分潤歸因到各帳號
-        const accounts = await listThreadsAccounts(user.id).catch(() => []);
+        // 依 sp_<帳號碼> 把分潤歸因到各帳號（共用上方 accounts）
         const revenue = await getAffiliateRevenue({ startMs, endMs }, accounts.map((a) => ({ id: a.id, label: a.label })));
         return { revenue, revenueErr: null };
       } catch (e) {

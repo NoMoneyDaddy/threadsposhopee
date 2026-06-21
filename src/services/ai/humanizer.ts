@@ -49,8 +49,10 @@ ${ctx.sourceText ? `別人怎麼介紹（僅供參考，不要照抄，要用你
 
 // 把 AI 輸出拆成正文 / 留言（對應 n8n「🎬準備媒體資料」的 split 邏輯）
 export function splitCopy(raw: string): { mainText: string; replyText: string } {
-  const parts = raw.split("留言區：");
-  const mainText = (parts[0] ?? "").replace(/^正文：/, "").trim();
+  // 容忍 LLM 常見輸出差異：全形/半形冒號（：/:）皆可（後綴空格由 trim 處理）。
+  // 否則一旦模型輸出半形冒號就失配，分潤連結（留言區）會遺失或被併入正文。
+  const parts = raw.split(/留言區[：:]/);
+  const mainText = (parts[0] ?? "").replace(/^正文[：:]/, "").trim();
   const replyText = (parts[1] ?? "有問題歡迎私訊！").trim();
   return { mainText, replyText };
 }

@@ -6,6 +6,7 @@ import { runPublishQueue } from "@/services/publish/queue";
 import { refreshExpiringTokens } from "@/services/threads/refresh";
 import { checkAffiliateLinks } from "@/services/materials/linkcheck";
 import { buildDailyDigest } from "@/services/digest/daily";
+import { verifySponsorPosts } from "@/services/sponsor/run";
 import { getOwnerUserId } from "@/lib/auth";
 import { env } from "@/lib/env";
 import { setHeartbeat, getUserTelegramChatId, getUserDiscordWebhook } from "@/lib/store";
@@ -48,6 +49,11 @@ export async function GET(req: Request) {
         if (r?.replies?.failed) parts.push(`補留言 ${r.replies.failed} 則失敗`);
         return parts.length ? `⚠️ ${parts.join("；")}` : null;
       }
+    },
+    {
+      key: "verifySponsor",
+      run: verifySponsorPosts,
+      warn: (r) => (r?.violations ? `🔒 贊助文 ${r.violations} 則連結被竄改/刪除，已暫停對應帳號` : null)
     }
   ];
   // 每天展期一次（03:00–03:14 視窗，避免每 15 分重複）

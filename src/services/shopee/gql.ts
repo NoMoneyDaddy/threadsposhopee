@@ -29,8 +29,8 @@ export async function callShopeeGql(appId: string, secret: string, payload: stri
     timeoutMs
   );
   if (!res.ok) {
-    // 上游回應本文只進 log，對外訊息僅保留狀態碼避免洩漏供應商細節。
-    log.error("Shopee API 非 2xx", { status: res.status, body: await res.text() });
+    // 上游回應本文只進 log（截斷 500 字避免長回應/echo 灌爆 log），對外僅保留狀態碼。
+    log.error("Shopee API 非 2xx", { status: res.status, body: (await res.text()).slice(0, 500) });
     throw new ShopeeApiError(`Shopee API 錯誤（${res.status}）`, res.status);
   }
   const json = await res.json();

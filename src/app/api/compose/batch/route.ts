@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { resolveMaterialFromUrl } from "@/services/materials/fromUrl";
-import { createDraftFromMaterial, getPublishPrefs } from "@/lib/store";
+import { createDraftFromMaterial, getPublishPrefs, userOwnsThreadsAccount } from "@/lib/store";
 import { withNextSlot, nextOpenSlot } from "@/services/publish/slots";
 import { getCurrentUser } from "@/lib/auth";
+import { isDemoMode } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -20,6 +21,10 @@ export async function POST(req: Request) {
     const threadsAccountId: string | null = body.threads_account_id || null;
     if (action === "queue" && !threadsAccountId) {
       return NextResponse.json({ ok: false, error: "加入佇列需指定發文帳號" }, { status: 400 });
+    }
+    // 驗證發文帳號歸屬：避免產生指向他人 account id 的懸空草稿（與 compose/route 一致）。
+    if (threadsAccountId && !isDemoMode && !(await userOwnsThreadsAccount(threadsAccountId, user.id))) {
+      return NextResponse.json({ ok: false, error: "發文帳號不存在或不屬於你" }, { status: 403 });
     }
     const urls: string[] = (Array.isArray(body.urls) ? body.urls : [])
       .map((u: unknown) => (typeof u === "string" ? u.trim() : ""))

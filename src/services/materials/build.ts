@@ -16,6 +16,7 @@ interface BuildMaterialInput {
   media?: { url: string | null; type: "image" | "video" | "none" };
   sourceText?: string;
   subIdTag?: string; // 追蹤用：來源帳號或 "manual"
+  customSubId?: string | null; // 使用者自訂 subId（套用兩種連結）；空＝用預設
   withCopy?: boolean; // 是否生成 AI 文案（手動建立可先不生成，之後再補）
 }
 
@@ -38,7 +39,7 @@ export async function buildMaterialForProduct(
 
   if (!isDemoMode && shopeeCreds) {
     try {
-      const subIds = buildSubIds(shopeeCreds.subId, input.subIdTag ?? "manual", input.itemId);
+      const subIds = buildSubIds(input.customSubId || shopeeCreds.subId, input.subIdTag ?? "manual", input.itemId);
       subId = subIds.join(",");
       shortLink = await generateAffiliateLink(shopeeCreds.appId, shopeeCreds.secret, input.cleanUrl, subIds);
       productName = await getProductName(shopeeCreds.appId, shopeeCreds.secret, input.shopId, input.itemId);
@@ -47,7 +48,7 @@ export async function buildMaterialForProduct(
     }
   } else if (!isDemoMode && affiliateId) {
     // 無 Open API，但有 affiliate_id：用官方 an_redir 做法自組追蹤連結（仍可分潤＋subId 分流）
-    const subIds = buildSubIds(null, input.subIdTag ?? "manual", input.itemId);
+    const subIds = buildSubIds(input.customSubId || null, input.subIdTag ?? "manual", input.itemId);
     subId = subIds.join("-");
     shortLink = buildAffiliateRedirectLink(input.cleanUrl, affiliateId, subIds);
     productName = `商品 ${input.itemId}`;

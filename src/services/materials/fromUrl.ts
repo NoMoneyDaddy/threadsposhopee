@@ -1,7 +1,7 @@
 // 從一個蝦皮連結解析並建立素材（單筆 /api/materials 與批次共用）。
 import { expandShopeeLink } from "@/services/shopee/expand";
 import { buildMaterialForProduct } from "@/services/materials/build";
-import { findMaterial, getShopeeCredentials, getGeminiKey, getShopeeAffiliateId, getUserCloudinary } from "@/lib/store";
+import { findMaterial, getShopeeCredentials, getGeminiKey, getShopeeAffiliateId, getShopeeSubId, getUserCloudinary } from "@/lib/store";
 import { env } from "@/lib/env";
 import type { AppUser } from "@/lib/auth";
 import type { Material } from "@/lib/types";
@@ -32,6 +32,7 @@ export async function resolveMaterialFromUrl(
   const affiliateId = shopeeCreds ? null : await getShopeeAffiliateId(ownerId);
   // 各人自綁 Cloudinary（素材進自己雲端）；沒綁退回 env 共用
   const cloudinaryCreds = await getUserCloudinary(ownerId);
+  const customSubId = await getShopeeSubId(ownerId);
 
   const notes: string[] = [];
   if (withCopy && !geminiKey) notes.push("未綁定自己的 Gemini 金鑰，已略過 AI 文案（到帳號管理綁定後可重產）");
@@ -42,6 +43,7 @@ export async function resolveMaterialFromUrl(
       cleanUrl: expanded.cleanUrl,
       originalShortLink: url,
       subIdTag: user.isOwner ? "manual" : ownerId.slice(0, 8),
+      customSubId,
       withCopy: canCopy
     },
     ownerId,

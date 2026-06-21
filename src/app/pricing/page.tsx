@@ -2,7 +2,6 @@ import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
 import { getUserPlan } from "@/lib/store";
 import { PLANS, PLAN_LABELS, type PlanId } from "@/lib/plans";
-import AdSlot from "@/components/AdSlot";
 
 export const dynamic = "force-dynamic";
 
@@ -98,8 +97,6 @@ export default async function PricingPage() {
         </Link>
         查看目前用量。
       </p>
-
-      <AdSlot slot={process.env.NEXT_PUBLIC_ADSENSE_SLOT_PRICING} className="mt-2" />
     </div>
   );
 }

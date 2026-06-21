@@ -49,23 +49,43 @@ export default async function AccountsPage({
   const ownerId = user?.id ?? "demo-user";
   const [threads, shopee] = await Promise.all([listThreadsAccounts(ownerId), listShopeeAccounts(ownerId)]);
   const oauthReady = !isDemoMode && Boolean(env.threadsAppId && env.threadsRedirectUri);
-  // 爬蟲（Apify）owner 限定；AI（Gemini）每人各綁各的
-  const apify = user?.isOwner ? await hasApifyCredentials(ownerId) : { bound: false, actor: null };
-  const geminiBound = user ? await hasGeminiKey(user.id) : false;
-  const copyPrefs = await getCopyPrefs(ownerId);
-  const affiliateId = await getShopeeAffiliateId(ownerId);
-  const customSubId = user ? await getShopeeSubId(ownerId) : null;
-  const autoRevive = user ? await getAutoReviveLinks(ownerId) : false;
-  const publishPrefs = user ? await getPublishPrefs(ownerId) : null;
-  const repostLimits = user ? await getRepostLimits(ownerId) : null;
-  const notifyPrefs = user ? await getNotifyPrefs(ownerId) : null;
-  const cloudinary = user ? await getUserCloudinary(ownerId) : null;
-  const telegramBound = user ? Boolean(await getUserTelegramChatId(user.id)) : false;
-  const discordBound = user ? Boolean(await getUserDiscordWebhook(user.id)) : false;
+  // 設定值彼此無依賴，改 Promise.all 並行（原為 14 個序列 await 瀑布，高延遲下整頁 TTFB 多耗 1s+）。
+  // 爬蟲（Apify）owner 限定；AI（Gemini）每人各綁各的。
+  const [
+    apify,
+    geminiBound,
+    copyPrefs,
+    affiliateId,
+    customSubId,
+    autoRevive,
+    publishPrefs,
+    repostLimits,
+    notifyPrefs,
+    cloudinary,
+    telegramChatId,
+    discordWebhook,
+    plan,
+    sponsor
+  ] = await Promise.all([
+    user?.isOwner ? hasApifyCredentials(ownerId) : Promise.resolve({ bound: false, actor: null }),
+    user ? hasGeminiKey(user.id) : Promise.resolve(false),
+    getCopyPrefs(ownerId),
+    getShopeeAffiliateId(ownerId),
+    user ? getShopeeSubId(ownerId) : Promise.resolve(null),
+    user ? getAutoReviveLinks(ownerId) : Promise.resolve(false),
+    user ? getPublishPrefs(ownerId) : Promise.resolve(null),
+    user ? getRepostLimits(ownerId) : Promise.resolve(null),
+    user ? getNotifyPrefs(ownerId) : Promise.resolve(null),
+    user ? getUserCloudinary(ownerId) : Promise.resolve(null),
+    user ? getUserTelegramChatId(user.id) : Promise.resolve(null),
+    user ? getUserDiscordWebhook(user.id) : Promise.resolve(null),
+    user ? getUserPlan(user.id) : Promise.resolve("free" as const),
+    getSponsorConfig()
+  ]);
+  const telegramBound = Boolean(telegramChatId);
+  const discordBound = Boolean(discordWebhook);
   // 方案配額（owner 不受限，顯示「無上限」）
-  const plan = user ? await getUserPlan(user.id) : "free";
   const accountLimit = Math.min(planLimits(plan).maxThreadsAccounts, GLOBAL_MAX_THREADS_ACCOUNTS);
-  const sponsor = await getSponsorConfig();
 
   return (
     <div className="space-y-6">

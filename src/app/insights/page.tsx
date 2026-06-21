@@ -22,24 +22,29 @@ export default async function InsightsPage({
 
   const { startMs, endMs, days, label: rangeLabel, custom } = resolveInsightsRange(searchParams);
 
-  const data = await getPublishInsights(user.id, { startMs, endMs });
+  // 帳號清單查一次，供 getPublishInsights（分項報表）與分潤歸因共用，避免同請求重複查 threads_accounts。
+  const accounts = await listThreadsAccounts(user.id).catch(() => []);
+  // 三項彼此無依賴（發布統計／分潤收益／互動數據），改 Promise.all 並行避免序列瀑布。
+  const [data, revResult, engagement] = await Promise.all([
+    getPublishInsights(user.id, { startMs, endMs }, accounts.map((a) => ({ id: a.id, label: a.label }))),
+    // 分潤收益（僅 owner、且有設金鑰時才抓；失敗則優雅降級），用 IIFE 保留自身 try/catch。
+    (async (): Promise<{ revenue: AffiliateRevenue | null; revenueErr: string | null }> => {
+      if (!(user.isOwner && !isDemoMode && env.shopeeAppId && env.shopeeSecret)) {
+        return { revenue: null, revenueErr: null };
+      }
+      try {
+        // 依 sp_<帳號碼> 把分潤歸因到各帳號（共用上方 accounts）
+        const revenue = await getAffiliateRevenue({ startMs, endMs }, accounts.map((a) => ({ id: a.id, label: a.label })));
+        return { revenue, revenueErr: null };
+      } catch (e) {
+        return { revenue: null, revenueErr: e instanceof Error ? e.message : String(e) };
+      }
+    })(),
+    // Threads 貼文互動數據（每人自己的帳號；逐篇查 insights，失敗則優雅降級不擋頁）
+    isDemoMode ? Promise.resolve(null) : getEngagementCached(user.id, 15).catch(() => null)
+  ]);
   const maxDay = Math.max(1, ...data.byDay.map((d) => d.count));
-
-  // 分潤收益（僅 owner、且有設金鑰時才抓；失敗則優雅降級）
-  let revenue: AffiliateRevenue | null = null;
-  let revenueErr: string | null = null;
-  if (user.isOwner && !isDemoMode && env.shopeeAppId && env.shopeeSecret) {
-    try {
-      // 帶入發文帳號清單 → 依 sp_<帳號碼> 把分潤歸因到各帳號
-      const accounts = await listThreadsAccounts(user.id).catch(() => []);
-      revenue = await getAffiliateRevenue({ startMs, endMs }, accounts.map((a) => ({ id: a.id, label: a.label })));
-    } catch (e) {
-      revenueErr = e instanceof Error ? e.message : String(e);
-    }
-  }
-
-  // Threads 貼文互動數據（每人自己的帳號；逐篇查 insights，失敗則優雅降級不擋頁）
-  const engagement = isDemoMode ? null : await getEngagementCached(user.id, 15).catch(() => null);
+  const { revenue, revenueErr } = revResult;
 
   return (
     <div className="space-y-6">

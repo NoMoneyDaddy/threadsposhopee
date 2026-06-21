@@ -70,7 +70,10 @@ export function swapAffiliateLink(text: string | null | undefined, oldLink: stri
   return `${t}\n${sponsorLink}`;
 }
 
-// 該不該把這篇當成贊助文（就地換連結）：啟用、非 owner 帳號、落在冷門時段、今天尚未做過。
+// 該不該把這篇當成贊助文（就地換連結）：
+// - 啟用、非 owner 帳號、今天尚未做過為前提。
+// - 使用者自選一篇（pickDraftId）：只認那一篇；有指定時段（pickHour）則限該時，否則一發即贊助。
+// - 未自選：落在冷門時段的當篇自動成為贊助文。
 export function shouldSponsor(opts: {
   enabled: boolean;
   isOwnerAccount: boolean;
@@ -78,13 +81,68 @@ export function shouldSponsor(opts: {
   offPeakStart: number;
   offPeakEnd: number;
   alreadyDoneToday: boolean;
+  thisDraftId?: string;
+  pickDraftId?: string | null;
+  pickHour?: number | null;
 }): boolean {
-  return (
-    opts.enabled &&
-    !opts.isOwnerAccount &&
-    !opts.alreadyDoneToday &&
-    inOffPeak(opts.hour, opts.offPeakStart, opts.offPeakEnd)
-  );
+  if (!opts.enabled || opts.isOwnerAccount || opts.alreadyDoneToday) return false;
+  if (opts.pickDraftId) {
+    if (opts.thisDraftId !== opts.pickDraftId) return false;
+    return opts.pickHour == null ? true : opts.hour === opts.pickHour;
+  }
+  return inOffPeak(opts.hour, opts.offPeakStart, opts.offPeakEnd);
+}
+
+// ── 使用者自選贊助文（app_state：key=sponsor:pick:<accId>）──────
+export interface SponsorPick {
+  draftId: string;
+  hour: number | null; // 指定發文時段（小時 0–23）；null = 該篇一發即贊助
+}
+
+function pickKey(accountId: string): string {
+  return `sponsor:pick:${accountId}`;
+}
+
+export async function getSponsorPick(accountId: string): Promise<SponsorPick | null> {
+  if (isDemoMode) return null;
+  const sb = getServiceClient()!;
+  const { data } = await sb.from("app_state").select("value").eq("key", pickKey(accountId)).maybeSingle();
+  if (!data?.value) return null;
+  try {
+    return JSON.parse(data.value) as SponsorPick;
+  } catch {
+    return null;
+  }
+}
+
+export async function setSponsorPick(accountId: string, pick: SponsorPick | null): Promise<void> {
+  if (isDemoMode) return;
+  const sb = getServiceClient()!;
+  if (!pick) {
+    await sb.from("app_state").delete().eq("key", pickKey(accountId));
+    return;
+  }
+  await sb
+    .from("app_state")
+    .upsert({ key: pickKey(accountId), value: JSON.stringify(pick), updated_at: new Date().toISOString() }, { onConflict: "key" });
+}
+
+// 批次取多帳號的自選（草稿頁標示用）：回傳 accountId -> draftId。
+export async function getSponsorPickMap(accountIds: string[]): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  if (isDemoMode || accountIds.length === 0) return out;
+  const sb = getServiceClient()!;
+  const { data } = await sb.from("app_state").select("key,value").in("key", accountIds.map(pickKey));
+  for (const row of data ?? []) {
+    try {
+      const pick = JSON.parse(row.value) as SponsorPick;
+      const accId = row.key.slice("sponsor:pick:".length);
+      if (pick?.draftId) out[accId] = pick.draftId;
+    } catch {
+      // skip
+    }
+  }
+  return out;
 }
 
 // ── 每日贊助紀錄（app_state：key=sponsor:rec:<accId>:<date>）──────

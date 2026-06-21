@@ -11,11 +11,15 @@ import { checkThreadsContent, THREADS_MAX_HASHTAGS } from "@/lib/threads-content
 export default function DraftCard({
   draft,
   dupSimilarity,
-  accountLabel
+  accountLabel,
+  sponsorEnabled = false,
+  isSponsorPick = false
 }: {
   draft: Draft;
   dupSimilarity?: number;
   accountLabel?: string;
+  sponsorEnabled?: boolean;
+  isSponsorPick?: boolean;
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -124,11 +128,35 @@ export default function DraftCard({
         })
       : "—";
 
+  async function toggleSponsor() {
+    setBusy("sponsor");
+    setMsg(null);
+    try {
+      const res = await fetch("/api/drafts/action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: draft.id, action: isSponsorPick ? "unset-sponsor" : "set-sponsor" })
+      });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error);
+      router.refresh();
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
   return (
-    <div className="flex flex-col rounded-2xl border bg-surface p-4">
+    <div className={`flex flex-col rounded-2xl border bg-surface p-4 ${isSponsorPick ? "ring-1 ring-brand" : ""}`}>
       <div className="mb-2 flex items-center justify-between gap-2">
         <span className="min-w-0 truncate text-sm font-medium text-ink">{draft.product_name ?? "（未知商品）"}</span>
         <span className="flex shrink-0 items-center gap-1">
+          {isSponsorPick && (
+            <span className="rounded bg-brand/10 px-2 py-0.5 text-xs font-medium text-brand" title="此篇將作為今日贊助文，連結會以平台分潤連結發布">
+              ★ 贊助文
+            </span>
+          )}
           {accountLabel && (
             <span className="max-w-[8rem] truncate rounded bg-brand/10 px-2 py-0.5 text-xs text-brand" title={`發到 ${accountLabel}`}>
               @{accountLabel}
@@ -137,6 +165,19 @@ export default function DraftCard({
           <span className="rounded bg-surface-2 px-2 py-0.5 text-xs text-ink-2">{draft.status}</span>
         </span>
       </div>
+
+      {sponsorEnabled && draft.threads_account_id && (
+        <div className="mb-2 flex items-center gap-2 text-xs text-ink-2">
+          <button
+            onClick={toggleSponsor}
+            disabled={busy === "sponsor"}
+            className="rounded-lg border px-2 py-1 hover:bg-surface-2 disabled:opacity-50"
+          >
+            {isSponsorPick ? "取消今日贊助文" : "設為今日贊助文"}
+          </button>
+          <a href="/sponsored" className="underline hover:text-ink">規則</a>
+        </div>
+      )}
 
       {editing ? (
         <div className="space-y-2">

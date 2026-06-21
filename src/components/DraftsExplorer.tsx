@@ -21,10 +21,12 @@ const STATUS_TABS: { value: string; label: string }[] = [
 // 草稿搜尋／篩選：依狀態分頁 + 關鍵字（商品名／正文）即時過濾。
 export default function DraftsExplorer({
   drafts,
-  accountLabels = {}
+  accountLabels = {},
+  sponsor
 }: {
   drafts: Draft[];
   accountLabels?: Record<string, string>;
+  sponsor?: { enabled: boolean; pickByAccount: Record<string, string> };
 }) {
   const [status, setStatus] = useState("all");
   const [q, setQ] = useState("");
@@ -98,6 +100,12 @@ export default function DraftsExplorer({
             draft={d}
             dupSimilarity={dupMap[d.id] >= DUP_THRESHOLD ? dupMap[d.id] : undefined}
             accountLabel={d.threads_account_id ? accountLabels[d.threads_account_id] : undefined}
+            sponsorEnabled={sponsor?.enabled ?? false}
+            isSponsorPick={
+              Boolean(sponsor?.enabled) &&
+              Boolean(d.threads_account_id) &&
+              sponsor?.pickByAccount[d.threads_account_id as string] === d.id
+            }
           />
         ))}
         {filtered.length === 0 && (

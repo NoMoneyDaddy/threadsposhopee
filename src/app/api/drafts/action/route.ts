@@ -9,6 +9,7 @@ import {
   requeueReply,
   rescheduleDraft
 } from "@/lib/store";
+import { setSponsorPick } from "@/lib/sponsor";
 import { generateCopy } from "@/services/ai/provider";
 import { getCurrentUser } from "@/lib/auth";
 import { apiError } from "@/lib/api-error";
@@ -40,6 +41,20 @@ export async function POST(req: Request) {
   }
   if (action === "approve") {
     await updateDraftStatus(id, "approved");
+    return NextResponse.json({ ok: true });
+  }
+  // 設/取消「今日贊助文」：使用者為該草稿的帳號自選這一篇（可帶指定發文時段 hour）。
+  if (action === "set-sponsor" || action === "unset-sponsor") {
+    if (!draft.threads_account_id) {
+      return NextResponse.json({ ok: false, error: "此草稿尚未綁定發文帳號" }, { status: 400 });
+    }
+    if (action === "unset-sponsor") {
+      await setSponsorPick(draft.threads_account_id, null);
+      return NextResponse.json({ ok: true });
+    }
+    const h = body.hour;
+    const hour = typeof h === "number" && Number.isInteger(h) && h >= 0 && h <= 23 ? h : null;
+    await setSponsorPick(draft.threads_account_id, { draftId: id, hour });
     return NextResponse.json({ ok: true });
   }
   if (action === "delete") {

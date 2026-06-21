@@ -28,9 +28,11 @@ import {
   getSponsorConfig,
   getSponsorRecord,
   setSponsorRecord,
+  getSponsorPick,
   shouldSponsor,
   swapAffiliateLink,
-  taipeiParts
+  taipeiParts,
+  type SponsorPick
 } from "@/lib/sponsor";
 import { resolveSponsorResources, buildSponsorLinkForAccount } from "@/services/sponsor/link";
 import { log } from "@/lib/logger";
@@ -128,6 +130,7 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
   const sponsorTaipei = taipeiParts();
   const sponsorOwnerId = sponsorCfg.enabled && !isDemoMode ? await getOwnerUserId().catch(() => null) : null;
   const sponsorDoneCache: Record<string, boolean> = {}; // accId -> 今天已發贊助文
+  const sponsorPickCache: Record<string, SponsorPick | null> = {}; // accId -> 使用者自選
   // 有商品原始連結＋owner → 整輪取一次資源（金鑰/affiliate_id/自訂 subId＋展開連結），供每帳號即時轉連結。
   const sponsorRes =
     sponsorCfg.enabled && !isDemoMode && sponsorCfg.productUrl && sponsorOwnerId
@@ -232,6 +235,10 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
         sponsorDoneCache[accId] = Boolean(await getSponsorRecord(accId, sponsorTaipei.date).catch(() => null));
       }
       const isOwnerAccount = Boolean(sponsorOwnerId) && draft.owner_id === sponsorOwnerId;
+      if (!(accId in sponsorPickCache)) {
+        sponsorPickCache[accId] = await getSponsorPick(accId).catch(() => null);
+      }
+      const pick = sponsorPickCache[accId];
       if (
         shouldSponsor({
           enabled: sponsorCfg.enabled,
@@ -239,7 +246,10 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
           hour: sponsorTaipei.hour,
           offPeakStart: sponsorCfg.offPeakStart,
           offPeakEnd: sponsorCfg.offPeakEnd,
-          alreadyDoneToday: sponsorDoneCache[accId]
+          alreadyDoneToday: sponsorDoneCache[accId],
+          thisDraftId: draft.id,
+          pickDraftId: pick?.draftId ?? null,
+          pickHour: pick?.hour ?? null
         })
       ) {
         // 每帳號即時轉連結（sp_<帳號碼>）；失敗退回靜態後備連結。

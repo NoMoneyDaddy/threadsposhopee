@@ -1,6 +1,19 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { aggregateItemRevenue, attributeRevenueByAccount } from "./report";
+import { aggregateItemRevenue, attributeRevenueByAccount, parseMoney } from "./report";
+
+test("parseMoney：去千分位逗號正確解析", () => {
+  assert.equal(parseMoney("1,234.50"), 1234.5);
+  assert.equal(parseMoney("1,000,000"), 1000000);
+  assert.equal(parseMoney("99.9"), 99.9);
+});
+
+test("parseMoney：空/壞值回 0", () => {
+  assert.equal(parseMoney(null), 0);
+  assert.equal(parseMoney(undefined), 0);
+  assert.equal(parseMoney(""), 0);
+  assert.equal(parseMoney("abc"), 0);
+});
 
 test("aggregateItemRevenue：依 itemId 加總佣金與筆數", () => {
   const nodes = [

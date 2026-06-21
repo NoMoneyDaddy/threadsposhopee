@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import DraftCard from "@/components/DraftCard";
+import BulkDraftBar from "@/components/BulkDraftBar";
 import type { Draft } from "@/lib/types";
 import { maxSimilarity } from "@/lib/text-similarity";
 
@@ -35,6 +36,25 @@ export default function DraftsExplorer({
 }) {
   const [status, setStatus] = useState("all");
   const [q, setQ] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  const toggleSelect = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  // 草稿更新後（批次/單筆操作）自動清除已非「待審」的選取，避免殘留與其他分頁殘影。
+  useEffect(() => {
+    setSelected((prev) => {
+      if (prev.size === 0) return prev;
+      const next = new Set<string>();
+      for (const d of drafts) if (d.status === "draft" && prev.has(d.id)) next.add(d.id);
+      return prev.size === next.size ? prev : next;
+    });
+  }, [drafts]);
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { all: drafts.length };
@@ -80,6 +100,10 @@ export default function DraftsExplorer({
     });
   }, [drafts, status, q]);
 
+  // 批次選取：只針對目前篩選結果中的「待審」草稿；選取集與實際待審交集，避免狀態已變的殘留。
+  const pendingInView = useMemo(() => filtered.filter((d) => d.status === "draft").map((d) => d.id), [filtered]);
+  const selectedPending = useMemo(() => pendingInView.filter((id) => selected.has(id)), [pendingInView, selected]);
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -105,6 +129,33 @@ export default function DraftsExplorer({
         />
       </div>
 
+      {pendingInView.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-1.5 text-sm text-ink-2">
+            <input
+              type="checkbox"
+              checked={selectedPending.length === pendingInView.length}
+              ref={(el) => {
+                if (el) el.indeterminate = selectedPending.length > 0 && selectedPending.length < pendingInView.length;
+              }}
+              onChange={(e) =>
+                setSelected((prev) => {
+                  // 聯集/差集：只動目前可見的待審，保留其他篩選下既有選取（可分批累積）。
+                  const next = new Set(prev);
+                  if (e.target.checked) pendingInView.forEach((id) => next.add(id));
+                  else pendingInView.forEach((id) => next.delete(id));
+                  return next;
+                })
+              }
+            />
+            全選待審（{pendingInView.length}）
+          </label>
+          {selectedPending.length > 0 && <span className="text-xs text-ink-3">已選 {selectedPending.length} 則</span>}
+        </div>
+      )}
+
+      {selectedPending.length > 0 && <BulkDraftBar draftIds={selectedPending} />}
+
       <div className="grid gap-4 md:grid-cols-2">
         {filtered.map((d) => (
           <DraftCard
@@ -113,6 +164,9 @@ export default function DraftsExplorer({
             dupSimilarity={dupMap[d.id] >= DUP_THRESHOLD ? dupMap[d.id] : undefined}
             accountLabel={d.threads_account_id ? accountLabels[d.threads_account_id] : undefined}
             sponsorEnabled={sponsor?.enabled ?? false}
+            selectable={d.status === "draft"}
+            selected={selected.has(d.id)}
+            onToggleSelect={() => toggleSelect(d.id)}
             isSponsorPick={
               Boolean(sponsor?.enabled) &&
               Boolean(d.threads_account_id) &&

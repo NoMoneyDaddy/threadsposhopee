@@ -15,7 +15,9 @@ export async function register() {
 
   if (process.env.INTERNAL_SCHEDULER !== "true") return;
 
-  const minutes = Math.max(1, Number(process.env.INTERNAL_SCHEDULER_MINUTES || "15"));
+  // parseInt + isFinite：避免非數字 env（如 "abc"）變 NaN 使 setInterval 近乎無延遲狂跑。
+  const parsed = parseInt(process.env.INTERNAL_SCHEDULER_MINUTES || "15", 10);
+  const minutes = Math.max(1, Number.isFinite(parsed) ? parsed : 15);
   const { schedulerTick } = await import("@/services/scheduler/tick");
 
   log.info("內建排程啟動", { everyMinutes: minutes });

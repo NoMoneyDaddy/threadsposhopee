@@ -65,9 +65,19 @@ export async function fetchSafePublicUrl(
   timeoutMs = 8000
 ): Promise<Response> {
   let current = typeof raw === "string" ? raw : raw.href;
+  const startOrigin = new URL(current).origin;
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     assertSafePublicUrl(current); // 每跳驗證（含初始 URL）
-    const res = await fetchWithTimeout(current, { ...init, redirect: "manual" }, timeoutMs);
+    const reqInit: RequestInit = { ...init, redirect: "manual" };
+    // 跨網域時剝除敏感 Header（瀏覽器原生行為）：避免重定向把憑證送往第三方域名。
+    if (init.headers && new URL(current).origin !== startOrigin) {
+      const h = new Headers(init.headers);
+      h.delete("authorization");
+      h.delete("cookie");
+      h.delete("proxy-authorization");
+      reqInit.headers = h;
+    }
+    const res = await fetchWithTimeout(current, reqInit, timeoutMs);
     if (res.status < 300 || res.status >= 400) return res;
     const loc = res.headers.get("location");
     if (!loc) return res; // 3xx 但無導向目標：交回呼叫端判斷

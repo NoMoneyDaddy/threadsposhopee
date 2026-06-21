@@ -107,6 +107,27 @@ test("fetchSafePublicUrl：3xx 無 Location 直接回該回應", async () => {
   );
 });
 
+test("fetchSafePublicUrl：跨網域重定向剝除敏感 Header，同網域保留", async () => {
+  const seen: Record<string, string | null> = {};
+  await withMockFetch(
+    (url, init) => {
+      const auth = new Headers(init.headers).get("authorization");
+      if (url.includes("a.example/start")) {
+        seen.firstHop = auth; // 初始（同網域）應保留
+        return { status: 302, location: "https://b.example/next" };
+      }
+      seen.crossHop = auth; // 跨網域應為 null
+      return { status: 200 };
+    },
+    async () => {
+      const res = await fetchSafePublicUrl("https://a.example/start", { headers: { authorization: "Bearer secret" } });
+      assert.equal(res.status, 200);
+    }
+  );
+  assert.equal(seen.firstHop, "Bearer secret");
+  assert.equal(seen.crossHop, null);
+});
+
 test("fetchSafePublicUrl：重定向過多丟錯", async () => {
   await withMockFetch(
     () => ({ status: 302, location: "https://cdn.shopee.tw/loop" }),

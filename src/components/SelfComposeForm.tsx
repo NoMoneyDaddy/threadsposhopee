@@ -4,14 +4,23 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ThreadsAccount } from "@/lib/types";
 import ThreadsPreview, { CharCount } from "@/components/ThreadsPreview";
+import CloudinaryUpload from "@/components/CloudinaryUpload";
 import { fetchWithTimeout } from "@/lib/http";
 import { parseTaipeiDateTimeLocal } from "@/lib/datetime";
 
 const input = "w-full rounded-xl border px-3 py-2 text-sm";
 const THREADS_LIMIT = 500;
 
-// 自寫一則直推：不靠蝦皮連結／AI，直接打字發到 Threads（可選一張圖或影片網址）。
-export default function SelfComposeForm({ threadsAccounts }: { threadsAccounts: ThreadsAccount[] }) {
+// 自寫一則直推：不靠蝦皮連結／AI，直接打字發到 Threads（可選一張圖或影片網址，或本機上傳）。
+export default function SelfComposeForm({
+  threadsAccounts,
+  cloud = null,
+  preset = null
+}: {
+  threadsAccounts: ThreadsAccount[];
+  cloud?: string | null;
+  preset?: string | null;
+}) {
   const router = useRouter();
   const [mainText, setMainText] = useState("");
   const [replyText, setReplyText] = useState("");
@@ -173,6 +182,12 @@ export default function SelfComposeForm({ threadsAccounts }: { threadsAccounts: 
           <option value="image">圖片</option>
           <option value="video">影片</option>
         </select>
+        <CloudinaryUpload
+          cloud={cloud}
+          preset={preset}
+          onUploaded={(url) => setMediaUrl(url)}
+          onType={(t) => setMediaType(t)}
+        />
       </div>
 
       <ThreadsPreview

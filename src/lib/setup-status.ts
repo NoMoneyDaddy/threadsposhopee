@@ -61,9 +61,9 @@ export async function getSetupSteps(user: AppUser): Promise<SetupStep[]> {
     {
       key: "cloudinary",
       title: "綁定 Cloudinary（媒體）",
-      desc: "素材直傳進你自己的雲端，不耗伺服器流量。",
+      desc: "素材／本機上傳直傳進你自己的雲端，不耗伺服器流量。必綁，無共用後備。",
       done: Boolean(cloud),
-      required: false,
+      required: true,
       href: "/accounts#setup-cloudinary"
     },
     {

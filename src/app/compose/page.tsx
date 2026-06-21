@@ -1,7 +1,7 @@
 import ComposerForm from "@/components/ComposerForm";
 import BatchCompose from "@/components/BatchCompose";
 import SelfComposeForm from "@/components/SelfComposeForm";
-import { listThreadsAccounts } from "@/lib/store";
+import { listThreadsAccounts, getUserCloudinary } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +14,9 @@ export default async function ComposePage() {
     );
   }
   const accounts = await listThreadsAccounts(user.id);
+  // 本機上傳用的 Cloudinary：一律用「使用者自綁的」，無系統 fallback；沒綁則隱藏上傳鈕並導去綁定。
+  const ownCloud = await getUserCloudinary(user.id);
+  const cc = ownCloud?.cloud && ownCloud?.preset ? ownCloud : null;
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
@@ -31,7 +34,7 @@ export default async function ComposePage() {
       <div className="pt-2">
         <h2 className="mb-1 text-lg font-semibold">自寫一則直推</h2>
         <p className="mb-2 text-sm text-ink-2">不靠蝦皮連結，直接打字（可附一張圖／影片網址）發到 Threads。</p>
-        <SelfComposeForm threadsAccounts={accounts} />
+        <SelfComposeForm threadsAccounts={accounts} cloud={cc?.cloud ?? null} preset={cc?.preset ?? null} />
       </div>
 
       <div className="pt-2">

@@ -1,6 +1,7 @@
 // Shopee 分潤「轉換報表」：抓實際成交佣金，做收益儀表板。
 // 用 owner 的環境變數金鑰；沿用既有 HMAC 簽名與帶逾時的 fetch。
 import { callShopeeGql } from "@/services/shopee/gql";
+import { normalizeSubId } from "@/services/shopee/subid";
 import { env } from "@/lib/env";
 import { getCachedJson, setCachedJson } from "@/lib/store";
 
@@ -27,7 +28,33 @@ export interface AffiliateRevenue {
   byItem: { name: string; commission: number; count: number }[];
   byDay: { date: string; commission: number }[];
   bySubId: { subId: string; commission: number; count: number }[];
+  byAccount?: { name: string; commission: number; count: number }[]; // 依 sp_<帳號碼> 歸因到發文帳號（owner 帶 accounts 時才算）
   truncated: boolean; // 是否因頁數上限而截斷
+}
+
+// 純函式：把 subId→收益 對照，依贊助連結的 sp_<帳號前8碼> 標記歸因到各發文帳號；無對應者歸「其他」。
+// utmContent 可能含多個 subId 串接，故以「包含」判定。可測。
+export function attributeRevenueByAccount(
+  subs: { subId: string; commission: number; count: number }[],
+  accounts: { id: string; label: string | null }[]
+): { name: string; commission: number; count: number }[] {
+  // token 與 subId 一律轉小寫比對：utm 可能因平台/手動輸入大小寫不一致，避免漏歸因。
+  const tokens = accounts
+    .map((a) => ({ token: normalizeSubId(`sp_${a.id.slice(0, 8)}`).toLowerCase(), name: a.label || a.id.slice(0, 8) }))
+    .filter((t) => t.token.length > 0);
+  const map = new Map<string, { commission: number; count: number }>();
+  for (const s of subs) {
+    const lower = s.subId.toLowerCase();
+    const hit = tokens.find((t) => lower.includes(t.token));
+    const key = hit ? hit.name : "其他／未對應";
+    const cur = map.get(key) ?? { commission: 0, count: 0 };
+    cur.commission += s.commission;
+    cur.count += s.count;
+    map.set(key, cur);
+  }
+  return [...map.entries()]
+    .map(([name, v]) => ({ name, commission: Math.round(v.commission * 100) / 100, count: v.count }))
+    .sort((a, b) => b.commission - a.commission);
 }
 
 const num = (s: string | null | undefined) => {
@@ -67,7 +94,10 @@ async function fetchConversions(start: number, end: number, maxPages = 10): Prom
 }
 
 // 接受「近 N 天」（數字）或明確時間窗 { startMs, endMs }（自訂區間）。
-export async function getAffiliateRevenue(arg: number | { startMs: number; endMs: number } = 30): Promise<AffiliateRevenue> {
+export async function getAffiliateRevenue(
+  arg: number | { startMs: number; endMs: number } = 30,
+  accounts?: { id: string; label: string | null }[]
+): Promise<AffiliateRevenue> {
   const end = typeof arg === "number" ? Math.floor(Date.now() / 1000) : Math.floor(arg.endMs / 1000);
   const start = typeof arg === "number" ? end - arg * 86400 : Math.floor(arg.startMs / 1000);
   const days = Math.max(1, Math.round((end - start) / 86400));
@@ -119,10 +149,8 @@ export async function getAffiliateRevenue(arg: number | { startMs: number; endMs
     .map(([name, v]) => ({ name, commission: round(v.commission), count: v.count }))
     .sort((a, b) => b.commission - a.commission)
     .slice(0, 10);
-  const topSubs = [...subMap.entries()]
-    .map(([subId, v]) => ({ subId, commission: round(v.commission), count: v.count }))
-    .sort((a, b) => b.commission - a.commission)
-    .slice(0, 10);
+  const allSubs = [...subMap.entries()].map(([subId, v]) => ({ subId, commission: round(v.commission), count: v.count }));
+  const topSubs = [...allSubs].sort((a, b) => b.commission - a.commission).slice(0, 10);
 
   return {
     days,
@@ -132,6 +160,7 @@ export async function getAffiliateRevenue(arg: number | { startMs: number; endMs
     byItem: topItems,
     byDay: [...dayMap.entries()].map(([date, commission]) => ({ date, commission: round(commission) })).sort((a, b) => a.date.localeCompare(b.date)),
     bySubId: topSubs,
+    byAccount: accounts?.length ? attributeRevenueByAccount(allSubs, accounts) : undefined,
     truncated
   };
 }

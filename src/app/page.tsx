@@ -20,7 +20,7 @@ export default async function DashboardPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">儀表板</h1>
-          <p className="text-sm text-ink-2">即時連動各服務，每 20 秒自動更新</p>
+          <p className="text-sm text-ink-2">即時連動各服務，每 30 秒自動更新</p>
         </div>
         <RunPipelineButton />
       </div>

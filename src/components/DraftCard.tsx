@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, memo } from "react";
 import { useRouter } from "next/navigation";
 import type { Draft } from "@/lib/types";
 import { CharCount } from "@/components/ThreadsPreview";
@@ -8,7 +8,9 @@ import ThreadsPreview from "@/components/ThreadsPreview";
 import { normalizeDraftMedia } from "@/lib/media";
 import { checkThreadsContent, THREADS_MAX_HASHTAGS } from "@/lib/threads-content";
 
-export default function DraftCard({
+// memo：草稿列表（最多 100 張）在搜尋/篩選 re-render 時，只重繪 props 變動的卡片。
+// 需搭配 DraftsExplorer 以 useCallback 穩定 onToggleSelect，否則 memo 失效。
+function DraftCard({
   draft,
   dupSimilarity,
   accountLabel,
@@ -25,7 +27,7 @@ export default function DraftCard({
   isSponsorPick?: boolean;
   selectable?: boolean;
   selected?: boolean;
-  onToggleSelect?: () => void;
+  onToggleSelect?: (id: string) => void;
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -161,7 +163,7 @@ export default function DraftCard({
             <input
               type="checkbox"
               checked={selected}
-              onChange={onToggleSelect}
+              onChange={() => onToggleSelect?.(draft.id)}
               aria-label="選取此草稿"
               className="shrink-0"
             />
@@ -455,3 +457,5 @@ export default function DraftCard({
     </div>
   );
 }
+
+export default memo(DraftCard);

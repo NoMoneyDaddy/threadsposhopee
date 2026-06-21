@@ -203,7 +203,8 @@ function PauseToggle({ paused, onDone }: { paused: boolean; onDone: () => void }
   );
 }
 
-const REFRESH_MS = 20000;
+// 30s：/api/dashboard 每次跑 15 條 count 查詢，多開分頁會放大 DB 負載；多數欄位變動不頻繁。
+const REFRESH_MS = 30000;
 
 function Chip({ label, on }: { label: string; on: boolean }) {
   return (

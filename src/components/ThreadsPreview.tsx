@@ -1,6 +1,7 @@
 "use client";
 
 import type { DraftMedia } from "@/lib/types";
+import { cloudinaryThumb } from "@/lib/img";
 
 // Threads 貼文即時預覽（仿 Typefully／Buffer 的所見即所得）。
 // 顯示正文、媒體（單張或多張輪播）、以及留言區（分潤連結），讓使用者發布前先看版面。
@@ -58,7 +59,7 @@ export default function ThreadsPreview({
                   : "max-h-72 w-full rounded-2xl border object-cover";
                 return m.type === "image" ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img key={`${m.url}-${i}`} src={m.url} alt="" className={cls} />
+                  <img key={`${m.url}-${i}`} src={cloudinaryThumb(m.url, 600)} alt="" loading="lazy" className={cls} />
                 ) : (
                   <video key={`${m.url}-${i}`} src={m.url} controls className={cls} />
                 );

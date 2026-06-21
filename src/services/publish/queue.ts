@@ -32,6 +32,7 @@ import {
   swapAffiliateLink,
   taipeiParts
 } from "@/lib/sponsor";
+import { resolveSponsorResources, buildSponsorLinkForAccount } from "@/services/sponsor/link";
 import { log } from "@/lib/logger";
 import { normalizeDraftMedia } from "@/lib/media";
 import { shardOf, circuitOpen, nextPacingSkipReason } from "@/services/publish/cadence";
@@ -127,6 +128,11 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
   const sponsorTaipei = taipeiParts();
   const sponsorOwnerId = sponsorCfg.enabled && !isDemoMode ? await getOwnerUserId().catch(() => null) : null;
   const sponsorDoneCache: Record<string, boolean> = {}; // accId -> 今天已發贊助文
+  // 有商品原始連結＋owner → 整輪取一次資源（金鑰/affiliate_id/自訂 subId＋展開連結），供每帳號即時轉連結。
+  const sponsorRes =
+    sponsorCfg.enabled && !isDemoMode && sponsorCfg.productUrl && sponsorOwnerId
+      ? await resolveSponsorResources(sponsorCfg.productUrl, sponsorOwnerId).catch(() => null)
+      : null;
 
   for (const draft of drafts) {
     // 接近 maxDuration(60s) 上限就停手，避免草稿卡在 publishing 狀態，留待下次排程
@@ -236,9 +242,17 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
           alreadyDoneToday: sponsorDoneCache[accId]
         })
       ) {
-        pubMainText = swapAffiliateLink(draft.main_text, draft.shopee_short_link, sponsorCfg.affiliateLink);
-        pubReplyText = draft.reply_text ? swapAffiliateLink(draft.reply_text, draft.shopee_short_link, sponsorCfg.affiliateLink) : draft.reply_text;
-        sponsorLinkUsed = sponsorCfg.affiliateLink;
+        // 每帳號即時轉連結（sp_<帳號碼>）；失敗退回靜態後備連結。
+        let link: string | null = sponsorCfg.affiliateLink || null;
+        if (sponsorRes) {
+          const perAcct = await buildSponsorLinkForAccount(sponsorRes, accId).catch(() => null);
+          if (perAcct) link = perAcct;
+        }
+        if (link) {
+          pubMainText = swapAffiliateLink(draft.main_text, draft.shopee_short_link, link);
+          pubReplyText = draft.reply_text ? swapAffiliateLink(draft.reply_text, draft.shopee_short_link, link) : draft.reply_text;
+          sponsorLinkUsed = link;
+        }
       }
     }
 

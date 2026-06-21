@@ -5,7 +5,8 @@ import { isDemoMode } from "./env";
 
 export interface SponsorConfig {
   enabled: boolean;
-  affiliateLink: string; // 要暫時替換進待發草稿的「平台」蝦皮分潤連結
+  productUrl: string; // 商品原始連結；系統據此用 owner 金鑰即時轉「每帳號 subId」分潤連結（可追來源）
+  affiliateLink: string; // 後備：靜態分潤短連結（無法每帳號追蹤；productUrl 為空時才用）
   offPeakStart: number; // 冷門時段起（小時 0–23，Asia/Taipei）
   offPeakEnd: number; // 冷門時段迄（小時 0–24）
 }
@@ -13,6 +14,7 @@ export interface SponsorConfig {
 const KEY = "sponsor_config";
 export const DEFAULT_SPONSOR_CONFIG: SponsorConfig = {
   enabled: false,
+  productUrl: "",
   affiliateLink: "",
   offPeakStart: 2,
   offPeakEnd: 5
@@ -149,14 +151,19 @@ export async function listSponsorRecordsToVerify(minAgeMs: number): Promise<Spon
 // 正規化＋驗證輸入（小時界線、連結需為 http(s)）。回傳清理後設定或錯誤訊息。
 export function normalizeSponsorConfig(input: Partial<SponsorConfig>): { ok: true; cfg: SponsorConfig } | { ok: false; error: string } {
   const enabled = Boolean(input.enabled);
+  const productUrl = String(input.productUrl ?? "").trim();
   const affiliateLink = String(input.affiliateLink ?? "").trim();
   const offPeakStart = Number(input.offPeakStart);
   const offPeakEnd = Number(input.offPeakEnd);
-  if (enabled && !/^https?:\/\//i.test(affiliateLink)) {
-    return { ok: false, error: "啟用時必須填入有效的平台分潤連結（http/https）" };
+  const isUrl = (s: string) => /^https?:\/\//i.test(s);
+  if (productUrl && !isUrl(productUrl)) return { ok: false, error: "商品原始連結需為 http/https" };
+  if (affiliateLink && !isUrl(affiliateLink)) return { ok: false, error: "後備分潤連結需為 http/https" };
+  // 啟用時：商品原始連結（可每帳號追蹤，建議）或後備靜態分潤連結，至少要有一個。
+  if (enabled && !productUrl && !affiliateLink) {
+    return { ok: false, error: "啟用時請填商品原始連結（建議）或後備分潤連結，至少一項" };
   }
   if (!Number.isInteger(offPeakStart) || !Number.isInteger(offPeakEnd) || offPeakStart < 0 || offPeakStart > 23 || offPeakEnd < 1 || offPeakEnd > 24 || offPeakStart >= offPeakEnd) {
     return { ok: false, error: "冷門時段需為 0–24 的整數且起 < 迄" };
   }
-  return { ok: true, cfg: { enabled, affiliateLink, offPeakStart, offPeakEnd } };
+  return { ok: true, cfg: { enabled, productUrl, affiliateLink, offPeakStart, offPeakEnd } };
 }

@@ -5,6 +5,7 @@ import { refreshExpiringTokens } from "@/services/threads/refresh";
 import { checkAffiliateLinks } from "@/services/materials/linkcheck";
 import { buildDailyDigest } from "@/services/digest/daily";
 import { buildPeriodicDigest } from "@/services/digest/periodic";
+import type { NotifyType } from "@/lib/notify-prefs";
 import { verifySponsorPosts, ensureSponsorPosts } from "@/services/sponsor/run";
 import { getOwnerUserId } from "@/lib/auth";
 import { env } from "@/lib/env";
@@ -63,51 +64,36 @@ export async function runCronAll(now: Date = new Date()): Promise<Record<string,
       warn: (r) => (r?.revived || r?.dead ? `🔗 連結重產 ${r.revived ?? 0}、仍失效 ${r.dead ?? 0}` : null)
     });
   }
-  // 每日成效摘要（台北 09:00 = UTC 01:00–01:14）。優先個人通道、否則全域 ops。
+  // 摘要共用：取 owner 通道，優先個人（依通知偏好開關）、否則全域 ops；無通道則略過。
+  const runDigest = async (type: NotifyType, build: () => Promise<string | null>) => {
+    const ownerId = await getOwnerUserId();
+    const [personalTg, personalDiscord] = ownerId
+      ? await Promise.all([
+          getUserTelegramChatId(ownerId).catch(() => null),
+          getUserDiscordWebhook(ownerId).catch(() => null)
+        ])
+      : [null, null];
+    const personalSink = Boolean((personalTg && env.telegramBotToken) || personalDiscord);
+    const globalSink = Boolean(env.telegramBotToken && env.telegramChatId);
+    if (!personalSink && !globalSink) return { sent: false };
+    const msg = await build();
+    if (!msg) return { sent: false };
+    if (personalSink) await sendUserAlert(ownerId, msg, type);
+    else await sendAlert(msg);
+    return { sent: true, via: personalSink ? "personal" : "global" };
+  };
+
+  // 每日成效摘要（台北 09:00 = UTC 01:00–01:14）。
   if (h === 1 && min < 15) {
-    steps.push({
-      key: "dailyDigest",
-      run: async () => {
-        const ownerId = await getOwnerUserId();
-        const [personalTg, personalDiscord] = ownerId
-          ? await Promise.all([
-              getUserTelegramChatId(ownerId).catch(() => null),
-              getUserDiscordWebhook(ownerId).catch(() => null)
-            ])
-          : [null, null];
-        const personalSink = Boolean((personalTg && env.telegramBotToken) || personalDiscord);
-        const globalSink = Boolean(env.telegramBotToken && env.telegramChatId);
-        if (!personalSink && !globalSink) return { sent: false };
-        const msg = await buildDailyDigest();
-        if (!msg) return { sent: false };
-        if (personalSink) await sendUserAlert(ownerId, msg, "daily_digest");
-        else await sendAlert(msg);
-        return { sent: true, via: personalSink ? "personal" : "global" };
-      }
-    });
+    steps.push({ key: "dailyDigest", run: () => runDigest("daily_digest", buildDailyDigest) });
   }
   // 每週績效摘要（每週一台北 10:00 = UTC 02:00–02:14）。
   if (dow === 1 && h === 2 && min < 15) {
-    steps.push({
-      key: "weeklyDigest",
-      run: async () => {
-        const ownerId = await getOwnerUserId();
-        const [personalTg, personalDiscord] = ownerId
-          ? await Promise.all([
-              getUserTelegramChatId(ownerId).catch(() => null),
-              getUserDiscordWebhook(ownerId).catch(() => null)
-            ])
-          : [null, null];
-        const personalSink = Boolean((personalTg && env.telegramBotToken) || personalDiscord);
-        const globalSink = Boolean(env.telegramBotToken && env.telegramChatId);
-        if (!personalSink && !globalSink) return { sent: false };
-        const msg = await buildPeriodicDigest("本週", 7);
-        if (!msg) return { sent: false };
-        if (personalSink) await sendUserAlert(ownerId, msg, "weekly_digest");
-        else await sendAlert(msg);
-        return { sent: true, via: personalSink ? "personal" : "global" };
-      }
-    });
+    steps.push({ key: "weeklyDigest", run: () => runDigest("weekly_digest", () => buildPeriodicDigest("本週", 7)) });
+  }
+  // 每月績效摘要（每月 1 日台北 10:30 = UTC 02:30–02:44）。
+  if (now.getUTCDate() === 1 && h === 2 && min >= 30 && min < 45) {
+    steps.push({ key: "monthlyDigest", run: () => runDigest("monthly_digest", () => buildPeriodicDigest("本月", 30)) });
   }
 
   for (const s of steps) {

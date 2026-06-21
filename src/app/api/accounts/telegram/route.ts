@@ -34,7 +34,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "系統未設定 Telegram bot，請聯絡管理員" }, { status: 400 });
   }
   // 先發測試訊息：成功才綁定，避免存到「機器人無法送達」的 chat（使用者需先對 bot 按 Start）。
-  const tested = await sendTelegram(env.telegramBotToken, chatId, "✅ ThreadsPoShopee 個人通知已連結，之後重要提醒會送到這裡。");
+  const tested = await sendTelegram(env.telegramBotToken, chatId, "✅ IwantPo 個人通知已連結，之後重要提醒會送到這裡。");
   if (!tested) {
     return NextResponse.json(
       { ok: false, error: "測試訊息送不出去：請先在 Telegram 對本 bot 按 /start，並確認 chat_id 正確" },

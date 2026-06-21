@@ -35,7 +35,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "請貼上 Discord webhook 連結（https://discord.com/api/webhooks/...）" }, { status: 400 });
   }
   // 先發測試訊息：成功才綁定，避免存到無效 webhook。
-  const tested = await sendDiscord(url, "✅ ThreadsPoShopee 個人通知已連結到此 Discord 頻道。");
+  const tested = await sendDiscord(url, "✅ IwantPo 個人通知已連結到此 Discord 頻道。");
   if (!tested) {
     return NextResponse.json({ ok: false, error: "測試訊息送不出去：請確認 webhook 連結正確且未被刪除" }, { status: 400 });
   }

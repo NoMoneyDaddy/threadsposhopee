@@ -31,11 +31,13 @@
 ## 架構速覽
 
 - **Next.js 14 App Router + Supabase**（Postgres + Auth + RLS）。Demo 模式（未設金鑰）用 `src/fixtures` 跑。
-- 兩個獨立子系統：
+- 子系統（皆獨立、可併用）：
   - **爬蟲**（owner 限定）：owner 綁自己的 Apify → 監看來源 → AI 文案 → 草稿（**一律待人工核准**）。
   - **發文**：各自 Threads 帳號 → 只發**核准過**的草稿，依防封節奏（間隔＋隨機抖動／每日上限／批次）。留言（串文 2/2 分潤連結）可延遲補發（保底＋抖動＋逐則覆寫）。
+  - **AI 代理人**（`src/services/ai/agent-run.ts`）：人格×領域（`src/lib/ai-domains.ts`，含自訂主題）→ 抓當日新聞（Google News RSS／未來 AI 搜尋）→ 去重（來源 hash＋標題 jaccard）→ 依人格用 owner Gemini 改寫 → 草稿（待審）。表：`ai_agents`／`ai_agent_seen`；接 cron（每代理人每日約一次）。
+  - **go2read 中轉導流**（`src/app/r/[code]`、`src/lib/redirect-store.ts`）：自有短連結＋揭露式中轉頁，「繼續」一次點擊開分潤＋去來源（分潤只在真實點擊觸發，**不做 cookie stuffing**）。短網域（`NEXT_PUBLIC_SHORT_DOMAIN`，如 go2read.link）由 middleware host gating 限定只服務 `/r/*`，其餘 404、不外露主站。草稿可一鍵套短連結（drafts/action `shorten`）。
 - 憑證自綁（加密存 `profiles`／各帳號表）：Apify、Shopee、Gemini、Threads OAuth、Cloudinary（各人素材進自己雲端）。
-- 排程：一條總排程 `/api/cron/all`（爬取＋發文＋每日展期 token＋每週健檢連結）。量大時發文可分片並行：多條 `/api/cron/publish?shards=N&shard=i`（同帳號穩定落同片，全域與分片擇一）。
+- 排程：一條總排程 `/api/cron/all`（爬取＋發文＋贊助補發/驗證＋AI 代理人＋每日展期 token＋每週健檢連結）。量大時發文可分片並行：多條 `/api/cron/publish?shards=N&shard=i`（同帳號穩定落同片，全域與分片擇一）。
 - 資料層集中在 `src/lib/store.ts`（service-role + 以 `owner_id` 應用層隔離；demo 走記憶體）。
 - 時區一律 `Asia/Taipei`。外部 fetch 一律走 `fetchWithTimeout`，URL 先過 `assertSafePublicUrl`（SSRF）。
 
@@ -44,5 +46,6 @@
 - 多租戶：所有使用者資料函式都要吃 `ownerId` 並過濾。**含發文憑證**：`getThreadsCredentials(id, ownerId)` 必帶 owner 過濾（service-role 繞 RLS，只用 id 查＝跨租戶越權）；建草稿/發文前先 `userOwnsThreadsAccount` 驗證帳號歸屬。
 - 佇列時段唯一性靠 migration 0008 索引 + `withNextSlot` 重試。
 - 發文佇列用 `app_state` 分布式鎖（`acquirePublishLock`/`releasePublishLock`）序列化，避免 cron 與手動觸發同跑而繞過防封間隔。
-- 遷移檔依序累加（目前到 `supabase/migrations/0019_*`）。
+- 遷移檔依序累加（目前到 `supabase/migrations/0028_*`）。檔案多為冪等（`if not exists`／`add column if not exists`／`create or replace`），唯 0001/0003 的 `create policy` 非冪等（勿重跑）。
 - 延遲留言用 `reply_status`（pending→publishing-reply→published/failed）原子認領＋`reclaimStaleReplies`（以 `updated_at` 判逾期）防中斷重複補。
+- 部署設定：go2read 中轉需 Zeabur 加網域 `go2read.link`（與主站 `iwantpo.nomoneydaddy.app` 並存於同一服務）＋環境變數 `NEXT_PUBLIC_SHORT_DOMAIN=https://go2read.link`（同時做 host gating 與短連結網域）。AI 代理人需各使用者自綁 Gemini 金鑰。

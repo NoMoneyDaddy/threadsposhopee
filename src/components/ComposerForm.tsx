@@ -212,6 +212,7 @@ export default function ComposerForm({ threadsAccounts }: { threadsAccounts: Thr
           <div className="flex flex-wrap items-center gap-2">
             <select
               className="rounded-xl border px-2 py-2 text-sm"
+              aria-label="發文帳號"
               value={accountId || threadsAccounts[0]?.id || ""}
               onChange={(e) => setAccountId(e.target.value)}
             >
@@ -228,6 +229,7 @@ export default function ComposerForm({ threadsAccounts }: { threadsAccounts: Thr
               value={scheduledAt}
               onChange={(e) => setScheduledAt(e.target.value)}
               title="排程時間（選「排程發布」時使用）"
+              aria-label="排程時間"
             />
           </div>
 

@@ -64,7 +64,7 @@ export default function BatchCompose({ threadsAccounts }: { threadsAccounts: Thr
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <select className="rounded-xl border px-2 py-2 text-sm" value={accountId || threadsAccounts[0]?.id || ""} onChange={(e) => setAccountId(e.target.value)}>
+        <select aria-label="發文帳號" className="rounded-xl border px-2 py-2 text-sm" value={accountId || threadsAccounts[0]?.id || ""} onChange={(e) => setAccountId(e.target.value)}>
           {threadsAccounts.length === 0 && <option value="">（尚無發文帳號）</option>}
           {threadsAccounts.map((a) => (
             <option key={a.id} value={a.id}>

@@ -15,7 +15,9 @@ const PUBLIC_PREFIXES = [
   "/privacy",
   "/terms",
   "/data-deletion",
-  "/sponsored"
+  "/sponsored",
+  "/r/", // go2read 中轉頁（訪客點短連結，無登入）
+  "/api/redirect/hit" // 中轉頁「繼續」計數 beacon（公開）
 ];
 
 export async function middleware(req: NextRequest) {

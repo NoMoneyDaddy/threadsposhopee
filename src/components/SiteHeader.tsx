@@ -11,6 +11,7 @@ const NAV: NavItem[] = [
   { href: "/compose", label: "發文" },
   { href: "/drafts", label: "草稿" },
   { href: "/insights", label: "成效" },
+  { href: "/links", label: "短連結" },
   { href: "/sources", label: "自動抓文" },
   { href: "/accounts", label: "帳號管理" }
 ];

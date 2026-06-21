@@ -19,13 +19,13 @@ export function accountHealth(
     return {
       label: acc.label,
       level: "error",
-      summary: acc.status === "error" ? "token 異常（展期失敗），已停止發文" : "token 已過期，需重新授權"
+      summary: acc.status === "error" ? "連線異常（更新失敗），已停止發文" : "授權已過期，需重新連結"
     };
   }
   if (acc.status === "paused") return { label: acc.label, level: "warn", summary: "已暫停" };
-  if (tok.level === "soon") return { label: acc.label, level: "warn", summary: `token ${tok.daysLeft} 天後到期` };
-  if (tok.level === "unknown") return { label: acc.label, level: "warn", summary: "無 token 到期資訊" };
-  return { label: acc.label, level: "ok", summary: `正常（token 約 ${tok.daysLeft} 天）` };
+  if (tok.level === "soon") return { label: acc.label, level: "warn", summary: `授權 ${tok.daysLeft} 天後到期` };
+  if (tok.level === "unknown") return { label: acc.label, level: "warn", summary: "無授權到期資訊" };
+  return { label: acc.label, level: "ok", summary: `正常（授權約剩 ${tok.daysLeft} 天）` };
 }
 
 // 排序：問題優先（error → warn → ok），同級維持原序，方便操作者先看要處理的。

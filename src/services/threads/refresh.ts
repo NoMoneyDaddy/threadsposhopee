@@ -44,7 +44,7 @@ export async function refreshExpiringTokens(): Promise<{
       );
       await sendUserAlert(
         acc.ownerId,
-        `🔑 你的 Threads 帳號「${acc.label}」token 已失效，已暫停發文。請到帳號管理重新用 Threads 連結授權。`,
+        `🔑 你的 Threads 帳號「${acc.label}」連線授權已失效，已暫停發文。請到帳號管理重新連結 Threads。`,
         "token_expiring"
       ).catch(() => {});
       return { label: acc.label, ok: false as const, error };

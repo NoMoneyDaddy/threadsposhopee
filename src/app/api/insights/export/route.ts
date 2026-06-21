@@ -8,10 +8,15 @@ import { env, isDemoMode } from "@/lib/env";
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
-// CSV 欄位逸出：含逗號/引號/換行則用雙引號包起並把內部引號加倍。
+// CSV 欄位逸出：含逗號/引號/換行（含 \r）則用雙引號包起並把內部引號加倍。
 function cell(v: string | number): string {
   const s = String(v);
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+// 台北時區日期（YYYY-MM-DD）。en-CA 輸出 ISO 形式，避免用 UTC 造成跨日偏差。
+function taipeiDate(ms: number): string {
+  return new Date(ms).toLocaleDateString("en-CA", { timeZone: "Asia/Taipei" });
 }
 function rows(list: { name?: string; date?: string; count?: number; commission?: number }[], cols: string[]): string {
   return list
@@ -67,9 +72,9 @@ export async function GET(req: Request) {
       }
     }
 
-    // 前置 BOM 讓 Excel 正確辨識 UTF-8 中文。
-    const csv = "﻿" + sections.join("\n") + "\n";
-    const fname = `insights_${new Date(startMs).toISOString().slice(0, 10)}_${new Date(endMs).toISOString().slice(0, 10)}.csv`;
+    // 前置 BOM 讓 Excel 正確辨識 UTF-8 中文；用顯式 ﻿ 轉義避免被格式化工具吃掉。
+    const csv = "\ufeff" + sections.join("\n") + "\n";
+    const fname = `insights_${taipeiDate(startMs)}_${taipeiDate(endMs)}.csv`;
     return new Response(csv, {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",

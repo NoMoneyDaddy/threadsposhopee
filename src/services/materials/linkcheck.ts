@@ -2,9 +2,8 @@
 // ponytail: 只在明確失效時標 invalid，避免誤判白白重燒 token。
 // 上限：蝦皮「商品下架」有時仍回 200 導向其他頁，這種軟失效抓不到；
 //       升級路徑為改用 Shopee productOfferV2 重查商品是否存在。
-import { fetchWithTimeout } from "@/lib/http";
 import { log } from "@/lib/logger";
-import { assertSafePublicUrl } from "@/lib/url-guard";
+import { fetchSafePublicUrl } from "@/lib/url-guard";
 import { listMaterialsToCheck, setAffiliateChecked, reviveAffiliateLink, getAutoReviveLinks, type MaterialToCheck } from "@/lib/store";
 import { sendUserAlert } from "@/lib/notify";
 import { regenerateAffiliateLink } from "./regen";
@@ -12,11 +11,11 @@ import { regenerateAffiliateLink } from "./regen";
 // 回傳 true 代表「明確失效」；其餘狀況（200/3xx/403/逾時/網路錯誤）一律視為未知 → 不標失效。
 async function isLinkDead(link: string): Promise<boolean> {
   try {
-    assertSafePublicUrl(link);
-    const res = await fetchWithTimeout(link, { method: "GET", redirect: "follow" }, 8000);
+    // 逐跳驗證的安全 fetch：堵住短連結 302 導向內網的 SSRF。3xx 已被視為「未失效」處理。
+    const res = await fetchSafePublicUrl(link, { method: "GET" }, 8000);
     return res.status === 404 || res.status === 410;
   } catch {
-    return false; // 網路錯誤/逾時 → 未知，不冤枉好連結
+    return false; // 網路錯誤/逾時/重定向過多 → 未知，不冤枉好連結
   }
 }
 

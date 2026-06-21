@@ -1,7 +1,11 @@
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
+import { Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { isDemoMode } from "@/lib/env";
+
+// Display 字體（標題與數字）：幾何 grotesk 給控制台「數據感」記憶點；中文由 CSS 字體堆疊 fallback。
+const display = Space_Grotesk({ subsets: ["latin"], weight: ["500", "700"], variable: "--font-display", display: "swap" });
 import { getCurrentUser } from "@/lib/auth";
 import SiteHeader from "@/components/SiteHeader";
 import PwaRegister from "@/components/PwaRegister";
@@ -26,7 +30,7 @@ export const viewport: Viewport = {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
   return (
-    <html lang="zh-Hant">
+    <html lang="zh-Hant" className={display.variable}>
       <body>
         {ADSENSE_CLIENT && (
           <Script

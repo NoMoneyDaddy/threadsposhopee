@@ -20,6 +20,7 @@
   --border-strong: 212 212 216; /* #d4d4d8 輸入框/明顯邊 */
   --brand: 99 102 241; /* #6366f1 靛藍（中性自有品牌色，不與任何平台聯想） */
   --brand-press: 79 70 229; /* #4f46e5 */
+  --shopee: 238 77 45; /* #ee4d2d 蝦皮橘：僅用於 signature「分潤線」漸層點綴 */
   --success: 22 163 74;
   --warn: 217 119 6;
   --danger: 220 38 38;
@@ -41,6 +42,7 @@
   --border-strong: 63 63 70;
   --brand: 129 140 248; /* #818cf8 靛藍在深底提亮 */
   --brand-press: 99 102 241;
+  --shopee: 251 113 80; /* 深底提亮的蝦皮橘 */
   --success: 34 197 94;
   --warn: 245 158 11;
   --danger: 248 113 113;
@@ -63,6 +65,10 @@
   h1, h2, h3, h4 {
     @apply tracking-tight text-ink;
     letter-spacing: -0.018em;
+    /* display 字體領頭、CJK 與系統字接續 fallback（標題即個性） */
+    font-family:
+      var(--font-display), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+      "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
   }
   /* 全站可見鍵盤焦點（無障礙：ui-ux-pro-max §1） */
   :focus-visible {
@@ -111,6 +117,25 @@
            focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30;
   }
   .label { @apply mb-1.5 block text-sm font-medium text-ink-2; }
+
+  /* signature「分潤線」：蝦皮橘 → 品牌靛 漸層，串起 Shopee × 自有品牌。克制使用。 */
+  .accent-line {
+    background-image: linear-gradient(90deg, rgb(var(--shopee)), rgb(var(--brand)));
+  }
+  /* 區段標題：左側一道短「分潤線」做結構標記（frontend-design：結構即語意，非裝飾） */
+  .section-title {
+    @apply relative pl-3 text-lg font-bold tracking-tight text-ink;
+  }
+  .section-title::before {
+    content: "";
+    @apply accent-line absolute left-0 top-1/2 h-[1.05em] w-1 -translate-y-1/2 rounded-full;
+  }
+  /* display 字體 + 等寬數字：給儀表板大數據用 */
+  .stat-num {
+    font-family: var(--font-display), ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+    @apply font-bold tracking-tight;
+  }
 
   /* 標籤徽章 */
   .badge { @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium; }

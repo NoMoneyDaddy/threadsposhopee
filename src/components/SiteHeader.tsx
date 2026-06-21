@@ -10,8 +10,6 @@ const NAV: NavItem[] = [
   { href: "/", label: "儀表板" },
   { href: "/compose", label: "發文" },
   { href: "/drafts", label: "草稿" },
-  { href: "/calendar", label: "行事曆" },
-  { href: "/materials", label: "素材" },
   { href: "/insights", label: "成效" },
   { href: "/sources", label: "自動抓文" },
   { href: "/accounts", label: "帳號管理" }

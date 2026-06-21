@@ -127,6 +127,8 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
   // 商品冷卻：記住本輪已發過的商品（跨帳號），避免同輪／DB 尚未可見時重複放行。
   const cooldownHours = env.productCooldownHours;
   const publishedProductsThisRun = new Set<string>();
+  // 本輪 DB 冷卻查詢結果快取（owner|url → 是否冷卻中），避免同商品多草稿時每篇都打一次 DB（N+1）。
+  const productCooldownCache = new Map<string, boolean>();
 
   // 贊助文章（功能 B）：冷門時段把非 owner 帳號的待發草稿連結就地換成平台連結（DB 原文不動＝發後還原）。
   const sponsorCfg = await getSponsorConfig();
@@ -216,10 +218,14 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
     // 不為一個 default-off 的防刷軟限制引入跨片分布式保留的複雜度。
     const cleanUrl = draft.clean_product_url;
     if (cooldownHours > 0 && cleanUrl) {
-      const sinceIso = new Date(Date.now() - cooldownHours * 3600_000).toISOString();
-      const onCooldown =
-        publishedProductsThisRun.has(cleanUrl) ||
-        (await wasProductPublishedSince(draft.owner_id ?? "", cleanUrl, sinceIso).catch(() => false));
+      const cacheKey = `${draft.owner_id ?? ""}|${cleanUrl}`;
+      let dbCooldown = productCooldownCache.get(cacheKey);
+      if (dbCooldown === undefined) {
+        const sinceIso = new Date(Date.now() - cooldownHours * 3600_000).toISOString();
+        dbCooldown = await wasProductPublishedSince(draft.owner_id ?? "", cleanUrl, sinceIso).catch(() => false);
+        productCooldownCache.set(cacheKey, dbCooldown);
+      }
+      const onCooldown = publishedProductsThisRun.has(cleanUrl) || dbCooldown;
       if (onCooldown) {
         result.skipped.push({ id: draft.id, reason: `商品冷卻中（${cooldownHours}h 內已發過）` });
         continue;

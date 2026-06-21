@@ -4,8 +4,18 @@ import { NextResponse, type NextRequest } from "next/server";
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 
 // 全站登入保護：未登入一律導去 /login。
-// 例外：/login、/api/cron*（由 CRON_SECRET 保護）、靜態資源。
-const PUBLIC_PREFIXES = ["/login", "/api/cron", "/auth"];
+// 例外：登入/OAuth、cron（CRON_SECRET 保護）、Meta 回呼（由 signed_request 驗證，無 session）、
+// 公開法務／資料刪除頁（供平台審核與使用者無登入檢視）、靜態資源。
+const PUBLIC_PREFIXES = [
+  "/login",
+  "/api/cron",
+  "/auth",
+  "/api/auth/threads/deauthorize",
+  "/api/auth/threads/data-deletion",
+  "/privacy",
+  "/terms",
+  "/data-deletion"
+];
 
 export async function middleware(req: NextRequest) {
   const url = req.nextUrl;

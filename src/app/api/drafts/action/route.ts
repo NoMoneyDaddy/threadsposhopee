@@ -10,6 +10,8 @@ import {
   rescheduleDraft
 } from "@/lib/store";
 import { setSponsorPick } from "@/lib/sponsor";
+import { createRedirectLink } from "@/lib/redirect-store";
+import { extractHttpUrls, replaceUrls } from "@/lib/linkify";
 import { generateCopy } from "@/services/ai/provider";
 import { getCurrentUser } from "@/lib/auth";
 import { apiError } from "@/lib/api-error";
@@ -68,6 +70,32 @@ export async function POST(req: Request) {
     });
     if (!updated) return NextResponse.json({ ok: false, error: "更新草稿失敗" }, { status: 400 });
     return NextResponse.json({ ok: true, draft: updated });
+  }
+  if (action === "shorten") {
+    // 一鍵套轉址：把草稿內連結轉成 go2read 短連結（中轉頁可附分潤）。
+    const shortBase = process.env.NEXT_PUBLIC_SHORT_DOMAIN || new URL(req.url).origin;
+    const urls = [...new Set([...extractHttpUrls(draft.main_text), ...extractHttpUrls(draft.reply_text)])]
+      // 跳過已是本短連結者，避免重複轉址
+      .filter((u) => !u.includes(`${shortBase}/r/`) && !u.includes("/r/"));
+    if (urls.length === 0) return NextResponse.json({ ok: false, error: "草稿內沒有可轉換的連結" }, { status: 200 });
+
+    const map: Record<string, string> = {};
+    for (const url of urls) {
+      try {
+        const code = await createRedirectLink(user.id, { sourceUrl: url });
+        map[url] = `${shortBase}/r/${code}`;
+      } catch {
+        // 單一 URL 不合法（SSRF/協定）→ 略過，不擋其他
+      }
+    }
+    if (Object.keys(map).length === 0) return NextResponse.json({ ok: false, error: "連結無法轉換" }, { status: 200 });
+
+    const updated = await updateDraft(id, user.id, {
+      main_text: draft.main_text ? replaceUrls(draft.main_text, map) : draft.main_text,
+      reply_text: draft.reply_text ? replaceUrls(draft.reply_text, map) : draft.reply_text
+    });
+    if (!updated) return NextResponse.json({ ok: false, error: "更新草稿失敗" }, { status: 400 });
+    return NextResponse.json({ ok: true, draft: updated, shortened: Object.keys(map).length });
   }
   if (action === "regenerate") {
     try {

@@ -22,6 +22,7 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
   const router = useRouter();
   const [name, setName] = useState("");
   const [domain, setDomain] = useState(AI_DOMAINS[0].id);
+  const [searchQuery, setSearchQuery] = useState("");
   const [tone, setTone] = useState("");
   const [accountId, setAccountId] = useState("");
   const [useRedirect, setUseRedirect] = useState(false);
@@ -45,6 +46,7 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
       const r = await api("/api/agents", "POST", {
         name,
         domain,
+        search_query: searchQuery,
         tone,
         threads_account_id: accountId || null,
         use_redirect: useRedirect
@@ -52,6 +54,7 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
       if (!r.ok) throw new Error(r.error);
       setName("");
       setTone("");
+      setSearchQuery("");
       router.refresh();
     } catch (e) {
       setMsg(e instanceof Error ? e.message : String(e));
@@ -102,6 +105,12 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
             </select>
           </div>
         </div>
+        {domain === "custom" && (
+          <div>
+            <label className="label" htmlFor="ag-q">自訂主題關鍵字（必填）</label>
+            <input id="ag-q" className="input" required value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="例：露營 裝備、植物 園藝" />
+          </div>
+        )}
         <div>
           <label className="label" htmlFor="ag-tone">口吻/風格（選填）</label>
           <input id="ag-tone" className="input" value={tone} onChange={(e) => setTone(e.target.value)} placeholder="理性、愛吐槽、用比喻" />

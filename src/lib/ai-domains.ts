@@ -28,8 +28,13 @@ export const AI_DOMAINS: AiDomain[] = [
   { id: "health", label: "健康", keyword: "健康 養生", sensitive: true },
   { id: "world", label: "國際", keyword: "國際 新聞", sensitive: true },
   { id: "auto", label: "汽車3C", keyword: "汽車 車訊" },
+  { id: "appliance", label: "家電", keyword: "家電 開箱 評測" },
+  { id: "startup", label: "創業", keyword: "創業 新創 商業模式" },
+  { id: "parenting", label: "母嬰", keyword: "母嬰 育兒 親子" },
   { id: "pet", label: "寵物", keyword: "寵物 毛小孩" },
-  { id: "horoscope", label: "星座命理", keyword: "星座 運勢" }
+  { id: "horoscope", label: "星座命理", keyword: "星座 運勢" },
+  // 自訂：keyword 留空，改用 agent.search_query 組查詢
+  { id: "custom", label: "自訂主題", keyword: "" }
 ];
 
 export function getAiDomain(id: string): AiDomain | undefined {

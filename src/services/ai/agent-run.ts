@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { geminiText } from "@/services/ai/gemini";
 import { fetchRssItems, type RssItem } from "@/services/ai/rss";
 import { getGeminiKey } from "@/lib/credentials";
-import { getAiDomain, defaultFeedsForDomain } from "@/lib/ai-domains";
+import { getAiDomain, defaultFeedsForDomain, googleNewsRss } from "@/lib/ai-domains";
 import { maxSimilarity } from "@/lib/text-similarity";
 import { createDraft } from "@/lib/drafts-store";
 import { userOwnsThreadsAccount } from "@/lib/store";
@@ -55,7 +55,9 @@ export function buildAgentPrompt(agent: AiAgent, item: { title: string; descript
 
 // 抓來源項目（目前支援 rss；空 feeds 用領域預設 Google News RSS）。
 async function fetchItems(agent: AiAgent): Promise<RssItem[]> {
-  const feeds = agent.rss_feeds.length ? agent.rss_feeds : defaultFeedsForDomain(agent.domain);
+  let feeds = agent.rss_feeds.length ? agent.rss_feeds : defaultFeedsForDomain(agent.domain);
+  // 自訂主題（或領域無預設）：用 search_query 組 Google News RSS。
+  if (!feeds.length && agent.search_query.trim()) feeds = [googleNewsRss(agent.search_query.trim())];
   const all: RssItem[] = [];
   for (const f of feeds) {
     all.push(...(await fetchRssItems(f)));

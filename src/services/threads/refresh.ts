@@ -27,7 +27,7 @@ export async function refreshExpiringTokens(): Promise<{
             ? expiresInSec
             : 60 * 24 * 60 * 60;
         const expiresAt = new Date(Date.now() + seconds * 1000).toISOString();
-        await updateThreadsToken(acc.id, accessToken, expiresAt);
+        await updateThreadsToken(acc.id, accessToken, expiresAt, acc.ownerId);
         return { label: acc.label, ok: true as const };
       } catch (e) {
         const error = e instanceof Error ? e.message : String(e);
@@ -39,7 +39,7 @@ export async function refreshExpiringTokens(): Promise<{
           return { label: acc.label, ok: false as const, error };
         }
         // token 確定失效：標 error（停止排程）＋通知擁有者重新授權。
-        await markThreadsAccountError(acc.id).catch((me) =>
+        await markThreadsAccountError(acc.id, acc.ownerId).catch((me) =>
           log.warn("標記 Threads 帳號 error 失敗", { accountId: acc.id, accountLabel: acc.label, err: me })
         );
         await sendUserAlert(

@@ -375,19 +375,29 @@ export async function listThreadsTokensToRefresh(
 }
 
 // 更新某帳號的長期 token + 到期日（展期後寫回，加密存放）。
-export async function updateThreadsToken(id: string, accessToken: string, expiresAt: string): Promise<void> {
+// ownerId 有值時一併過濾（縱深防禦：service-role 繞 RLS，全程帶 owner 較安全）。
+export async function updateThreadsToken(
+  id: string,
+  accessToken: string,
+  expiresAt: string,
+  ownerId?: string | null
+): Promise<void> {
   if (isDemoMode) return;
   const sb = getServiceClient()!;
-  const { error } = await sb
+  let q = sb
     .from("threads_accounts")
     .update({ access_token_enc: encrypt(accessToken), token_expires_at: expiresAt, status: "active" })
     .eq("id", id);
+  if (ownerId) q = q.eq("owner_id", ownerId);
+  const { error } = await q;
   if (error) throw error;
 }
 
 // 展期失敗時標記帳號為 error，讓前端看得到、停止排程它。
-export async function markThreadsAccountError(id: string): Promise<void> {
+export async function markThreadsAccountError(id: string, ownerId?: string | null): Promise<void> {
   if (isDemoMode) return;
   const sb = getServiceClient()!;
-  await sb.from("threads_accounts").update({ status: "error" }).eq("id", id);
+  let q = sb.from("threads_accounts").update({ status: "error" }).eq("id", id);
+  if (ownerId) q = q.eq("owner_id", ownerId);
+  await q;
 }

@@ -27,8 +27,8 @@ export async function uploadToCloudinary(
   // 外部 fetch 前一律過 SSRF 守衛（即使 endpoint 為固定常數，維持全站一致約定）。
   const res = await fetchWithRetry(assertSafePublicUrl(endpoint).href, { method: "POST", body: form }, 20000);
   if (!res.ok) {
-    // 上游回應本文可能含帳號細節：只進 log，對外訊息僅保留狀態碼避免洩漏。
-    log.error("Cloudinary 上傳失敗", { status: res.status, body: await res.text() });
+    // 上游回應本文可能含帳號細節：只進 log（截斷 500 字），對外僅保留狀態碼避免洩漏。
+    log.error("Cloudinary 上傳失敗", { status: res.status, body: (await res.text()).slice(0, 500) });
     throw new Error(`Cloudinary 上傳失敗（${res.status}）`);
   }
   const json = await res.json();

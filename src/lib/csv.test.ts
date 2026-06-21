@@ -15,6 +15,18 @@ test("csvCell：含逗號/引號/換行需包引號並把引號加倍", () => {
   assert.equal(csvCell("a\r\nb"), '"a\r\nb"');
 });
 
+test("csvCell：公式注入前綴中和（=+-@ 與 tab）", () => {
+  assert.equal(csvCell("=HYPERLINK(1)"), "'=HYPERLINK(1)");
+  assert.equal(csvCell("+1"), "'+1");
+  assert.equal(csvCell("-2"), "'-2");
+  assert.equal(csvCell("@foo"), "'@foo");
+  assert.equal(csvCell("\tx"), "'\tx");
+});
+
+test("csvCell：公式前綴且含逗號 → 先中和再包引號", () => {
+  assert.equal(csvCell("=cmd,x"), `"'=cmd,x"`);
+});
+
 test("csvCell：null/undefined → 空字串", () => {
   assert.equal(csvCell(null), "");
   assert.equal(csvCell(undefined), "");

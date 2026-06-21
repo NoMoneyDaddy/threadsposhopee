@@ -24,6 +24,17 @@ test("shouldSponsor: 啟用＋非owner＋冷門時段＋今天未做", () => {
   assert.equal(shouldSponsor({ ...base, enabled: false }), false);
 });
 
+test("shouldSponsor: 使用者自選一篇（pickDraftId）只認那篇、可改時段", () => {
+  const base = { enabled: true, isOwnerAccount: false, hour: 12, offPeakStart: 2, offPeakEnd: 5, alreadyDoneToday: false };
+  // 自選了 d1：非冷門時段也算（pickHour=null）
+  assert.equal(shouldSponsor({ ...base, thisDraftId: "d1", pickDraftId: "d1" }), true);
+  // 不是被選的那篇 → 不贊助
+  assert.equal(shouldSponsor({ ...base, thisDraftId: "d2", pickDraftId: "d1" }), false);
+  // 指定時段：只有該時才贊助
+  assert.equal(shouldSponsor({ ...base, hour: 9, thisDraftId: "d1", pickDraftId: "d1", pickHour: 9 }), true);
+  assert.equal(shouldSponsor({ ...base, hour: 10, thisDraftId: "d1", pickDraftId: "d1", pickHour: 9 }), false);
+});
+
 test("taipeiParts: 回傳日期字串與 0–23 小時", () => {
   const p = taipeiParts(new Date("2026-06-21T00:00:00Z")); // 台北 08:00
   assert.match(p.date, /^\d{4}-\d{2}-\d{2}$/);

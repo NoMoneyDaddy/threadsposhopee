@@ -14,6 +14,7 @@ export const dynamic = "force-dynamic";
 async function maybeVary(draft: Draft, material: Material, ownerId: string): Promise<{ draft: Draft; note?: string }> {
   try {
     const [geminiKey, copyPrefs] = await Promise.all([getGeminiKey(ownerId), getCopyPrefs(ownerId)]);
+    if (!geminiKey) return { draft, note: "未綁定自己的 Gemini 金鑰，沿用原文案（到帳號管理綁定）" };
     const copy = await generateCopy(
       {
         productName: material.product_name ?? "這個好物",

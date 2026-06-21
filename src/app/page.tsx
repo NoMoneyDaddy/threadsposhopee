@@ -1,9 +1,15 @@
 import RunPipelineButton from "@/components/RunPipelineButton";
 import LiveDashboard from "@/components/LiveDashboard";
+import SetupGuide from "@/components/SetupGuide";
+import { getCurrentUser } from "@/lib/auth";
+import { getSetupSteps } from "@/lib/setup-status";
 
 export const dynamic = "force-dynamic";
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  const user = await getCurrentUser();
+  const steps = user ? await getSetupSteps(user) : [];
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -13,6 +19,8 @@ export default function DashboardPage() {
         </div>
         <RunPipelineButton />
       </div>
+
+      {steps.length > 0 && <SetupGuide steps={steps} />}
 
       <LiveDashboard />
     </div>

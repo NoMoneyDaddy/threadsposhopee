@@ -6,7 +6,7 @@ import { runPublishQueue } from "@/services/publish/queue";
 import { refreshExpiringTokens } from "@/services/threads/refresh";
 import { checkAffiliateLinks } from "@/services/materials/linkcheck";
 import { buildDailyDigest } from "@/services/digest/daily";
-import { verifySponsorPosts } from "@/services/sponsor/run";
+import { verifySponsorPosts, ensureSponsorPosts } from "@/services/sponsor/run";
 import { getOwnerUserId } from "@/lib/auth";
 import { env } from "@/lib/env";
 import { setHeartbeat, getUserTelegramChatId, getUserDiscordWebhook } from "@/lib/store";
@@ -49,6 +49,11 @@ export async function GET(req: Request) {
         if (r?.replies?.failed) parts.push(`補留言 ${r.replies.failed} 則失敗`);
         return parts.length ? `⚠️ ${parts.join("；")}` : null;
       }
+    },
+    {
+      key: "sponsorFill",
+      run: async () => ensureSponsorPosts(await getOwnerUserId()),
+      warn: (r) => (r?.created ? `★ 自動補發贊助文 ${r.created} 篇` : null)
     },
     {
       key: "verifySponsor",

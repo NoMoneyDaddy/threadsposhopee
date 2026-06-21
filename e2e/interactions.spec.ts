@@ -1,8 +1,8 @@
 import { test, expect } from "@playwright/test";
 
-test("文案佇列：狀態分頁與關鍵字篩選", async ({ page }) => {
+test("草稿：狀態分頁與關鍵字篩選", async ({ page }) => {
   await page.goto("/drafts");
-  await expect(page.getByRole("heading", { name: "文案佇列", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "草稿", level: 1 })).toBeVisible();
 
   // 狀態分頁存在（避免與 BulkBar 的「全部核准」等按鈕衝突，用「全部 N」計數樣式定位）
   await expect(page.getByRole("button", { name: /^全部 \d/ })).toBeVisible();
@@ -15,16 +15,16 @@ test("文案佇列：狀態分頁與關鍵字篩選", async ({ page }) => {
   await expect(page.getByText("沒有符合條件的草稿。")).toBeVisible();
 });
 
-test("快速發文：表單欄位可見", async ({ page }) => {
+test("發文：表單欄位可見", async ({ page }) => {
   await page.goto("/compose");
-  await expect(page.getByRole("heading", { name: "快速發文", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "發文", level: 1 })).toBeVisible();
   // 至少有一個文字輸入區（正文）
   await expect(page.locator("textarea").first()).toBeVisible();
 });
 
-test("成效統計：每日發布量區塊渲染", async ({ page }) => {
+test("成效：每日發布量區塊渲染", async ({ page }) => {
   await page.goto("/insights");
-  await expect(page.getByRole("heading", { name: "成效統計", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "成效", level: 1 })).toBeVisible();
   await expect(page.getByRole("heading", { name: "每日發布量" })).toBeVisible();
 });
 

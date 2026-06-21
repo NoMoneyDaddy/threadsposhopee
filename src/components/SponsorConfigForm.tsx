@@ -9,6 +9,7 @@ import type { SponsorConfig } from "@/lib/sponsor";
 export default function SponsorConfigForm({ initial }: { initial: SponsorConfig }) {
   const router = useRouter();
   const [enabled, setEnabled] = useState(initial.enabled);
+  const [productUrl, setProductUrl] = useState(initial.productUrl);
   const [link, setLink] = useState(initial.affiliateLink);
   const [start, setStart] = useState(String(initial.offPeakStart));
   const [end, setEnd] = useState(String(initial.offPeakEnd));
@@ -26,6 +27,7 @@ export default function SponsorConfigForm({ initial }: { initial: SponsorConfig 
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             enabled,
+            productUrl: productUrl.trim(),
             affiliateLink: link.trim(),
             offPeakStart: Number(start),
             offPeakEnd: Number(end)
@@ -57,11 +59,19 @@ export default function SponsorConfigForm({ initial }: { initial: SponsorConfig 
       </label>
       <input
         className="mb-2 w-full rounded-xl border px-3 py-2 text-sm"
-        placeholder="平台蝦皮分潤連結（如 https://s.shopee.tw/xxx）"
+        placeholder="商品原始連結（建議；系統會即時轉每帳號 sp_ 分潤連結，可追來源）"
+        value={productUrl}
+        onChange={(e) => setProductUrl(e.target.value)}
+        inputMode="url"
+        aria-label="商品原始連結"
+      />
+      <input
+        className="mb-2 w-full rounded-xl border px-3 py-2 text-sm"
+        placeholder="後備靜態分潤連結（選填；無法每帳號追蹤）"
         value={link}
         onChange={(e) => setLink(e.target.value)}
         inputMode="url"
-        aria-label="平台分潤連結"
+        aria-label="後備分潤連結"
       />
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <span className="text-ink-2">冷門時段（台北時間，時）</span>

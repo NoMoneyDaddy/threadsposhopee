@@ -27,7 +27,7 @@ export default async function SourcesPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold">監看來源</h1>
+      <h1 className="text-2xl font-bold">自動抓文</h1>
       <p className="text-sm text-ink-2">
         每個來源 = 監看一個 Threads 帳號的貼文，自動換成你的分潤連結後產出文案到指定發文帳號。
       </p>

@@ -24,7 +24,7 @@ export default async function DraftsPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold">文案佇列</h1>
+      <h1 className="text-2xl font-bold">草稿</h1>
       <p className="text-sm text-ink-2">
         AI 生成的草稿在此審核。可直接編輯文案、AI 重寫、核准發布或刪除。分潤連結會自動放留言區。
       </p>

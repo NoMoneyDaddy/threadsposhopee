@@ -5,14 +5,15 @@ import { usePathname } from "next/navigation";
 
 type NavItem = { href: string; label: string };
 
+// 依使用流程排序、用淺白名稱（降低學習成本）。
 const NAV: NavItem[] = [
-  { href: "/compose", label: "快速發文" },
   { href: "/", label: "儀表板" },
-  { href: "/sources", label: "監看來源" },
-  { href: "/materials", label: "素材庫" },
-  { href: "/drafts", label: "文案佇列" },
-  { href: "/calendar", label: "排程總覽" },
-  { href: "/insights", label: "成效統計" },
+  { href: "/compose", label: "發文" },
+  { href: "/drafts", label: "草稿" },
+  { href: "/calendar", label: "行事曆" },
+  { href: "/materials", label: "素材" },
+  { href: "/insights", label: "成效" },
+  { href: "/sources", label: "自動抓文" },
   { href: "/accounts", label: "帳號管理" }
 ];
 

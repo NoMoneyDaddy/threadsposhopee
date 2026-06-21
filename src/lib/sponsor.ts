@@ -38,6 +38,114 @@ export async function setSponsorConfig(cfg: SponsorConfig): Promise<void> {
     .upsert({ key: KEY, value: JSON.stringify(cfg), updated_at: new Date().toISOString() }, { onConflict: "key" });
 }
 
+// ── 純函式（可單測）───────────────────────────────────────────
+
+// 取台北時區的「日期字串 YYYY-MM-DD」與「小時 0–23」。
+export function taipeiParts(now: Date = new Date()): { date: string; hour: number } {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Taipei",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    hour12: false
+  }).formatToParts(now);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  const hour = Number(get("hour")) % 24; // 某些環境午夜回 "24"
+  return { date: `${get("year")}-${get("month")}-${get("day")}`, hour };
+}
+
+// 是否落在冷門時段 [start, end)（小時）。
+export function inOffPeak(hour: number, start: number, end: number): boolean {
+  return hour >= start && hour < end;
+}
+
+// 把文字中的舊分潤連結替換為平台贊助連結。舊連結不存在時：有內容就在結尾補上平台連結。
+export function swapAffiliateLink(text: string | null | undefined, oldLink: string | null | undefined, sponsorLink: string): string {
+  const t = text ?? "";
+  if (oldLink && t.includes(oldLink)) return t.split(oldLink).join(sponsorLink);
+  if (!t.trim()) return t;
+  return `${t}\n${sponsorLink}`;
+}
+
+// 該不該把這篇當成贊助文（就地換連結）：啟用、非 owner 帳號、落在冷門時段、今天尚未做過。
+export function shouldSponsor(opts: {
+  enabled: boolean;
+  isOwnerAccount: boolean;
+  hour: number;
+  offPeakStart: number;
+  offPeakEnd: number;
+  alreadyDoneToday: boolean;
+}): boolean {
+  return (
+    opts.enabled &&
+    !opts.isOwnerAccount &&
+    !opts.alreadyDoneToday &&
+    inOffPeak(opts.hour, opts.offPeakStart, opts.offPeakEnd)
+  );
+}
+
+// ── 每日贊助紀錄（app_state：key=sponsor:rec:<accId>:<date>）──────
+export interface SponsorRecord {
+  postId: string;
+  link: string;
+  ownerId: string;
+  at: string;
+  verified?: boolean;
+  violated?: boolean;
+}
+
+function recKey(accountId: string, date: string): string {
+  return `sponsor:rec:${accountId}:${date}`;
+}
+
+export async function getSponsorRecord(accountId: string, date: string): Promise<SponsorRecord | null> {
+  if (isDemoMode) return null;
+  const sb = getServiceClient()!;
+  const { data } = await sb.from("app_state").select("value").eq("key", recKey(accountId, date)).maybeSingle();
+  if (!data?.value) return null;
+  try {
+    return JSON.parse(data.value) as SponsorRecord;
+  } catch {
+    return null;
+  }
+}
+
+export async function setSponsorRecord(accountId: string, date: string, rec: SponsorRecord): Promise<void> {
+  if (isDemoMode) return;
+  const sb = getServiceClient()!;
+  await sb
+    .from("app_state")
+    .upsert({ key: recKey(accountId, date), value: JSON.stringify(rec), updated_at: new Date().toISOString() }, { onConflict: "key" });
+}
+
+export interface SponsorRecordEntry {
+  accountId: string;
+  date: string;
+  rec: SponsorRecord;
+}
+
+// 撈出「尚未驗證、且已發出超過 minAgeMs」的贊助紀錄（給驗證排程用）。
+export async function listSponsorRecordsToVerify(minAgeMs: number): Promise<SponsorRecordEntry[]> {
+  if (isDemoMode) return [];
+  const sb = getServiceClient()!;
+  const { data } = await sb.from("app_state").select("key,value").like("key", "sponsor:rec:%");
+  const out: SponsorRecordEntry[] = [];
+  for (const row of data ?? []) {
+    try {
+      const rec = JSON.parse(row.value) as SponsorRecord;
+      if (rec.verified) continue;
+      if (Date.now() - new Date(rec.at).getTime() < minAgeMs) continue;
+      const m = /^sponsor:rec:(.+):(\d{4}-\d{2}-\d{2})$/.exec(row.key);
+      if (!m) continue;
+      out.push({ accountId: m[1], date: m[2], rec });
+    } catch {
+      // 壞資料略過
+    }
+  }
+  return out;
+}
+
 // 正規化＋驗證輸入（小時界線、連結需為 http(s)）。回傳清理後設定或錯誤訊息。
 export function normalizeSponsorConfig(input: Partial<SponsorConfig>): { ok: true; cfg: SponsorConfig } | { ok: false; error: string } {
   const enabled = Boolean(input.enabled);

@@ -23,6 +23,15 @@ import {
   clearAccountCircuit
 } from "@/lib/store";
 import { publishToThreads, publishReply, PublishUncertainError } from "@/services/threads/publish";
+import { getOwnerUserId } from "@/lib/auth";
+import {
+  getSponsorConfig,
+  getSponsorRecord,
+  setSponsorRecord,
+  shouldSponsor,
+  swapAffiliateLink,
+  taipeiParts
+} from "@/lib/sponsor";
 import { log } from "@/lib/logger";
 import { normalizeDraftMedia } from "@/lib/media";
 import { shardOf, circuitOpen, nextPacingSkipReason } from "@/services/publish/cadence";
@@ -113,6 +122,12 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
   const cooldownHours = env.productCooldownHours;
   const publishedProductsThisRun = new Set<string>();
 
+  // 贊助文章（功能 B）：冷門時段把非 owner 帳號的待發草稿連結就地換成平台連結（DB 原文不動＝發後還原）。
+  const sponsorCfg = await getSponsorConfig();
+  const sponsorTaipei = taipeiParts();
+  const sponsorOwnerId = sponsorCfg.enabled && !isDemoMode ? await getOwnerUserId().catch(() => null) : null;
+  const sponsorDoneCache: Record<string, boolean> = {}; // accId -> 今天已發贊助文
+
   for (const draft of drafts) {
     // 接近 maxDuration(60s) 上限就停手，避免草稿卡在 publishing 狀態，留待下次排程
     if (Date.now() - startTime > 50000) break;
@@ -202,6 +217,31 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
       : 0;
     const deferReply = Boolean(draft.reply_text) && replyDelay > 0;
 
+    // 贊助文判定：啟用＋非 owner 帳號＋冷門時段＋今天尚未做過 → 就地換連結（DB 原文不動）。
+    let sponsorLinkUsed: string | null = null;
+    let pubMainText = draft.main_text ?? "";
+    let pubReplyText = draft.reply_text;
+    if (sponsorCfg.enabled && !isDemoMode) {
+      if (!(accId in sponsorDoneCache)) {
+        sponsorDoneCache[accId] = Boolean(await getSponsorRecord(accId, sponsorTaipei.date).catch(() => null));
+      }
+      const isOwnerAccount = Boolean(sponsorOwnerId) && draft.owner_id === sponsorOwnerId;
+      if (
+        shouldSponsor({
+          enabled: sponsorCfg.enabled,
+          isOwnerAccount,
+          hour: sponsorTaipei.hour,
+          offPeakStart: sponsorCfg.offPeakStart,
+          offPeakEnd: sponsorCfg.offPeakEnd,
+          alreadyDoneToday: sponsorDoneCache[accId]
+        })
+      ) {
+        pubMainText = swapAffiliateLink(draft.main_text, draft.shopee_short_link, sponsorCfg.affiliateLink);
+        pubReplyText = draft.reply_text ? swapAffiliateLink(draft.reply_text, draft.shopee_short_link, sponsorCfg.affiliateLink) : draft.reply_text;
+        sponsorLinkUsed = sponsorCfg.affiliateLink;
+      }
+    }
+
     try {
       const nowMs = Date.now();
       const nowIso = new Date(nowMs).toISOString();
@@ -214,13 +254,24 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
         const res = await publishToThreads({
           threadsUserId: creds.threadsUserId,
           accessToken: creds.accessToken,
-          text: draft.main_text ?? "",
+          text: pubMainText,
           media: normalizeDraftMedia(draft),
-          replyText: draft.reply_text,
+          replyText: pubReplyText,
           deferReply
         });
         postId = res.postId;
         replyFailedInline = Boolean(res.replyFailed);
+      }
+
+      // 贊助文發布成功 → 記錄當日紀錄（供驗證），DB 草稿原文未動＝自動還原。
+      if (sponsorLinkUsed) {
+        sponsorDoneCache[accId] = true;
+        await setSponsorRecord(accId, sponsorTaipei.date, {
+          postId,
+          link: sponsorLinkUsed,
+          ownerId: draft.owner_id ?? "",
+          at: nowIso
+        }).catch((e) => log.warn("寫入贊助文紀錄失敗", { accId, err: e }));
       }
 
       // 延遲留言：標 pending + 到期時間，交給下方的補留言 pass；

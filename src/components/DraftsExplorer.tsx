@@ -75,7 +75,9 @@ export default function DraftsExplorer({
     for (const d of drafts) {
       if (d.status === "published" && d.main_text) {
         const k = d.threads_account_id ?? "";
-        (publishedByAcc.get(k) ?? publishedByAcc.set(k, []).get(k)!).push(d.main_text);
+        let arr = publishedByAcc.get(k);
+        if (!arr) publishedByAcc.set(k, (arr = []));
+        arr.push(d.main_text);
       }
     }
     const m: Record<string, number> = {};

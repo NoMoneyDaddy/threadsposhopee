@@ -13,13 +13,19 @@ export default function DraftCard({
   dupSimilarity,
   accountLabel,
   sponsorEnabled = false,
-  isSponsorPick = false
+  isSponsorPick = false,
+  selectable = false,
+  selected = false,
+  onToggleSelect
 }: {
   draft: Draft;
   dupSimilarity?: number;
   accountLabel?: string;
   sponsorEnabled?: boolean;
   isSponsorPick?: boolean;
+  selectable?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -148,9 +154,20 @@ export default function DraftCard({
   }
 
   return (
-    <div className={`flex flex-col rounded-2xl border bg-surface p-4 ${isSponsorPick ? "ring-1 ring-brand" : ""}`}>
+    <div className={`flex min-w-0 flex-col rounded-2xl border bg-surface p-4 ${isSponsorPick ? "ring-1 ring-brand" : ""} ${selected ? "ring-1 ring-brand" : ""}`}>
       <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="min-w-0 truncate text-sm font-medium text-ink">{draft.product_name ?? "（未知商品）"}</span>
+        <span className="flex min-w-0 items-center gap-2">
+          {selectable && (
+            <input
+              type="checkbox"
+              checked={selected}
+              onChange={onToggleSelect}
+              aria-label="選取此草稿"
+              className="shrink-0"
+            />
+          )}
+          <span className="min-w-0 truncate text-sm font-medium text-ink">{draft.product_name ?? "（未知商品）"}</span>
+        </span>
         <span className="flex shrink-0 items-center gap-1">
           {isSponsorPick && (
             <span className="rounded bg-brand/10 px-2 py-0.5 text-xs font-medium text-brand" title="此篇將作為今日贊助文，連結會以平台分潤連結發布">

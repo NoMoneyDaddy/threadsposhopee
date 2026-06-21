@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import DraftCard from "@/components/DraftCard";
+import BulkDraftBar from "@/components/BulkDraftBar";
 import type { Draft } from "@/lib/types";
 import { maxSimilarity } from "@/lib/text-similarity";
 
@@ -35,6 +36,15 @@ export default function DraftsExplorer({
 }) {
   const [status, setStatus] = useState("all");
   const [q, setQ] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  const toggleSelect = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { all: drafts.length };
@@ -80,6 +90,10 @@ export default function DraftsExplorer({
     });
   }, [drafts, status, q]);
 
+  // 批次選取：只針對目前篩選結果中的「待審」草稿；選取集與實際待審交集，避免狀態已變的殘留。
+  const pendingInView = useMemo(() => filtered.filter((d) => d.status === "draft").map((d) => d.id), [filtered]);
+  const selectedPending = useMemo(() => pendingInView.filter((id) => selected.has(id)), [pendingInView, selected]);
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -105,6 +119,27 @@ export default function DraftsExplorer({
         />
       </div>
 
+      {pendingInView.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-1.5 text-sm text-ink-2">
+            <input
+              type="checkbox"
+              checked={selectedPending.length === pendingInView.length}
+              ref={(el) => {
+                if (el) el.indeterminate = selectedPending.length > 0 && selectedPending.length < pendingInView.length;
+              }}
+              onChange={(e) =>
+                setSelected(e.target.checked ? new Set(pendingInView) : new Set())
+              }
+            />
+            全選待審（{pendingInView.length}）
+          </label>
+          {selectedPending.length > 0 && <span className="text-xs text-ink-3">已選 {selectedPending.length} 則</span>}
+        </div>
+      )}
+
+      {selectedPending.length > 0 && <BulkDraftBar draftIds={selectedPending} />}
+
       <div className="grid gap-4 md:grid-cols-2">
         {filtered.map((d) => (
           <DraftCard
@@ -113,6 +148,9 @@ export default function DraftsExplorer({
             dupSimilarity={dupMap[d.id] >= DUP_THRESHOLD ? dupMap[d.id] : undefined}
             accountLabel={d.threads_account_id ? accountLabels[d.threads_account_id] : undefined}
             sponsorEnabled={sponsor?.enabled ?? false}
+            selectable={d.status === "draft"}
+            selected={selected.has(d.id)}
+            onToggleSelect={() => toggleSelect(d.id)}
             isSponsorPick={
               Boolean(sponsor?.enabled) &&
               Boolean(d.threads_account_id) &&

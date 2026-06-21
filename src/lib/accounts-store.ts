@@ -399,5 +399,6 @@ export async function markThreadsAccountError(id: string, ownerId?: string | nul
   const sb = getServiceClient()!;
   let q = sb.from("threads_accounts").update({ status: "error" }).eq("id", id);
   if (ownerId) q = q.eq("owner_id", ownerId);
-  await q;
+  const { error } = await q;
+  if (error) throw error; // 不靜默失敗：讓呼叫端的 .catch 能記錄（否則帳號未真的標 error）
 }

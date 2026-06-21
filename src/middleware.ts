@@ -34,8 +34,16 @@ export async function middleware(req: NextRequest) {
   // 公開端點（cron／Meta 回呼）已在上方放行；server-to-server 無 Origin 不受影響。
   if (req.method !== "GET" && req.method !== "HEAD") {
     const origin = req.headers.get("origin");
-    if (origin && new URL(origin).host !== url.host) {
-      return NextResponse.json({ ok: false, error: "跨來源請求被拒" }, { status: 403 });
+    if (origin) {
+      let sameOrigin = false;
+      try {
+        sameOrigin = new URL(origin).host === url.host; // 解析失敗（如 "null"/畸形）視為跨來源
+      } catch {
+        sameOrigin = false;
+      }
+      if (!sameOrigin) {
+        return NextResponse.json({ ok: false, error: "跨來源請求被拒" }, { status: 403 });
+      }
     }
   }
 

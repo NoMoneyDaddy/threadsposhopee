@@ -57,6 +57,7 @@ export async function POST(req: Request) {
   if (action === "regenerate") {
     try {
       const [geminiKey, copyPrefs] = await Promise.all([getGeminiKey(user.id), getCopyPrefs(user.id)]);
+      if (!geminiKey) return NextResponse.json({ ok: false, error: "請先到帳號管理綁定你自己的 Gemini 金鑰" }, { status: 400 });
       const copy = await generateCopy(
         {
           productName: draft.product_name ?? "這個好物",
@@ -84,6 +85,7 @@ export async function POST(req: Request) {
     const n = Math.min(3, Math.max(2, Number(body.count) || 2));
     try {
       const [geminiKey, copyPrefs] = await Promise.all([getGeminiKey(user.id), getCopyPrefs(user.id)]);
+      if (!geminiKey) return NextResponse.json({ ok: false, error: "請先到帳號管理綁定你自己的 Gemini 金鑰" }, { status: 400 });
       const ctx = {
         productName: draft.product_name ?? "這個好物",
         shopeeShortLink: draft.shopee_short_link ?? "",

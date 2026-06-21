@@ -25,14 +25,16 @@ export async function resolveMaterialFromUrl(
   if (!shopeeCreds && user.isOwner && env.shopeeAppId && env.shopeeSecret) {
     shopeeCreds = { appId: env.shopeeAppId, secret: env.shopeeSecret, subId: env.shopeeDefaultSubId };
   }
-  // Gemini key：自綁優先，沒綁退回 env（在 generateCopy 內處理）
+  // AI 文案只用「使用者自己綁的」Gemini 金鑰；沒綁就略過文案，不借用系統共用金鑰。
   const geminiKey = await getGeminiKey(ownerId);
+  const canCopy = withCopy && Boolean(geminiKey);
   // 沒綁 Shopee API 時的後備：用 affiliate_id 自組追蹤連結
   const affiliateId = shopeeCreds ? null : await getShopeeAffiliateId(ownerId);
   // 各人自綁 Cloudinary（素材進自己雲端）；沒綁退回 env 共用
   const cloudinaryCreds = await getUserCloudinary(ownerId);
 
   const notes: string[] = [];
+  if (withCopy && !geminiKey) notes.push("未綁定自己的 Gemini 金鑰，已略過 AI 文案（到帳號管理綁定後可重產）");
   const material = await buildMaterialForProduct(
     {
       shopId: expanded.shopId,
@@ -40,7 +42,7 @@ export async function resolveMaterialFromUrl(
       cleanUrl: expanded.cleanUrl,
       originalShortLink: url,
       subIdTag: user.isOwner ? "manual" : ownerId.slice(0, 8),
-      withCopy
+      withCopy: canCopy
     },
     ownerId,
     shopeeCreds,

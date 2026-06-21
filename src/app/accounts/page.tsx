@@ -65,7 +65,7 @@ export default async function AccountsPage({
         </div>
       )}
 
-      <div className="rounded-2xl border bg-surface p-4">
+      <div id="setup-threads" className="scroll-mt-24 rounded-2xl border bg-surface p-4">
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="font-medium">用 Threads 一鍵連結發文帳號</div>
@@ -88,20 +88,34 @@ export default async function AccountsPage({
 
       <div className="grid gap-4 md:grid-cols-2">
         <ThreadsAccountForm />
-        <ShopeeAccountForm />
+        <div id="setup-shopee" className="scroll-mt-24">
+          <ShopeeAccountForm />
+        </div>
       </div>
 
       {user && <AffiliateIdForm initial={affiliateId} />}
 
-      {user && <CloudinaryForm initialCloud={cloudinary?.cloud ?? null} initialPreset={cloudinary?.preset ?? null} />}
+      {user && (
+        <div id="setup-cloudinary" className="scroll-mt-24">
+          <CloudinaryForm initialCloud={cloudinary?.cloud ?? null} initialPreset={cloudinary?.preset ?? null} />
+        </div>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2">
         {/* 爬蟲僅 owner；AI 文案每人各綁各的 */}
-        {user?.isOwner && <ApifyForm bound={apify.bound} actor={apify.actor} />}
-        {user && <GeminiForm bound={geminiBound} />}
+        {user?.isOwner && (
+          <div id="setup-apify" className="scroll-mt-24">
+            <ApifyForm bound={apify.bound} actor={apify.actor} />
+          </div>
+        )}
+        {user && (
+          <div id="setup-gemini" className="scroll-mt-24">
+            <GeminiForm bound={geminiBound} />
+          </div>
+        )}
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div id="setup-notify" className="grid scroll-mt-24 gap-4 md:grid-cols-2">
         {user && <TelegramForm bound={telegramBound} botConfigured={!isDemoMode && Boolean(env.telegramBotToken)} />}
         {user && <DiscordForm bound={discordBound} />}
       </div>

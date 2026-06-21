@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { log } from "@/lib/logger";
 import { getCurrentUser } from "@/lib/auth";
 import { getGeminiKey } from "@/lib/store";
-import { env, isDemoMode } from "@/lib/env";
+import { isDemoMode } from "@/lib/env";
 import { checkCompliance, MAX_COMPLIANCE_CHARS } from "@/services/ai/compliance";
 
 export const dynamic = "force-dynamic";
@@ -19,9 +19,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: `文案過長（上限 ${MAX_COMPLIANCE_CHARS} 字）` }, { status: 400 });
   }
 
-  const key = isDemoMode ? "" : (await getGeminiKey(user.id).catch(() => null)) || env.geminiApiKey;
+  // 只用使用者自己綁的金鑰，不借用系統共用金鑰
+  const key = isDemoMode ? "" : await getGeminiKey(user.id).catch(() => null);
   if (!key) {
-    return NextResponse.json({ ok: false, error: "請先在帳號管理綁定 Gemini 金鑰" }, { status: 400 });
+    return NextResponse.json({ ok: false, error: "請先到帳號管理綁定你自己的 Gemini 金鑰" }, { status: 400 });
   }
 
   try {

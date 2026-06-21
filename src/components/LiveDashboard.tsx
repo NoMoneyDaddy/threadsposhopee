@@ -97,26 +97,6 @@ function PublishPlan({ rows }: { rows: DashboardData["publishPlan"] }) {
   );
 }
 
-// 未綁金鑰提示：自綁或 env 任一有就算 OK；缺的列出來提醒去帳號管理綁。
-function MissingBinds({ binds }: { binds?: { apify: boolean; gemini: boolean; shopee: boolean } | null }) {
-  if (!binds) return null;
-  const missing = [
-    !binds.apify && "Apify（爬蟲）",
-    !binds.gemini && "Gemini（AI 文案）",
-    !binds.shopee && "Shopee（分潤）"
-  ].filter(Boolean) as string[];
-  if (missing.length === 0) return null;
-  return (
-    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-      🔑 尚未設定：{missing.join("、")}。到{" "}
-      <Link href="/accounts" className="underline hover:opacity-80">
-        帳號管理
-      </Link>{" "}
-      綁定後爬蟲／AI 才能運作。
-    </div>
-  );
-}
-
 // 自動駕駛心跳：依上次排程執行時間判斷是否運轉中（demo 模式不顯示）。
 function Autopilot({ lastCronAt, demo }: { lastCronAt?: string | null; demo: boolean }) {
   if (demo) return null;
@@ -298,13 +278,6 @@ export default function LiveDashboard() {
   const needsVerification = d.needsVerification ?? 0;
   const needsAttention =
     issues.error > 0 || d.drafts.failed > 0 || issues.paused > 0 || tokenExpiring > 0 || invalidMaterials > 0 || needsVerification > 0;
-  // 核心流程未走完（沒帳號、沒素材、或未曾發布）時，顯示上手引導，直到三步都完成才隱藏
-  const setupIncomplete = d.threadsAccounts === 0 || d.materials === 0 || d.drafts.published === 0;
-  const steps = [
-    { done: d.threadsAccounts > 0, label: "連結 Threads 發文帳號", href: "/accounts", cta: "去連結" },
-    { done: d.materials > 0, label: "貼蝦皮連結，產生第一則文案", href: "/compose", cta: "去發文" },
-    { done: d.drafts.published > 0, label: "審核並發布（或排程）", href: "/drafts", cta: "看佇列" }
-  ];
   return (
     <div className="space-y-6">
       <Autopilot lastCronAt={data.lastCronAt} demo={data.demo} />
@@ -320,33 +293,8 @@ export default function LiveDashboard() {
           <PauseToggle paused={Boolean(data.publishPaused)} onDone={load} />
         </div>
       )}
-      <MissingBinds binds={data.binds} />
       <AccountsHealth rows={data.accountsHealth} />
       <PublishPlan rows={data.publishPlan} />
-      {setupIncomplete && (
-        <div className="rounded-2xl border border-brand/30 bg-orange-50 p-5">
-          <h2 className="mb-3 font-semibold text-ink">🚀 開始使用（3 步驟）</h2>
-          <ol className="space-y-2">
-            {steps.map((s, i) => (
-              <li key={s.href} className="flex items-center gap-3 text-sm">
-                <span
-                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs ${
-                    s.done ? "bg-green-500 text-white" : "bg-surface text-ink-2 ring-1 ring-neutral-300"
-                  }`}
-                >
-                  {s.done ? "✓" : i + 1}
-                </span>
-                <span className={s.done ? "text-ink-3 line-through" : "text-ink"}>{s.label}</span>
-                {!s.done && (
-                  <Link href={s.href} className="ml-auto rounded-xl bg-brand px-3 py-1 text-xs font-medium text-white hover:opacity-90">
-                    {s.cta}
-                  </Link>
-                )}
-              </li>
-            ))}
-          </ol>
-        </div>
-      )}
       {needsAttention && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
           <span className="font-semibold">⚠️ 需要注意</span>

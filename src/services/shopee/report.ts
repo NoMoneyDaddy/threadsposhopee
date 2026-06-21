@@ -60,7 +60,7 @@ export function attributeRevenueByAccount(
 // 解析金額字串為數值：先去千分位逗號（"1,234.50" → 1234.5），無法解析回 0。
 // 純函式可測。蝦皮金額常破千，未去逗號會被 parseFloat 在逗號處截斷而嚴重低估。
 export function parseMoney(s: string | null | undefined): number {
-  const n = parseFloat(String(s ?? "").replace(/,/g, ""));
+  const n = parseFloat((s ?? "").replace(/,/g, ""));
   return Number.isFinite(n) ? n : 0;
 }
 const num = parseMoney;

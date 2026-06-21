@@ -155,6 +155,24 @@ export async function setShopeeAffiliateId(ownerId: string, affiliateId: string 
   if (error) throw new Error(`儲存 shopee_affiliate_id 失敗：${error.message}`);
 }
 
+// 使用者自訂分潤 subId（套用到 API 短連結與 an_redir 長連結）。非機密，明文存。
+export async function getShopeeSubId(ownerId: string): Promise<string | null> {
+  if (isDemoMode) return null;
+  const sb = getServiceClient()!;
+  const { data, error } = await sb.from("profiles").select("shopee_sub_id").eq("id", ownerId).maybeSingle();
+  if (error) throw new Error(`讀取 shopee_sub_id 失敗：${error.message}`);
+  return data?.shopee_sub_id ?? null;
+}
+
+export async function setShopeeSubId(ownerId: string, subId: string | null): Promise<void> {
+  if (isDemoMode) return;
+  const sb = getServiceClient()!;
+  const { error } = await sb
+    .from("profiles")
+    .upsert({ id: ownerId, shopee_sub_id: subId || null }, { onConflict: "id" });
+  if (error) throw new Error(`儲存 shopee_sub_id 失敗：${error.message}`);
+}
+
 // 各使用者自綁的 Cloudinary（cloud name + unsigned upload preset，皆非機密，明文存）。
 // 沒綁則回 null，呼叫端退回 env 共用設定。
 export async function getUserCloudinary(ownerId: string): Promise<{ cloud: string; preset: string } | null> {

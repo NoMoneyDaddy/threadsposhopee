@@ -103,6 +103,8 @@ export {
   setUserDiscordWebhook,
   getShopeeAffiliateId,
   setShopeeAffiliateId,
+  getShopeeSubId,
+  setShopeeSubId,
   getUserCloudinary,
   setUserCloudinary,
   getUserPlan,

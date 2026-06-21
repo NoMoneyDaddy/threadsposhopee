@@ -1,5 +1,6 @@
 import { log } from "@/lib/logger";
 import { callShopeeGql, ShopeeApiError } from "./gql";
+import { normalizeSubId } from "./subid";
 
 export { ShopeeApiError }; // 向後相容：原本由本檔匯出
 
@@ -36,10 +37,9 @@ export async function validateShopeeCredentials(
 
 // 組出帶追蹤識別的 subIds（最多 5 個）：base + 來源帳號 + 商品 item_id。
 // 蝦皮分潤報表會依 subId 分流統計，可看出哪個來源/商品帶來收益。
-// subId 僅允許英數，需清洗（來源含 @、商品名含中文/空白都不適合）。
+// subId 僅允許英數與底線（官方規範），需清洗（來源含 @、商品名含中文/空白都不適合）。
 export function buildSubIds(base: string | null | undefined, sourceUsername: string, itemId: string): string[] {
-  const san = (s: string | null | undefined) => (s ?? "").replace(/[^a-zA-Z0-9]/g, "").slice(0, 50);
-  const parts = [san(base) || "threadspo", san(sourceUsername), san(itemId)];
+  const parts = [normalizeSubId(base) || "threadspo", normalizeSubId(sourceUsername), normalizeSubId(itemId)];
   return parts.filter((p) => p.length > 0);
 }
 

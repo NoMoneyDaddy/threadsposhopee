@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { shortHostOf, isAllowedOnShortHost } from "@/lib/short-host";
 
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 
@@ -22,6 +23,15 @@ const PUBLIC_PREFIXES = [
 
 export async function middleware(req: NextRequest) {
   const url = req.nextUrl;
+
+  // 短網域（go2read.link）只當轉址服務：只放行 /r/* 與計數 beacon，其餘一律 404，
+  // 不外露主站任何頁面（主站 host 不受影響）。靠 NEXT_PUBLIC_SHORT_DOMAIN 認出短網域。
+  const shortHost = shortHostOf(process.env.NEXT_PUBLIC_SHORT_DOMAIN);
+  if (shortHost && (req.headers.get("host") ?? url.host) === shortHost) {
+    if (isAllowedOnShortHost(url.pathname)) return NextResponse.next();
+    return new NextResponse("Not found", { status: 404 });
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
 

@@ -7,7 +7,9 @@ export default function CopyLink({ path }: { path: string }) {
   const [copied, setCopied] = useState(false);
   async function copy() {
     try {
-      await navigator.clipboard.writeText(`${location.origin}${path}`);
+      // 有設短網域（如 https://go2read.link）就用它，否則用當前網域。
+      const base = process.env.NEXT_PUBLIC_SHORT_DOMAIN || location.origin;
+      await navigator.clipboard.writeText(`${base}${path}`);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {

@@ -26,7 +26,8 @@ export default function RedirectLinkForm() {
       });
       const json = await res.json();
       if (!json.ok) throw new Error(json.error || "建立失敗");
-      setCreated(`${location.origin}/r/${json.code}`);
+      const base = process.env.NEXT_PUBLIC_SHORT_DOMAIN || location.origin;
+      setCreated(`${base}/r/${json.code}`);
       setSourceUrl("");
       setAffiliateUrl("");
       setTitle("");

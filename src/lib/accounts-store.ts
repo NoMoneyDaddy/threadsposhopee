@@ -251,6 +251,23 @@ export async function setThreadsAccountStatus(
   return Boolean(data);
 }
 
+// 由 Meta 解除授權／資料刪除回呼觸發（無登入情境）：依 threads_user_id 刪除對應發文帳號與 token。
+export async function deleteThreadsAccountsByThreadsUserId(threadsUserId: string): Promise<number> {
+  if (isDemoMode) {
+    const before = demo.threadsAccounts.length;
+    demo.threadsAccounts = demo.threadsAccounts.filter((a) => a.threads_user_id !== threadsUserId);
+    return before - demo.threadsAccounts.length;
+  }
+  const sb = getServiceClient()!;
+  const { data, error } = await sb
+    .from("threads_accounts")
+    .delete()
+    .eq("threads_user_id", threadsUserId)
+    .select("id");
+  if (error) throw error;
+  return data?.length ?? 0;
+}
+
 export async function deleteThreadsAccount(id: string, ownerId: string): Promise<boolean> {
   if (isDemoMode) {
     const i = demo.threadsAccounts.findIndex((x) => x.id === id);

@@ -29,7 +29,7 @@ export async function buildMaterialForProduct(
   geminiKey?: string | null, // 使用者自綁的 Gemini key；沒傳則退回 env
   copyPrefs?: CopyPrefs, // 文案偏好；上層（pipeline 迴圈）先取好傳入，避免每篇重查
   affiliateId?: string | null, // 無 API 時的後備：用 affiliate_id 組 an_redir 追蹤連結
-  cloudinaryCreds?: { cloud: string; preset: string } | null // 使用者自綁 Cloudinary；沒傳退回 env
+  cloudinaryCreds?: { cloud: string; preset: string } | null // 使用者自綁 Cloudinary；沒綁則不中轉、沿用原 URL（無 env 後備）
 ): Promise<Material> {
   const media = input.media ?? { url: null, type: "none" as const };
   let shortLink = input.originalShortLink;

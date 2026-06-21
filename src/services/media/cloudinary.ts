@@ -1,19 +1,18 @@
-import { env } from "@/lib/env";
 import { assertSafePublicUrl } from "@/lib/url-guard";
 import { fetchWithRetry } from "@/lib/http";
 import { log } from "@/lib/logger";
 
 // 把來源媒體（Threads CDN 短效 URL）中轉到 Cloudinary，取得穩定 URL 給 Threads 發文用。
 // 對應 n8n「下載影片/圖片 → 上傳 Cloudinary」節點。
-// creds：使用者自綁的 Cloudinary（素材進自己雲端）；沒傳則退回 env 共用設定。
+// creds：使用者「自綁的」Cloudinary（素材進自己雲端）。無 fallback——沒綁就不中轉、沿用原 URL。
 export async function uploadToCloudinary(
   sourceUrl: string,
   type: "image" | "video",
   creds?: { cloud: string; preset: string } | null
 ): Promise<string> {
-  const cloud = creds?.cloud || env.cloudinaryCloud;
-  const preset = creds?.preset || env.cloudinaryPreset;
-  if (!cloud) return sourceUrl; // 未設定就直接沿用原 URL
+  const cloud = creds?.cloud;
+  const preset = creds?.preset;
+  if (!cloud || !preset) return sourceUrl; // 未綁定自己的 Cloudinary → 沿用原 URL（不使用系統共用設定）
 
   // SSRF 防護：sourceUrl 可能來自外部來源，擋內網位址（避免 Cloudinary 被當跳板抓內網）
   const safeUrl = assertSafePublicUrl(sourceUrl);

@@ -5,7 +5,7 @@
 import { fetchWithTimeout } from "@/lib/http";
 import { log } from "@/lib/logger";
 import { assertSafePublicUrl } from "@/lib/url-guard";
-import { listMaterialsToCheck, setAffiliateChecked, reviveAffiliateLink, type MaterialToCheck } from "@/lib/store";
+import { listMaterialsToCheck, setAffiliateChecked, reviveAffiliateLink, getAutoReviveLinks, type MaterialToCheck } from "@/lib/store";
 import { regenerateAffiliateLink } from "./regen";
 
 // 回傳 true 代表「明確失效」；其餘狀況（200/3xx/403/逾時/網路錯誤）一律視為未知 → 不標失效。
@@ -22,22 +22,25 @@ async function isLinkDead(link: string): Promise<boolean> {
 type Outcome = "ok" | "revived" | "dead";
 
 // 失效連結先嘗試重產（短連結過期常見）：重產出新連結且確認非失效 → 復活；否則標失效。
-async function checkOne(m: MaterialToCheck, ownerUserId: string | null): Promise<Outcome> {
+// autoRevive=false（預設）：失效只標記、不重產（使用者未開啟自動替換）。
+async function checkOne(m: MaterialToCheck, ownerUserId: string | null, autoRevive: boolean): Promise<Outcome> {
   const logFail = (what: string) => (e: unknown) =>
     log.warn("連結健檢失敗", { what, materialId: m.id, err: e });
   if (!(await isLinkDead(m.link))) {
     await setAffiliateChecked(m.id, false).catch(logFail("標記已檢查"));
     return "ok";
   }
-  try {
-    const regen = await regenerateAffiliateLink(m, ownerUserId);
-    if (regen && !(await isLinkDead(regen.link))) {
-      await reviveAffiliateLink(m.id, m.owner_id, regen.link, regen.subId);
-      return "revived";
+  if (autoRevive) {
+    try {
+      const regen = await regenerateAffiliateLink(m, ownerUserId);
+      if (regen && !(await isLinkDead(regen.link))) {
+        await reviveAffiliateLink(m.id, m.owner_id, regen.link, regen.subId);
+        return "revived";
+      }
+    } catch (e) {
+      // 重產失敗（金鑰/API 問題）→ 記 log 後落到標失效，由告警提示人工處理
+      logFail("自動重產")(e);
     }
-  } catch (e) {
-    // 重產失敗（金鑰/API 問題）→ 記 log 後落到標失效，由告警提示人工處理
-    logFail("自動重產")(e);
   }
   await setAffiliateChecked(m.id, true).catch(logFail("標記失效"));
   return "dead";
@@ -52,11 +55,18 @@ export async function checkAffiliateLinks(
   const items = await listMaterialsToCheck(30, scopeOwnerId);
   let dead = 0;
   let revived = 0;
+  // 自動替換為各使用者偏好（預設關）：依素材 owner 查一次並快取本輪。
+  const autoReviveCache = new Map<string, boolean>();
+  const autoReviveFor = async (oid: string | null): Promise<boolean> => {
+    if (!oid) return false;
+    if (!autoReviveCache.has(oid)) autoReviveCache.set(oid, await getAutoReviveLinks(oid).catch(() => false));
+    return autoReviveCache.get(oid)!;
+  };
   // 分批檢查，每批最多 5 個並行，避免一次開過多外部連線
   const CONCURRENCY = 5;
   for (let i = 0; i < items.length; i += CONCURRENCY) {
     const batch = items.slice(i, i + CONCURRENCY);
-    const results = await Promise.all(batch.map((m) => checkOne(m, ownerUserId)));
+    const results = await Promise.all(batch.map(async (m) => checkOne(m, ownerUserId, await autoReviveFor(m.owner_id))));
     dead += results.filter((r) => r === "dead").length;
     revived += results.filter((r) => r === "revived").length;
   }

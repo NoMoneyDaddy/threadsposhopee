@@ -105,6 +105,8 @@ export {
   setShopeeAffiliateId,
   getShopeeSubId,
   setShopeeSubId,
+  getAutoReviveLinks,
+  setAutoReviveLinks,
   getUserCloudinary,
   setUserCloudinary,
   getUserPlan,

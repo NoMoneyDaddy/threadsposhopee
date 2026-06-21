@@ -6,6 +6,7 @@ import {
   getCopyPrefs,
   getShopeeAffiliateId,
   getShopeeSubId,
+  getAutoReviveLinks,
   getUserCloudinary,
   getUserTelegramChatId,
   getUserDiscordWebhook,
@@ -24,6 +25,7 @@ import GeminiForm from "@/components/GeminiForm";
 import CopyPrefsForm from "@/components/CopyPrefsForm";
 import AffiliateIdForm from "@/components/AffiliateIdForm";
 import SubIdForm from "@/components/SubIdForm";
+import AutoReviveForm from "@/components/AutoReviveForm";
 import CloudinaryForm from "@/components/CloudinaryForm";
 import TelegramForm from "@/components/TelegramForm";
 import DiscordForm from "@/components/DiscordForm";
@@ -46,6 +48,7 @@ export default async function AccountsPage({
   const copyPrefs = await getCopyPrefs(ownerId);
   const affiliateId = await getShopeeAffiliateId(ownerId);
   const customSubId = user ? await getShopeeSubId(ownerId) : null;
+  const autoRevive = user ? await getAutoReviveLinks(ownerId) : false;
   const cloudinary = user ? await getUserCloudinary(ownerId) : null;
   const telegramBound = user ? Boolean(await getUserTelegramChatId(user.id)) : false;
   const discordBound = user ? Boolean(await getUserDiscordWebhook(user.id)) : false;
@@ -103,6 +106,7 @@ export default async function AccountsPage({
         <div className="grid gap-4 md:grid-cols-2">
           <AffiliateIdForm initial={affiliateId} />
           <SubIdForm initial={customSubId} />
+          <AutoReviveForm initial={autoRevive} />
         </div>
       )}
 

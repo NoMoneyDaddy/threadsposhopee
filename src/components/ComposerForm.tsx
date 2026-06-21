@@ -6,6 +6,7 @@ import type { ThreadsAccount, Material } from "@/lib/types";
 import ThreadsPreview, { CharCount } from "@/components/ThreadsPreview";
 import { checkThreadsContent, THREADS_MAX_HASHTAGS } from "@/lib/threads-content";
 import { parseTaipeiDateTimeLocal } from "@/lib/datetime";
+import { cloudinaryThumb } from "@/lib/img";
 
 const input = "w-full rounded-xl border px-3 py-2 text-sm";
 const THREADS_LIMIT = 500;
@@ -145,7 +146,7 @@ export default function ComposerForm({ threadsAccounts }: { threadsAccounts: Thr
           <div className="flex items-center gap-3">
             {material.cloudinary_media_url && material.media_type === "image" && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={material.cloudinary_media_url} alt="" className="h-16 w-16 rounded object-cover" />
+              <img src={cloudinaryThumb(material.cloudinary_media_url, 128)} alt="" loading="lazy" className="h-16 w-16 rounded object-cover" />
             )}
             {material.cloudinary_media_url && material.media_type === "video" && (
               <video src={material.cloudinary_media_url} className="h-16 w-16 rounded object-cover" controls />

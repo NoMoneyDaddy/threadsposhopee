@@ -6,6 +6,7 @@ import EmptyState from "@/components/EmptyState";
 import { listMaterials, listThreadsAccounts } from "@/lib/store";
 import { getItemRevenueMap, type ItemRevenue } from "@/services/shopee/report";
 import { getCurrentUser } from "@/lib/auth";
+import { cloudinaryThumb } from "@/lib/img";
 import { env, isDemoMode } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
@@ -61,7 +62,7 @@ export default async function MaterialsPage() {
             </div>
             {m.cloudinary_media_url && m.media_type !== "none" && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={m.cloudinary_media_url} alt="" className="mb-2 h-32 w-full rounded object-cover" />
+              <img src={cloudinaryThumb(m.cloudinary_media_url, 600)} alt="" loading="lazy" className="mb-2 h-32 w-full rounded object-cover" />
             )}
             {m.main_text ? (
               <div className="whitespace-pre-wrap text-sm text-ink">{m.main_text}</div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import DraftCard from "@/components/DraftCard";
 import BulkDraftBar from "@/components/BulkDraftBar";
 import type { Draft } from "@/lib/types";
@@ -38,13 +38,17 @@ export default function DraftsExplorer({
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
-  const toggleSelect = (id: string) =>
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  // useCallback 穩定參照：讓 DraftCard 的 memo 生效（否則每次 render 新函式會使 memo 失效）。
+  const toggleSelect = useCallback(
+    (id: string) =>
+      setSelected((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      }),
+    []
+  );
 
   // 草稿更新後（批次/單筆操作）自動清除已非「待審」的選取，避免殘留與其他分頁殘影。
   useEffect(() => {
@@ -166,7 +170,7 @@ export default function DraftsExplorer({
             sponsorEnabled={sponsor?.enabled ?? false}
             selectable={d.status === "draft"}
             selected={selected.has(d.id)}
-            onToggleSelect={() => toggleSelect(d.id)}
+            onToggleSelect={toggleSelect}
             isSponsorPick={
               Boolean(sponsor?.enabled) &&
               Boolean(d.threads_account_id) &&

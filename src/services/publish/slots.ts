@@ -28,8 +28,10 @@ function firstOpenSlot(takenIso: Set<string>, times: HM[], fromMs: number, daysA
   return null;
 }
 
-export function nextOpenSlot(takenIso: Set<string>, fromMs = Date.now(), daysAhead = 30): string | null {
-  const times: HM[] = (env.publishSlots.length ? env.publishSlots : ["09:00", "12:30", "20:00"]).map((s) => {
+// slots：每位使用者自訂發文時段（HH:MM 陣列）；未傳則用全站 env 預設。
+export function nextOpenSlot(takenIso: Set<string>, fromMs = Date.now(), daysAhead = 30, slots?: string[]): string | null {
+  const source = slots && slots.length ? slots : env.publishSlots.length ? env.publishSlots : ["09:00", "12:30", "20:00"];
+  const times: HM[] = source.map((s) => {
     const [h, m] = s.split(":").map(Number);
     return { h, m };
   });

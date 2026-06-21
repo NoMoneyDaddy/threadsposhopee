@@ -7,6 +7,7 @@ import {
   getShopeeAffiliateId,
   getShopeeSubId,
   getAutoReviveLinks,
+  getPublishPrefs,
   getUserCloudinary,
   getUserTelegramChatId,
   getUserDiscordWebhook,
@@ -26,6 +27,7 @@ import CopyPrefsForm from "@/components/CopyPrefsForm";
 import AffiliateIdForm from "@/components/AffiliateIdForm";
 import SubIdForm from "@/components/SubIdForm";
 import AutoReviveForm from "@/components/AutoReviveForm";
+import PublishPrefsForm from "@/components/PublishPrefsForm";
 import CloudinaryForm from "@/components/CloudinaryForm";
 import TelegramForm from "@/components/TelegramForm";
 import DiscordForm from "@/components/DiscordForm";
@@ -49,6 +51,7 @@ export default async function AccountsPage({
   const affiliateId = await getShopeeAffiliateId(ownerId);
   const customSubId = user ? await getShopeeSubId(ownerId) : null;
   const autoRevive = user ? await getAutoReviveLinks(ownerId) : false;
+  const publishPrefs = user ? await getPublishPrefs(ownerId) : null;
   const cloudinary = user ? await getUserCloudinary(ownerId) : null;
   const telegramBound = user ? Boolean(await getUserTelegramChatId(user.id)) : false;
   const discordBound = user ? Boolean(await getUserDiscordWebhook(user.id)) : false;
@@ -144,6 +147,8 @@ export default async function AccountsPage({
           <a href="/sponsored" className="text-brand underline">《贊助文章規則》</a>。
         </div>
       )}
+
+      {user && publishPrefs && <PublishPrefsForm initial={publishPrefs} />}
 
       <CopyPrefsForm initial={copyPrefs} />
 

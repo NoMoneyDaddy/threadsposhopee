@@ -4,10 +4,11 @@ import {
   createDraft,
   updateDraftStatus,
   userOwnsThreadsAccount,
-  getUserCloudinary
+  getUserCloudinary,
+  getPublishPrefs
 } from "@/lib/store";
 import { uploadToCloudinary } from "@/services/media/cloudinary";
-import { withNextSlot } from "@/services/publish/slots";
+import { withNextSlot, nextOpenSlot } from "@/services/publish/slots";
 import { assertSafePublicUrl } from "@/lib/url-guard";
 import { getCurrentUser } from "@/lib/auth";
 import { publishDraftNow } from "@/services/publish/publish-draft";
@@ -135,8 +136,10 @@ export async function POST(req: Request) {
     let draft;
     let queuedSlot: string | null = null;
     if (action === "queue") {
-      // 自動排進下一個空時段；併發撞格時 withNextSlot 會重算重試
-      draft = await withNextSlot(user.id, (slot) => make(slot));
+      // 自動排進下一個空時段（使用者自訂時段優先）；併發撞格時 withNextSlot 會重算重試
+      const prefs = await getPublishPrefs(user.id).catch(() => null);
+      const slots = prefs?.slots;
+      draft = await withNextSlot(user.id, (slot) => make(slot), 5, (taken) => nextOpenSlot(taken, Date.now(), 30, slots));
       if (!draft) return NextResponse.json({ ok: false, error: "未來 30 天的時段都排滿了" }, { status: 409 });
       queuedSlot = draft.scheduled_at ?? null;
     } else if (action === "schedule") {

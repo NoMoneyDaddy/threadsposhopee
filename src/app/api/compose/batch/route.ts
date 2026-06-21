@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveMaterialFromUrl } from "@/services/materials/fromUrl";
-import { createDraftFromMaterial } from "@/lib/store";
-import { withNextSlot } from "@/services/publish/slots";
+import { createDraftFromMaterial, getPublishPrefs } from "@/lib/store";
+import { withNextSlot, nextOpenSlot } from "@/services/publish/slots";
 import { getCurrentUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +28,8 @@ export async function POST(req: Request) {
     if (!urls.length) return NextResponse.json({ ok: false, error: "沒有有效連結" }, { status: 400 });
 
     const startTime = Date.now();
+    // 使用者自訂發文時段（整批共用一次查詢）。
+    const userSlots = (await getPublishPrefs(user.id).catch(() => null))?.slots;
     const results: { url: string; ok: boolean; error?: string; scheduledAt?: string }[] = [];
 
     for (const url of urls) {
@@ -39,13 +41,17 @@ export async function POST(req: Request) {
         const { material } = await resolveMaterialFromUrl(url, user, true);
         if (action === "queue") {
           // 每筆即時重抓已占用時段並重試，前一筆已提交故不會重排同格
-          const draft = await withNextSlot(user.id, (slot) =>
-            createDraftFromMaterial(material, {
-              owner_id: user.id,
-              threads_account_id: threadsAccountId,
-              status: "approved",
-              scheduled_at: slot
-            })
+          const draft = await withNextSlot(
+            user.id,
+            (slot) =>
+              createDraftFromMaterial(material, {
+                owner_id: user.id,
+                threads_account_id: threadsAccountId,
+                status: "approved",
+                scheduled_at: slot
+              }),
+            5,
+            (taken) => nextOpenSlot(taken, Date.now(), 30, userSlots)
           );
           if (!draft) {
             results.push({ url, ok: false, error: "30 天內時段已滿" });

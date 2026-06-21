@@ -5,6 +5,7 @@ import {
   listApprovedDrafts,
   listApprovedDraftsForShard,
   getAccountPublishState,
+  getPublishPrefs,
   getThreadsCredentials,
   updateDraftStatus,
   updateDraftStatusAtomic,
@@ -121,6 +122,8 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
     string,
     { lastPublishedAt: string | null; publishedLast24h: number; accountStatus: string; createdAt: string | null }
   > = {};
+  // 每位使用者自訂發文節奏（min gap／每日上限）本輪快取（依 owner）。
+  const pacingPrefsCache: Record<string, { slots: string[]; minGapMinutes: number; maxPerDay: number }> = {};
   // 商品冷卻：記住本輪已發過的商品（跨帳號），避免同輪／DB 尚未可見時重複放行。
   const cooldownHours = env.productCooldownHours;
   const publishedProductsThisRun = new Set<string>();
@@ -176,6 +179,16 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
     }
 
     const doneThisRun = publishedThisRun[accId] ?? 0;
+    // 每位使用者自訂節奏（min gap／每日上限）：依草稿 owner 查一次並快取本輪；未設沿用 env。
+    const ownerKey = draft.owner_id ?? "";
+    if (!(ownerKey in pacingPrefsCache)) {
+      pacingPrefsCache[ownerKey] = await getPublishPrefs(ownerKey).catch(() => ({
+        slots: [],
+        minGapMinutes: env.publishMinGapMinutes,
+        maxPerDay: env.publishMaxPerDay
+      }));
+    }
+    const pp = pacingPrefsCache[ownerKey];
     // 同步節奏守衛（斷路器→批次→每日上限含暖機→最小間隔含抖動）抽成純函式，集中且可單測。
     const pacingSkip = nextPacingSkipReason({
       failuresThisRun: failuresThisRun[accId] ?? 0,
@@ -183,11 +196,11 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
       doneThisRun,
       batchPerRun: env.publishBatchPerRun,
       publishedLast24h: state.publishedLast24h,
-      maxPerDay: env.publishMaxPerDay,
+      maxPerDay: pp.maxPerDay,
       warmupDays: env.accountWarmupDays,
       createdAt: state.createdAt,
       lastPublishedAt: state.lastPublishedAt,
-      minGapMinutes: env.publishMinGapMinutes,
+      minGapMinutes: pp.minGapMinutes,
       gapJitterMinutes: env.publishGapJitterMinutes,
       accountId: accId,
       now: Date.now()

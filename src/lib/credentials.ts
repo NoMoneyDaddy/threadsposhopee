@@ -2,10 +2,11 @@
 // Shopee affiliate_id、Cloudinary。由 store.ts 拆出（God File 漸進拆分）。
 // 金鑰類 AES-256-GCM 加密；chat_id/webhook/affiliate_id/cloudinary 非機密，明文存。
 import { getServiceClient } from "./supabase/server";
-import { isDemoMode } from "./env";
+import { isDemoMode, env } from "./env";
 import { decrypt, encrypt } from "./crypto";
 import { log } from "./logger";
 import { normalizePlan, type PlanId } from "./plans";
+import { parseSlots, type PublishPrefs } from "./publish-prefs";
 
 // ── 方案分層（商業化）：每人一個方案字串（非機密，明文存）。限額查 plans.ts ──
 export async function getUserPlan(ownerId: string): Promise<PlanId> {
@@ -225,4 +226,45 @@ export async function setUserCloudinary(ownerId: string, cloud: string | null, p
       { onConflict: "id" }
     );
   if (error) throw new Error(`儲存 Cloudinary 設定失敗：${error.message}`);
+}
+
+// ── 每位使用者發文節奏（slots/min gap/max per day）：留空沿用 env 預設 ──────
+export async function getPublishPrefs(ownerId: string): Promise<PublishPrefs> {
+  const fallback: PublishPrefs = {
+    slots: env.publishSlots.length ? env.publishSlots : ["09:00", "12:30", "20:00"],
+    minGapMinutes: env.publishMinGapMinutes,
+    maxPerDay: env.publishMaxPerDay
+  };
+  if (isDemoMode) return fallback;
+  const sb = getServiceClient()!;
+  const { data } = await sb
+    .from("profiles")
+    .select("publish_slots, publish_min_gap_minutes, publish_max_per_day")
+    .eq("id", ownerId)
+    .maybeSingle();
+  if (!data) return fallback;
+  const slots = parseSlots(data.publish_slots);
+  return {
+    slots: slots.length ? slots : fallback.slots,
+    minGapMinutes: data.publish_min_gap_minutes ?? fallback.minGapMinutes,
+    maxPerDay: data.publish_max_per_day ?? fallback.maxPerDay
+  };
+}
+
+export async function setPublishPrefs(
+  ownerId: string,
+  prefs: { slots: string[]; minGapMinutes: number | null; maxPerDay: number | null }
+): Promise<void> {
+  if (isDemoMode) return;
+  const sb = getServiceClient()!;
+  const { error } = await sb.from("profiles").upsert(
+    {
+      id: ownerId,
+      publish_slots: prefs.slots.length ? prefs.slots.join(",") : null,
+      publish_min_gap_minutes: prefs.minGapMinutes,
+      publish_max_per_day: prefs.maxPerDay
+    },
+    { onConflict: "id" }
+  );
+  if (error) throw new Error(`儲存發文節奏失敗：${error.message}`);
 }

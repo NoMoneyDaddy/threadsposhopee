@@ -108,6 +108,8 @@ export {
   setShopeeSubId,
   getAutoReviveLinks,
   setAutoReviveLinks,
+  getPublishPrefs,
+  setPublishPrefs,
   getUserCloudinary,
   setUserCloudinary,
   getUserPlan,

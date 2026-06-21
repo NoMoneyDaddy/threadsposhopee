@@ -3,6 +3,7 @@ import { fetchWithTimeout } from "./http";
 import { assertSafePublicUrl } from "./url-guard";
 import { log } from "./logger";
 import { getUserTelegramChatId, getUserDiscordWebhook, getNotifyPrefs } from "./store";
+import { sendUserPush, isPushConfigured } from "./push";
 import type { NotifyType } from "./notify-prefs";
 
 // 共用底層：對指定 chat 發 Telegram 訊息。回傳是否成功（供「測試」按鈕判斷）。
@@ -80,5 +81,6 @@ export async function sendUserAlert(
   const jobs: Promise<unknown>[] = [];
   if (chatId && env.telegramBotToken) jobs.push(sendTelegram(env.telegramBotToken, chatId, text));
   if (discordUrl) jobs.push(sendDiscord(discordUrl, text));
+  if (isPushConfigured()) jobs.push(sendUserPush(ownerId, text)); // 瀏覽器推播（無訂閱則內部略過）
   await Promise.all(jobs);
 }

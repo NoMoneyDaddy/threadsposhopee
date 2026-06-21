@@ -71,7 +71,7 @@ export default async function SourcesPage() {
             {sources.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-4 py-6 text-center text-ink-3">
-                  尚無來源。連接 Supabase 後可在此新增。
+                  尚無監看來源。用上方表單新增一個 Threads 帳號來源，系統會定時抓取並產生待審草稿。
                 </td>
               </tr>
             )}

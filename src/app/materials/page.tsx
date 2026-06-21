@@ -2,6 +2,7 @@ import MaterialCreateForm from "@/components/MaterialCreateForm";
 import RepostButton from "@/components/RepostButton";
 import CheckLinksButton from "@/components/CheckLinksButton";
 import BulkRepostButton from "@/components/BulkRepostButton";
+import EmptyState from "@/components/EmptyState";
 import { listMaterials, listThreadsAccounts } from "@/lib/store";
 import { getItemRevenueMap, type ItemRevenue } from "@/services/shopee/report";
 import { getCurrentUser } from "@/lib/auth";
@@ -87,8 +88,13 @@ export default async function MaterialsPage() {
           </div>
         ))}
         {materials.length === 0 && (
-          <div className="col-span-2 rounded-2xl border border-dashed p-10 text-center text-ink-3">
-            還沒有素材。用上面的表單貼一個蝦皮連結建立，或讓爬取流程自動產生。
+          <div className="col-span-2">
+            <EmptyState
+              icon="🧺"
+              title="還沒有素材"
+              hint="用上面的表單貼一個蝦皮商品連結即可建立素材；之後可在發文頁直接挑用，或讓自動抓文流程幫你產生。"
+              cta={{ href: "/compose", label: "前往發文" }}
+            />
           </div>
         )}
       </div>

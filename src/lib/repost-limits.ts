@@ -14,13 +14,16 @@ export function normalizeRepostLimitsInput(body: unknown):
   const b = (body ?? {}) as Record<string, unknown>;
   const parse = (v: unknown): number | null => {
     if (v === "" || v === null || v === undefined) return 0;
-    const n = typeof v === "number" ? v : parseInt(String(v).trim(), 10);
-    if (!Number.isFinite(n)) return null;
+    // 僅接受字串/數字：擋 [3]、{}等經隱式 String() 轉型繞過驗證。
+    if (typeof v !== "string" && typeof v !== "number") return null;
+    // Number 而非 parseInt：parseInt("3.9")→3、"5abc"→5 會靜默截斷接受非整數輸入。
+    const n = typeof v === "number" ? v : Number(v.trim());
+    if (!Number.isInteger(n)) return null;
     return n;
   };
   const perAccount = parse(b.perAccount);
   const total = parse(b.total);
-  if (perAccount === null || total === null) return { ok: false, error: "上限需為數字" };
+  if (perAccount === null || total === null) return { ok: false, error: "上限需為整數" };
   if (perAccount < 0 || total < 0) return { ok: false, error: "上限不可為負數" };
   if (perAccount > REPOST_LIMIT_MAX || total > REPOST_LIMIT_MAX) {
     return { ok: false, error: `上限不可超過 ${REPOST_LIMIT_MAX}` };

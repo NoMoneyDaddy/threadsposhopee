@@ -29,7 +29,7 @@ export default async function MaterialsPage() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-2xl font-bold">素材庫</h1>
+        <h1 className="text-2xl font-bold">素材</h1>
         <div className="flex flex-wrap items-center gap-3">
           <BulkRepostButton threadsAccounts={accounts} />
           <CheckLinksButton />

@@ -33,7 +33,7 @@ export default async function CalendarPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-bold">排程總覽</h1>
+        <h1 className="text-2xl font-bold">行事曆</h1>
         <p className="text-sm text-ink-2">已核准、排定未來時間的草稿。發文 worker 會在時間到時依防封節奏發布。</p>
       </div>
 

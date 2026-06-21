@@ -15,7 +15,7 @@ import {
 import { getCurrentUser } from "@/lib/auth";
 import { getSponsorConfig } from "@/lib/sponsor";
 import SponsorConfigForm from "@/components/SponsorConfigForm";
-import { PLAN_LABELS, planLimits } from "@/lib/plans";
+import { PLAN_LABELS, planLimits, GLOBAL_MAX_THREADS_ACCOUNTS } from "@/lib/plans";
 import { env, isDemoMode } from "@/lib/env";
 import { tokenExpiryState } from "@/lib/token-expiry";
 import ThreadsAccountForm from "@/components/ThreadsAccountForm";
@@ -54,7 +54,7 @@ export default async function AccountsPage({
   const discordBound = user ? Boolean(await getUserDiscordWebhook(user.id)) : false;
   // 方案配額（owner 不受限，顯示「無上限」）
   const plan = user ? await getUserPlan(user.id) : "free";
-  const accountLimit = planLimits(plan).maxThreadsAccounts;
+  const accountLimit = Math.min(planLimits(plan).maxThreadsAccounts, GLOBAL_MAX_THREADS_ACCOUNTS);
   const sponsor = await getSponsorConfig();
 
   return (
@@ -156,7 +156,9 @@ export default async function AccountsPage({
             title="查看方案與升級（可連結的發文帳號數依方案而定）"
           >
             {PLAN_LABELS[plan]}方案 ·{" "}
-            {user?.isOwner ? `${threads.length} 個（管理者無上限）` : `${threads.length} / ${accountLimit} 個發文帳號`}
+            {user?.isOwner
+              ? `${threads.length} / ${GLOBAL_MAX_THREADS_ACCOUNTS} 個（管理者）`
+              : `${threads.length} / ${accountLimit} 個發文帳號`}
           </a>
         </div>
         <div className="grid gap-3 md:grid-cols-2">

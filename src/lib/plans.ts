@@ -14,6 +14,9 @@ export const PLANS: Record<PlanId, PlanLimits> = {
   business: { maxThreadsAccounts: 50 }
 };
 
+// 全站每人綁定 Threads 帳號硬上限（含管理者）：資源保護，避免單人爆量造成排隊。
+export const GLOBAL_MAX_THREADS_ACCOUNTS = 20;
+
 export const PLAN_LABELS: Record<PlanId, string> = {
   free: "免費版",
   pro: "專業版",

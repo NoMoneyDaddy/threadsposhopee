@@ -7,7 +7,6 @@ const PAGES: { path: string; heading: string }[] = [
   { path: "/sources", heading: "自動抓文" },
   { path: "/materials", heading: "素材" },
   { path: "/drafts", heading: "草稿" },
-  { path: "/calendar", heading: "行事曆" },
   { path: "/insights", heading: "成效" },
   { path: "/accounts", heading: "帳號管理" }
 ];
@@ -15,9 +14,14 @@ const PAGES: { path: string; heading: string }[] = [
 test("首頁顯示 Demo 模式標記與導覽", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByText("Demo 模式（未連接金鑰）")).toBeVisible();
-  // 導覽列含主要連結
-  await expect(page.getByRole("link", { name: "素材" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "成效" })).toBeVisible();
+  // 導覽列含主要連結（階段 2 精簡後）
+  await expect(page.getByRole("link", { name: "草稿", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "成效", exact: true })).toBeVisible();
+});
+
+test("舊行事曆網址轉址到草稿", async ({ page }) => {
+  await page.goto("/calendar");
+  await expect(page).toHaveURL(/\/drafts$/);
 });
 
 for (const p of PAGES) {
@@ -31,9 +35,9 @@ for (const p of PAGES) {
   });
 }
 
-test("導覽列點擊可切換到素材頁", async ({ page }) => {
+test("導覽列點擊可切換到草稿頁", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("link", { name: "素材", exact: true }).click();
-  await expect(page).toHaveURL(/\/materials$/);
-  await expect(page.getByRole("heading", { name: "素材", level: 1 })).toBeVisible();
+  await page.getByRole("link", { name: "草稿", exact: true }).click();
+  await expect(page).toHaveURL(/\/drafts$/);
+  await expect(page.getByRole("heading", { name: "草稿", level: 1 })).toBeVisible();
 });

@@ -20,9 +20,14 @@ export default async function ComposePage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold">發文</h1>
-        <p className="text-sm text-ink-2">貼一個蝦皮連結 → AI 生成文案 → 編輯後立即發布、排程或存草稿。</p>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h1 className="text-2xl font-bold">發文</h1>
+          <p className="text-sm text-ink-2">貼一個蝦皮連結 → AI 生成文案 → 編輯後立即發布、排程或存草稿。</p>
+        </div>
+        <a href="/materials" className="shrink-0 rounded-xl border px-3 py-2 text-sm hover:bg-surface-2">
+          管理素材
+        </a>
       </div>
       {accounts.length === 0 && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">

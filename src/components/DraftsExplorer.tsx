@@ -8,10 +8,15 @@ import { maxSimilarity } from "@/lib/text-similarity";
 // 與「同帳號近期已發布貼文」高度相似才示警（重複措辭易被降觸及）。
 const DUP_THRESHOLD = 0.8;
 
+// 「已排程」＝已核准且排定未來時間（取代原獨立「行事曆」頁）。
+const isScheduled = (d: Draft): boolean =>
+  d.status === "approved" && !!d.scheduled_at && new Date(d.scheduled_at).getTime() > Date.now();
+
 const STATUS_TABS: { value: string; label: string }[] = [
   { value: "all", label: "全部" },
   { value: "draft", label: "待審" },
   { value: "approved", label: "已核准" },
+  { value: "scheduled", label: "已排程" },
   { value: "published", label: "已發布" },
   { value: "failed", label: "失敗" },
   { value: "needs_verification", label: "待確認" },
@@ -33,7 +38,10 @@ export default function DraftsExplorer({
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { all: drafts.length };
-    for (const d of drafts) c[d.status] = (c[d.status] ?? 0) + 1;
+    for (const d of drafts) {
+      c[d.status] = (c[d.status] ?? 0) + 1;
+      if (isScheduled(d)) c.scheduled = (c.scheduled ?? 0) + 1;
+    }
     return c;
   }, [drafts]);
 
@@ -58,7 +66,11 @@ export default function DraftsExplorer({
   const filtered = useMemo(() => {
     const kw = q.trim().toLowerCase();
     return drafts.filter((d) => {
-      if (status !== "all" && d.status !== status) return false;
+      if (status === "scheduled") {
+        if (!isScheduled(d)) return false;
+      } else if (status !== "all" && d.status !== status) {
+        return false;
+      }
       if (!kw) return true;
       return (
         (d.product_name ?? "").toLowerCase().includes(kw) ||

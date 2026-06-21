@@ -35,14 +35,12 @@ const num = (s: string | null | undefined) => {
   return Number.isFinite(n) ? n : 0;
 };
 
-// 抓近 N 天轉換報表（分頁，最多抓 maxPages 頁避免吃滿時間）。
-async function fetchConversions(days: number, maxPages = 10): Promise<{ nodes: ReportNode[]; truncated: boolean }> {
+// 抓指定時間窗（秒）轉換報表（分頁，最多抓 maxPages 頁避免吃滿時間）。
+async function fetchConversions(start: number, end: number, maxPages = 10): Promise<{ nodes: ReportNode[]; truncated: boolean }> {
   const appId = env.shopeeAppId;
   const secret = env.shopeeSecret;
   if (!appId || !secret) throw new Error("未設定 Shopee 分潤金鑰");
 
-  const end = Math.floor(Date.now() / 1000);
-  const start = end - days * 86400;
   const nodes: ReportNode[] = [];
   let scrollId = "";
   let truncated = false;
@@ -68,8 +66,12 @@ async function fetchConversions(days: number, maxPages = 10): Promise<{ nodes: R
   return { nodes, truncated };
 }
 
-export async function getAffiliateRevenue(days = 30): Promise<AffiliateRevenue> {
-  const { nodes, truncated } = await fetchConversions(days);
+// 接受「近 N 天」（數字）或明確時間窗 { startMs, endMs }（自訂區間）。
+export async function getAffiliateRevenue(arg: number | { startMs: number; endMs: number } = 30): Promise<AffiliateRevenue> {
+  const end = typeof arg === "number" ? Math.floor(Date.now() / 1000) : Math.floor(arg.endMs / 1000);
+  const start = typeof arg === "number" ? end - arg * 86400 : Math.floor(arg.startMs / 1000);
+  const days = Math.max(1, Math.round((end - start) / 86400));
+  const { nodes, truncated } = await fetchConversions(start, end);
 
   const statusMap = new Map<string, { count: number; commission: number }>();
   const itemMap = new Map<string, { commission: number; count: number }>();
@@ -165,7 +167,8 @@ export async function getItemRevenueMap(ownerId: string, days = 30): Promise<Rec
   const key = `item_revenue:${ownerId}:${days}`;
   const cached = await getCachedJson<Record<string, ItemRevenue>>(key, 6 * 3600_000).catch(() => null);
   if (cached) return cached;
-  const { nodes } = await fetchConversions(days);
+  const end = Math.floor(Date.now() / 1000);
+  const { nodes } = await fetchConversions(end - days * 86400, end);
   const map = aggregateItemRevenue(nodes);
   await setCachedJson(key, map).catch(() => {});
   return map;

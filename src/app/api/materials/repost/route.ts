@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { log } from "@/lib/logger";
-import { getMaterial, createDraftFromMaterial, updateDraft, getGeminiKey, getCopyPrefs, userOwnsThreadsAccount } from "@/lib/store";
+import { getMaterial, createDraftFromMaterial, updateDraft, getGeminiKey, getCopyPrefs, userOwnsThreadsAccount, getRepostLimits, countMaterialReposts } from "@/lib/store";
+import { exceedsRepostLimit } from "@/lib/repost-limits";
 import { withNextSlot, nextOpenSlotAtHours } from "@/services/publish/slots";
 import { getBestHours } from "@/services/threads/engagement";
 import { generateCopy } from "@/services/ai/provider";
@@ -61,6 +62,16 @@ export async function POST(req: Request) {
 
     const action = body.action === "queue" ? "queue" : "draft";
     const vary = body.vary === true;
+
+    // 重複發文上限：只在「排入佇列」（承諾發文）時把關；存草稿不計。0＝不限。
+    if (action === "queue") {
+      const limits = await getRepostLimits(ownerId);
+      if (limits.perAccount > 0 || limits.total > 0) {
+        const cnt = await countMaterialReposts(ownerId, material.id, body.threads_account_id);
+        const chk = exceedsRepostLimit(limits, cnt);
+        if (chk.blocked) return NextResponse.json({ ok: false, error: chk.reason }, { status: 409 });
+      }
+    }
 
     let draft: Draft | null;
     let scheduledAt: string | null = null;

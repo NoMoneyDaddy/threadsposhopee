@@ -8,6 +8,7 @@ import { log } from "./logger";
 import { normalizePlan, type PlanId } from "./plans";
 import { parseSlots, type PublishPrefs } from "./publish-prefs";
 import { normalizeNotifyPrefs, type NotifyPrefs } from "./notify-prefs";
+import type { RepostLimits } from "./repost-limits";
 
 // ── 方案分層（商業化）：每人一個方案字串（非機密，明文存）。限額查 plans.ts ──
 export async function getUserPlan(ownerId: string): Promise<PlanId> {
@@ -268,6 +269,37 @@ export async function setPublishPrefs(
     { onConflict: "id" }
   );
   if (error) throw new Error(`儲存發文節奏失敗：${error.message}`);
+}
+
+// ── 每位使用者「同素材重複發文上限」（0／NULL＝不限）──────
+export async function getRepostLimits(ownerId: string): Promise<RepostLimits> {
+  if (isDemoMode) return { perAccount: 0, total: 0 };
+  const sb = getServiceClient()!;
+  const { data, error } = await sb
+    .from("profiles")
+    .select("repost_max_per_account, repost_max_total")
+    .eq("id", ownerId)
+    .maybeSingle();
+  if (error) throw new Error(`讀取重發上限失敗：${error.message}`);
+  return {
+    perAccount: data?.repost_max_per_account ?? 0,
+    total: data?.repost_max_total ?? 0
+  };
+}
+
+export async function setRepostLimits(ownerId: string, limits: RepostLimits): Promise<void> {
+  if (isDemoMode) return;
+  const sb = getServiceClient()!;
+  const { error } = await sb.from("profiles").upsert(
+    {
+      id: ownerId,
+      // 0 視為不限 → 存 NULL，語意一致
+      repost_max_per_account: limits.perAccount > 0 ? limits.perAccount : null,
+      repost_max_total: limits.total > 0 ? limits.total : null
+    },
+    { onConflict: "id" }
+  );
+  if (error) throw new Error(`儲存重發上限失敗：${error.message}`);
 }
 
 // ── 每位使用者通知個別開關（notify_prefs jsonb）：預設全開 ──────

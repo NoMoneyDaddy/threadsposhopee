@@ -4,26 +4,10 @@ import { getEngagementCached, bestPostingTimes, type EngagementSummary } from "@
 import { detectReachDrop } from "@/services/threads/reach";
 import { getCurrentUser } from "@/lib/auth";
 import { env, isDemoMode } from "@/lib/env";
+import { INSIGHTS_PERIODS as PERIODS, resolveInsightsRange } from "@/lib/insights-range";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
-
-// 區間預設：今日 / 近 7 / 30 / 90 / 365 天（日/週/月/季/年報表）。
-const PERIODS: { days: number; label: string }[] = [
-  { days: 1, label: "今日" },
-  { days: 7, label: "近 7 天" },
-  { days: 30, label: "近 30 天" },
-  { days: 90, label: "近 90 天" },
-  { days: 365, label: "近一年" }
-];
-
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-// 把台北日期（YYYY-MM-DD）轉成 epoch ms。台北固定 UTC+8、無日光節約。
-function taipeiMs(date: string, end: boolean): number | null {
-  if (!DATE_RE.test(date)) return null;
-  const t = Date.parse(`${date}T${end ? "23:59:59" : "00:00:00"}+08:00`);
-  return Number.isNaN(t) ? null : t;
-}
 
 // 成效統計：自家發布數據 + Shopee 分潤實際收益（owner 限定）。
 // 支援預設區間（days）與自訂日期區間（from/to，台北）。
@@ -35,16 +19,7 @@ export default async function InsightsPage({
   const user = await getCurrentUser();
   if (!user) return <div className="text-center text-sm text-red-500">請先登入。</div>;
 
-  // 自訂區間優先；無效則退回預設 days。
-  const fromMs = searchParams.from ? taipeiMs(searchParams.from, false) : null;
-  const toMs = searchParams.to ? taipeiMs(searchParams.to, true) : null;
-  const custom = fromMs !== null && toMs !== null && fromMs <= toMs;
-  const days = PERIODS.some((p) => p.days === Number(searchParams.days)) ? Number(searchParams.days) : 30;
-  const endMs = custom ? (toMs as number) : Date.now();
-  const startMs = custom ? (fromMs as number) : endMs - days * 86400_000;
-  const rangeLabel = custom
-    ? `${searchParams.from} ~ ${searchParams.to}`
-    : PERIODS.find((p) => p.days === days)?.label ?? `近 ${days} 天`;
+  const { startMs, endMs, days, label: rangeLabel, custom } = resolveInsightsRange(searchParams);
 
   const data = await getPublishInsights(user.id, { startMs, endMs });
   const maxDay = Math.max(1, ...data.byDay.map((d) => d.count));
@@ -99,6 +74,16 @@ export default async function InsightsPage({
               清除
             </a>
           )}
+          <a
+            href={`/api/insights/export?${new URLSearchParams(
+              custom
+                ? { from: searchParams.from ?? "", to: searchParams.to ?? "" }
+                : { days: String(days) }
+            ).toString()}`}
+            className="rounded-lg border border-brand/40 px-3 py-1 text-xs text-brand hover:bg-brand/10"
+          >
+            匯出 CSV
+          </a>
         </form>
       </div>
 

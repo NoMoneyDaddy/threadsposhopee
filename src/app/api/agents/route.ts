@@ -18,6 +18,11 @@ export async function POST(req: Request) {
     if (!name) return NextResponse.json({ ok: false, error: "請填代理人名稱" }, { status: 400 });
     if (!getAiDomain(body.domain)) return NextResponse.json({ ok: false, error: "領域不存在" }, { status: 400 });
 
+    const searchQuery = typeof body.search_query === "string" ? body.search_query.trim().slice(0, 100) : "";
+    if (body.domain === "custom" && !searchQuery) {
+      return NextResponse.json({ ok: false, error: "自訂主題請填搜尋關鍵字" }, { status: 400 });
+    }
+
     const emoji = EMOJI.includes(body.emoji_level) ? body.emoji_level : "light";
     const length = Number(body.length);
     const tags = Array.isArray(body.hashtag_pool)
@@ -31,6 +36,7 @@ export async function POST(req: Request) {
       emoji_level: emoji,
       hashtag_pool: tags,
       length: Number.isInteger(length) && length >= 50 && length <= 500 ? length : 200,
+      search_query: searchQuery,
       threads_account_id: typeof body.threads_account_id === "string" ? body.threads_account_id : null,
       use_redirect: body.use_redirect === true
     });

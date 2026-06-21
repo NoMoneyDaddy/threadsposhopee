@@ -57,10 +57,13 @@ export function attributeRevenueByAccount(
     .sort((a, b) => b.commission - a.commission);
 }
 
-const num = (s: string | null | undefined) => {
-  const n = parseFloat(s ?? "");
+// 解析金額字串為數值：先去千分位逗號（"1,234.50" → 1234.5），無法解析回 0。
+// 純函式可測。蝦皮金額常破千，未去逗號會被 parseFloat 在逗號處截斷而嚴重低估。
+export function parseMoney(s: string | null | undefined): number {
+  const n = parseFloat(String(s ?? "").replace(/,/g, ""));
   return Number.isFinite(n) ? n : 0;
-};
+}
+const num = parseMoney;
 
 // 抓指定時間窗（秒）轉換報表（分頁，最多抓 maxPages 頁避免吃滿時間）。
 async function fetchConversions(start: number, end: number, maxPages = 10): Promise<{ nodes: ReportNode[]; truncated: boolean }> {
@@ -87,8 +90,15 @@ async function fetchConversions(start: number, end: number, maxPages = 10): Prom
     const rep = data?.conversionReport;
     nodes.push(...((rep?.nodes ?? []) as ReportNode[]));
     if (!rep?.pageInfo?.hasNextPage) break;
-    scrollId = rep.pageInfo.scrollId ?? "";
-    if (page === maxPages - 1 && rep.pageInfo.hasNextPage) truncated = true;
+    const nextScroll = rep.pageInfo.scrollId ?? "";
+    // hasNextPage 但拿不到 scrollId：若續圈會走「首頁分支」重抓第一頁→佣金重複加總。
+    // 視為截斷並停止，避免重複計入。
+    if (!nextScroll) {
+      truncated = true;
+      break;
+    }
+    scrollId = nextScroll;
+    if (page === maxPages - 1) truncated = true;
   }
   return { nodes, truncated };
 }

@@ -14,7 +14,9 @@ import {
   getThreadsCredentials,
   setThreadsAccountStatus,
   listActiveThreadsAccountsAll,
-  listDrafts
+  listDrafts,
+  getCachedJson,
+  setCachedJson
 } from "@/lib/store";
 import { getPostText } from "@/services/threads/verify";
 import { resolveSponsorResources, buildSponsorLinkForAccount } from "@/services/sponsor/link";
@@ -72,6 +74,11 @@ export async function ensureSponsorPosts(ownerUserId: string | null): Promise<{ 
   return out;
 }
 
+// 違規寬鬆化：單次刪文/竄改不立即暫停，累計達門檻才暫停（容許偶發/誤刪）。
+// 連續驗證通過會清零。strike 以 30 天滾動窗存於 app_state。
+const SPONSOR_VIOLATION_LIMIT = 3;
+const STRIKE_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+
 export async function verifySponsorPosts(): Promise<{ checked: number; violations: number }> {
   const out = { checked: 0, violations: 0 };
   if (isDemoMode) return out;
@@ -84,19 +91,35 @@ export async function verifySponsorPosts(): Promise<{ checked: number; violation
       const text = await getPostText(rec.postId, creds.accessToken);
       // text===null 代表貼文被刪/讀不到；否則檢查平台分潤連結是否仍在內文。
       const ok = text !== null && (rec.link ? text.includes(rec.link) : true);
+      const strikeKey = `sponsor_strikes:${accountId}`;
       if (ok) {
         await setSponsorRecord(accountId, date, { ...rec, verified: true });
+        // 通過則清零累計違規（寬鬆：給機會重新累積）
+        await setCachedJson(strikeKey, 0).catch(() => {});
       } else {
         out.violations++;
-        await setThreadsAccountStatus(accountId, rec.ownerId, "paused").catch((e) =>
-          log.warn("暫停帳號失敗", { accountId, err: e })
-        );
         await setSponsorRecord(accountId, date, { ...rec, verified: true, violated: true });
-        await sendUserAlert(
-          rec.ownerId,
-          "⚠️ 你的贊助文章連結被移除或竄改，該帳號發文已暫停。請至帳號管理重新啟用（並遵守贊助文章規則）。",
-          "sponsor_violation"
-        ).catch(() => {});
+        const prev = (await getCachedJson<number>(strikeKey, STRIKE_WINDOW_MS).catch(() => 0)) ?? 0;
+        const strikes = prev + 1;
+        await setCachedJson(strikeKey, strikes).catch(() => {});
+        if (strikes >= SPONSOR_VIOLATION_LIMIT) {
+          // 累計達上限才暫停（恢復走帳號管理手動啟用）
+          await setThreadsAccountStatus(accountId, rec.ownerId, "paused").catch((e) =>
+            log.warn("暫停帳號失敗", { accountId, err: e })
+          );
+          await sendUserAlert(
+            rec.ownerId,
+            `⚠️ 你的贊助文章連結多次（${strikes} 次）被移除或竄改，該帳號發文已暫停。請至帳號管理重新啟用並遵守贊助文章規則。`,
+            "sponsor_violation"
+          ).catch(() => {});
+        } else {
+          // 未達上限：只提醒、不暫停
+          await sendUserAlert(
+            rec.ownerId,
+            `🔔 提醒：你的贊助文章連結被移除或竄改（第 ${strikes}/${SPONSOR_VIOLATION_LIMIT} 次）。累計達上限才會暫停發文，請遵守贊助文章規則。`,
+            "sponsor_violation"
+          ).catch(() => {});
+        }
       }
     } catch (e) {
       log.warn("驗證贊助文發生錯誤", { accountId, err: e });

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import AdSlot from "@/components/AdSlot";
 
 export const metadata: Metadata = { title: "贊助文章規則 — IwantPo" };
 
@@ -44,16 +45,21 @@ export default function SponsoredPage() {
         </p>
       </Section>
 
-      <Section title="驗證與暫停">
+      <Section title="驗證與暫停（寬鬆處理）">
         <p>
-          系統會驗證贊助文章已成功發布、且其分潤連結未被竄改或刪除。若偵測到該篇被刪除或連結被更動，
-          將<strong className="text-ink">暫停該 Threads 帳號的自動發文</strong>，待下一篇贊助文章正常發布後自動恢復。
+          系統會驗證贊助文章已成功發布、且其分潤連結未被竄改或刪除。偶發或單次被刪除/更動，
+          系統<strong className="text-ink">只會記錄並提醒</strong>，不會立即暫停；
+          僅在<strong className="text-ink">累計多次違規</strong>時，才會暫停該 Threads 帳號的自動發文，
+          恢復走帳號管理的手動啟用。
         </p>
       </Section>
 
       <Section title="範圍與變更">
         <p>管理者本人的帳號不適用本規則。本規則以本頁最新版本為準。</p>
       </Section>
+
+      {/* 低干擾廣告：僅置於公開內容頁底部（非操作流程/交易頁），未設 AdSense 則不顯示 */}
+      <AdSlot slot={process.env.NEXT_PUBLIC_ADSENSE_SLOT_CONTENT} className="mt-4" />
     </div>
   );
 }

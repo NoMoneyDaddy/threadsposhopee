@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import DraftCard from "@/components/DraftCard";
 import BulkDraftBar from "@/components/BulkDraftBar";
 import type { Draft } from "@/lib/types";
@@ -45,6 +45,16 @@ export default function DraftsExplorer({
       else next.add(id);
       return next;
     });
+
+  // 草稿更新後（批次/單筆操作）自動清除已非「待審」的選取，避免殘留與其他分頁殘影。
+  useEffect(() => {
+    setSelected((prev) => {
+      if (prev.size === 0) return prev;
+      const next = new Set<string>();
+      for (const d of drafts) if (d.status === "draft" && prev.has(d.id)) next.add(d.id);
+      return prev.size === next.size ? prev : next;
+    });
+  }, [drafts]);
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { all: drafts.length };
@@ -129,7 +139,13 @@ export default function DraftsExplorer({
                 if (el) el.indeterminate = selectedPending.length > 0 && selectedPending.length < pendingInView.length;
               }}
               onChange={(e) =>
-                setSelected(e.target.checked ? new Set(pendingInView) : new Set())
+                setSelected((prev) => {
+                  // 聯集/差集：只動目前可見的待審，保留其他篩選下既有選取（可分批累積）。
+                  const next = new Set(prev);
+                  if (e.target.checked) pendingInView.forEach((id) => next.add(id));
+                  else pendingInView.forEach((id) => next.delete(id));
+                  return next;
+                })
               }
             />
             全選待審（{pendingInView.length}）

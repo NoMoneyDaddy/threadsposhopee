@@ -359,7 +359,9 @@ export async function listThreadsTokensToRefresh(
     .select("id, label, owner_id, access_token_enc, token_expires_at")
     .eq("status", "active")
     .not("access_token_enc", "is", null)
-    .lte("token_expires_at", cutoff);
+    // 含「無到期日」的 active 帳號：Postgres 對 NULL 的 .lte 回 false，會讓無到期日帳號
+    // 永不展期、60 天後靜默過期且從不進 worker。以 or 補上 is null。
+    .or(`token_expires_at.lte.${cutoff},token_expires_at.is.null`);
   return (data ?? [])
     .map((r) => {
       try {

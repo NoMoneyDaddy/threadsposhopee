@@ -1,7 +1,7 @@
 // Threads 長期 token 自動展期 worker。
 // 長期 token 約 60 天到期，到期前 7 天內自動 refresh，並把新 token + 到期日寫回。
-// 展期失敗（多半因 token 已過期）→ 標記帳號 error，前端可見並停止排程。
-import { refreshLongLivedToken } from "@/services/threads/token";
+// 展期失敗且「token 確定失效」→ 標記帳號 error；暫時性錯誤（5xx/限流/網路/逾時）僅記錄、下輪重試。
+import { refreshLongLivedToken, ThreadsTokenError, isPermanentTokenError } from "@/services/threads/token";
 import { listThreadsTokensToRefresh, updateThreadsToken, markThreadsAccountError } from "@/lib/store";
 import { sendUserAlert } from "@/lib/notify";
 import { log } from "@/lib/logger";
@@ -31,14 +31,20 @@ export async function refreshExpiringTokens(): Promise<{
         return { label: acc.label, ok: true as const };
       } catch (e) {
         const error = e instanceof Error ? e.message : String(e);
-        // 標記失敗若又失敗需可見：否則帳號維持 active 會持續展期失敗、發文也跟著失敗。
+        // 暫時性錯誤（5xx/限流/網路/逾時，無明確失效狀態）：不誤標 error、不通知，留待下輪重試。
+        // 否則一次 Threads 暫時性故障就把仍有效的帳號打成 error、發出誤導的「需重新授權」。
+        const permanent = e instanceof ThreadsTokenError && isPermanentTokenError(e.status);
+        if (!permanent) {
+          log.warn("Threads token 展期暫時性失敗，下輪重試", { accountId: acc.id, accountLabel: acc.label, err: error });
+          return { label: acc.label, ok: false as const, error };
+        }
+        // token 確定失效：標 error（停止排程）＋通知擁有者重新授權。
         await markThreadsAccountError(acc.id).catch((me) =>
           log.warn("標記 Threads 帳號 error 失敗", { accountId: acc.id, accountLabel: acc.label, err: me })
         );
-        // 個人通知：token 展期失敗＝該帳號將停止發文，推給帳號擁有者盡快重新授權。
         await sendUserAlert(
           acc.ownerId,
-          `🔑 你的 Threads 帳號「${acc.label}」token 展期失敗，已暫停發文。請到帳號管理重新用 Threads 連結授權。`,
+          `🔑 你的 Threads 帳號「${acc.label}」token 已失效，已暫停發文。請到帳號管理重新用 Threads 連結授權。`,
           "token_expiring"
         ).catch(() => {});
         return { label: acc.label, ok: false as const, error };

@@ -1,4 +1,5 @@
 import { getPublishInsights } from "@/lib/store";
+import { listThreadsAccounts } from "@/lib/accounts-store";
 import { getAffiliateRevenue, type AffiliateRevenue } from "@/services/shopee/report";
 import { getEngagementCached, bestPostingTimes, type EngagementSummary } from "@/services/threads/engagement";
 import { detectReachDrop } from "@/services/threads/reach";
@@ -29,7 +30,9 @@ export default async function InsightsPage({
   let revenueErr: string | null = null;
   if (user.isOwner && !isDemoMode && env.shopeeAppId && env.shopeeSecret) {
     try {
-      revenue = await getAffiliateRevenue({ startMs, endMs });
+      // 帶入發文帳號清單 → 依 sp_<帳號碼> 把分潤歸因到各帳號
+      const accounts = await listThreadsAccounts(user.id).catch(() => []);
+      revenue = await getAffiliateRevenue({ startMs, endMs }, accounts.map((a) => ({ id: a.id, label: a.label })));
     } catch (e) {
       revenueErr = e instanceof Error ? e.message : String(e);
     }
@@ -290,6 +293,13 @@ function RevenueSection({ r }: { r: AffiliateRevenue }) {
           </div>
         )}
       </section>
+
+      {r.byAccount && r.byAccount.length > 0 && (
+        <RevenueRank
+          title="各帳號分潤收益（依 sp_ 標記歸因）"
+          rows={r.byAccount.map((a) => ({ name: a.name, value: a.commission, sub: `${a.count} 筆` }))}
+        />
+      )}
 
       <div className="grid gap-4 md:grid-cols-2">
         <RevenueRank title="收益最高商品" rows={r.byItem.map((i) => ({ name: i.name, value: i.commission, sub: `${i.count} 筆` }))} />

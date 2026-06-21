@@ -347,7 +347,8 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
         // 個人通知：發布不確定需人工確認 → 推給該草稿擁有者（已綁 Telegram 才送）。
         await sendUserAlert(
           draft.owner_id,
-          `⚠️ 你的貼文「${draft.product_name ?? draft.id}」可能已發出但回應遺失，請到 Threads 確認後再決定重發或退回（草稿頁→待確認）。`
+          `⚠️ 你的貼文「${draft.product_name ?? draft.id}」可能已發出但回應遺失，請到 Threads 確認後再決定重發或退回（草稿頁→待確認）。`,
+          "publish_uncertain"
         ).catch(() => {});
       } else {
         await updateDraftStatus(draft.id, "failed", { error: msg }, draft.owner_id ?? undefined);
@@ -366,6 +367,12 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
         }
         const cd = circuitCooldown > 0 ? `，冷卻 ${circuitCooldown} 分` : "";
         await sendAlert(`⚠️ 帳號連續發文失敗 ${failuresThisRun[accId]} 次，已暫停該帳號${cd}。最後錯誤：${msg}`).catch(() => {});
+        // 個人通知：帳號被暫停（連續失敗）→ 推給該草稿擁有者。
+        await sendUserAlert(
+          draft.owner_id,
+          `⛔ 你的發文帳號因連續失敗已暫停${cd}。請到帳號管理檢查 token／重新授權。`,
+          "account_paused"
+        ).catch(() => {});
       }
     }
   }
@@ -413,7 +420,7 @@ async function publishDueReplies(startTime: number, shard?: ShardOpts): Promise<
         log.warn("標記延遲留言失敗時又失敗（將由 reclaim 回收）", { ownerId, draftId: d.id, err: me })
       );
       // 個人通知：分潤連結留言（串文 2/2）沒補上＝影響轉換，推給該草稿擁有者到草稿頁重補。
-      await sendUserAlert(ownerId, "💬 你有一則分潤連結留言補發失敗，請到草稿頁「重試補留言」。").catch(() => {});
+      await sendUserAlert(ownerId, "💬 你有一則分潤連結留言補發失敗，請到草稿頁「重試補留言」。", "reply_failed").catch(() => {});
       out.failed++;
     }
   }

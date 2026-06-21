@@ -38,7 +38,8 @@ export async function refreshExpiringTokens(): Promise<{
         // 個人通知：token 展期失敗＝該帳號將停止發文，推給帳號擁有者盡快重新授權。
         await sendUserAlert(
           acc.ownerId,
-          `🔑 你的 Threads 帳號「${acc.label}」token 展期失敗，已暫停發文。請到帳號管理重新用 Threads 連結授權。`
+          `🔑 你的 Threads 帳號「${acc.label}」token 展期失敗，已暫停發文。請到帳號管理重新用 Threads 連結授權。`,
+          "token_expiring"
         ).catch(() => {});
         return { label: acc.label, ok: false as const, error };
       }

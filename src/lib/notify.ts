@@ -2,7 +2,8 @@ import { env } from "./env";
 import { fetchWithTimeout } from "./http";
 import { assertSafePublicUrl } from "./url-guard";
 import { log } from "./logger";
-import { getUserTelegramChatId, getUserDiscordWebhook } from "./store";
+import { getUserTelegramChatId, getUserDiscordWebhook, getNotifyPrefs } from "./store";
+import type { NotifyType } from "./notify-prefs";
 
 // 共用底層：對指定 chat 發 Telegram 訊息。回傳是否成功（供「測試」按鈕判斷）。
 // 絕不丟錯（告警失敗不該再炸上層）。
@@ -61,8 +62,17 @@ export async function sendDiscord(webhookUrl: string, text: string): Promise<boo
 
 // 個人通知：發到某使用者自綁的所有通道（Telegram + Discord，各自選配）。
 // 未綁任何通道 → 靜默略過（個人通知為選配，缺了不該報錯）。並行送、互不影響。
-export async function sendUserAlert(ownerId: string | null | undefined, text: string): Promise<void> {
+export async function sendUserAlert(
+  ownerId: string | null | undefined,
+  text: string,
+  type?: NotifyType
+): Promise<void> {
   if (!ownerId) return;
+  // 個別開關：有指定類型且使用者關掉該類 → 不送（無類型＝系統訊息照送）。
+  if (type) {
+    const prefs = await getNotifyPrefs(ownerId).catch(() => null);
+    if (prefs && prefs[type] === false) return;
+  }
   const [chatId, discordUrl] = await Promise.all([
     getUserTelegramChatId(ownerId).catch(() => null),
     getUserDiscordWebhook(ownerId).catch(() => null)

@@ -7,6 +7,7 @@ import { decrypt, encrypt } from "./crypto";
 import { log } from "./logger";
 import { normalizePlan, type PlanId } from "./plans";
 import { parseSlots, type PublishPrefs } from "./publish-prefs";
+import { normalizeNotifyPrefs, type NotifyPrefs } from "./notify-prefs";
 
 // ── 方案分層（商業化）：每人一個方案字串（非機密，明文存）。限額查 plans.ts ──
 export async function getUserPlan(ownerId: string): Promise<PlanId> {
@@ -267,4 +268,29 @@ export async function setPublishPrefs(
     { onConflict: "id" }
   );
   if (error) throw new Error(`儲存發文節奏失敗：${error.message}`);
+}
+
+// ── 每位使用者通知個別開關（notify_prefs jsonb）：預設全開 ──────
+export async function getNotifyPrefs(ownerId: string): Promise<NotifyPrefs> {
+  if (isDemoMode) return normalizeNotifyPrefs(null);
+  const sb = getServiceClient()!;
+  const { data } = await sb.from("profiles").select("notify_prefs").eq("id", ownerId).maybeSingle();
+  let raw: unknown = data?.notify_prefs ?? null;
+  if (typeof raw === "string") {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      raw = null;
+    }
+  }
+  return normalizeNotifyPrefs(raw);
+}
+
+export async function setNotifyPrefs(ownerId: string, prefs: NotifyPrefs): Promise<void> {
+  if (isDemoMode) return;
+  const sb = getServiceClient()!;
+  const { error } = await sb
+    .from("profiles")
+    .upsert({ id: ownerId, notify_prefs: normalizeNotifyPrefs(prefs) }, { onConflict: "id" });
+  if (error) throw new Error(`儲存通知偏好失敗：${error.message}`);
 }

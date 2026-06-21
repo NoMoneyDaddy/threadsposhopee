@@ -6,6 +6,7 @@ import { fetchWithTimeout } from "@/lib/http";
 import { log } from "@/lib/logger";
 import { assertSafePublicUrl } from "@/lib/url-guard";
 import { listMaterialsToCheck, setAffiliateChecked, reviveAffiliateLink, getAutoReviveLinks, type MaterialToCheck } from "@/lib/store";
+import { sendUserAlert } from "@/lib/notify";
 import { regenerateAffiliateLink } from "./regen";
 
 // 回傳 true 代表「明確失效」；其餘狀況（200/3xx/403/逾時/網路錯誤）一律視為未知 → 不標失效。
@@ -62,13 +63,27 @@ export async function checkAffiliateLinks(
     if (!autoReviveCache.has(oid)) autoReviveCache.set(oid, await getAutoReviveLinks(oid).catch(() => false));
     return autoReviveCache.get(oid)!;
   };
+  // 失效（dead）依 owner 彙整，整輪結束推一則通知（避免逐則洗版）。
+  const deadByOwner: Record<string, number> = {};
   // 分批檢查，每批最多 5 個並行，避免一次開過多外部連線
   const CONCURRENCY = 5;
   for (let i = 0; i < items.length; i += CONCURRENCY) {
     const batch = items.slice(i, i + CONCURRENCY);
-    const results = await Promise.all(batch.map(async (m) => checkOne(m, ownerUserId, await autoReviveFor(m.owner_id))));
-    dead += results.filter((r) => r === "dead").length;
-    revived += results.filter((r) => r === "revived").length;
+    const results = await Promise.all(
+      batch.map(async (m) => ({ outcome: await checkOne(m, ownerUserId, await autoReviveFor(m.owner_id)), ownerId: m.owner_id }))
+    );
+    for (const r of results) {
+      if (r.outcome === "dead") {
+        dead++;
+        if (r.ownerId) deadByOwner[r.ownerId] = (deadByOwner[r.ownerId] ?? 0) + 1;
+      } else if (r.outcome === "revived") {
+        revived++;
+      }
+    }
+  }
+  // 個人通知：你的分潤連結失效（需到素材頁重產或開啟自動替換）。
+  for (const [oid, n] of Object.entries(deadByOwner)) {
+    await sendUserAlert(oid, `🔗 你有 ${n} 個分潤連結失效，到素材頁可重產（或在帳號管理開啟「失效自動替換」）。`).catch(() => {});
   }
   return { checked: items.length, dead, revived };
 }

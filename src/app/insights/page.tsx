@@ -8,11 +8,21 @@ import { env, isDemoMode } from "@/lib/env";
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
+// 區間預設：今日 / 近 7 / 30 / 90 / 365 天（日/週/月/季/年報表）。
+const PERIODS: { days: number; label: string }[] = [
+  { days: 1, label: "今日" },
+  { days: 7, label: "近 7 天" },
+  { days: 30, label: "近 30 天" },
+  { days: 90, label: "近 90 天" },
+  { days: 365, label: "近一年" }
+];
+
 // 成效統計：自家發布數據 + Shopee 分潤實際收益（owner 限定）。
-export default async function InsightsPage() {
+export default async function InsightsPage({ searchParams }: { searchParams: { days?: string } }) {
   const user = await getCurrentUser();
   if (!user) return <div className="text-center text-sm text-red-500">請先登入。</div>;
-  const data = await getPublishInsights(user.id, 30);
+  const days = PERIODS.some((p) => p.days === Number(searchParams.days)) ? Number(searchParams.days) : 30;
+  const data = await getPublishInsights(user.id, days);
   const maxDay = Math.max(1, ...data.byDay.map((d) => d.count));
 
   // 分潤收益（僅 owner、且有設金鑰時才抓；失敗則優雅降級）
@@ -20,7 +30,7 @@ export default async function InsightsPage() {
   let revenueErr: string | null = null;
   if (user.isOwner && !isDemoMode && env.shopeeAppId && env.shopeeSecret) {
     try {
-      revenue = await getAffiliateRevenue(30);
+      revenue = await getAffiliateRevenue(days);
     } catch (e) {
       revenueErr = e instanceof Error ? e.message : String(e);
     }
@@ -36,6 +46,19 @@ export default async function InsightsPage() {
         <p className="text-sm text-ink-2">
           近 {data.days} 天共發布 <b className="text-brand">{data.totalPublished}</b> 篇。
         </p>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {PERIODS.map((p) => (
+            <a
+              key={p.days}
+              href={`/insights?days=${p.days}`}
+              className={`rounded-full px-3 py-1 text-xs ${
+                p.days === days ? "bg-brand text-white" : "bg-surface-2 text-ink-2 hover:bg-neutral-200"
+              }`}
+            >
+              {p.label}
+            </a>
+          ))}
+        </div>
       </div>
 
       {revenue && <RevenueSection r={revenue} />}

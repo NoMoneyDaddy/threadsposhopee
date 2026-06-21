@@ -8,6 +8,7 @@ import {
   getShopeeSubId,
   getAutoReviveLinks,
   getPublishPrefs,
+  getNotifyPrefs,
   getUserCloudinary,
   getUserTelegramChatId,
   getUserDiscordWebhook,
@@ -28,6 +29,7 @@ import AffiliateIdForm from "@/components/AffiliateIdForm";
 import SubIdForm from "@/components/SubIdForm";
 import AutoReviveForm from "@/components/AutoReviveForm";
 import PublishPrefsForm from "@/components/PublishPrefsForm";
+import NotifyPrefsForm from "@/components/NotifyPrefsForm";
 import CloudinaryForm from "@/components/CloudinaryForm";
 import TelegramForm from "@/components/TelegramForm";
 import DiscordForm from "@/components/DiscordForm";
@@ -52,6 +54,7 @@ export default async function AccountsPage({
   const customSubId = user ? await getShopeeSubId(ownerId) : null;
   const autoRevive = user ? await getAutoReviveLinks(ownerId) : false;
   const publishPrefs = user ? await getPublishPrefs(ownerId) : null;
+  const notifyPrefs = user ? await getNotifyPrefs(ownerId) : null;
   const cloudinary = user ? await getUserCloudinary(ownerId) : null;
   const telegramBound = user ? Boolean(await getUserTelegramChatId(user.id)) : false;
   const discordBound = user ? Boolean(await getUserDiscordWebhook(user.id)) : false;
@@ -137,6 +140,8 @@ export default async function AccountsPage({
         {user && <TelegramForm bound={telegramBound} botConfigured={!isDemoMode && Boolean(env.telegramBotToken)} />}
         {user && <DiscordForm bound={discordBound} />}
       </div>
+
+      {user && notifyPrefs && <NotifyPrefsForm initial={notifyPrefs} />}
 
       {user?.isOwner && <SponsorConfigForm initial={sponsor} />}
 

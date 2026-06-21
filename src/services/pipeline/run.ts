@@ -174,7 +174,7 @@ export async function runAllSources(): Promise<PipelineResult[]> {
   // 個人通知：本輪新產生的草稿待審（爬蟲掛在 owner 名下）→ 提醒 owner 去核准。
   const newDrafts = results.reduce((n, r) => n + r.drafts.length, 0);
   if (newDrafts > 0) {
-    await sendUserAlert(ownerId, `📝 有 ${newDrafts} 則新文案草稿待審核，到草稿頁核准後才會發布。`).catch(() => {});
+    await sendUserAlert(ownerId, `📝 有 ${newDrafts} 則新文案草稿待審核，到草稿頁核准後才會發布。`, "draft_pending").catch(() => {});
   }
   return results;
 }

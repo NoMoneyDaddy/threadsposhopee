@@ -79,7 +79,7 @@ export async function runCronAll(now: Date = new Date()): Promise<Record<string,
         if (!personalSink && !globalSink) return { sent: false };
         const msg = await buildDailyDigest();
         if (!msg) return { sent: false };
-        if (personalSink) await sendUserAlert(ownerId, msg);
+        if (personalSink) await sendUserAlert(ownerId, msg, "daily_digest");
         else await sendAlert(msg);
         return { sent: true, via: personalSink ? "personal" : "global" };
       }

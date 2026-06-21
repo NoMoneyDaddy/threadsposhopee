@@ -110,6 +110,8 @@ export {
   setAutoReviveLinks,
   getPublishPrefs,
   setPublishPrefs,
+  getNotifyPrefs,
+  setNotifyPrefs,
   getUserCloudinary,
   setUserCloudinary,
   getUserPlan,

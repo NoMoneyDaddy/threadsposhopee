@@ -94,7 +94,8 @@ export async function verifySponsorPosts(): Promise<{ checked: number; violation
         await setSponsorRecord(accountId, date, { ...rec, verified: true, violated: true });
         await sendUserAlert(
           rec.ownerId,
-          "⚠️ 你的贊助文章連結被移除或竄改，該帳號發文已暫停。請至帳號管理重新啟用（並遵守贊助文章規則）。"
+          "⚠️ 你的贊助文章連結被移除或竄改，該帳號發文已暫停。請至帳號管理重新啟用（並遵守贊助文章規則）。",
+          "sponsor_violation"
         ).catch(() => {});
       }
     } catch (e) {

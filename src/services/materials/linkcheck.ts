@@ -83,7 +83,7 @@ export async function checkAffiliateLinks(
   }
   // 個人通知：你的分潤連結失效（需到素材頁重產或開啟自動替換）。
   for (const [oid, n] of Object.entries(deadByOwner)) {
-    await sendUserAlert(oid, `🔗 你有 ${n} 個分潤連結失效，到素材頁可重產（或在帳號管理開啟「失效自動替換」）。`).catch(() => {});
+    await sendUserAlert(oid, `🔗 你有 ${n} 個分潤連結失效，到素材頁可重產（或在帳號管理開啟「失效自動替換」）。`, "link_dead").catch(() => {});
   }
   return { checked: items.length, dead, revived };
 }

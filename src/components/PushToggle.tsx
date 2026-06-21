@@ -85,8 +85,9 @@ export default function PushToggle({ vapidPublicKey }: { vapidPublicKey: string 
     setMsg(null);
     try {
       const res = await fetch("/api/push/test", { method: "POST" });
-      const json = await res.json();
-      if (!json.ok) throw new Error(json.error);
+      // 伺服器異常（502/504/代理錯誤頁）可能回 HTML，先擋掉避免 JSON 解析錯誤訊息不友善。
+      const json = await res.json().catch(() => ({}) as { ok?: boolean; error?: string; devices?: number });
+      if (!res.ok || !json.ok) throw new Error(json.error || `伺服器錯誤（${res.status}）`);
       setMsg(`✅ 已送出測試推播（${json.devices} 台裝置）`);
     } catch (e) {
       setMsg(`❌ ${e instanceof Error ? e.message : String(e)}`);

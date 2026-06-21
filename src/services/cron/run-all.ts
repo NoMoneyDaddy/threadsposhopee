@@ -10,6 +10,8 @@ import { verifySponsorPosts, ensureSponsorPosts } from "@/services/sponsor/run";
 import { getOwnerUserId } from "@/lib/auth";
 import { env } from "@/lib/env";
 import { setHeartbeat, getUserTelegramChatId, getUserDiscordWebhook } from "@/lib/store";
+import { isPushConfigured } from "@/lib/push";
+import { listPushSubscriptions } from "@/lib/push-store";
 import { log } from "@/lib/logger";
 
 // 總排程主體：被 /api/cron/all（外部 cron）與內建排程（instrumentation tick）共用。
@@ -73,7 +75,9 @@ export async function runCronAll(now: Date = new Date()): Promise<Record<string,
           getUserDiscordWebhook(ownerId).catch(() => null)
         ])
       : [null, null];
-    const personalSink = Boolean((personalTg && env.telegramBotToken) || personalDiscord);
+    // 只開瀏覽器推播（未綁 Telegram/Discord）的使用者也應收到摘要 → 納入推播訂閱狀態。
+    const hasPush = ownerId && isPushConfigured() ? (await listPushSubscriptions(ownerId).catch(() => [])).length > 0 : false;
+    const personalSink = Boolean((personalTg && env.telegramBotToken) || personalDiscord || hasPush);
     const globalSink = Boolean(env.telegramBotToken && env.telegramChatId);
     if (!personalSink && !globalSink) return { sent: false };
     const msg = await build();

@@ -93,9 +93,9 @@
 }
 
 @layer components {
-  /* 按鈕：膠囊、200ms 過場、清楚焦點/停用態（觸控高度由 py 達成 ≥40px） */
+  /* 按鈕：膠囊、200ms 過場、清楚焦點/停用態（觸控高度 ≥44px，由 min-h 保證） */
   .btn {
-    @apply inline-flex select-none items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold
+    @apply inline-flex min-h-[2.75rem] select-none items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold
            transition-[background-color,color,box-shadow,opacity,transform] duration-200 ease-out
            disabled:cursor-not-allowed disabled:opacity-50 active:translate-y-px;
   }
@@ -104,16 +104,17 @@
   .btn-outline { @apply border border-strong bg-surface text-ink hover:bg-surface-2; }
   .btn-ghost   { @apply text-ink-2 hover:bg-surface-2 hover:text-ink; }
   .btn-danger  { @apply border border-danger/30 bg-surface text-danger hover:bg-danger/10; }
-  .btn-sm      { @apply px-3 py-1.5 text-xs; }
+  .btn-sm      { @apply min-h-0 px-3 py-1.5 text-xs; } /* 密集列用的精簡按鈕，不套 44px 下限 */
 
   /* 卡片：圓潤、細邊、柔和陰影 */
   .card { @apply rounded-2xl border border-border bg-surface shadow-[var(--shadow-card)]; }
   .card-p { @apply card p-5 sm:p-6; }
 
   /* 輸入：圓角、品牌焦點環 */
+  /* text-base(16px) on mobile 防 iOS 聚焦自動縮放；sm 以上回 14px 維持精簡 */
   .input {
-    @apply w-full rounded-xl border border-strong bg-surface px-3.5 py-2.5 text-sm text-ink
-           placeholder:text-ink-3 transition-colors
+    @apply w-full rounded-xl border border-strong bg-surface px-3.5 py-2.5 text-base text-ink
+           placeholder:text-ink-3 transition-colors sm:text-sm
            focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30;
   }
   .label { @apply mb-1.5 block text-sm font-medium text-ink-2; }

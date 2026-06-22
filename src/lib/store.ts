@@ -65,6 +65,7 @@ export {
   requeueReply,
   updateDraftStatusAtomic,
   listApprovedDrafts,
+  listNeedsVerificationAll,
   listApprovedDraftsForShard,
   type PublishedPostRef,
   type ReplyDueDraft
@@ -122,6 +123,9 @@ export {
   getUserCloudinary,
   getUserCloudinaryFull,
   setUserCloudinary,
+  getBioSettings,
+  setBioSettings,
+  normalizeBioHandle,
   getUserPlan,
   setUserPlan
 } from "./credentials";

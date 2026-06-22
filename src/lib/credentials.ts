@@ -270,6 +270,33 @@ export async function setUserCloudinary(
   if (error) throw new Error(`儲存 Cloudinary 設定失敗：${error.message}`);
 }
 
+// ── Link-in-bio：公開 bio 頁代稱（handle）與標題（非機密，明文存）──────
+// 純函式：正規化 handle（小寫、僅英數底線連字號、長度 3–30）。不合法回 null。可測。
+export function normalizeBioHandle(input: string | null | undefined): string | null {
+  const h = (input ?? "").trim().toLowerCase();
+  return /^[a-z0-9_-]{3,30}$/.test(h) ? h : null;
+}
+
+export async function getBioSettings(ownerId: string): Promise<{ handle: string | null; title: string | null }> {
+  if (isDemoMode) return { handle: null, title: null };
+  const sb = getServiceClient()!;
+  const { data } = await sb.from("profiles").select("bio_handle, bio_title").eq("id", ownerId).maybeSingle();
+  return { handle: data?.bio_handle ?? null, title: data?.bio_title ?? null };
+}
+
+// handle 傳 null 解除（清空）；傳值前須先過 normalizeBioHandle。撞他人已用 handle → 友善錯誤。
+export async function setBioSettings(ownerId: string, handle: string | null, title: string | null): Promise<void> {
+  if (isDemoMode) return;
+  const sb = getServiceClient()!;
+  const { error } = await sb
+    .from("profiles")
+    .upsert({ id: ownerId, bio_handle: handle, bio_title: title || null }, { onConflict: "id" });
+  if (error) {
+    if (error.code === "23505") throw new Error("這個代稱已被使用，請換一個");
+    throw new Error(`儲存 bio 設定失敗：${error.message}`);
+  }
+}
+
 // ── 每位使用者發文節奏（slots/min gap/max per day）：留空沿用 env 預設 ──────
 export async function getPublishPrefs(ownerId: string): Promise<PublishPrefs> {
   const fallback: PublishPrefs = {

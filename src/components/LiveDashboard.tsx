@@ -85,10 +85,10 @@ function PublishPlan({ rows }: { rows: DashboardData["publishPlan"] }) {
         <tbody>
           {rows.map((r) => (
             <tr key={r.id} className="flex items-center gap-2">
-              <td className="w-24 shrink-0 truncate text-ink-2">{r.accountLabel}</td>
+              <td className="w-20 shrink-0 truncate text-ink-2 sm:w-24">{r.accountLabel}</td>
               <td className="min-w-0 flex-1 truncate text-ink">{r.productName ?? "（草稿）"}</td>
-              <td className="shrink-0 text-xs text-ink-3">{r.reason}</td>
-              <td className="w-28 shrink-0 text-right text-xs tabular-nums text-ink-2">{fmt(r.etaIso)}</td>
+              <td className="hidden shrink-0 text-xs text-ink-3 sm:block sm:max-w-[12rem] sm:truncate">{r.reason}</td>
+              <td className="w-24 shrink-0 text-right text-xs tabular-nums text-ink-2 sm:w-28">{fmt(r.etaIso)}</td>
             </tr>
           ))}
         </tbody>

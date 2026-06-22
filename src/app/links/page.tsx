@@ -1,17 +1,23 @@
 import { getCurrentUser } from "@/lib/auth";
 import { listRedirectLinks } from "@/lib/redirect-store";
+import { getBioSettings } from "@/lib/store";
 import RedirectLinkForm from "@/components/RedirectLinkForm";
 import CopyLink from "@/components/CopyLink";
 import EmptyState from "@/components/EmptyState";
 import SelfBuyNotice from "@/components/SelfBuyNotice";
+import BioSettingsForm from "@/components/BioSettingsForm";
+import BioToggle from "@/components/BioToggle";
 
 export const dynamic = "force-dynamic";
 
-// go2read 短連結管理：建立 ＋ 列出（含點擊/繼續統計）。
+// go2read 短連結管理：建立 ＋ 列出（含點擊/繼續統計）＋ link-in-bio。
 export default async function LinksPage() {
   const user = await getCurrentUser();
   if (!user) return <div className="text-center text-sm text-red-500">請先登入。</div>;
-  const links = await listRedirectLinks(user.id).catch(() => []);
+  const [links, bio] = await Promise.all([
+    listRedirectLinks(user.id).catch(() => []),
+    getBioSettings(user.id).catch(() => ({ handle: null, title: null }))
+  ]);
 
   return (
     <div className="space-y-6">
@@ -23,6 +29,8 @@ export default async function LinksPage() {
       <RedirectLinkForm />
 
       <SelfBuyNotice />
+
+      <BioSettingsForm initialHandle={bio.handle} initialTitle={bio.title} />
 
       <section className="card p-5">
         <h2 className="section-title mb-3">我的短連結</h2>
@@ -40,10 +48,11 @@ export default async function LinksPage() {
                   <div className="truncate text-sm font-medium">{l.title ?? l.sourceUrl}</div>
                   <div className="truncate text-xs text-ink-3">{l.sourceUrl}</div>
                 </div>
-                <div className="flex shrink-0 items-center gap-3">
+                <div className="flex shrink-0 items-center gap-2">
                   <span className="text-xs text-ink-2 tabular-nums">
                     👁 {l.clicks} · ▶ {l.continues}
                   </span>
+                  <BioToggle code={l.code} initial={l.inBio} />
                   <CopyLink path={`/r/${l.code}`} />
                 </div>
               </li>

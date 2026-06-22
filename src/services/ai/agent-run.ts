@@ -3,7 +3,7 @@
 import { createHash } from "node:crypto";
 import { geminiText } from "@/services/ai/gemini";
 import { fetchRssItems, type RssItem } from "@/services/ai/rss";
-import { getGeminiKey } from "@/lib/credentials";
+import { getGeminiKey, getDefaultAffiliateUrl } from "@/lib/credentials";
 import { getAiDomain, defaultFeedsForDomain, googleNewsRss } from "@/lib/ai-domains";
 import { maxSimilarity } from "@/lib/text-similarity";
 import { createDraft } from "@/lib/drafts-store";
@@ -83,6 +83,13 @@ export async function runAgentOnce(agent: AiAgent, geminiKey: string): Promise<A
   if (!items.length) return { ok: false, reason: "來源無項目" };
 
   const recentTitles = await recentSeenTitles(agent.id, SEEN_WINDOW_MS);
+  // 預設分潤連結：走 go2read 中轉時，「繼續」要去的分潤連結（使用者一次設定、套用所有代理人貼文）。
+  const defaultAffiliateUrl = agent.use_redirect
+    ? await getDefaultAffiliateUrl(agent.owner_id).catch((err) => {
+        log.error("取得代理人預設分潤連結失敗", { agentId: agent.id, err });
+        return null;
+      })
+    : null;
 
   for (const item of items) {
     const hash = sourceHash(item.link);
@@ -102,7 +109,11 @@ export async function runAgentOnce(agent: AiAgent, geminiKey: string): Promise<A
     // 來源連結：選擇走 go2read 短連結（可附分潤）或原始連結
     let sourceUrl = item.link;
     if (agent.use_redirect) {
-      const code = await createRedirectLink(agent.owner_id, { sourceUrl: item.link, title: item.title }).catch(() => null);
+      const code = await createRedirectLink(agent.owner_id, {
+        sourceUrl: item.link,
+        affiliateUrl: defaultAffiliateUrl, // 預設分潤連結（未設則中轉頁僅去來源）
+        title: item.title
+      }).catch(() => null);
       if (code) sourceUrl = `/r/${code}`; // 對外請搭配 NEXT_PUBLIC_SHORT_DOMAIN 顯示完整網域
     }
     const mainText = `${body}\n\n📎 來源：${sourceUrl}`;

@@ -4,6 +4,7 @@
 import { getServiceClient } from "./supabase/server";
 import { isDemoMode, env } from "./env";
 import { decrypt, encrypt } from "./crypto";
+import { assertSafePublicUrl } from "./url-guard";
 import { log } from "./logger";
 import { normalizePlan, type PlanId } from "./plans";
 import { parseSlots, type PublishPrefs } from "./publish-prefs";
@@ -131,6 +132,30 @@ export async function setUserDiscordWebhook(ownerId: string, url: string | null)
   const sb = getServiceClient()!;
   const { error } = await sb.from("profiles").upsert({ id: ownerId, discord_webhook_url: url }, { onConflict: "id" });
   if (error) throw error;
+}
+
+// ── 預設分潤連結：AI 代理人走 go2read 中轉時，「繼續」的分潤連結預設值（非機密，明文）──
+// 建議填蝦皮直營商城（如 https://shopee.tw/shop/50662979）或自己的分潤連結；免得每篇重設。
+export const SUGGESTED_DEFAULT_AFFILIATE_URL = "https://shopee.tw/shop/50662979";
+
+export async function getDefaultAffiliateUrl(ownerId: string): Promise<string | null> {
+  if (isDemoMode) return null;
+  const sb = getServiceClient();
+  if (!sb) return null;
+  const { data, error } = await sb.from("profiles").select("default_affiliate_url").eq("id", ownerId).maybeSingle();
+  if (error) throw new Error(`讀取預設分潤連結失敗：${error.message}`);
+  const v = data?.default_affiliate_url;
+  return typeof v === "string" && v.trim() ? v.trim() : null;
+}
+
+// url 傳空/null＝解除。設定時驗證為安全公開 URL（擋內網/非法協定）。
+export async function setDefaultAffiliateUrl(ownerId: string, url: string | null): Promise<void> {
+  const clean = url && url.trim() ? url.trim() : null;
+  if (clean) assertSafePublicUrl(clean); // 非法則拋錯
+  if (isDemoMode) return;
+  const sb = getServiceClient()!;
+  const { error } = await sb.from("profiles").upsert({ id: ownerId, default_affiliate_url: clean }, { onConflict: "id" });
+  if (error) throw new Error(`儲存預設分潤連結失敗：${error.message}`);
 }
 
 export async function hasGeminiKey(ownerId: string): Promise<boolean> {

@@ -51,35 +51,3 @@ test("parseSearchPosts：無蝦皮連結 → shopeeLinks 空陣列", () => {
 test("parseSearchPosts：非陣列輸入回空陣列", () => {
   assert.deepEqual(parseSearchPosts(null as any), []);
 });
-
-test("parseSearchPosts：相鄰配對——帶連結的回覆借用前一篇主文媒體", () => {
-  const posts = parseSearchPosts([
-    // 主文：有圖、無連結（吸睛貼文）
-    {
-      username: "tdc",
-      isReply: false,
-      captionText: "哈哈 我真的會笑死",
-      postUrl: "https://www.threads.com/@tdc/post/MAIN",
-      imageUrl: "main.jpg"
-    },
-    // 2/2 回覆：帶蝦皮連結、自身無媒體 → 應借用主文的圖
-    {
-      username: "tdc",
-      isReply: true,
-      captionText: "這裡有⬇️ https://s.shopee.tw/8pj1gqNBHQ",
-      postUrl: "https://www.threads.com/@tdc/post/REPLY"
-    }
-  ]);
-  const reply = posts.find((p) => p.postId === "REPLY")!;
-  assert.equal(reply.mediaType, "image");
-  assert.equal(reply.mediaUrl, "main.jpg");
-});
-
-test("parseSearchPosts：不同作者不互相借用媒體", () => {
-  const posts = parseSearchPosts([
-    { username: "a", isReply: false, captionText: "圖", postUrl: "https://www.threads.com/@a/post/A", imageUrl: "a.jpg" },
-    { username: "b", isReply: true, captionText: "https://s.shopee.tw/xyz", postUrl: "https://www.threads.com/@b/post/B" }
-  ]);
-  const b = posts.find((p) => p.postId === "B")!;
-  assert.equal(b.mediaType, "none");
-});

@@ -57,26 +57,7 @@ export function parseSearchPosts(items: any[]): ScrapedPost[] {
       shopeeLinks: Array.from(text.matchAll(SHOPEE_SHORT_RE)).map((m) => m[1])
     });
   }
-  return attachMainMedia(out);
-}
-
-// 相鄰配對（標準兩段式模板）：發文者常把吸睛影片/圖放主文、蝦皮連結放 2/2 留言。
-// 對「帶連結但自身無媒體」的貼文，往前找同作者、最近一篇「有媒體的主文」借用其媒體，
-// 湊成「媒體＋商品連結」的合格素材組。就地修改並回傳同一陣列。
-function attachMainMedia(posts: ScrapedPost[]): ScrapedPost[] {
-  for (let i = 0; i < posts.length; i++) {
-    const p = posts[i];
-    if (p.mediaType !== "none" || p.shopeeLinks.length === 0) continue;
-    for (let j = i - 1; j >= 0; j--) {
-      const c = posts[j];
-      if (c.username && c.username === p.username && !c.isReply && c.mediaType !== "none") {
-        p.mediaType = c.mediaType;
-        p.mediaUrl = c.mediaUrl;
-        break;
-      }
-    }
-  }
-  return posts;
+  return out;
 }
 
 // 搜尋條件：username（→ actor 的 from，監看單一帳號）或 searchQuery（→ 關鍵字搜尋）。

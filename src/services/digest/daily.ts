@@ -3,7 +3,7 @@
 import { env, isDemoMode } from "@/lib/env";
 import { log } from "@/lib/logger";
 import { getOwnerUserId } from "@/lib/auth";
-import { getDashboardStats, getGeminiKey } from "@/lib/store";
+import { getDashboardStats, getGeminiKey, getShopeeCredentials } from "@/lib/store";
 import { getEngagementCached } from "@/services/threads/engagement";
 import { detectReachDrop } from "@/services/threads/reach";
 import { getAffiliateRevenue } from "@/services/shopee/report";
@@ -77,8 +77,9 @@ export async function buildDailyDigest(): Promise<string | null> {
       : null;
 
   let revenue: { commission: number; conversions: number } | null = null;
-  if (!isDemoMode && env.shopeeAppId && env.shopeeSecret) {
-    const r = await getAffiliateRevenue(1).catch(() => null); // 近 1 天分潤
+  const shopeeCreds = isDemoMode ? null : await getShopeeCredentials(ownerId).catch(() => null);
+  if (shopeeCreds) {
+    const r = await getAffiliateRevenue({ appId: shopeeCreds.appId, secret: shopeeCreds.secret }, 1).catch(() => null); // 近 1 天分潤
     if (r) revenue = { commission: r.totalCommission, conversions: r.totalConversions };
   }
 

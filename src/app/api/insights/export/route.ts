@@ -1,10 +1,10 @@
 import { log } from "@/lib/logger";
 import { getCurrentUser } from "@/lib/auth";
-import { getPublishInsights } from "@/lib/store";
+import { getPublishInsights, getShopeeCredentials } from "@/lib/store";
 import { getAffiliateRevenue } from "@/services/shopee/report";
 import { resolveInsightsRange } from "@/lib/insights-range";
 import { csvCell as cell, csvRows as rows } from "@/lib/csv";
-import { env, isDemoMode } from "@/lib/env";
+import { isDemoMode } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -44,9 +44,10 @@ export async function GET(req: Request) {
     sections.push("來源,篇數");
     sections.push(rows(data.bySource, ["name", "count"]));
 
-    // 分潤收益（owner 限定，失敗則略過、不擋匯出）
-    if (user.isOwner && !isDemoMode && env.shopeeAppId && env.shopeeSecret) {
-      const rev = await getAffiliateRevenue({ startMs, endMs }).catch((e) => {
+    // 分潤收益（吃使用者自綁金鑰，沒綁則略過、不擋匯出）
+    const shopeeCreds = isDemoMode ? null : await getShopeeCredentials(user.id).catch(() => null);
+    if (shopeeCreds) {
+      const rev = await getAffiliateRevenue({ appId: shopeeCreds.appId, secret: shopeeCreds.secret }, { startMs, endMs }).catch((e) => {
         log.warn("匯出分潤收益失敗，略過", { err: e instanceof Error ? e.message : e });
         return null;
       });

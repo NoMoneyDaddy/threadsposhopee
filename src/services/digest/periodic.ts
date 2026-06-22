@@ -1,9 +1,9 @@
 // 定期績效摘要（週／月）：把區間內發布量、各帳號分項、熱門商品與分潤收益打包成一則訊息，
 // 由總排程定期推到 Telegram，讓操作者免登入也能掌握較長週期的趨勢。
-import { env, isDemoMode } from "@/lib/env";
+import { isDemoMode } from "@/lib/env";
 import { log } from "@/lib/logger";
 import { getOwnerUserId } from "@/lib/auth";
-import { getPublishInsights } from "@/lib/store";
+import { getPublishInsights, getShopeeCredentials } from "@/lib/store";
 import { getAffiliateRevenue } from "@/services/shopee/report";
 
 export interface PeriodicDigestInput {
@@ -48,8 +48,9 @@ export async function buildPeriodicDigest(label: string, days: number): Promise<
   if (!insights) return null;
 
   let revenue: { commission: number; conversions: number } | null = null;
-  if (!isDemoMode && env.shopeeAppId && env.shopeeSecret) {
-    const r = await getAffiliateRevenue({ startMs, endMs }).catch(() => null);
+  const creds = isDemoMode ? null : await getShopeeCredentials(ownerId).catch(() => null);
+  if (creds) {
+    const r = await getAffiliateRevenue({ appId: creds.appId, secret: creds.secret }, { startMs, endMs }).catch(() => null);
     if (r) revenue = { commission: r.totalCommission, conversions: r.totalConversions };
   }
 

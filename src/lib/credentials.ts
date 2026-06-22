@@ -270,6 +270,86 @@ export async function setUserCloudinary(
   if (error) throw new Error(`儲存 Cloudinary 設定失敗：${error.message}`);
 }
 
+// ── Cloudflare R2 圖床（S3 相容，與 Cloudinary 二擇一）──────────
+// access key/secret 為機密 → 加密存；account_id/bucket/public_base 明文。沒綁回 null。
+export type R2Settings = {
+  accountId: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+  bucket: string;
+  publicBase: string;
+};
+
+export async function getUserR2(ownerId: string): Promise<R2Settings | null> {
+  if (isDemoMode) return null;
+  const sb = getServiceClient()!;
+  const { data, error } = await sb
+    .from("profiles")
+    .select("r2_account_id, r2_access_key_id_enc, r2_secret_enc, r2_bucket, r2_public_base")
+    .eq("id", ownerId)
+    .maybeSingle();
+  if (error) {
+    log.warn("讀取 R2 設定失敗，改用其他圖床", { ownerId, err: error.message });
+    return null;
+  }
+  const accountId = data?.r2_account_id?.trim();
+  const bucket = data?.r2_bucket?.trim();
+  const publicBase = data?.r2_public_base?.trim();
+  if (!accountId || !bucket || !publicBase || !data?.r2_access_key_id_enc || !data?.r2_secret_enc) return null;
+  try {
+    return {
+      accountId,
+      bucket,
+      publicBase,
+      accessKeyId: decrypt(data.r2_access_key_id_enc),
+      secretAccessKey: decrypt(data.r2_secret_enc)
+    };
+  } catch (e) {
+    log.error("解密 R2 金鑰失敗", { ownerId, err: e });
+    return null;
+  }
+}
+
+// 是否已綁 R2（給設定頁顯示狀態，不回明文）。
+export async function hasUserR2(ownerId: string): Promise<boolean> {
+  if (isDemoMode) return false;
+  const sb = getServiceClient()!;
+  const { data } = await sb
+    .from("profiles")
+    .select("r2_account_id, r2_bucket, r2_public_base, r2_secret_enc")
+    .eq("id", ownerId)
+    .maybeSingle();
+  return Boolean(data?.r2_account_id && data?.r2_bucket && data?.r2_public_base && data?.r2_secret_enc);
+}
+
+// 儲存 R2 設定。傳空白 accountId＝整組解除。accessKeyId/secret 空白＝沿用既有（只改網域/bucket）。
+export async function setUserR2(
+  ownerId: string,
+  s: { accountId: string | null; accessKeyId?: string | null; secretAccessKey?: string | null; bucket?: string | null; publicBase?: string | null }
+): Promise<void> {
+  if (isDemoMode) return;
+  const sb = getServiceClient()!;
+  const accountId = s.accountId?.trim() || null;
+  const patch: Record<string, unknown> = { id: ownerId };
+  if (!accountId) {
+    Object.assign(patch, {
+      r2_account_id: null,
+      r2_access_key_id_enc: null,
+      r2_secret_enc: null,
+      r2_bucket: null,
+      r2_public_base: null
+    });
+  } else {
+    patch.r2_account_id = accountId;
+    patch.r2_bucket = s.bucket?.trim() || null;
+    patch.r2_public_base = s.publicBase?.trim().replace(/\/+$/, "") || null;
+    if (s.accessKeyId && s.accessKeyId.trim()) patch.r2_access_key_id_enc = encrypt(s.accessKeyId.trim());
+    if (s.secretAccessKey && s.secretAccessKey.trim()) patch.r2_secret_enc = encrypt(s.secretAccessKey.trim());
+  }
+  const { error } = await sb.from("profiles").upsert(patch, { onConflict: "id" });
+  if (error) throw new Error(`儲存 R2 設定失敗：${error.message}`);
+}
+
 // ── Link-in-bio：公開 bio 頁代稱（handle）與標題（非機密，明文存）──────
 // 純函式：正規化 handle（小寫、僅英數底線連字號、長度 3–30）。不合法回 null。可測。
 export function normalizeBioHandle(input: string | null | undefined): string | null {

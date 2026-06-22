@@ -19,9 +19,9 @@ import {
   getShopeeCredentials,
   getGeminiKey,
   getCopyPrefs,
-  getShopeeAffiliateId,
-  getUserCloudinary
+  getShopeeAffiliateId
 } from "@/lib/store";
+import { getMediaProvider } from "@/services/media/upload";
 import type { Source } from "@/lib/types";
 
 // owner 的 Shopee 金鑰：一律吃自綁（shopee_accounts），未綁回 null（不再用環境變數）。
@@ -60,8 +60,8 @@ export async function runSourcePipeline(source: Source, ownerId: string): Promis
   const copyPrefs = await getCopyPrefs(ownerId); // 一次取出，整個迴圈重用，避免每篇重查
   // 沒綁 Shopee API 時的後備：用 affiliate_id 自組追蹤連結
   const affiliateId = shopeeCreds ? null : await getShopeeAffiliateId(ownerId);
-  // 各人自綁 Cloudinary（素材進自己雲端）；一次取出整迴圈重用
-  const cloudinaryCreds = await getUserCloudinary(ownerId);
+  // 各人自綁圖床（R2 或 Cloudinary，素材進自己雲端）；一次取出整迴圈重用
+  const mediaProvider = await getMediaProvider(ownerId);
   const posts = await scrapeLatestPosts(source.source_username, source.posts_limit, apify);
   result.scanned = posts.length;
   // 一次預載本來源已處理的貼文 id（取代逐篇 isPostProcessed 查詢，消除 N+1）
@@ -114,7 +114,7 @@ export async function runSourcePipeline(source: Source, ownerId: string): Promis
           geminiKey,
           copyPrefs,
           affiliateId,
-          cloudinaryCreds
+          mediaProvider
         );
       }
 

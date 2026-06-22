@@ -4,6 +4,7 @@ import {
   listShopeeAccounts,
   getShopeeAffiliateId,
   getUserCloudinary,
+  hasUserR2,
   hasApifyCredentials,
   getUserTelegramChatId,
   getUserDiscordWebhook
@@ -22,11 +23,12 @@ export interface SetupStep {
 // 計算「目前這位使用者」的設定完成度（引導卡牌用）。一律以 user.id 查 → 各人各自的狀態。
 export async function getSetupSteps(user: AppUser): Promise<SetupStep[]> {
   const id = user.id;
-  const [threads, shopeeAccts, affId, cloud, apify, tg, dc, gem] = await Promise.all([
+  const [threads, shopeeAccts, affId, cloud, r2, apify, tg, dc, gem] = await Promise.all([
     listThreadsAccounts(id),
     listShopeeAccounts(id),
     getShopeeAffiliateId(id),
     getUserCloudinary(id),
+    hasUserR2(id),
     user.isOwner ? hasApifyCredentials(id) : Promise.resolve({ bound: true, actor: null }),
     getUserTelegramChatId(id),
     getUserDiscordWebhook(id),
@@ -59,12 +61,12 @@ export async function getSetupSteps(user: AppUser): Promise<SetupStep[]> {
       href: "/accounts#setup-shopee"
     },
     {
-      key: "cloudinary",
-      title: "綁定圖片／影片存放（Cloudinary）",
-      desc: "想發圖片／影片再綁；純文字發文不需要。綁了之後素材會存進你自己的 Cloudinary，不耗伺服器流量。",
-      done: Boolean(cloud),
+      key: "media",
+      title: "綁定圖片／影片存放（Cloudinary 或 Cloudflare R2）",
+      desc: "想發圖片／影片再綁；純文字發文不需要。素材會存進你自己的雲端（二擇一），不耗伺服器流量。",
+      done: Boolean(cloud) || r2,
       required: false,
-      href: "/accounts#setup-cloudinary"
+      href: "/accounts#setup-media"
     },
     {
       key: "notify",

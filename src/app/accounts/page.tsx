@@ -90,6 +90,10 @@ export default async function AccountsPage({
             </span>
           )}
         </div>
+        <p className="mt-2 text-xs text-ink-3">
+          📱 手機若按了只跳出 Threads App、無法返回完成綁定，請改用<b>電腦瀏覽器</b>操作；
+          或用下方「新增 Threads 發文帳號」<b>手動填入 access token</b>（同樣可用）。
+        </p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">

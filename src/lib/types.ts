@@ -47,6 +47,8 @@ export interface Material {
   reply_text?: string | null;
   ai_raw?: string | null;
   ai_generated_at?: string | null;
+  evergreen?: boolean | null; // 常青回收：定期自動重排成待審草稿
+  evergreen_last_at?: string | null; // 上次常青重排時間（算「到期」用）
   created_at: string;
 }
 

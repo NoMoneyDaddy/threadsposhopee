@@ -3,6 +3,7 @@ import RepostButton from "@/components/RepostButton";
 import CheckLinksButton from "@/components/CheckLinksButton";
 import BulkRepostButton from "@/components/BulkRepostButton";
 import EmptyState from "@/components/EmptyState";
+import EvergreenToggle from "@/components/EvergreenToggle";
 import { listMaterials, listThreadsAccounts } from "@/lib/store";
 import { getItemRevenueMap, type ItemRevenue } from "@/services/shopee/report";
 import { getCurrentUser } from "@/lib/auth";
@@ -83,8 +84,9 @@ export default async function MaterialsPage() {
                 連結檢查於 {new Date(m.affiliate_checked_at).toLocaleDateString("zh-TW", { timeZone: "Asia/Taipei" })}
               </div>
             )}
-            <div className="mt-3">
+            <div className="mt-3 flex flex-wrap items-center gap-2">
               <RepostButton materialId={m.id} threadsAccounts={accounts} />
+              <EvergreenToggle materialId={m.id} initial={Boolean(m.evergreen)} />
             </div>
           </div>
         ))}

@@ -34,6 +34,10 @@ export {
   listMaterialsToCheck,
   reviveAffiliateLink,
   setAffiliateChecked,
+  setMaterialEvergreen,
+  listEvergreenDueAll,
+  touchEvergreen,
+  isEvergreenDue,
   type MaterialToCheck
 } from "./materials-store";
 

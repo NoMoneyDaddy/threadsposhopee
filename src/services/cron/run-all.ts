@@ -3,6 +3,7 @@ import { runAllSources } from "@/services/pipeline/run";
 import { runPublishQueue } from "@/services/publish/queue";
 import { refreshExpiringTokens } from "@/services/threads/refresh";
 import { checkAffiliateLinks } from "@/services/materials/linkcheck";
+import { runEvergreen } from "@/services/materials/evergreen";
 import { buildDailyDigest } from "@/services/digest/daily";
 import { buildPeriodicDigest } from "@/services/digest/periodic";
 import type { NotifyType } from "@/lib/notify-prefs";
@@ -72,6 +73,15 @@ export async function runCronAll(now: Date = new Date()): Promise<Record<string,
       warn: (r) => (r?.revived || r?.dead ? `🔗 連結重產 ${r.revived ?? 0}、仍失效 ${r.dead ?? 0}` : null)
     });
   }
+  // 常青內容回收：每天一次（台北 13:00 = UTC 05:00–05:14），把到期的常青素材重排成待審草稿。
+  if (h === 5 && min < 15) {
+    steps.push({
+      key: "evergreen",
+      run: runEvergreen,
+      warn: (r) => (r?.created ? `♻️ 常青回收新增 ${r.created} 篇草稿（待審）` : null)
+    });
+  }
+
   // 摘要共用：取 owner 通道，優先個人（依通知偏好開關）、否則全域 ops；無通道則略過。
   const runDigest = async (type: NotifyType, build: () => Promise<string | null>) => {
     const ownerId = await getOwnerUserId();

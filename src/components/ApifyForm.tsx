@@ -36,16 +36,12 @@ export default function ApifyForm({ bound, actor }: { bound: boolean; actor: str
     }
   }
 
-  const input = "w-full rounded-xl border px-3 py-2 text-sm";
+  const input = "input";
   return (
-    <div className="rounded-2xl border bg-surface p-4">
+    <div className="card p-4">
       <div className="mb-2 flex items-center justify-between">
         <span className="font-medium">自動抓文（Apify）綁定</span>
-        {bound ? (
-          <span className="rounded bg-green-100 px-2 py-0.5 text-xs text-green-700">已綁定</span>
-        ) : (
-          <span className="rounded bg-surface-2 px-2 py-0.5 text-xs text-ink-2">未綁定</span>
-        )}
+        {bound ? <span className="badge-success">已綁定</span> : <span className="badge-neutral">未綁定</span>}
       </div>
       <p className="mb-2 text-xs text-ink-2">
         監看來源的爬蟲用你自己的 Apify 帳號。到 Apify → Settings → Integrations 取得 API token。
@@ -64,11 +60,7 @@ export default function ApifyForm({ bound, actor }: { bound: boolean; actor: str
           value={actorInput}
           onChange={(e) => setActorInput(e.target.value)}
         />
-        <button
-          onClick={save}
-          disabled={busy}
-          className="rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-        >
+        <button onClick={save} disabled={busy} className="btn btn-brand">
           {busy ? "儲存中…" : bound ? "更新綁定" : "綁定"}
         </button>
         {msg && <p className="text-sm text-ink-2">{msg}</p>}

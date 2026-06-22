@@ -98,7 +98,7 @@ export default function PushToggle({ vapidPublicKey }: { vapidPublicKey: string 
 
   if (!supported) {
     return (
-      <div className="rounded-2xl border bg-surface p-4">
+      <div className="card p-4">
         <div className="mb-1 font-medium">瀏覽器推播</div>
         <p className="text-xs text-ink-3">此瀏覽器不支援 Web Push（iOS 需先「加到主畫面」後再開啟）。</p>
       </div>
@@ -106,7 +106,7 @@ export default function PushToggle({ vapidPublicKey }: { vapidPublicKey: string 
   }
 
   return (
-    <div className="rounded-2xl border bg-surface p-4">
+    <div className="card p-4">
       <div className="mb-1 font-medium">瀏覽器推播</div>
       <p className="mb-2 text-xs text-ink-2">
         在此裝置接收待審草稿、發布結果、贊助違規等即時通知（依「通知偏好」個別開關）。

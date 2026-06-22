@@ -34,7 +34,7 @@ export default function AutoReviveForm({ initial }: { initial: boolean }) {
   }
 
   return (
-    <div className="rounded-2xl border bg-surface p-4">
+    <div className="card p-4">
       <div className="mb-1 font-medium">連結失效自動替換（選填）</div>
       <p className="mb-2 text-xs text-ink-2">
         開啟後：分潤連結被偵測失效時，系統用資料庫保存的<b>商品原始連結</b>自動重產有效分潤連結。

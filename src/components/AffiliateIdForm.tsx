@@ -31,7 +31,7 @@ export default function AffiliateIdForm({ initial }: { initial: string | null })
   }
 
   return (
-    <div className="rounded-2xl border bg-surface p-4">
+    <div className="card p-4">
       <div className="mb-1 font-medium">分潤連結（免 API）</div>
       <p className="mb-2 text-xs text-ink-2">
         沒有蝦皮分潤 API 也能追蹤：填你的分潤 ID，系統會自動幫每個連結加上來源標記，方便在蝦皮報表分辨成效。
@@ -39,18 +39,14 @@ export default function AffiliateIdForm({ initial }: { initial: string | null })
       </p>
       <div className="flex flex-wrap gap-2">
         <input
-          className="min-w-0 flex-1 rounded-xl border px-3 py-2 text-sm"
+          className="input min-w-0 flex-1"
           inputMode="numeric"
           aria-label="Shopee affiliate_id"
           placeholder="affiliate_id（純數字，如 16308730014）"
           value={id}
           onChange={(e) => setId(e.target.value)}
         />
-        <button
-          onClick={save}
-          disabled={busy}
-          className="shrink-0 rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-        >
+        <button onClick={save} disabled={busy} className="btn btn-brand shrink-0">
           {busy ? "儲存中…" : "儲存"}
         </button>
       </div>

@@ -13,17 +13,14 @@ export default function EmptyState({
   cta?: { href: string; label: string };
 }) {
   return (
-    <div className="rounded-2xl border border-dashed p-10 text-center">
-      <div className="text-3xl" aria-hidden>
+    <div className="rounded-2xl border border-dashed border-strong bg-surface/50 p-10 text-center">
+      <div className="text-4xl" aria-hidden>
         {icon}
       </div>
-      <p className="mt-2 font-medium text-ink-2">{title}</p>
-      {hint && <p className="mx-auto mt-1 max-w-sm text-sm text-ink-3">{hint}</p>}
+      <p className="mt-3 font-semibold text-ink">{title}</p>
+      {hint && <p className="mx-auto mt-1.5 max-w-sm text-sm text-ink-2">{hint}</p>}
       {cta && (
-        <Link
-          href={cta.href}
-          className="mt-4 inline-block rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-        >
+        <Link href={cta.href} className="btn btn-brand mt-5">
           {cta.label}
         </Link>
       )}

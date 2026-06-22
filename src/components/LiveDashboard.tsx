@@ -34,7 +34,7 @@ function AccountsHealth({ rows }: { rows: DashboardData["accountsHealth"] }) {
   const dot: Record<string, string> = { ok: "bg-green-500", warn: "bg-amber-500", error: "bg-red-500" };
   const text: Record<string, string> = { ok: "text-ink-2", warn: "text-amber-700", error: "text-red-600" };
   return (
-    <div className="rounded-2xl border bg-surface p-5">
+    <div className="card p-5">
       <h2 className="mb-3 font-semibold">帳號健康</h2>
       <ul className="space-y-2">
         {rows.map((r) => (
@@ -64,7 +64,7 @@ function PublishPlan({ rows }: { rows: DashboardData["publishPlan"] }) {
         })
       : "—";
   return (
-    <div className="rounded-2xl border bg-surface p-5">
+    <div className="card p-5">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="font-semibold">發文排隊進度</h2>
         {congested && (
@@ -222,9 +222,9 @@ function Chip({ label, on }: { label: string; on: boolean }) {
 
 function Stat({ label, value, accent }: { label: string; value: number; accent?: string }) {
   return (
-    <div className="rounded-2xl border bg-surface p-4">
-      <div className="text-sm text-ink-2">{label}</div>
-      <div className={`mt-1 text-3xl font-bold ${accent ?? ""}`}>{value}</div>
+    <div className="card p-4">
+      <div className="text-xs font-medium text-ink-2">{label}</div>
+      <div className={`stat-num mt-1.5 text-3xl ${accent ?? "text-ink"}`}>{value}</div>
     </div>
   );
 }
@@ -270,7 +270,13 @@ export default function LiveDashboard() {
   }, [load]);
 
   if (!data && !err) return <div className="text-sm text-ink-3">載入中…</div>;
-  if (err) return <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-600">⚠️ {err}</div>;
+  if (err)
+    return (
+      <div className="card flex flex-wrap items-center gap-3 border-danger/30 bg-danger/5 p-4 text-sm text-danger">
+        <span>⚠️ 暫時讀不到儀表板資料（{err}）。</span>
+        <button onClick={load} className="btn btn-outline btn-sm">重新整理</button>
+      </div>
+    );
   if (!data) return null;
 
   const d = data.stats;
@@ -330,7 +336,8 @@ export default function LiveDashboard() {
           </span>
         </div>
       )}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="card flex flex-wrap items-center gap-2 p-4">
+        <span className="mr-1 text-xs font-medium text-ink-2">服務連線</span>
         <Chip label="資料庫" on={Boolean(data.services.supabase)} />
         <Chip label="AI 文案" on={Boolean(data.services.gemini)} />
         <Chip label="自動抓文" on={Boolean(data.services.apify)} />
@@ -339,7 +346,7 @@ export default function LiveDashboard() {
         <span className="ml-auto flex items-center gap-2 text-xs text-ink-3">
           {loading && <span className="h-2 w-2 animate-pulse rounded-full bg-green-400" />}
           更新於 {new Date(data.at).toLocaleTimeString("zh-TW")}
-          <button onClick={load} className="rounded border px-2 py-0.5 hover:bg-surface-2">
+          <button onClick={load} className="rounded-full border border-border px-2.5 py-1 hover:bg-surface-2">
             重新整理
           </button>
         </span>
@@ -353,7 +360,7 @@ export default function LiveDashboard() {
         <Stat label="近 24h 已發" value={d.publishedLast24h} accent="text-green-600" />
       </div>
 
-      <div className="rounded-2xl border bg-surface p-5">
+      <div className="card p-5">
         <h2 className="mb-3 font-semibold">草稿漏斗</h2>
         <div className="flex flex-wrap items-center gap-2 text-sm">
           {[
@@ -384,7 +391,7 @@ export default function LiveDashboard() {
       </div>
 
       {data.isOwner && data.threadsQuota.length > 0 && (
-        <div className="rounded-2xl border bg-surface p-5">
+        <div className="card p-5">
           <h2 className="mb-3 font-semibold">Threads 今日發文額度（即時）</h2>
           <div className="space-y-3">
             {data.threadsQuota.map((q) => (
@@ -403,7 +410,7 @@ export default function LiveDashboard() {
       )}
 
       {data.isOwner && data.cloudinary && (
-        <div className="rounded-2xl border bg-surface p-5">
+        <div className="card p-5">
           <h2 className="mb-3 font-semibold">Cloudinary 用量（即時）</h2>
           <div className="mb-1 flex justify-between text-sm">
             <span>Credits</span>

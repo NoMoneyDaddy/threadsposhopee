@@ -2,6 +2,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { listRedirectLinks } from "@/lib/redirect-store";
 import RedirectLinkForm from "@/components/RedirectLinkForm";
 import CopyLink from "@/components/CopyLink";
+import EmptyState from "@/components/EmptyState";
 
 export const dynamic = "force-dynamic";
 
@@ -20,10 +21,14 @@ export default async function LinksPage() {
 
       <RedirectLinkForm />
 
-      <section className="rounded-2xl border bg-surface p-5">
+      <section className="card p-5">
         <h2 className="section-title mb-3">我的短連結</h2>
         {links.length === 0 ? (
-          <p className="text-sm text-ink-3">還沒有短連結。</p>
+          <EmptyState
+            icon="🔗"
+            title="還沒有短連結"
+            hint="用上方表單貼一個連結，就能產生你自己的短連結；別人點開會先看到預覽頁再前往原文。"
+          />
         ) : (
           <ul className="divide-y divide-border">
             {links.map((l) => (

@@ -89,10 +89,12 @@ export default async function InsightsPage({
       {engagement && engagement.fetched > 0 && <EngagementSection e={engagement} />}
       {engagement && engagement.fetched >= 3 && <BestTimesSection e={engagement} />}
 
-      <section className="rounded-2xl border bg-surface p-5">
+      <section className="card p-5">
         <h2 className="section-title mb-3">每日發布量</h2>
         {data.byDay.length === 0 ? (
-          <p className="text-sm text-ink-3">此區間尚無已發布貼文。</p>
+          <p className="text-sm text-ink-2">
+            這段期間還沒有已發布的貼文。到「文章管理」核准草稿或手動發文後，這裡就會出現每日發布量。
+          </p>
         ) : (
           <div className="flex items-end gap-1" style={{ height: 120 }}>
             {data.byDay.map((d) => (

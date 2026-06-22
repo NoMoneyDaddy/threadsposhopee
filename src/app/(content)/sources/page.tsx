@@ -1,5 +1,6 @@
-import { listShopeeAccounts, listSources, listThreadsAccounts } from "@/lib/store";
+import { listShopeeAccounts, listSources, listThreadsAccounts, hasApifyCredentials } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
+import { isDemoMode } from "@/lib/env";
 import SourceForm from "@/components/SourceForm";
 import { DeleteButton, ToggleButton } from "@/components/RowActions";
 
@@ -7,13 +8,28 @@ export const dynamic = "force-dynamic";
 
 export default async function SourcesPage() {
   const user = await getCurrentUser();
+  // 未登入（且非 demo）不可用 demo-user 當後備查資料（service-role 僅以 owner_id 過濾，後備 id 會變存取金鑰）。
+  if (!user && !isDemoMode) {
+    return <div className="rounded-2xl border border-dashed p-10 text-center text-ink-2">請先登入。</div>;
+  }
   const ownerId = user?.id ?? "demo-user";
 
-  // 爬蟲是管理者專屬功能
-  if (user && !user.isOwner) {
+  // 抓取：綁定自己的 Apify 金鑰即可使用（計費算在自己帳上）。未綁先引導去綁。
+  // demo 模式（無金鑰）照常顯示頁面，方便試用與 e2e 煙霧測試。
+  const apify = isDemoMode ? { bound: true } : await hasApifyCredentials(ownerId);
+  if (!apify.bound && !isDemoMode) {
     return (
-      <div className="rounded-2xl border border-dashed p-10 text-center text-ink-2">
-        監看來源（抓取）僅限管理者使用。你可以到「素材庫」手動貼分潤連結建立內容。
+      <div className="space-y-3 rounded-2xl border border-dashed p-10 text-center text-ink-2">
+        <p>自動抓文需要你自己的 Apify 金鑰（抓取靠它，費用也算在你的 Apify 帳號）。</p>
+        <p>
+          <a href="/accounts#setup-apify" className="text-brand underline">
+            前往帳號管理綁定 Apify 金鑰 →
+          </a>
+        </p>
+        <p className="text-xs text-ink-3">
+          Apify 免費帳號每月約 US$5 平台額度；本工具使用的 actor「igview-owner/threads-search-scraper」計費約
+          US$5 / 每 1,000 筆結果起（以 Apify 商店頁為準）。
+        </p>
       </div>
     );
   }

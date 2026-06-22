@@ -1,15 +1,21 @@
 import { NextResponse } from "next/server";
-import { createSource } from "@/lib/store";
+import { createSource, hasApifyCredentials, userOwnsThreadsAccount, userOwnsShopeeAccount } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
+import { isDemoMode } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 
-// 監看來源（爬蟲）是 owner 專屬功能
+// 監看來源（抓取）：任何綁定自己 Apify 金鑰的使用者皆可使用。
 export async function POST(req: Request) {
   try {
     const user = await getCurrentUser();
     if (!user) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
-    if (!user.isOwner) return NextResponse.json({ ok: false, error: "只有管理者可新增監看來源" }, { status: 403 });
+    // 需先綁定自己的 Apify 金鑰（抓取靠它，計費也算在自己帳上）。
+    // 不吞 I/O 錯：hasApifyCredentials 若拋錯則落到外層 catch 回 500，不誤判成「未綁定」。
+    const apify = await hasApifyCredentials(user.id);
+    if (!apify.bound) {
+      return NextResponse.json({ ok: false, error: "請先到帳號管理綁定自己的 Apify 金鑰，才能新增監看來源" }, { status: 403 });
+    }
 
     const body = await req.json();
     const searchQuery = body.search_query ? String(body.search_query).trim() : "";
@@ -19,6 +25,14 @@ export async function POST(req: Request) {
         { ok: false, error: "缺少 threads_account_id，且 source_username／search_query 至少要填一個" },
         { status: 400 }
       );
+    }
+    // 多租戶越權防護：發文帳號必須屬於當前使用者（service-role 繞 RLS，務必應用層驗證）
+    if (!isDemoMode && !(await userOwnsThreadsAccount(String(body.threads_account_id), user.id))) {
+      return NextResponse.json({ ok: false, error: "無權使用此發文帳號" }, { status: 403 });
+    }
+    // 同理：若指定 Shopee 分潤帳號，也需屬於本人
+    if (!isDemoMode && body.shopee_account_id && !(await userOwnsShopeeAccount(String(body.shopee_account_id), user.id))) {
+      return NextResponse.json({ ok: false, error: "無權使用此分潤帳號" }, { status: 403 });
     }
     const source = await createSource(
       {

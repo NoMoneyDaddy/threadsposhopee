@@ -37,12 +37,16 @@ export default async function AccountsPage({
   searchParams: { threads?: string; note?: string };
 }) {
   const user = await getCurrentUser();
+  // 未登入（且非 demo）不可用 demo-user 當後備查資料（service-role 僅以 owner_id 過濾，後備 id 會變存取金鑰）。
+  if (!user && !isDemoMode) {
+    return <div className="rounded-2xl border border-dashed p-10 text-center text-ink-2">請先登入。</div>;
+  }
   const ownerId = user?.id ?? "demo-user";
   const [threads, shopee] = await Promise.all([listThreadsAccounts(ownerId), listShopeeAccounts(ownerId)]);
   const oauthReady = !isDemoMode && Boolean(env.threadsAppId && env.threadsRedirectUri);
   const [apify, geminiBound, affiliateId, customSubId, autoRevive, cloudinary, cloudinaryFull, r2Settings, plan] =
     await Promise.all([
-      user?.isOwner ? hasApifyCredentials(ownerId) : Promise.resolve({ bound: false, actor: null }),
+      user ? hasApifyCredentials(ownerId) : Promise.resolve({ bound: false, actor: null }),
       user ? hasGeminiKey(user.id) : Promise.resolve(false),
       getShopeeAffiliateId(ownerId),
       user ? getShopeeSubId(ownerId) : Promise.resolve(null),
@@ -138,8 +142,8 @@ export default async function AccountsPage({
       )}
 
       <div className="grid gap-4 md:grid-cols-2">
-        {/* 爬蟲僅 owner；AI 文案每人各綁各的 */}
-        {user?.isOwner && (
+        {/* 抓取：綁定自己的 Apify 金鑰即可用；AI 文案每人各綁各的 */}
+        {user && (
           <div id="setup-apify" className="scroll-mt-24">
             <ApifyForm bound={apify.bound} actor={apify.actor} />
           </div>

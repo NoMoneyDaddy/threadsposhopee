@@ -13,15 +13,18 @@ import {
   markPostProcessed,
   listProcessedPostIds,
   listSources,
+  listAllEnabledSources,
   findMaterial,
   createDraftFromMaterial,
   getApifyCredentials,
   getShopeeCredentials,
   getGeminiKey,
   getCopyPrefs,
-  getShopeeAffiliateId
+  getShopeeAffiliateId,
+  userOwnsThreadsAccount
 } from "@/lib/store";
 import { getMediaProvider } from "@/services/media/upload";
+import { isDemoMode } from "@/lib/env";
 import type { Source } from "@/lib/types";
 
 // owner 的 Shopee 金鑰：一律吃自綁（shopee_accounts），未綁回 null（不再用環境變數）。
@@ -149,13 +152,23 @@ export async function runSourcePipeline(source: Source, ownerId: string): Promis
 }
 
 // 跑所有啟用中的來源（給排程 / 手動觸發用）。爬蟲是 owner 專屬，產出掛在 owner 名下。
-export async function runAllSources(): Promise<PipelineResult[]> {
-  const ownerId = (await getOwnerUserId()) ?? "demo-user";
-  // owner-scope：只撈該 owner 自己的來源（爬蟲為 owner 限定子系統），確保用對的憑證、
-  // 草稿掛在對的 owner 名下，符合多租戶過濾鐵則（不可用 listSources() 撈到跨租戶來源）。
-  const sources = (await listSources(ownerId)).filter((s) => s.enabled);
+// 跑「單一使用者」的所有啟用來源（手動觸發、或總排程逐使用者呼叫）。
+// 多租戶：用該使用者自己的憑證，草稿掛在其名下。
+// opts.sources：總排程已在記憶體分組好時傳入，省去重複 DB 查詢（避免 N+1）。
+// opts.deadline：時間預算（epoch ms），逐來源前檢查，超過即停手留待下輪（守 cron maxDuration）。
+export async function runSourcesForOwner(
+  ownerId: string,
+  opts: { sources?: Source[]; deadline?: number } = {}
+): Promise<PipelineResult[]> {
+  const sources = (opts.sources ?? (await listSources(ownerId))).filter((s) => s.enabled);
   const results: PipelineResult[] = [];
   for (const s of sources) {
+    if (opts.deadline && Date.now() > opts.deadline) break; // 時間預算用盡，剩餘下輪再跑
+    // 多租戶越權防護：建草稿前驗證來源綁定的 Threads 帳號確實屬於本人（擋錯綁/污染來源跨租戶寫入）。
+    if (!isDemoMode && !(await userOwnsThreadsAccount(s.threads_account_id, ownerId))) {
+      log.warn("來源 Threads 帳號歸屬驗證失敗，略過", { ownerId, sourceId: s.id });
+      continue;
+    }
     // 單一來源拋錯不該中斷整批後續來源（fail-isolation，對齊 cron/all 的 allSettled 精神）。
     try {
       results.push(await runSourcePipeline(s, ownerId));
@@ -179,6 +192,31 @@ export async function runAllSources(): Promise<PipelineResult[]> {
   const newDrafts = results.reduce((n, r) => n + r.drafts.length, 0);
   if (newDrafts > 0) {
     await sendUserAlert(ownerId, `📝 有 ${newDrafts} 則新文案草稿待審核，到草稿頁核准後才會發布。`, "draft_pending").catch(() => {});
+  }
+  return results;
+}
+
+// 所有租戶：一次撈全部啟用來源、記憶體依 owner 分組（免 N+1），只跑「有綁自己 Apify 金鑰」的使用者。
+// 公平性：owner 順序隨機打亂，避免排前面的長時間來源每輪吃光預算、導致後面的人永遠輪不到（飢餓）。
+// 時間預算守 cron maxDuration，傳入 runSourcesForOwner 連單一 owner 內也會中途停手。
+export async function runAllSources(): Promise<PipelineResult[]> {
+  if (isDemoMode) return runSourcesForOwner((await getOwnerUserId()) ?? "demo-user");
+  const start = Date.now();
+  const deadline = start + 50000;
+  // 記憶體分組：owner_id -> 其啟用來源
+  const byOwner = new Map<string, Source[]>();
+  for (const s of await listAllEnabledSources()) {
+    if (!s.owner_id) continue;
+    const arr = byOwner.get(s.owner_id) ?? [];
+    arr.push(s);
+    byOwner.set(s.owner_id, arr);
+  }
+  const owners = Array.from(byOwner.keys()).sort(() => Math.random() - 0.5); // 公平隨機
+  const results: PipelineResult[] = [];
+  for (const ownerId of owners) {
+    if (Date.now() > deadline) break; // 守 maxDuration，剩餘 owner 下輪再跑
+    if (!(await getApifyCredentials(ownerId))) continue; // 沒綁自己 Apify 金鑰的使用者略過
+    results.push(...(await runSourcesForOwner(ownerId, { sources: byOwner.get(ownerId), deadline })));
   }
   return results;
 }

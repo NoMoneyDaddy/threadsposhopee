@@ -12,7 +12,7 @@ const TABS: Tab[] = [
   { href: "/agents", label: "AI 代理人" },
   { href: "/materials", label: "素材" },
   { href: "/shared", label: "共享庫" },
-  { href: "/sources", label: "自動抓文", ownerOnly: true }
+  { href: "/sources", label: "自動抓文" }
 ];
 
 export default function ContentTabs({ isOwner }: { isOwner: boolean }) {

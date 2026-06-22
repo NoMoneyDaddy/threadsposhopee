@@ -75,6 +75,19 @@ export async function userOwnsThreadsAccount(accountId: string, ownerId: string)
   return Boolean(data);
 }
 
+// 該 Shopee 分潤帳號是否屬於此使用者（建來源前驗證，擋跨租戶冒用 account id）。
+export async function userOwnsShopeeAccount(accountId: string, ownerId: string): Promise<boolean> {
+  if (isDemoMode) return true;
+  const sb = getServiceClient()!;
+  const { data } = await sb
+    .from("shopee_accounts")
+    .select("id")
+    .eq("id", accountId)
+    .eq("owner_id", ownerId)
+    .maybeSingle();
+  return Boolean(data);
+}
+
 // 該使用者所有啟用帳號的解密 token（依 account id 索引）。貼文互動數據需逐帳號 token 查 insights。
 export async function listThreadsAccountTokens(ownerId: string): Promise<{ id: string; accessToken: string }[]> {
   if (isDemoMode) return [];

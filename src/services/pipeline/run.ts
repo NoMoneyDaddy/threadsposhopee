@@ -79,7 +79,8 @@ export async function runSourcePipeline(source: Source, ownerId: string): Promis
   );
 
   for (const post of posts) {
-    if (post.isReply) continue;
+    // 註：搜尋爬蟲的「2/2 留言」常才是帶蝦皮連結的那篇，故不再略過 isReply；
+    // 沒有蝦皮連結的貼文會在下方被略過。
 
     // 單篇容錯：任一外部 API 失敗只略過該篇，不中斷整條流程
     try {

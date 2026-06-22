@@ -25,8 +25,19 @@ function postIdFromUrl(url: string): string {
   return m ? m[1] : "";
 }
 
+// 取貼文的「主要媒體」：優先影片，否則第一張圖。
+// 注意：allImages/allVideos 多是「同一檔的多種尺寸變體」（URL 路徑含同一媒體 id），
+// 不是多個不同媒體；故只取代表（cover）一個，避免把同圖重複當輪播。
+function pickMedia(item: any): { type: "image" | "video"; url: string } | null {
+  const video = item.videoUrl || (Array.isArray(item.allVideos) ? item.allVideos[0] : null);
+  if (typeof video === "string" && video) return { type: "video", url: video };
+  const image = item.imageUrl || (Array.isArray(item.allImages) ? item.allImages[0] : null);
+  if (typeof image === "string" && image) return { type: "image", url: image };
+  return null;
+}
+
 // 把 search scraper 的扁平 dataset items 攤平成 ScrapedPost[]：每個 item 即一則貼文。
-// 此 actor 不回媒體欄位，故 mediaType 一律 none、mediaUrl 為 null。純函式可測。
+// 媒體取主要一個（影片優先，否則 cover 圖）。純函式可測。
 export function parseSearchPosts(items: any[]): ScrapedPost[] {
   if (!Array.isArray(items)) return [];
   const out: ScrapedPost[] = [];
@@ -35,13 +46,14 @@ export function parseSearchPosts(items: any[]): ScrapedPost[] {
     const text: string = item.captionText ?? "";
     const postId = postIdFromUrl(item.postUrl ?? "");
     if (!postId) continue;
+    const media = pickMedia(item);
     out.push({
       postId,
       username: item.username ?? "",
-      isReply: false,
+      isReply: Boolean(item.isReply),
       text,
-      mediaType: "none",
-      mediaUrl: null,
+      mediaType: media?.type ?? "none",
+      mediaUrl: media?.url ?? null,
       shopeeLinks: Array.from(text.matchAll(SHOPEE_SHORT_RE)).map((m) => m[1])
     });
   }

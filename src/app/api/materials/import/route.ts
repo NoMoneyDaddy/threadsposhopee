@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { log } from "@/lib/logger";
-import { getSharedMaterial, incrementImportCount, setMaterialCopyIfEmpty } from "@/lib/store";
+import { getSharedMaterial, incrementImportCount, findMaterial } from "@/lib/store";
 import { resolveMaterialFromUrl } from "@/services/materials/fromUrl";
 import { getCurrentUser } from "@/lib/auth";
 
@@ -25,10 +25,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "這是你自己分享的商品，無需匯入" }, { status: 400 });
     }
 
-    // 用匯入者自己的金鑰重產分潤連結（withCopy=false 不重燒 token；文案重用分享者的）。
-    const { material, notes } = await resolveMaterialFromUrl(shared.clean_product_url, user, false);
-    await setMaterialCopyIfEmpty(material.id, user.id, shared.main_text, shared.reply_text).catch(() => {});
-    await incrementImportCount(id).catch(() => {});
+    // 防重複刷分：匯入者已擁有該商品則不再累加分享者貢獻（仍重產/更新自己的素材）。
+    const alreadyHad = await findMaterial(shared.shop_id, shared.item_id, user.id).catch(() => null);
+    // 用匯入者自己的金鑰重產分潤連結，並用匯入者自己的 Gemini「重新生成」文案（有金鑰才生成、沒金鑰留空）。
+    // 不逐字沿用分享者文案：避免不同使用者文案相同（被判洗版/降觸及）。
+    const { material, notes } = await resolveMaterialFromUrl(shared.clean_product_url, user, true);
+    if (!alreadyHad) await incrementImportCount(id).catch(() => {});
 
     return NextResponse.json({ ok: true, materialId: material.id, notes });
   } catch (e) {

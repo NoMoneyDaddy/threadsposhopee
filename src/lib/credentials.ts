@@ -297,6 +297,24 @@ export async function setBioSettings(ownerId: string, handle: string | null, tit
   }
 }
 
+// ── 高貢獻者贊助文回饋方式：exempt（免發）｜own_link（換成自己的分潤連結）──────
+export type SponsorRewardMode = "exempt" | "own_link";
+
+export async function getSponsorRewardMode(ownerId: string): Promise<SponsorRewardMode> {
+  if (isDemoMode) return "exempt";
+  const sb = getServiceClient()!;
+  const { data } = await sb.from("profiles").select("sponsor_reward_mode").eq("id", ownerId).maybeSingle();
+  return data?.sponsor_reward_mode === "own_link" ? "own_link" : "exempt";
+}
+
+export async function setSponsorRewardMode(ownerId: string, mode: SponsorRewardMode): Promise<void> {
+  if (isDemoMode) return;
+  const sb = getServiceClient()!;
+  const v: SponsorRewardMode = mode === "own_link" ? "own_link" : "exempt";
+  const { error } = await sb.from("profiles").upsert({ id: ownerId, sponsor_reward_mode: v }, { onConflict: "id" });
+  if (error) throw new Error(`儲存回饋方式失敗：${error.message}`);
+}
+
 // ── 每位使用者發文節奏（slots/min gap/max per day）：留空沿用 env 預設 ──────
 export async function getPublishPrefs(ownerId: string): Promise<PublishPrefs> {
   const fallback: PublishPrefs = {

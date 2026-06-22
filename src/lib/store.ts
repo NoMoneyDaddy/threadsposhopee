@@ -43,7 +43,6 @@ export {
   getSharedMaterial,
   incrementImportCount,
   getContributionScore,
-  setMaterialCopyIfEmpty,
   type MaterialToCheck,
   type SharedMaterial
 } from "./materials-store";
@@ -73,6 +72,7 @@ export {
   updateDraftStatusAtomic,
   listApprovedDrafts,
   listNeedsVerificationAll,
+  mainTextUsedByOtherOwner,
   listApprovedDraftsForShard,
   type PublishedPostRef,
   type ReplyDueDraft
@@ -133,6 +133,9 @@ export {
   getBioSettings,
   setBioSettings,
   normalizeBioHandle,
+  getSponsorRewardMode,
+  setSponsorRewardMode,
+  type SponsorRewardMode,
   getUserPlan,
   setUserPlan
 } from "./credentials";

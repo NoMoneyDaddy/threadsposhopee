@@ -122,6 +122,8 @@ export async function touchEvergreen(id: string): Promise<void> {
 export type SharedMaterial = {
   id: string;
   owner_id: string | null;
+  shop_id: string;
+  item_id: string;
   product_name: string | null;
   clean_product_url: string | null;
   media_type: "image" | "video" | "none" | null;
@@ -131,6 +133,19 @@ export type SharedMaterial = {
   import_count: number;
   created_at: string;
 };
+
+// 依「原始商品」(shop_id+item_id) 去重，保留每個商品被匯入最多的一筆（others 已依 import_count 排序）。純函式可測。
+export function dedupeSharedByProduct(rows: SharedMaterial[]): SharedMaterial[] {
+  const seen = new Set<string>();
+  const out: SharedMaterial[] = [];
+  for (const m of rows) {
+    const key = `${m.shop_id}:${m.item_id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(m);
+  }
+  return out;
+}
 
 // 開關某素材是否分享進公共池（多租戶：owner_id 過濾）。
 export async function setMaterialShared(id: string, ownerId: string, on: boolean): Promise<boolean> {
@@ -151,19 +166,21 @@ export async function setMaterialShared(id: string, ownerId: string, on: boolean
   return Boolean(data);
 }
 
-// 列出公共池（排除瀏覽者自己的；不含分潤連結）。新到舊。
+// 列出公共池（排除瀏覽者自己的；不含分潤連結）。依被匯入次數排序、再依商品去重，回傳前 limit 筆。
 export async function listSharedMaterials(viewerOwnerId: string, limit = 60): Promise<SharedMaterial[]> {
   if (isDemoMode) return [];
   const sb = getServiceClient()!;
+  // 多抓一些（去重前），讓同商品的多筆不會佔滿名額。
   const { data } = await sb
     .from("materials")
-    .select("id, owner_id, product_name, clean_product_url, media_type, cloudinary_media_url, main_text, reply_text, import_count, created_at")
+    .select("id, owner_id, shop_id, item_id, product_name, clean_product_url, media_type, cloudinary_media_url, main_text, reply_text, import_count, created_at")
     .eq("shared", true)
     .eq("affiliate_valid", true)
     .neq("owner_id", viewerOwnerId)
+    .order("import_count", { ascending: false })
     .order("created_at", { ascending: false })
-    .limit(limit);
-  return (data ?? []) as SharedMaterial[];
+    .limit(limit * 3);
+  return dedupeSharedByProduct((data ?? []) as SharedMaterial[]).slice(0, limit);
 }
 
 // 取一筆共享素材（供匯入：需 clean_product_url；任何登入者可匯入，故不帶 owner 過濾，但必須 shared）。
@@ -179,41 +196,21 @@ export async function getSharedMaterial(id: string): Promise<SharedMaterial | nu
   return (data as SharedMaterial) ?? null;
 }
 
-// 累加被匯入次數（貢獻分數，best-effort 讀-加-寫；競態下可能少算 1，非關鍵可接受）。
+// 累加被匯入次數（資料庫端原子 +1，避免競態與多次往返）。
 export async function incrementImportCount(id: string): Promise<void> {
   if (isDemoMode) return;
   const sb = getServiceClient()!;
-  const { data } = await sb.from("materials").select("import_count").eq("id", id).maybeSingle();
-  const next = ((data?.import_count as number) ?? 0) + 1;
-  await sb.from("materials").update({ import_count: next }).eq("id", id);
+  const { error } = await sb.rpc("increment_material_import", { p_id: id });
+  if (error) throw new Error(`累加匯入次數失敗：${error.message}`);
 }
 
-// 貢獻分數：自己已分享素材被匯入的總次數。
+// 貢獻分數＝該使用者所有素材被匯入總次數（資料庫端 SUM；不限目前是否仍分享，取消分享不歸零歷史貢獻）。
 export async function getContributionScore(ownerId: string): Promise<number> {
   if (isDemoMode) return 0;
   const sb = getServiceClient()!;
-  const { data } = await sb.from("materials").select("import_count").eq("owner_id", ownerId).eq("shared", true);
-  return (data ?? []).reduce((sum, m) => sum + ((m.import_count as number) ?? 0), 0);
-}
-
-// 匯入後補上文案（重用分享者的文案，省 token；只在匯入者該素材尚無文案時寫入）。
-export async function setMaterialCopyIfEmpty(id: string, ownerId: string, mainText: string | null, replyText: string | null): Promise<void> {
-  if (!mainText) return;
-  if (isDemoMode) {
-    const m = demo.materials.find((x) => x.id === id);
-    if (m && !m.main_text) {
-      m.main_text = mainText;
-      m.reply_text = replyText;
-    }
-    return;
-  }
-  const sb = getServiceClient()!;
-  await sb
-    .from("materials")
-    .update({ main_text: mainText, reply_text: replyText })
-    .eq("id", id)
-    .eq("owner_id", ownerId)
-    .is("main_text", null);
+  const { data, error } = await sb.rpc("get_contribution_score", { p_owner: ownerId });
+  if (error) throw new Error(`取得貢獻分數失敗：${error.message}`);
+  return (data as number) ?? 0;
 }
 
 // 連結健檢 worker 用：取最久沒檢查、目前仍有效的素材（跨租戶）。

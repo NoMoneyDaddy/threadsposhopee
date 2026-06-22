@@ -7,7 +7,8 @@ import {
   getGeminiKey,
   getCopyPrefs,
   requeueReply,
-  rescheduleDraft
+  rescheduleDraft,
+  mainTextUsedByOtherOwner
 } from "@/lib/store";
 import { setSponsorPick } from "@/lib/sponsor";
 import { createRedirectLink } from "@/lib/redirect-store";
@@ -154,6 +155,13 @@ export async function POST(req: Request) {
     // 人工按「核准並發布」即視為核准；但已發布／發布中／已退回的不可再次發布，避免重複貼文
     if (draft.status === "published" || draft.status === "publishing" || draft.status === "rejected") {
       return NextResponse.json({ ok: false, error: `草稿狀態為「${draft.status}」，無法發布` }, { status: 400 });
+    }
+    // 禁止不同使用者用相同文案（避免重複內容被降觸及/封號）。
+    if (await mainTextUsedByOtherOwner(draft.main_text, user.id)) {
+      return NextResponse.json(
+        { ok: false, error: "這段文案已有其他使用者發布過，請先改寫（可用 AI 重寫）再發。" },
+        { status: 409 }
+      );
     }
     if (isDemoMode) {
       await updateDraftStatus(id, "published", { published_post_id: "demo_" + Date.now() });

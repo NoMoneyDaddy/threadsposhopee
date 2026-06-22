@@ -1,6 +1,7 @@
 import EmptyState from "@/components/EmptyState";
 import ImportSharedButton from "@/components/ImportSharedButton";
-import { listSharedMaterials, getContributionScore } from "@/lib/store";
+import RewardModeForm from "@/components/RewardModeForm";
+import { listSharedMaterials, getContributionScore, getSponsorRewardMode } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
 import { cloudinaryThumb } from "@/lib/img";
 import { SPONSOR_EXEMPT_CONTRIBUTION } from "@/lib/contribution";
@@ -11,9 +12,10 @@ export const dynamic = "force-dynamic";
 export default async function SharedPage() {
   const user = await getCurrentUser();
   if (!user) return <div className="text-center text-sm text-red-500">請先登入。</div>;
-  const [items, contribution] = await Promise.all([
+  const [items, contribution, rewardMode] = await Promise.all([
     listSharedMaterials(user.id).catch(() => []),
-    getContributionScore(user.id).catch(() => 0)
+    getContributionScore(user.id).catch(() => 0),
+    getSponsorRewardMode(user.id).catch(() => "exempt" as const)
   ]);
   const exempt = contribution >= SPONSOR_EXEMPT_CONTRIBUTION;
 
@@ -33,6 +35,8 @@ export default async function SharedPage() {
           🏅 貢獻 {contribution}{exempt ? "（已免贊助文）" : `／${SPONSOR_EXEMPT_CONTRIBUTION}`}
         </span>
       </div>
+
+      {exempt && <RewardModeForm initial={rewardMode} />}
 
       {items.length === 0 ? (
         <EmptyState

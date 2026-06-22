@@ -93,7 +93,7 @@
 }
 
 @layer components {
-  /* 按鈕：膠囊、200ms 過場、清楚焦點/停用態（觸控高度由 py 達成 ≥40px） */
+  /* 按鈕：膠囊、200ms 過場、清楚焦點/停用態（觸控高度 ≥44px，由 min-h 保證） */
   .btn {
     @apply inline-flex min-h-[2.75rem] select-none items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold
            transition-[background-color,color,box-shadow,opacity,transform] duration-200 ease-out

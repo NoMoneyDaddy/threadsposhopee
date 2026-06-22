@@ -7,6 +7,7 @@ import { CharCount } from "@/components/ThreadsPreview";
 import ThreadsPreview from "@/components/ThreadsPreview";
 import { normalizeDraftMedia } from "@/lib/media";
 import { checkThreadsContent, THREADS_MAX_HASHTAGS } from "@/lib/threads-content";
+import { isLowRelevance } from "@/lib/relevance";
 
 // memo：草稿列表（最多 100 張）在搜尋/篩選 re-render 時，只重繪 props 變動的卡片。
 // 需搭配 DraftsExplorer 以 useCallback 穩定 onToggleSelect，否則 memo 失效。
@@ -256,6 +257,12 @@ function DraftCard({
       {typeof dupSimilarity === "number" && (
         <div className="mt-2 rounded bg-amber-50 p-2 text-xs text-amber-700" role="alert">
           ⚠️ 文案與同帳號近期貼文高度相似（{Math.round(dupSimilarity * 100)}%），重複措辭易被降觸及，建議改寫再發。
+        </div>
+      )}
+
+      {isLowRelevance(draft.product_name, mainText) && (
+        <div className="mt-2 rounded bg-amber-50 p-2 text-xs text-amber-700" role="alert">
+          ⚠️ 商品與文案相關性偏低，內容與帶的商品可能不符（易被判誤導／降觸及）。發布前請確認文案有提到這個商品。
         </div>
       )}
 

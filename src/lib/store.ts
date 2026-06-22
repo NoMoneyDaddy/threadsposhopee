@@ -123,6 +123,9 @@ export {
   getUserCloudinary,
   getUserCloudinaryFull,
   setUserCloudinary,
+  getBioSettings,
+  setBioSettings,
+  normalizeBioHandle,
   getUserPlan,
   setUserPlan
 } from "./credentials";

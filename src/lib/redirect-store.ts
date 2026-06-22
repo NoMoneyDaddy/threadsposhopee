@@ -26,6 +26,12 @@ export interface RedirectLinkRow extends RedirectLink {
   clicks: number;
   continues: number;
   createdAt: string;
+  inBio: boolean;
+}
+
+export interface BioPage {
+  title: string | null;
+  links: { code: string; title: string | null; imageUrl: string | null }[];
 }
 
 // 建立短連結：驗證 URL（SSRF/協定），產生唯一 code（衝突重試），回傳 code。
@@ -80,7 +86,7 @@ export async function listRedirectLinks(ownerId: string, limit = 100): Promise<R
   const sb = getServiceClient()!;
   const { data } = await sb
     .from("redirect_links")
-    .select("code, source_url, affiliate_url, title, image_url, description, clicks, continues, created_at")
+    .select("code, source_url, affiliate_url, title, image_url, description, clicks, continues, created_at, in_bio")
     .eq("owner_id", ownerId)
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -93,8 +99,46 @@ export async function listRedirectLinks(ownerId: string, limit = 100): Promise<R
     description: d.description,
     clicks: d.clicks,
     continues: d.continues,
-    createdAt: d.created_at
+    createdAt: d.created_at,
+    inBio: Boolean(d.in_bio)
   }));
+}
+
+// 開關某短連結是否顯示在 bio 頁（多租戶：以 owner_id 過濾）。
+export async function setRedirectInBio(code: string, ownerId: string, on: boolean): Promise<boolean> {
+  if (isDemoMode) return true;
+  const sb = getServiceClient()!;
+  const { data } = await sb
+    .from("redirect_links")
+    .update({ in_bio: on })
+    .eq("code", code)
+    .eq("owner_id", ownerId)
+    .select("code")
+    .maybeSingle();
+  return Boolean(data);
+}
+
+// 公開 bio 頁：依 handle 取該使用者的標題與「已加入 bio」的短連結。找不到回 null。
+export async function getBioPageByHandle(handle: string): Promise<BioPage | null> {
+  if (isDemoMode) return null;
+  const sb = getServiceClient()!;
+  const { data: prof } = await sb
+    .from("profiles")
+    .select("id, bio_title")
+    .eq("bio_handle", handle.toLowerCase())
+    .maybeSingle();
+  if (!prof) return null;
+  const { data: links } = await sb
+    .from("redirect_links")
+    .select("code, title, image_url")
+    .eq("owner_id", prof.id)
+    .eq("in_bio", true)
+    .order("created_at", { ascending: false })
+    .limit(50);
+  return {
+    title: prof.bio_title ?? null,
+    links: (links ?? []).map((l) => ({ code: l.code, title: l.title, imageUrl: l.image_url }))
+  };
 }
 
 // 原子累加中轉頁瀏覽數（best-effort，不擋頁）。

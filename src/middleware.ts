@@ -18,6 +18,7 @@ const PUBLIC_PREFIXES = [
   "/data-deletion",
   "/sponsored",
   "/r/", // go2read 中轉頁（訪客點短連結，無登入）
+  "/b/", // 公開 bio 頁（link-in-bio，無登入）
   "/api/redirect/hit" // 中轉頁「繼續」計數 beacon（公開）
 ];
 

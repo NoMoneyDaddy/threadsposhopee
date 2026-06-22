@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { getServiceClient } from "./supabase/server";
 import { isDemoMode } from "./env";
 import { demo } from "./demo-store";
+import { combinedContributionScore } from "./contribution";
 import type { Material } from "./types";
 
 export async function findMaterial(shopId: string, itemId: string, ownerId: string): Promise<Material | null> {
@@ -275,13 +276,29 @@ export async function incrementImportCount(id: string): Promise<void> {
   if (error) throw new Error(`累加匯入次數失敗：${error.message}`);
 }
 
-// 貢獻分數＝該使用者所有素材被匯入總次數（資料庫端 SUM；不限目前是否仍分享，取消分享不歸零歷史貢獻）。
+// 該使用者目前分享進公共池的素材篇數（貢獻分數的「篇數」項）。
+export async function getSharedMaterialCount(ownerId: string): Promise<number> {
+  if (isDemoMode) return 0;
+  const sb = getServiceClient()!;
+  const { count, error } = await sb
+    .from("materials")
+    .select("id", { count: "exact", head: true })
+    .eq("owner_id", ownerId)
+    .eq("shared", true);
+  if (error) throw new Error(`取得分享素材數失敗：${error.message}`);
+  return count ?? 0;
+}
+
+// 貢獻分數＝被匯入總次數 × W_IMPORT + 分享素材篇數 × W_SHARED（見 contribution.ts）。
+// 被匯入總次數走 DB 端 SUM（不限目前是否仍分享，取消分享不歸零歷史貢獻）。
 export async function getContributionScore(ownerId: string): Promise<number> {
   if (isDemoMode) return 0;
   const sb = getServiceClient()!;
   const { data, error } = await sb.rpc("get_contribution_score", { p_owner: ownerId });
   if (error) throw new Error(`取得貢獻分數失敗：${error.message}`);
-  return (data as number) ?? 0;
+  const importTotal = (data as number) ?? 0;
+  const sharedCount = await getSharedMaterialCount(ownerId).catch(() => 0);
+  return combinedContributionScore(importTotal, sharedCount);
 }
 
 // 連結健檢 worker 用：取最久沒檢查、目前仍有效的素材（跨租戶）。

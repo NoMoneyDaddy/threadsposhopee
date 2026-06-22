@@ -7,6 +7,7 @@ import { checkAffiliateLinks } from "@/services/materials/linkcheck";
 import { runEvergreen } from "@/services/materials/evergreen";
 import { buildDailyDigest } from "@/services/digest/daily";
 import { buildPeriodicDigest } from "@/services/digest/periodic";
+import { broadcastWeeklyDigests } from "@/services/digest/weekly-broadcast";
 import type { NotifyType } from "@/lib/notify-prefs";
 import { verifySponsorPosts, ensureSponsorPosts } from "@/services/sponsor/run";
 import { runAiAgents } from "@/services/ai/agent-run";
@@ -113,9 +114,13 @@ export async function runCronAll(now: Date = new Date()): Promise<Record<string,
   if (h === 1 && min < 15) {
     steps.push({ key: "dailyDigest", run: () => runDigest("daily_digest", buildDailyDigest) });
   }
-  // 每週績效摘要（每週一台北 10:00 = UTC 02:00–02:14）。
+  // 每週收益週報：廣播給所有有綁通知通道的會員，各收自己的數據（每週一台北 10:00 = UTC 02:00–02:14）。
   if (dow === 1 && h === 2 && min < 15) {
-    steps.push({ key: "weeklyDigest", run: () => runDigest("weekly_digest", () => buildPeriodicDigest("本週", 7)) });
+    steps.push({
+      key: "weeklyDigest",
+      run: broadcastWeeklyDigests,
+      warn: (r) => (r?.sent ? `📈 已發送 ${r.sent} 份會員週報` : null)
+    });
   }
   // 每月績效摘要（每月 1 日台北 10:30 = UTC 02:30–02:44）。
   if (now.getUTCDate() === 1 && h === 2 && min >= 30 && min < 45) {

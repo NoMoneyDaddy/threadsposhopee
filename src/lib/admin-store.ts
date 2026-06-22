@@ -111,6 +111,19 @@ async function sumImportCount(): Promise<number> {
   return ((data ?? []) as { score: number }[]).reduce((a, r) => a + (r.score ?? 0), 0);
 }
 
+// 週報廣播用：列出有綁通知通道（Telegram 或 Discord）的使用者 id（明文欄位，非機密）。
+export async function listOwnersWithNotify(limit = 500): Promise<string[]> {
+  if (isDemoMode) return [];
+  const sb = getServiceClient()!;
+  const { data, error } = await sb
+    .from("profiles")
+    .select("id, telegram_chat_id, discord_webhook_url")
+    .or("telegram_chat_id.not.is.null,discord_webhook_url.not.is.null")
+    .limit(limit);
+  if (error) throw new Error(`列出通知會員失敗：${error.message}`);
+  return (data ?? []).map((r) => r.id as string);
+}
+
 // ── 貢獻排行榜 ────────────────────────────────────────────
 export type Contributor = { owner_id: string; score: number; bio_handle: string | null };
 export async function listTopContributors(limit = 10): Promise<Contributor[]> {

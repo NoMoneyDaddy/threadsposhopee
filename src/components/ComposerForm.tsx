@@ -235,10 +235,11 @@ export default function ComposerForm({ threadsAccounts }: { threadsAccounts: Thr
 
           <ThreadsPreview
             accountLabel={threadsAccounts.find((a) => a.id === (accountId || threadsAccounts[0]?.id))?.label}
-            mainText={mainText}
-            replyText={replyText}
+            mainText={allInMain && replyText ? [mainText, replyText].filter(Boolean).join("\n\n") : mainText}
+            replyText={allInMain ? "" : replyText}
             mediaUrl={material.cloudinary_media_url}
             mediaType={material.media_type}
+            media={material.media}
           />
 
           <div className="flex flex-wrap items-center gap-2">

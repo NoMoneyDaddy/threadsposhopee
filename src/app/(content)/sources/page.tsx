@@ -1,5 +1,6 @@
 import { listShopeeAccounts, listSources, listThreadsAccounts, hasApifyCredentials } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
+import { isDemoMode } from "@/lib/env";
 import SourceForm from "@/components/SourceForm";
 import { DeleteButton, ToggleButton } from "@/components/RowActions";
 
@@ -10,8 +11,9 @@ export default async function SourcesPage() {
   const ownerId = user?.id ?? "demo-user";
 
   // 抓取：綁定自己的 Apify 金鑰即可使用（計費算在自己帳上）。未綁先引導去綁。
+  // demo 模式（無金鑰）照常顯示頁面，方便試用與 e2e 煙霧測試。
   const apify = user ? await hasApifyCredentials(ownerId).catch(() => ({ bound: false })) : { bound: false };
-  if (user && !apify.bound) {
+  if (user && !apify.bound && !isDemoMode) {
     return (
       <div className="space-y-3 rounded-2xl border border-dashed p-10 text-center text-ink-2">
         <p>自動抓文需要你自己的 Apify 金鑰（抓取靠它，費用也算在你的 Apify 帳號）。</p>

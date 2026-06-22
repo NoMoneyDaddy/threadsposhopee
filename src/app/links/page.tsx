@@ -3,6 +3,7 @@ import { listRedirectLinks } from "@/lib/redirect-store";
 import RedirectLinkForm from "@/components/RedirectLinkForm";
 import CopyLink from "@/components/CopyLink";
 import EmptyState from "@/components/EmptyState";
+import SelfBuyNotice from "@/components/SelfBuyNotice";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,8 @@ export default async function LinksPage() {
       </div>
 
       <RedirectLinkForm />
+
+      <SelfBuyNotice />
 
       <section className="card p-5">
         <h2 className="section-title mb-3">我的短連結</h2>

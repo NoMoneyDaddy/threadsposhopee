@@ -47,7 +47,7 @@ export async function createMaterial(input: Partial<Material>, ownerId: string):
       Object.assign(existing, input);
       return existing;
     }
-    const material = { id: randomUUID(), affiliate_valid: true, created_at: new Date().toISOString(), ...input } as Material;
+    const material = { id: randomUUID(), affiliate_valid: true, created_at: new Date().toISOString(), ...input, owner_id: ownerId } as Material;
     demo.materials.unshift(material);
     return material;
   }
@@ -279,7 +279,8 @@ export async function incrementImportCount(id: string): Promise<void> {
 // 註：貢獻分數由 SQL 即時從 materials 表計算（被匯入次數＋分享篇數），刪除後分數自然下降，無需另行扣分。
 export async function deleteMaterial(id: string, ownerId: string): Promise<boolean> {
   if (isDemoMode) {
-    const i = demo.materials.findIndex((m) => m.id === id);
+    // 與非 demo 分支一致地帶 owner_id 過濾，維持多租戶授權語義。
+    const i = demo.materials.findIndex((m) => m.id === id && m.owner_id === ownerId);
     if (i < 0) return false;
     demo.materials.splice(i, 1);
     return true;

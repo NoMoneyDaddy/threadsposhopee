@@ -13,7 +13,11 @@ export default function DeleteAccountButton() {
     setBusy(true);
     setMsg(null);
     try {
-      const res = await fetch("/api/account/delete", { method: "POST" });
+      const res = await fetch("/api/account/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmText })
+      });
       const json = await res.json();
       if (!json.ok) throw new Error(json.error);
       window.location.href = "/login";
@@ -32,7 +36,14 @@ export default function DeleteAccountButton() {
         ⚠️ 已發佈到 Threads 的貼文（含贊助文）<span className="font-medium">不會</span>被自動刪除（Threads 無提供刪文 API），如需移除請自行到 Threads 操作。
       </p>
       {!open ? (
-        <button onClick={() => setOpen(true)} className="rounded-xl border border-red-300 px-3 py-2 text-sm text-red-600 hover:bg-red-50">
+        <button
+          onClick={() => {
+            setConfirmText("");
+            setMsg(null);
+            setOpen(true);
+          }}
+          className="rounded-xl border border-red-300 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+        >
           我要刪除帳號
         </button>
       ) : (
@@ -55,7 +66,15 @@ export default function DeleteAccountButton() {
             >
               {busy ? "刪除中…" : "永久刪除"}
             </button>
-            <button onClick={() => setOpen(false)} disabled={busy} className="rounded-xl border px-3 py-2 text-sm">
+            <button
+              onClick={() => {
+                setOpen(false);
+                setConfirmText("");
+                setMsg(null);
+              }}
+              disabled={busy}
+              className="rounded-xl border px-3 py-2 text-sm"
+            >
               取消
             </button>
           </div>

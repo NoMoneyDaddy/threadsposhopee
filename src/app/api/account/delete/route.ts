@@ -8,10 +8,15 @@ import { log } from "@/lib/logger";
 export const dynamic = "force-dynamic";
 
 // 永久刪除自己的帳號與所有自有資料（不可復原），完成後登出。
-export async function POST() {
+export async function POST(req: Request) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   if (isDemoMode) return NextResponse.json({ ok: false, error: "Demo 模式不支援刪除帳號" }, { status: 400 });
+  // 伺服器端再次驗證確認字串：避免略過前端防呆、直接帶 session 打 API 誤刪。
+  const body = (await req.json().catch(() => null)) as { confirmText?: string } | null;
+  if (body?.confirmText !== "刪除") {
+    return NextResponse.json({ ok: false, error: "請輸入「刪除」以確認" }, { status: 400 });
+  }
   try {
     await deleteOwnerAccount(user.id);
   } catch (e) {

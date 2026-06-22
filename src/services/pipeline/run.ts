@@ -63,8 +63,13 @@ export async function runSourcePipeline(source: Source, ownerId: string): Promis
   // 各人自綁圖床（R2 或 Cloudinary，素材進自己雲端）；一次取出整迴圈重用
   const mediaProvider = await getMediaProvider(ownerId);
   // 來源兩種模式：有 search_query → 關鍵字搜尋；否則監看 source_username 帳號。
+  // 兩者都填＝在該帳號內搜尋關鍵字（同時帶 searchQuery 與 from）。
   const posts = source.search_query
-    ? await scrapeLatestPosts({ searchQuery: source.search_query, sort: "recent" }, source.posts_limit, apify)
+    ? await scrapeLatestPosts(
+        { searchQuery: source.search_query, username: source.source_username, sort: "recent" },
+        source.posts_limit,
+        apify
+      )
     : await scrapeLatestPosts({ username: source.source_username }, source.posts_limit, apify);
   result.scanned = posts.length;
   // 一次預載本來源已處理的貼文 id（取代逐篇 isPostProcessed 查詢，消除 N+1）

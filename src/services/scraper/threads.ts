@@ -75,8 +75,10 @@ export async function scrapeLatestPosts(
 
   const spec: ScrapeQuery = typeof query === "string" ? { username: query } : query;
   const username = spec.username?.trim().replace(/^@/, "") || "";
-  // actor 的 searchQuery 為必填；只監看帳號（未給關鍵字）時帶空字串，靠 from 過濾。
-  const searchQuery = spec.searchQuery?.trim() || "";
+  // actor 的 searchQuery 為必填，空字串可能觸發 Apify 驗證錯誤。本專案目標貼文必含蝦皮連結
+  // （s.shopee.tw／shope.ee／shopee.tw 皆含子字串 "shope"），故只監看帳號時預設帶 "shope"，
+  // 既滿足必填又精準篩出含分潤連結的貼文。
+  const searchQuery = spec.searchQuery?.trim() || "shope";
   const body: Record<string, unknown> = {
     searchQuery,
     sort: spec.sort ?? "recent",
@@ -99,6 +101,8 @@ export async function scrapeLatestPosts(
   );
   if (!res.ok) throw new Error(`Apify 失敗: ${res.status} ${await res.text()}`);
   const dataset = await res.json();
-  // Apify 回傳是 dataset items 陣列（每筆即一則貼文）
-  return parseSearchPosts(Array.isArray(dataset) ? dataset : [dataset]);
+  // Apify 回傳是 dataset items 陣列（每筆即一則貼文）。actor 的 maxPosts 下限 20，
+  // 但使用者的 posts_limit 可能更小 → 解析後再夾到設定值，避免處理過多、燒 AI/Shopee 額度。
+  const posts = parseSearchPosts(Array.isArray(dataset) ? dataset : [dataset]);
+  return posts.slice(0, Math.max(1, postsLimit));
 }

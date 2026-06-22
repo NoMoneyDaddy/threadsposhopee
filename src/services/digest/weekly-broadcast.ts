@@ -25,11 +25,12 @@ export async function broadcastWeeklyDigests(): Promise<{ sent: number; skipped:
         out.skipped++;
         continue;
       }
+      // 只有「成功取得內容」才標記本週已處理；buildPeriodicDigestForOwner 僅在錯誤時回 null
+      //（無貼文仍會回「已發布 0 篇」字串），故 null＝暫時性錯誤，留待下個 tick 重試、不寫快取。
       const msg = await buildPeriodicDigestForOwner(id, "本週", 7).catch(() => null);
-      // 標記「本週已處理」即使內容為空，避免每個 tick 重打外部 API。
-      await setCachedJson(key, Date.now());
       if (!msg) continue;
       await sendUserAlert(id, msg, "weekly_digest");
+      await setCachedJson(key, Date.now());
       out.sent++;
     } catch (e) {
       log.warn("發送會員週報失敗", { ownerId: id, err: e });

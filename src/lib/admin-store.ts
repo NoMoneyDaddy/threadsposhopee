@@ -115,11 +115,12 @@ async function sumImportCount(): Promise<number> {
 export async function listOwnersWithNotify(limit = 500): Promise<string[]> {
   if (isDemoMode) return [];
   const sb = getServiceClient()!;
-  const { data } = await sb
+  const { data, error } = await sb
     .from("profiles")
     .select("id, telegram_chat_id, discord_webhook_url")
     .or("telegram_chat_id.not.is.null,discord_webhook_url.not.is.null")
     .limit(limit);
+  if (error) throw new Error(`列出通知會員失敗：${error.message}`);
   return (data ?? []).map((r) => r.id as string);
 }
 

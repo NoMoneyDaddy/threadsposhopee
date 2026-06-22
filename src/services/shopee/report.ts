@@ -65,11 +65,21 @@ export function parseMoney(s: string | null | undefined): number {
 }
 const num = parseMoney;
 
+// 蝦皮 conversionReport 僅能查「近 3 個月」，起點早於此會回 error 11001 而整個讀取失敗。
+// 用 88 天為上限（保守涵蓋最短的 3 個曆月，避免邊界被拒）；起點早於上限則夾到上限。純函式可測。
+export const SHOPEE_MAX_LOOKBACK_SEC = 88 * 86400;
+export function clampShopeeStart(startSec: number, nowSec: number): number {
+  const earliest = nowSec - SHOPEE_MAX_LOOKBACK_SEC;
+  return startSec < earliest ? earliest : startSec;
+}
+
 // 抓指定時間窗（秒）轉換報表（分頁，最多抓 maxPages 頁避免吃滿時間）。
 async function fetchConversions(start: number, end: number, maxPages = 10): Promise<{ nodes: ReportNode[]; truncated: boolean }> {
   const appId = env.shopeeAppId;
   const secret = env.shopeeSecret;
   if (!appId || !secret) throw new Error("未設定 Shopee 分潤金鑰");
+  // 守住蝦皮 3 個月限制（任何呼叫端都受保護）。
+  start = clampShopeeStart(start, Math.floor(Date.now() / 1000));
 
   const nodes: ReportNode[] = [];
   let scrollId = "";
@@ -109,7 +119,9 @@ export async function getAffiliateRevenue(
   accounts?: { id: string; label: string | null }[]
 ): Promise<AffiliateRevenue> {
   const end = typeof arg === "number" ? Math.floor(Date.now() / 1000) : Math.floor(arg.endMs / 1000);
-  const start = typeof arg === "number" ? end - arg * 86400 : Math.floor(arg.startMs / 1000);
+  const rawStart = typeof arg === "number" ? end - arg * 86400 : Math.floor(arg.startMs / 1000);
+  // 夾到蝦皮 3 個月上限，讓 days 標示與實際抓取一致（避免「近 365 天」卻只有近 3 個月資料）。
+  const start = clampShopeeStart(rawStart, Math.floor(Date.now() / 1000));
   const days = Math.max(1, Math.round((end - start) / 86400));
   const { nodes, truncated } = await fetchConversions(start, end);
 

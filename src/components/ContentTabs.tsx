@@ -15,7 +15,7 @@ const TABS: Tab[] = [
 ];
 
 export default function ContentTabs({ isOwner }: { isOwner: boolean }) {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "";
   const tabs = TABS.filter((t) => !t.ownerOnly || isOwner);
   return (
     <nav className="-mx-1 mb-4 flex items-center gap-1 overflow-x-auto px-1" aria-label="文章管理次導覽">

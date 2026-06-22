@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import DraftCard from "@/components/DraftCard";
 import BulkDraftBar from "@/components/BulkDraftBar";
 import type { Draft } from "@/lib/types";
@@ -189,7 +190,7 @@ export default function DraftsExplorer({
                 <p className="mx-auto mt-1.5 max-w-sm text-sm text-ink-2">
                   草稿可來自「手動發文」存稿、AI 代理人，或自動抓文。核准後才會進入發文排程。
                 </p>
-                <a href="/compose" className="btn btn-brand mt-5">去發一篇</a>
+                <Link href="/compose" className="btn btn-brand mt-5">去發一篇</Link>
               </>
             ) : (
               <p className="mt-3 text-sm text-ink-2">沒有符合目前篩選條件的草稿。</p>

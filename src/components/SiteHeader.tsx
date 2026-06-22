@@ -23,7 +23,7 @@ export default function SiteHeader({
   user: { email: string | null; isOwner: boolean } | null;
   isDemo: boolean;
 }) {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "";
   const items = NAV;
   const isActive = (n: NavItem) => {
     const all = n.match ?? [n.href];

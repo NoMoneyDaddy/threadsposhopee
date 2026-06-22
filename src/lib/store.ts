@@ -49,6 +49,7 @@ export {
   getSharedMaterial,
   incrementImportCount,
   getContributionScore,
+  incrementContributionBonus,
   type MaterialToCheck,
   type SharedMaterial
 } from "./materials-store";

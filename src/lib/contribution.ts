@@ -14,15 +14,6 @@ export function canOwnLink(contributionScore: number): boolean {
   return contributionScore >= OWN_LINK_CONTRIBUTION;
 }
 
-// 貢獻分數 = 被匯入次數 × W_IMPORT + 分享素材篇數 × W_SHARED。
-// 兩者並計：被匯入＝下游實際採用（價值高）；分享篇數＝鼓勵持續貢獻（權重較低，避免灌量刷分）。
-export const CONTRIB_W_IMPORT = 1; // 每次被別人匯入
-export const CONTRIB_W_SHARED = 1; // 每篇分享進公共池的素材
-
-export function combinedContributionScore(importTotal: number, sharedCount: number): number {
-  const imp = Number.isFinite(importTotal) && importTotal > 0 ? importTotal : 0;
-  const shared = Number.isFinite(sharedCount) && sharedCount > 0 ? sharedCount : 0;
-  return Math.floor(imp * CONTRIB_W_IMPORT + shared * CONTRIB_W_SHARED);
-}
-
-// 貢獻等級（公開排行／個人頁顯示）沿用 roles.ts 的勳章階梯（contributionBadge），不另立一套。
+// 貢獻分數 = 被匯入次數 + 分享素材篇數 + 資料貢獻紅利（皆權重 1）。
+// 計算統一在 DB（migration 0042 的 get_contribution_score／top_contributors），不在 TS 重算，避免雙算。
+// 等級顯示沿用 roles.ts 的勳章階梯（contributionBadge），不另立一套。

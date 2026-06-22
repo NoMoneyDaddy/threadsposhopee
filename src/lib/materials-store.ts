@@ -4,7 +4,6 @@ import { randomUUID } from "node:crypto";
 import { getServiceClient } from "./supabase/server";
 import { isDemoMode } from "./env";
 import { demo } from "./demo-store";
-import { combinedContributionScore } from "./contribution";
 import type { Material } from "./types";
 
 export async function findMaterial(shopId: string, itemId: string, ownerId: string): Promise<Material | null> {
@@ -276,29 +275,20 @@ export async function incrementImportCount(id: string): Promise<void> {
   if (error) throw new Error(`累加匯入次數失敗：${error.message}`);
 }
 
-// 該使用者目前分享進公共池的素材篇數（貢獻分數的「篇數」項）。
-export async function getSharedMaterialCount(ownerId: string): Promise<number> {
-  if (isDemoMode) return 0;
-  const sb = getServiceClient()!;
-  const { count, error } = await sb
-    .from("materials")
-    .select("id", { count: "exact", head: true })
-    .eq("owner_id", ownerId)
-    .eq("shared", true);
-  if (error) throw new Error(`取得分享素材數失敗：${error.message}`);
-  return count ?? 0;
-}
-
-// 貢獻分數＝被匯入總次數 × W_IMPORT + 分享素材篇數 × W_SHARED（見 contribution.ts）。
-// 被匯入總次數走 DB 端 SUM（不限目前是否仍分享，取消分享不歸零歷史貢獻）。
+// 貢獻分數＝被匯入次數 + 分享中素材篇數 + 資料貢獻紅利（單一來源走 DB RPC，見 migration 0042）。
 export async function getContributionScore(ownerId: string): Promise<number> {
   if (isDemoMode) return 0;
   const sb = getServiceClient()!;
   const { data, error } = await sb.rpc("get_contribution_score", { p_owner: ownerId });
   if (error) throw new Error(`取得貢獻分數失敗：${error.message}`);
-  const importTotal = (data as number) ?? 0;
-  const sharedCount = await getSharedMaterialCount(ownerId).catch(() => 0);
-  return combinedContributionScore(importTotal, sharedCount);
+  return (data as number) ?? 0;
+}
+
+// 資料貢獻紅利＋n（用自己金鑰把分享進池的素材補上商品資料時記一次）。
+export async function incrementContributionBonus(ownerId: string, n = 1): Promise<void> {
+  if (isDemoMode || n <= 0) return;
+  const sb = getServiceClient()!;
+  await sb.rpc("increment_contribution_bonus", { p_owner: ownerId, p_n: n });
 }
 
 // 連結健檢 worker 用：取最久沒檢查、目前仍有效的素材（跨租戶）。
@@ -311,6 +301,8 @@ export type MaterialToCheck = {
   clean_product_url: string | null;
   link: string;
   affiliate_sub_id: string | null;
+  shared: boolean; // 是否分享進公共池（資料貢獻紅利判定）
+  commission_rate: string | null; // 現有分潤率（null＝尚未補上，首次補上記紅利）
 };
 // ownerId 有值時只撈該 owner 的素材（owner 手動觸發健檢用）；null = 全租戶（cron worker）。
 export async function listMaterialsToCheck(
@@ -321,7 +313,7 @@ export async function listMaterialsToCheck(
   const sb = getServiceClient()!;
   let q = sb
     .from("materials")
-    .select("id, owner_id, shop_id, item_id, clean_product_url, affiliate_short_link, affiliate_sub_id, affiliate_checked_at")
+    .select("id, owner_id, shop_id, item_id, clean_product_url, affiliate_short_link, affiliate_sub_id, affiliate_checked_at, shared, commission_rate")
     .eq("affiliate_valid", true)
     .not("affiliate_short_link", "is", null);
   if (ownerId) q = q.eq("owner_id", ownerId);
@@ -335,7 +327,9 @@ export async function listMaterialsToCheck(
       item_id: m.item_id,
       clean_product_url: m.clean_product_url ?? null,
       link: m.affiliate_short_link as string,
-      affiliate_sub_id: m.affiliate_sub_id ?? null
+      affiliate_sub_id: m.affiliate_sub_id ?? null,
+      shared: Boolean(m.shared),
+      commission_rate: m.commission_rate ?? null
     }));
 }
 

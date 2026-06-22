@@ -8,6 +8,7 @@ import {
   listMaterialsToCheck,
   setAffiliateChecked,
   setMaterialCommission,
+  incrementContributionBonus,
   reviveAffiliateLink,
   getAutoReviveLinks,
   getShopeeCredentials,
@@ -25,6 +26,10 @@ async function refreshCommission(m: MaterialToCheck): Promise<void> {
   if (!creds) return;
   const info = await getProductInfo(creds.appId, creds.secret, m.shop_id, m.item_id);
   await setMaterialCommission(m.id, m.owner_id, info.commissionRate, new Date().toISOString());
+  // 資料貢獻紅利：用自己的金鑰把「分享進公共池」的素材「首次」補上分潤率 → 記一次（不重複累加防灌）。
+  if (m.shared && !m.commission_rate && info.commissionRate) {
+    await incrementContributionBonus(m.owner_id, 1).catch(() => {});
+  }
 }
 
 // 回傳 true 代表「明確失效」；其餘狀況（200/3xx/403/逾時/網路錯誤）一律視為未知 → 不標失效。

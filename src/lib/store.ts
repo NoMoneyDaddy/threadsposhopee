@@ -61,6 +61,7 @@ export {
   setFeatureFlags,
   getAdminStats,
   listTopContributors,
+  listOwnersWithNotify,
   DEFAULT_FLAGS,
   type FeatureFlags,
   type AdminStats,

@@ -39,6 +39,11 @@ export function composePeriodicDigest(d: PeriodicDigestInput): string {
 export async function buildPeriodicDigest(label: string, days: number): Promise<string | null> {
   const ownerId = await getOwnerUserId();
   if (!ownerId) return null;
+  return buildPeriodicDigestForOwner(ownerId, label, days);
+}
+
+// 為「指定使用者」蒐集區間資料並組摘要（每週週報廣播用，各會員收自己的數據）。取資料失敗回 null。
+export async function buildPeriodicDigestForOwner(ownerId: string, label: string, days: number): Promise<string | null> {
   const endMs = Date.now();
   const startMs = endMs - days * 86400_000;
   const insights = await getPublishInsights(ownerId, { startMs, endMs }).catch((e) => {

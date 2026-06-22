@@ -88,6 +88,15 @@ export default async function InsightsPage({
       {engagement && engagement.fetched >= 6 && <ReachDropBanner e={engagement} />}
       {engagement && engagement.fetched > 0 && <EngagementSection e={engagement} />}
       {engagement && engagement.fetched >= 3 && <BestTimesSection e={engagement} />}
+      {!isDemoMode && (!engagement || engagement.fetched < 3) && (
+        <section className="rounded-2xl border border-dashed border-border bg-surface p-5">
+          <h2 className="section-title mb-1">最佳發文時段</h2>
+          <p className="text-sm text-ink-2">
+            這裡會依你貼文的 <b>Threads 互動數據</b>（各時段／星期的平均觀看）算出最佳發文時段。
+            目前可用樣本不足（需至少 3 篇有互動數據的貼文）——多發幾篇、確認帳號已完成 Threads 授權後就會出現。
+          </p>
+        </section>
+      )}
 
       <section className="card p-5">
         <h2 className="section-title mb-3">每日發布量</h2>

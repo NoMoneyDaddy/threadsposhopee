@@ -20,7 +20,7 @@ import { badgesFor, isReviewer, contributionBadge, isTopMaterial } from "@/lib/r
 
 export const dynamic = "force-dynamic";
 
-// 共享素材庫：瀏覽其他人分享的商品，用自己的金鑰匯入（分潤算自己）。
+// 共享庫：瀏覽其他人分享的商品，用自己的金鑰匯入（分潤算自己）。
 // 含身份組勳章、貢獻排行榜、收藏（高黏著度）、頂級素材標記與審查員審核。
 export default async function SharedPage() {
   const user = await getCurrentUser();

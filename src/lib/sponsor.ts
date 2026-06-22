@@ -1,4 +1,4 @@
-// 贊助文章設定（功能 B）：owner 設定要替換進贊助文的平台分潤連結、冷門時段與開關。
+// 贊助文設定（功能 B）：owner 設定要替換進贊助文的平台分潤連結、冷門時段與開關。
 // 存 app_state 單列（key=sponsor_config），demo 走預設值。
 import { getServiceClient } from "./supabase/server";
 import { isDemoMode } from "./env";

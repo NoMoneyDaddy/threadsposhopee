@@ -310,7 +310,7 @@ export async function deleteShopeeAccount(id: string, ownerId: string): Promise<
 
 // 取某使用者啟用中的 Threads 帳號 + 解密 token（儀表板查額度用）
 // 跨租戶 worker 查詢（僅由 cron 呼叫、不吃使用者輸入）：所有 active 發文帳號（id/owner/threadsUser）。
-// 用於贊助文章自動補發：找出今天還沒有贊助文的非 owner 帳號。
+// 用於贊助文自動補發：找出今天還沒有贊助文的非 owner 帳號。
 export async function listActiveThreadsAccountsAll(): Promise<
   { id: string; owner_id: string; threads_user_id: string; label: string }[]
 > {

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import AdSlot from "@/components/AdSlot";
 
-export const metadata: Metadata = { title: "贊助文章規則 — IwantPo" };
+export const metadata: Metadata = { title: "贊助文規則 — IwantPo" };
 
 const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
   <section className="space-y-2">
@@ -10,17 +10,17 @@ const Section = ({ title, children }: { title: string; children: React.ReactNode
   </section>
 );
 
-// 公開的「贊助文章」規則頁（介面標示「此則將被納入贊助文章」時連到這裡）。
+// 公開的「贊助文」規則頁（介面標示「此則將被納入贊助文」時連到這裡）。
 export default function SponsoredPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-7 py-4">
       <header className="space-y-1">
-        <h1 className="text-2xl font-bold tracking-tight">贊助文章規則</h1>
+        <h1 className="text-2xl font-bold tracking-tight">贊助文規則</h1>
         <p className="text-sm text-ink-3">最後更新：2026-06-21</p>
       </header>
 
       <p className="text-sm leading-relaxed text-ink-2">
-        本服務以「贊助文章」支應免費使用。使用本服務即表示你了解並同意以下規則。
+        本服務以「贊助文」支應免費使用。使用本服務即表示你了解並同意以下規則。
       </p>
 
       <Section title="運作方式">
@@ -34,20 +34,20 @@ export default function SponsoredPage() {
 
       <Section title="事前標示">
         <p>
-          系統會在網站介面上<strong className="text-ink">明確標示</strong>哪一則將被納入贊助文章，你可事先得知。
+          系統會在網站介面上<strong className="text-ink">明確標示</strong>哪一則將被納入贊助文，你可事先得知。
         </p>
       </Section>
 
       <Section title="連結鎖定">
         <p>
-          被選為贊助文章的該篇貼文，其分潤連結<strong className="text-ink">不可由使用者修改或移除</strong>；
+          被選為贊助文的該篇貼文，其分潤連結<strong className="text-ink">不可由使用者修改或移除</strong>；
           其他文字內容不受影響。
         </p>
       </Section>
 
       <Section title="驗證與暫停（寬鬆處理）">
         <p>
-          系統會驗證贊助文章已成功發布、且其分潤連結未被竄改或刪除。偶發或單次被刪除/更動，
+          系統會驗證贊助文已成功發布、且其分潤連結未被竄改或刪除。偶發或單次被刪除/更動，
           系統<strong className="text-ink">只會記錄並提醒</strong>，不會立即暫停；
           僅在<strong className="text-ink">累計多次違規</strong>時，才會暫停該 Threads 帳號的自動發文，
           恢復走帳號管理的手動啟用。

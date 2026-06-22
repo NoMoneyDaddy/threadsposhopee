@@ -5,7 +5,7 @@ import { getCurrentUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-// 開關某素材是否分享進公共素材池（多租戶：以登入者 id 過濾）。
+// 開關某素材是否分享進公共共享庫（多租戶：以登入者 id 過濾）。
 export async function POST(req: Request) {
   try {
     const user = await getCurrentUser();

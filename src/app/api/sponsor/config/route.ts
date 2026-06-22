@@ -4,7 +4,7 @@ import { setSponsorConfig, normalizeSponsorConfig } from "@/lib/sponsor";
 
 export const dynamic = "force-dynamic";
 
-// owner 限定：設定贊助文章（平台分潤連結／冷門時段／開關）。
+// owner 限定：設定贊助文（平台分潤連結／冷門時段／開關）。
 export async function POST(req: Request) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });

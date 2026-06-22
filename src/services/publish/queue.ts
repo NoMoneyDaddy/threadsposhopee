@@ -134,7 +134,7 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
   // 本輪 DB 冷卻查詢結果快取（owner|url → 是否冷卻中），避免同商品多草稿時每篇都打一次 DB（N+1）。
   const productCooldownCache = new Map<string, boolean>();
 
-  // 贊助文章（功能 B）：冷門時段把非 owner 帳號的待發草稿連結就地換成平台連結（DB 原文不動＝發後還原）。
+  // 贊助文（功能 B）：冷門時段把非 owner 帳號的待發草稿連結就地換成平台連結（DB 原文不動＝發後還原）。
   const sponsorCfg = await getSponsorConfig();
   const sponsorTaipei = taipeiParts();
   const sponsorOwnerId = sponsorCfg.enabled && !isDemoMode ? await getOwnerUserId().catch(() => null) : null;

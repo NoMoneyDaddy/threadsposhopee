@@ -3,22 +3,14 @@ import {
   listThreadsAccounts,
   hasApifyCredentials,
   hasGeminiKey,
-  getCopyPrefs,
   getShopeeAffiliateId,
   getShopeeSubId,
   getAutoReviveLinks,
-  getPublishPrefs,
-  getNotifyPrefs,
-  getRepostLimits,
   getUserCloudinary,
   getUserCloudinaryFull,
-  getUserTelegramChatId,
-  getUserDiscordWebhook,
   getUserPlan
 } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
-import { getSponsorConfig } from "@/lib/sponsor";
-import SponsorConfigForm from "@/components/SponsorConfigForm";
 import { PLAN_LABELS, planLimits, GLOBAL_MAX_THREADS_ACCOUNTS } from "@/lib/plans";
 import { env, isDemoMode } from "@/lib/env";
 import { tokenExpiryState } from "@/lib/token-expiry";
@@ -26,21 +18,15 @@ import ThreadsAccountForm from "@/components/ThreadsAccountForm";
 import ShopeeAccountForm from "@/components/ShopeeAccountForm";
 import ApifyForm from "@/components/ApifyForm";
 import GeminiForm from "@/components/GeminiForm";
-import CopyPrefsForm from "@/components/CopyPrefsForm";
 import AffiliateIdForm from "@/components/AffiliateIdForm";
 import SubIdForm from "@/components/SubIdForm";
 import AutoReviveForm from "@/components/AutoReviveForm";
-import PublishPrefsForm from "@/components/PublishPrefsForm";
-import RepostLimitsForm from "@/components/RepostLimitsForm";
-import NotifyPrefsForm from "@/components/NotifyPrefsForm";
-import PushToggle from "@/components/PushToggle";
 import CloudinaryForm from "@/components/CloudinaryForm";
-import TelegramForm from "@/components/TelegramForm";
-import DiscordForm from "@/components/DiscordForm";
 import { DeleteButton, ToggleButton } from "@/components/RowActions";
 
 export const dynamic = "force-dynamic";
 
+// 帳號管理：只放「帳號連接＋金鑰／憑證綁定」。行為偏好與通知設定在「設定」頁。
 export default async function AccountsPage({
   searchParams
 }: {
@@ -50,49 +36,26 @@ export default async function AccountsPage({
   const ownerId = user?.id ?? "demo-user";
   const [threads, shopee] = await Promise.all([listThreadsAccounts(ownerId), listShopeeAccounts(ownerId)]);
   const oauthReady = !isDemoMode && Boolean(env.threadsAppId && env.threadsRedirectUri);
-  // 設定值彼此無依賴，改 Promise.all 並行（原為 14 個序列 await 瀑布，高延遲下整頁 TTFB 多耗 1s+）。
-  // 爬蟲（Apify）owner 限定；AI（Gemini）每人各綁各的。
-  const [
-    apify,
-    geminiBound,
-    copyPrefs,
-    affiliateId,
-    customSubId,
-    autoRevive,
-    publishPrefs,
-    repostLimits,
-    notifyPrefs,
-    cloudinary,
-    cloudinaryFull,
-    telegramChatId,
-    discordWebhook,
-    plan,
-    sponsor
-  ] = await Promise.all([
-    user?.isOwner ? hasApifyCredentials(ownerId) : Promise.resolve({ bound: false, actor: null }),
-    user ? hasGeminiKey(user.id) : Promise.resolve(false),
-    getCopyPrefs(ownerId),
-    getShopeeAffiliateId(ownerId),
-    user ? getShopeeSubId(ownerId) : Promise.resolve(null),
-    user ? getAutoReviveLinks(ownerId) : Promise.resolve(false),
-    user ? getPublishPrefs(ownerId) : Promise.resolve(null),
-    user ? getRepostLimits(ownerId) : Promise.resolve(null),
-    user ? getNotifyPrefs(ownerId) : Promise.resolve(null),
-    user ? getUserCloudinary(ownerId) : Promise.resolve(null),
-    user ? getUserCloudinaryFull(ownerId) : Promise.resolve(null),
-    user ? getUserTelegramChatId(user.id) : Promise.resolve(null),
-    user ? getUserDiscordWebhook(user.id) : Promise.resolve(null),
-    user ? getUserPlan(user.id) : Promise.resolve("free" as const),
-    getSponsorConfig()
-  ]);
-  const telegramBound = Boolean(telegramChatId);
-  const discordBound = Boolean(discordWebhook);
+  const [apify, geminiBound, affiliateId, customSubId, autoRevive, cloudinary, cloudinaryFull, plan] =
+    await Promise.all([
+      user?.isOwner ? hasApifyCredentials(ownerId) : Promise.resolve({ bound: false, actor: null }),
+      user ? hasGeminiKey(user.id) : Promise.resolve(false),
+      getShopeeAffiliateId(ownerId),
+      user ? getShopeeSubId(ownerId) : Promise.resolve(null),
+      user ? getAutoReviveLinks(ownerId) : Promise.resolve(false),
+      user ? getUserCloudinary(ownerId) : Promise.resolve(null),
+      user ? getUserCloudinaryFull(ownerId) : Promise.resolve(null),
+      user ? getUserPlan(user.id) : Promise.resolve("free" as const)
+    ]);
   // 方案配額（owner 不受限，顯示「無上限」）
   const accountLimit = Math.min(planLimits(plan).maxThreadsAccounts, GLOBAL_MAX_THREADS_ACCOUNTS);
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">帳號管理</h1>
+      <div>
+        <h1 className="text-2xl font-bold">帳號管理</h1>
+        <p className="text-sm text-ink-2">連接你的發文帳號、綁定各服務金鑰。發文節奏、通知等偏好請到「設定」。</p>
+      </div>
 
       {searchParams.threads && (
         <div
@@ -166,31 +129,6 @@ export default async function AccountsPage({
           </div>
         )}
       </div>
-
-      <div id="setup-notify" className="grid scroll-mt-24 gap-4 md:grid-cols-2">
-        {user && <TelegramForm bound={telegramBound} botConfigured={!isDemoMode && Boolean(env.telegramBotToken)} />}
-        {user && <DiscordForm bound={discordBound} />}
-      </div>
-
-      {user && env.vapidPublicKey && <PushToggle vapidPublicKey={env.vapidPublicKey} />}
-
-      {user && notifyPrefs && <NotifyPrefsForm initial={notifyPrefs} />}
-
-      {user?.isOwner && <SponsorConfigForm initial={sponsor} />}
-
-      {user && !user.isOwner && sponsor.enabled && (
-        <div className="rounded-2xl border border-border bg-surface-2 p-3 text-sm text-ink-2">
-          ℹ️ 免費使用：你的每個發文帳號每天會有 1 篇於冷門時段（{sponsor.offPeakStart}–{sponsor.offPeakEnd} 時）以平台分潤連結發布，
-          系統會事前標示、發後還原你的連結。詳見{" "}
-          <a href="/sponsored" className="text-brand underline">《贊助文章規則》</a>。
-        </div>
-      )}
-
-      {user && publishPrefs && <PublishPrefsForm initial={publishPrefs} />}
-
-      {user && repostLimits && <RepostLimitsForm initial={repostLimits} />}
-
-      <CopyPrefsForm initial={copyPrefs} />
 
       <section>
         <div className="mb-2 flex items-center justify-between gap-2">

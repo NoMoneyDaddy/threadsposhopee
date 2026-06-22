@@ -14,9 +14,9 @@ const PAGES: { path: string; heading: string }[] = [
 test("首頁顯示 Demo 模式標記與導覽", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByText("Demo 模式（未連接金鑰）")).toBeVisible();
-  // 導覽列含主要連結（階段 2 精簡後）
-  await expect(page.getByRole("link", { name: "草稿", exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: "成效", exact: true })).toBeVisible();
+  // 導覽列含六大頁主要連結（文章管理整併發文/草稿/AI代理人/素材/自動抓文）
+  await expect(page.getByRole("link", { name: "文章管理", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "成效分析", exact: true })).toBeVisible();
 });
 
 test("舊行事曆網址轉址到草稿", async ({ page }) => {
@@ -35,9 +35,9 @@ for (const p of PAGES) {
   });
 }
 
-test("導覽列點擊可切換到草稿頁", async ({ page }) => {
+test("導覽列「文章管理」可切換到草稿頁", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("link", { name: "草稿", exact: true }).click();
+  await page.getByRole("link", { name: "文章管理", exact: true }).click();
   await expect(page).toHaveURL(/\/drafts$/);
   await expect(page.getByRole("heading", { name: "草稿", level: 1 })).toBeVisible();
 });

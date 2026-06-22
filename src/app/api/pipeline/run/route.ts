@@ -10,7 +10,7 @@ export async function POST() {
   try {
     const user = await getCurrentUser();
     if (!user) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
-    if (!user.isOwner) return NextResponse.json({ ok: false, error: "只有管理者可執行爬取" }, { status: 403 });
+    if (!user.isOwner) return NextResponse.json({ ok: false, error: "只有管理者可執行抓取" }, { status: 403 });
 
     const results = await runAllSources();
     return NextResponse.json({ ok: true, results });

@@ -13,7 +13,7 @@ export default async function SourcesPage() {
   if (user && !user.isOwner) {
     return (
       <div className="rounded-2xl border border-dashed p-10 text-center text-ink-2">
-        監看來源（爬蟲）僅限管理者使用。你可以到「素材庫」手動貼分潤連結建立內容。
+        監看來源（抓取）僅限管理者使用。你可以到「素材庫」手動貼分潤連結建立內容。
       </div>
     );
   }

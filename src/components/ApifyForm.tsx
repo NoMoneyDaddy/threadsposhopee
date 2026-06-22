@@ -44,7 +44,7 @@ export default function ApifyForm({ bound, actor }: { bound: boolean; actor: str
         {bound ? <span className="badge-success">已綁定</span> : <span className="badge-neutral">未綁定</span>}
       </div>
       <p className="mb-2 text-xs text-ink-2">
-        監看來源的爬蟲用你自己的 Apify 帳號。到 Apify → Settings → Integrations 取得 API token。
+        監看來源的抓取用你自己的 Apify 帳號。到 Apify → Settings → Integrations 取得 API token。
       </p>
       <div className="space-y-2">
         <input

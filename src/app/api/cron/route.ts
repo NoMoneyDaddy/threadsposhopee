@@ -11,6 +11,6 @@ export const GET = createCronHandler(
   async () => ({ results: await runAllSources() }),
   (r) => {
     const failed = r.results.filter((x) => x.error);
-    return failed.length ? `🕷️ 爬取 ${failed.length} 個來源失敗：${failed.map((x) => x.sourceUsername).join("、")}` : null;
+    return failed.length ? `🕷️ 抓取 ${failed.length} 個來源失敗：${failed.map((x) => x.sourceUsername).join("、")}` : null;
   }
 );

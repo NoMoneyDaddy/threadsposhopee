@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { log } from "@/lib/logger";
-import { setUserR2 } from "@/lib/store";
+import { setUserR2, hasUserR2 } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
 import { parseR2Input } from "@/services/media/r2-config";
 
@@ -27,12 +27,17 @@ export async function POST(req: Request) {
     if (accessKeyId.length > 200 || secretAccessKey.length > 400) {
       return NextResponse.json({ ok: false, error: "金鑰格式不正確" }, { status: 400 });
     }
-    // 首次綁定（有 accountId）必須一併提供 key/secret；之後更新可留空沿用。
-    if (parsed.accountId && (!accessKeyId || !secretAccessKey)) {
-      // 允許「只改網域/bucket」：若資料庫已有金鑰，前端留空即可；這裡只在「明顯首綁卻沒填」時擋。
-      // 用 header 區分太重；改為若兩者皆空且看似首綁則提示。簡化：兩者皆空時放行（沿用既有），
-      // 但若只填其一則視為誤填。
-      if (Boolean(accessKeyId) !== Boolean(secretAccessKey)) {
+    // 首次綁定（有 accountId）必須一併提供 key/secret；之後更新可留空沿用（只改網域/bucket）。
+    if (parsed.accountId) {
+      const alreadyBound = await hasUserR2(user.id);
+      if (!alreadyBound && (!accessKeyId || !secretAccessKey)) {
+        return NextResponse.json(
+          { ok: false, error: "首次綁定必須填寫 Access Key ID 與 Secret Access Key" },
+          { status: 400 }
+        );
+      }
+      // 已綁定時：留空＝沿用既有；但只填其一視為誤填。
+      if (alreadyBound && Boolean(accessKeyId) !== Boolean(secretAccessKey)) {
         return NextResponse.json({ ok: false, error: "Access Key ID 與 Secret 需一起填寫" }, { status: 400 });
       }
     }

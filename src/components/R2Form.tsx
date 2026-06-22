@@ -7,11 +7,21 @@ import { fetchWithTimeout } from "@/lib/http";
 // 各人自綁 Cloudflare R2 圖床（與 Cloudinary 二擇一）。
 // 安全：分享素材時只共享「公開讀」物件網址（唯讀），寫入 token 只在 server 用、加密存、不外露，
 // 故不需要第二把 key。建議把 R2 API token 限縮到「單一 bucket、Object Read & Write」。
-export default function R2Form({ bound }: { bound: boolean }) {
+export default function R2Form({
+  bound,
+  initialAccountId = "",
+  initialBucket = "",
+  initialPublicBase = ""
+}: {
+  bound: boolean;
+  initialAccountId?: string;
+  initialBucket?: string;
+  initialPublicBase?: string;
+}) {
   const router = useRouter();
-  const [accountId, setAccountId] = useState("");
-  const [bucket, setBucket] = useState("");
-  const [publicBase, setPublicBase] = useState("");
+  const [accountId, setAccountId] = useState(initialAccountId);
+  const [bucket, setBucket] = useState(initialBucket);
+  const [publicBase, setPublicBase] = useState(initialPublicBase);
   const [accessKeyId, setAccessKeyId] = useState("");
   const [secret, setSecret] = useState("");
   const [busy, setBusy] = useState(false);

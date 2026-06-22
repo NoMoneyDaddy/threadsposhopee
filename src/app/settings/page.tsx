@@ -6,6 +6,7 @@ import {
   getUserTelegramChatId,
   getUserDiscordWebhook
 } from "@/lib/store";
+import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
 import { getSponsorConfig } from "@/lib/sponsor";
 import { env, isDemoMode } from "@/lib/env";
@@ -66,7 +67,7 @@ export default async function SettingsPage() {
         <div className="rounded-2xl border border-border bg-surface-2 p-3 text-sm text-ink-2">
           ℹ️ 免費使用：你的每個發文帳號每天會有 1 篇於冷門時段（{sponsor.offPeakStart}–{sponsor.offPeakEnd} 時）以平台分潤連結發布，
           系統會事前標示、發後還原你的連結。詳見{" "}
-          <a href="/sponsored" className="text-brand underline">《贊助文章規則》</a>。
+          <Link href="/sponsored" className="text-brand underline">《贊助文章規則》</Link>。
         </div>
       )}
     </div>

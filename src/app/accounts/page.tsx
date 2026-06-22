@@ -21,6 +21,7 @@ import GeminiForm from "@/components/GeminiForm";
 import AffiliateIdForm from "@/components/AffiliateIdForm";
 import SubIdForm from "@/components/SubIdForm";
 import AutoReviveForm from "@/components/AutoReviveForm";
+import SelfBuyNotice from "@/components/SelfBuyNotice";
 import CloudinaryForm from "@/components/CloudinaryForm";
 import { DeleteButton, ToggleButton } from "@/components/RowActions";
 
@@ -99,11 +100,14 @@ export default async function AccountsPage({
       </div>
 
       {user && (
-        <div className="grid gap-4 md:grid-cols-2">
-          <AffiliateIdForm initial={affiliateId} />
-          <SubIdForm initial={customSubId} />
-          <AutoReviveForm initial={autoRevive} />
-        </div>
+        <>
+          <div className="grid gap-4 md:grid-cols-2">
+            <AffiliateIdForm initial={affiliateId} />
+            <SubIdForm initial={customSubId} />
+            <AutoReviveForm initial={autoRevive} />
+          </div>
+          <SelfBuyNotice />
+        </>
       )}
 
       {user && (

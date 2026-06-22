@@ -131,7 +131,11 @@ async function publishContainer(userId: string, token: string, creationId: strin
   const params = new URLSearchParams({ access_token: token, creation_id: creationId });
   const res = await fetchThreadsPost(`${GRAPH}/${userId}/threads_publish`, { method: "POST", body: params });
   if (!res.ok) throw new Error(`發布失敗 ${res.status}: ${await res.text()}`);
-  return (await res.json()).id;
+  // 2xx 但回應缺 id：貼文「可能已發出」卻拿不到 id → 視為不確定（呼叫端標 needs_verification），
+  // 不可當成功（會謊報 published 且無 postId 可補留言/去重），也不可當 failed（會被重發雙貼）。
+  const id = (await res.json().catch(() => null))?.id;
+  if (!id) throw new Error("發布回應缺少貼文 id（可能已發出）");
+  return id;
 }
 
 // 在指定主貼文下發一則留言（串文 2/2，放分潤連結），回傳留言貼文 id。

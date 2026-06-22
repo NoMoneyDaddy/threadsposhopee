@@ -7,15 +7,15 @@ type Tab = { href: string; label: string; ownerOnly?: boolean };
 
 // 文章管理的次導覽：把發文、草稿、AI 代理人、素材、自動抓文整併在同一個頁面群組底下。
 const TABS: Tab[] = [
-  { href: "/drafts", label: "草稿審核" },
-  { href: "/compose", label: "手動發文" },
+  { href: "/drafts", label: "草稿" },
+  { href: "/compose", label: "發文" },
   { href: "/agents", label: "AI 代理人" },
-  { href: "/materials", label: "素材庫" },
+  { href: "/materials", label: "素材" },
   { href: "/sources", label: "自動抓文", ownerOnly: true }
 ];
 
 export default function ContentTabs({ isOwner }: { isOwner: boolean }) {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "";
   const tabs = TABS.filter((t) => !t.ownerOnly || isOwner);
   return (
     <nav className="-mx-1 mb-4 flex items-center gap-1 overflow-x-auto px-1" aria-label="文章管理次導覽">

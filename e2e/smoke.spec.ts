@@ -7,7 +7,7 @@ const PAGES: { path: string; heading: string }[] = [
   { path: "/sources", heading: "自動抓文" },
   { path: "/materials", heading: "素材" },
   { path: "/drafts", heading: "草稿" },
-  { path: "/insights", heading: "成效" },
+  { path: "/insights", heading: "成效分析" },
   { path: "/accounts", heading: "帳號管理" }
 ];
 

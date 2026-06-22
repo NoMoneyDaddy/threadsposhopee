@@ -10,14 +10,16 @@ import {
   rescheduleDraft,
   mainTextUsedByOtherOwner
 } from "@/lib/store";
-import { setSponsorPick } from "@/lib/sponsor";
+import { setSponsorPick, swapAffiliateLink } from "@/lib/sponsor";
 import { createRedirectLink } from "@/lib/redirect-store";
 import { extractHttpUrls, replaceUrls } from "@/lib/linkify";
+import { assertSafePublicUrl } from "@/lib/url-guard";
 import { generateCopy } from "@/services/ai/provider";
 import { getCurrentUser } from "@/lib/auth";
 import { apiError } from "@/lib/api-error";
 import { publishDraftNow } from "@/services/publish/publish-draft";
 import { isDemoMode } from "@/lib/env";
+import type { Draft } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -65,10 +67,39 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   }
   if (action === "edit") {
-    const updated = await updateDraft(id, user.id, {
-      main_text: typeof body.main_text === "string" ? body.main_text : draft.main_text,
-      reply_text: typeof body.reply_text === "string" ? body.reply_text : draft.reply_text
-    });
+    const mainText = typeof body.main_text === "string" ? body.main_text : draft.main_text;
+    const replyText = typeof body.reply_text === "string" ? body.reply_text : draft.reply_text;
+    const patch: Partial<Draft> = { main_text: mainText, reply_text: replyText };
+    // 媒體指派（主文 media／留言 reply_media）：只接受形狀正確的既有媒體項（url+type）。
+    const sanitizeMedia = (arr: unknown): { url: string; type: "image" | "video" }[] =>
+      Array.isArray(arr)
+        ? arr
+            .filter(
+              (m): m is { url: string; type: "image" | "video" } =>
+                Boolean(m) &&
+                typeof (m as { url?: unknown }).url === "string" &&
+                ((m as { type?: unknown }).type === "image" || (m as { type?: unknown }).type === "video")
+            )
+            .map((m) => ({ url: m.url, type: m.type }))
+        : [];
+    if (Array.isArray(body.media)) patch.media = sanitizeMedia(body.media);
+    if (Array.isArray(body.reply_media)) patch.reply_media = sanitizeMedia(body.reply_media);
+    // 手動設定分潤連結（覆寫自動轉換）：驗證為安全公開網址後，更新欄位並把舊連結就地換成新連結。
+    if (typeof body.shopee_short_link === "string" && body.shopee_short_link.trim()) {
+      let link: string;
+      try {
+        link = assertSafePublicUrl(body.shopee_short_link.trim()).href;
+      } catch {
+        return NextResponse.json({ ok: false, error: "分潤連結不合法或非公開網址" }, { status: 400 });
+      }
+      const old = draft.shopee_short_link;
+      patch.shopee_short_link = link;
+      if (old && old !== link) {
+        patch.main_text = mainText ? swapAffiliateLink(mainText, old, link) : mainText;
+        patch.reply_text = replyText ? swapAffiliateLink(replyText, old, link) : replyText;
+      }
+    }
+    const updated = await updateDraft(id, user.id, patch);
     if (!updated) return NextResponse.json({ ok: false, error: "更新草稿失敗" }, { status: 400 });
     return NextResponse.json({ ok: true, draft: updated });
   }

@@ -2,8 +2,9 @@
 // 被刪除或竄改 → 暫停該 Threads 帳號發文（恢復走帳號管理的手動啟用）。由 /api/cron/all 觸發。
 import {
   listSponsorRecordsToVerify,
-  setSponsorRecord,
-  getSponsorRecord,
+  appendSponsorRecord,
+  updateSponsorRecordAt,
+  countSponsorToday,
   getSponsorPick,
   getSponsorConfig,
   taipeiParts,
@@ -20,7 +21,7 @@ import {
   getCachedJson,
   setCachedJson
 } from "@/lib/store";
-import { isSponsorExempt } from "@/lib/contribution";
+import { isSponsorExempt, canOwnLink } from "@/lib/contribution";
 import { getPostText } from "@/services/threads/verify";
 import { resolveSponsorResources, buildSponsorLinkForAccount } from "@/services/sponsor/link";
 import { publishToThreads } from "@/services/threads/publish";
@@ -47,8 +48,8 @@ export async function ensureSponsorPosts(ownerUserId: string | null): Promise<{ 
   const accounts = (await listActiveThreadsAccountsAll().catch(() => [])).filter((a) => a.owner_id !== ownerUserId);
   const start = Date.now();
   let idx = 0;
-  // 高貢獻者回饋：exempt＝免每日贊助文；own_link＝照發但換成自己的分潤連結（自己賺）。按 owner 快取。
-  const rewardByOwner = new Map<string, { high: boolean; mode: "exempt" | "own_link" }>();
+  // 高貢獻者回饋：exempt＝免每日贊助文（門檻較低）；own_link＝照發但換成自己的分潤連結自賺（門檻更高）。按 owner 快取。
+  const rewardByOwner = new Map<string, { high: boolean; ownLink: boolean }>();
   for (const acc of accounts) {
     if (Date.now() - start > 40000) break; // 守 maxDuration
     const oid = acc.owner_id;
@@ -56,18 +57,21 @@ export async function ensureSponsorPosts(ownerUserId: string | null): Promise<{ 
     try {
       let reward = rewardByOwner.get(oid);
       if (reward === undefined) {
-        const high = isSponsorExempt(await getContributionScore(oid).catch(() => 0));
+        const score = await getContributionScore(oid).catch(() => 0);
+        const high = isSponsorExempt(score);
         const mode = high ? await getSponsorRewardMode(oid).catch(() => "exempt" as const) : "exempt";
-        reward = { high, mode };
+        // 自賺需達更高門檻：選了 own_link 但分數不夠 → 退回 exempt（仍免發，但不自賺）。
+        reward = { high, ownLink: mode === "own_link" && canOwnLink(score) };
         rewardByOwner.set(oid, reward);
       }
-      if (reward.high && reward.mode === "exempt") continue; // 高貢獻者選擇免贊助文
-      if (await getSponsorRecord(acc.id, tp.date)) continue; // 今天已有贊助文（佇列已換）
+      if (reward.high && !reward.ownLink) continue; // 免贊助（含選 own_link 但未達自賺門檻者）
+      // 安全網只保底「至少 1 篇」；配額>1 的額外贊助由發文佇列在當日達成（此處不追量）。
+      if ((await countSponsorToday(acc.id, tp.date)) >= 1) continue;
       const pick = await getSponsorPick(acc.id);
       if (pick?.draftId) continue; // 使用者自選 → 交由佇列處理，不重複補發
 
       // own_link：高貢獻者照發贊助文，但連結換成「他自己」的分潤連結（用自己的蝦皮金鑰重產）。
-      const useOwnLink = reward.high && reward.mode === "own_link";
+      const useOwnLink = reward.ownLink;
       let link: string | null;
       if (useOwnLink) {
         const mres = cfg.productUrl ? await resolveSponsorResources(cfg.productUrl, oid).catch(() => null) : null;
@@ -90,7 +94,7 @@ export async function ensureSponsorPosts(ownerUserId: string | null): Promise<{ 
         replyText: null,
         deferReply: false
       });
-      await setSponsorRecord(acc.id, tp.date, { postId: r.postId, link, ownerId: oid, at: new Date().toISOString(), ownLink: useOwnLink || undefined });
+      await appendSponsorRecord(acc.id, tp.date, { postId: r.postId, link, ownerId: oid, at: new Date().toISOString(), ownLink: useOwnLink || undefined });
       out.created++;
     } catch (e) {
       log.warn("自動補發贊助文失敗", { accId: acc.id, err: e });
@@ -108,7 +112,7 @@ export async function verifySponsorPosts(): Promise<{ checked: number; violation
   const out = { checked: 0, violations: 0 };
   if (isDemoMode) return out;
   const entries = await listSponsorRecordsToVerify(VERIFY_AFTER_MS).catch(() => []);
-  for (const { accountId, date, rec } of entries) {
+  for (const { accountId, date, index, rec } of entries) {
     out.checked++;
     try {
       if (rec.ownLink) continue; // 高貢獻者用自己連結的贊助文：非平台分潤，不做連結驗證/裁罰
@@ -119,12 +123,12 @@ export async function verifySponsorPosts(): Promise<{ checked: number; violation
       const ok = text !== null && (rec.link ? text.includes(rec.link) : true);
       const strikeKey = `sponsor_strikes:${accountId}`;
       if (ok) {
-        await setSponsorRecord(accountId, date, { ...rec, verified: true });
+        await updateSponsorRecordAt(accountId, date, index, { ...rec, verified: true });
         // 通過則清零累計違規（寬鬆：給機會重新累積）
         await setCachedJson(strikeKey, 0).catch(() => {});
       } else {
         out.violations++;
-        await setSponsorRecord(accountId, date, { ...rec, verified: true, violated: true });
+        await updateSponsorRecordAt(accountId, date, index, { ...rec, verified: true, violated: true });
         const prev = (await getCachedJson<number>(strikeKey, STRIKE_WINDOW_MS).catch(() => 0)) ?? 0;
         const strikes = prev + 1;
         await setCachedJson(strikeKey, strikes).catch(() => {});

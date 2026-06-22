@@ -19,18 +19,21 @@ export async function createSource(
   input: {
     threads_account_id: string;
     shopee_account_id?: string | null;
-    source_username: string;
+    source_username?: string;
+    search_query?: string | null;
     poll_interval_minutes?: number;
     auto_publish?: boolean;
     posts_limit?: number;
   },
   ownerId: string
 ): Promise<Source> {
+  const search_query = input.search_query?.trim() || null;
   const row = {
     owner_id: ownerId,
     threads_account_id: input.threads_account_id,
     shopee_account_id: input.shopee_account_id ?? null,
-    source_username: input.source_username.trim().replace(/^@/, ""),
+    source_username: (input.source_username ?? "").trim().replace(/^@/, ""),
+    search_query,
     enabled: true,
     poll_interval_minutes: input.poll_interval_minutes ?? 15,
     auto_publish: input.auto_publish ?? false,

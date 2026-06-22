@@ -7,6 +7,9 @@ import ThreadsPreview, { CharCount } from "@/components/ThreadsPreview";
 import { checkThreadsContent, THREADS_MAX_HASHTAGS } from "@/lib/threads-content";
 import { parseTaipeiDateTimeLocal } from "@/lib/datetime";
 import { cloudinaryThumb } from "@/lib/img";
+import { isQualifiedMediaSet } from "@/lib/media";
+import { formatCommissionRate } from "@/lib/product-name";
+import type { DraftMedia } from "@/lib/types";
 
 const input = "w-full rounded-xl border px-3 py-2 text-sm";
 const THREADS_LIMIT = 500;
@@ -18,6 +21,7 @@ export default function ComposerForm({ threadsAccounts }: { threadsAccounts: Thr
   const [mainText, setMainText] = useState("");
   const [replyText, setReplyText] = useState("");
   const [replyDelay, setReplyDelay] = useState(""); // 留言延遲（分），空=用全域預設
+  const [allInMain, setAllInMain] = useState(false); // true＝影片+圖+連結全發主文，不另發留言
   const [accountId, setAccountId] = useState(threadsAccounts[0]?.id ?? "");
   const [scheduledAt, setScheduledAt] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
@@ -86,6 +90,7 @@ export default function ComposerForm({ threadsAccounts }: { threadsAccounts: Thr
           main_text: mainText,
           reply_text: replyText,
           reply_delay_minutes: replyDelay.trim() === "" ? null : Number(replyDelay),
+          post_mode: allInMain ? "all_in_main" : "split",
           action,
           scheduled_at: scheduledAt ? parseTaipeiDateTimeLocal(scheduledAt).toISOString() : null
         })
@@ -110,6 +115,7 @@ export default function ComposerForm({ threadsAccounts }: { threadsAccounts: Thr
       setMainText("");
       setReplyText("");
       setReplyDelay("");
+      setAllInMain(false);
       router.refresh();
     } catch (e) {
       setMsg(`❌ ${e instanceof Error ? e.message : String(e)}`);
@@ -152,15 +158,37 @@ export default function ComposerForm({ threadsAccounts }: { threadsAccounts: Thr
               <video src={material.cloudinary_media_url} className="h-16 w-16 rounded object-cover" controls />
             )}
             <div className="min-w-0">
-              <div className="truncate text-sm font-medium">{material.product_name ?? "（商品）"}</div>
-              <a
-                href={material.affiliate_short_link ?? "#"}
-                target="_blank"
-                rel="noreferrer"
-                className="truncate text-xs text-brand hover:underline"
-              >
-                {material.affiliate_short_link}
-              </a>
+              <div className="flex items-center gap-2">
+                <div className="truncate text-sm font-medium">{material.product_name ?? "（商品）"}</div>
+                {(() => {
+                  const mediaList: DraftMedia[] =
+                    material.media && material.media.length > 0
+                      ? material.media
+                      : material.cloudinary_media_url && (material.media_type === "image" || material.media_type === "video")
+                        ? [{ url: material.cloudinary_media_url, type: material.media_type }]
+                        : [];
+                  return (
+                    <span className={"shrink-0 rounded px-1.5 py-0.5 text-[10px] " + (isQualifiedMediaSet(mediaList) ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700")}>
+                      {isQualifiedMediaSet(mediaList) ? "✅ 合格素材組" : "⚠️ 建議 1 影片＋≥1 圖"}
+                    </span>
+                  );
+                })()}
+              </div>
+              <div className="flex items-center gap-2">
+                <a
+                  href={material.affiliate_short_link ?? "#"}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="min-w-0 truncate text-xs text-brand hover:underline"
+                >
+                  {material.affiliate_short_link}
+                </a>
+                {formatCommissionRate(material.commission_rate) && (
+                  <span className="shrink-0 rounded bg-surface-2 px-1.5 py-0.5 text-[10px] text-ink-2" title="目前分潤率（會隨時間變動）">
+                    分潤 {formatCommissionRate(material.commission_rate)}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -180,9 +208,13 @@ export default function ComposerForm({ threadsAccounts }: { threadsAccounts: Thr
             rows={2}
             value={replyText}
             onChange={(e) => setReplyText(e.target.value)}
-            placeholder="留言區（含分潤連結）"
+            placeholder={allInMain ? "留言內容（將併入主文一起發）" : "留言區（含分潤連結）"}
           />
-          {replyText.trim() && (
+          <label className="flex items-center gap-2 text-xs text-ink-2">
+            <input type="checkbox" checked={allInMain} onChange={(e) => setAllInMain(e.target.checked)} />
+            全部發主文（影片＋圖＋分潤連結同一篇，不另發留言）
+          </label>
+          {!allInMain && replyText.trim() && (
             <div className="flex items-center gap-2">
               <label htmlFor="composer-reply-delay" className="text-xs text-ink-2">
                 留言延遲（分，空＝用預設）
@@ -203,10 +235,11 @@ export default function ComposerForm({ threadsAccounts }: { threadsAccounts: Thr
 
           <ThreadsPreview
             accountLabel={threadsAccounts.find((a) => a.id === (accountId || threadsAccounts[0]?.id))?.label}
-            mainText={mainText}
-            replyText={replyText}
+            mainText={allInMain && replyText ? [mainText, replyText].filter(Boolean).join("\n\n") : mainText}
+            replyText={allInMain ? "" : replyText}
             mediaUrl={material.cloudinary_media_url}
             mediaType={material.media_type}
+            media={material.media}
           />
 
           <div className="flex flex-wrap items-center gap-2">

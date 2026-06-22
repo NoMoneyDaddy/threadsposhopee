@@ -20,6 +20,7 @@ export interface Source {
   threads_account_id: string;
   shopee_account_id?: string | null;
   source_username: string;
+  search_query?: string | null; // 有值＝關鍵字搜尋模式；無值＝監看 source_username 帳號
   enabled: boolean;
   poll_interval_minutes: number;
   auto_publish: boolean;
@@ -33,8 +34,11 @@ export interface Material {
   owner_id?: string | null;
   shop_id: string;
   item_id: string;
-  product_name?: string | null;
+  product_name?: string | null; // 乾淨核心品名（給文案/卡片標題）
+  product_name_raw?: string | null; // 原始蝦皮標題（留存，可能含 SEO 關鍵字）
   clean_product_url?: string | null;
+  commission_rate?: string | null; // 目前分潤率字串小數（0.05＝5%），顯示用
+  commission_checked_at?: string | null; // 分潤率查詢時間
   affiliate_short_link?: string | null;
   affiliate_sub_id?: string | null;
   affiliate_generated_at?: string | null;
@@ -43,6 +47,8 @@ export interface Material {
   media_type?: "image" | "video" | "none" | null;
   source_media_url?: string | null;
   cloudinary_media_url?: string | null;
+  // 多媒體（同一篇貼文的影片＋圖）：空陣列時退回上面單一 media 欄位（向後相容）。
+  media?: DraftMedia[];
   main_text?: string | null;
   reply_text?: string | null;
   ai_raw?: string | null;
@@ -79,12 +85,19 @@ export interface Draft {
   product_name?: string | null;
   clean_product_url?: string | null;
   shopee_short_link?: string | null;
+  commission_rate?: string | null; // 建立時自素材快照的分潤率（顯示用）
+  commission_checked_at?: string | null;
   media_type?: "image" | "video" | "none" | null;
   source_media_url?: string | null;
   cloudinary_media_url?: string | null;
   // 多媒體（輪播）：人工拖拉上傳/排序後存這裡；空陣列時退回上面單一 media 欄位（向後相容）。
   // DB 為 jsonb NOT NULL default '[]'，讀取一律是陣列，故型別不含 null。
   media?: DraftMedia[];
+  // 留言（串文 2/2）要帶的媒體（通常 1 張圖）。空陣列＝純文字留言。
+  reply_media?: DraftMedia[];
+  // 發布版面：'split'（預設，null 同）＝主文媒體＋留言（含分潤連結＋reply_media）；
+  // 'all_in_main'＝影片＋圖＋連結全發主文，不另發留言。
+  post_mode?: "split" | "all_in_main" | null;
   main_text?: string | null;
   reply_text?: string | null;
   ai_raw?: string | null;

@@ -4,9 +4,33 @@
 //       升級路徑為改用 Shopee productOfferV2 重查商品是否存在。
 import { log } from "@/lib/logger";
 import { fetchSafePublicUrl } from "@/lib/url-guard";
-import { listMaterialsToCheck, setAffiliateChecked, reviveAffiliateLink, getAutoReviveLinks, type MaterialToCheck } from "@/lib/store";
+import {
+  listMaterialsToCheck,
+  setAffiliateChecked,
+  setMaterialCommission,
+  incrementContributionBonus,
+  reviveAffiliateLink,
+  getAutoReviveLinks,
+  getShopeeCredentials,
+  type MaterialToCheck
+} from "@/lib/store";
 import { sendUserAlert } from "@/lib/notify";
+import { getProductInfo } from "@/services/shopee/affiliate";
+import { isDemoMode } from "@/lib/env";
 import { regenerateAffiliateLink } from "./regen";
+
+// 健檢順手刷新「目前分潤率」（顯示用，會隨時間變動）。需該 owner 自綁 Shopee API；失敗只記 log 不影響健檢。
+async function refreshCommission(m: MaterialToCheck): Promise<void> {
+  if (isDemoMode || !m.owner_id) return;
+  const creds = await getShopeeCredentials(m.owner_id);
+  if (!creds) return;
+  const info = await getProductInfo(creds.appId, creds.secret, m.shop_id, m.item_id);
+  await setMaterialCommission(m.id, m.owner_id, info.commissionRate, new Date().toISOString());
+  // 資料貢獻紅利：用自己的金鑰把「分享進公共池」的素材「首次」補上分潤率 → 記一次（不重複累加防灌）。
+  if (m.shared && !m.commission_rate && info.commissionRate) {
+    await incrementContributionBonus(m.owner_id, 1).catch(() => {});
+  }
+}
 
 // 回傳 true 代表「明確失效」；其餘狀況（200/3xx/403/逾時/網路錯誤）一律視為未知 → 不標失效。
 async function isLinkDead(link: string): Promise<boolean> {
@@ -28,6 +52,7 @@ async function checkOne(m: MaterialToCheck, ownerUserId: string | null, autoRevi
     log.warn("連結健檢失敗", { what, materialId: m.id, err: e });
   if (!(await isLinkDead(m.link))) {
     await setAffiliateChecked(m.id, false).catch(logFail("標記已檢查"));
+    await refreshCommission(m).catch(logFail("刷新分潤率"));
     return "ok";
   }
   if (autoRevive) {

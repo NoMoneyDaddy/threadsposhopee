@@ -1,20 +1,12 @@
-{
-  "_comment": "模擬 Apify Threads Scraper 回傳的單篇貼文（簡化版），供 Demo 模式 / 測試使用。",
-  "node": {
-    "thread_items": [
-      {
-        "post": {
-          "pk": "seed_post_002",
-          "id": "seed_post_002",
-          "code": "C_demoCode",
-          "is_reply": false,
-          "caption": { "text": "這個保溫瓶真的扯，冰塊放一整天還在 😳 連結我放留言 https://s.shopee.tw/9KdEmoLink" },
-          "media_type": 1,
-          "image_versions2": {
-            "candidates": [{ "url": "https://picsum.photos/seed/bottle/800/800", "width": 800, "height": 800 }]
-          }
-        }
-      }
-    ]
+[
+  {
+    "username": "demo_seller",
+    "isVerified": false,
+    "captionText": "這個保溫瓶真的扯，冰塊放一整天還在 😳 連結我放這 https://s.shopee.tw/9KdEmoLink",
+    "takenAtFormatted": "6/22/2026, 12:00:00 PM",
+    "likeCount": 3,
+    "directReplyCount": 1,
+    "repostCount": 0,
+    "postUrl": "https://www.threads.com/@demo_seller/post/C_demoCode"
   }
-}
+]

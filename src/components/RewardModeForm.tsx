@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { SponsorRewardMode } from "@/lib/store";
+import { SPONSOR_EXEMPT_CONTRIBUTION, OWN_LINK_CONTRIBUTION } from "@/lib/contribution";
 
 // 高貢獻者回饋方式選擇：免每日贊助文，或照發但換成自己的分潤連結（自己賺）。
 export default function RewardModeForm({ initial }: { initial: SponsorRewardMode }) {
@@ -38,7 +39,9 @@ export default function RewardModeForm({ initial }: { initial: SponsorRewardMode
   return (
     <div className="rounded-2xl border bg-surface p-4">
       <div className="mb-1 text-sm font-medium text-ink">🎁 你的回饋方式</div>
-      <p className="mb-3 text-xs text-ink-2">貢獻達門檻，可選擇每日贊助文要怎麼回饋你。</p>
+      <p className="mb-3 text-xs text-ink-2">
+        貢獻達門檻可選回饋方式：免贊助需 {SPONSOR_EXEMPT_CONTRIBUTION} 分、連結自賺需 {OWN_LINK_CONTRIBUTION} 分（更難）。
+      </p>
       <div className="flex flex-col gap-2 sm:flex-row">
         <button
           type="button"
@@ -59,8 +62,8 @@ export default function RewardModeForm({ initial }: { initial: SponsorRewardMode
       </div>
       <p className="mt-2 text-xs text-ink-3">
         {mode === "own_link"
-          ? "每日贊助文會照常發，但連結用你自己的蝦皮金鑰重產，分潤算你的（需先綁定蝦皮金鑰）。"
-          : "你的帳號不會被排每日平台贊助文。"}
+          ? `連結自賺：每日第 1 篇仍走平台（平台保本），超過配額的「超額篇」才換成你自己的蝦皮分潤連結、分潤算你的（需綁蝦皮金鑰，且貢獻達 ${OWN_LINK_CONTRIBUTION} 分）。`
+          : "免贊助：你的帳號不會被排每日平台贊助文。"}
       </p>
       {msg && <div className="mt-2 text-xs text-ink-2">{msg}</div>}
     </div>

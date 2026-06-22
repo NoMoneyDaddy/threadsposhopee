@@ -8,7 +8,8 @@ import { log } from "@/lib/logger";
 export async function uploadToCloudinary(
   sourceUrl: string,
   type: "image" | "video",
-  creds?: { cloud: string; preset: string } | null
+  creds?: { cloud: string; preset: string } | null,
+  keyHint?: string
 ): Promise<string> {
   const cloud = creds?.cloud;
   const preset = creds?.preset;
@@ -21,7 +22,9 @@ export async function uploadToCloudinary(
   const form = new FormData();
   form.append("file", safeUrl.href); // Cloudinary 支援直接給遠端 URL 由它抓取（用正規化 href 防解析歧異）
   form.append("upload_preset", preset);
-  form.append("folder", type === "video" ? "threads/videos" : "threads/images");
+  // 以商品分組（keyHint=<shopId>_<itemId>）；缺時退回舊的 type 分類資料夾。
+  const folder = keyHint ? `threads/${keyHint.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64)}` : type === "video" ? "threads/videos" : "threads/images";
+  form.append("folder", folder);
 
   // 影片上傳較慢放寬到 20s；只重試 429（被限流＝未處理，重試不會產生重複資產）。
   // 外部 fetch 前一律過 SSRF 守衛（即使 endpoint 為固定常數，維持全站一致約定）。

@@ -49,7 +49,7 @@ export default async function SourcesPage() {
           <tbody>
             {sources.map((s) => (
               <tr key={s.id} className="border-t">
-                <td className="px-4 py-2 font-medium">@{s.source_username}</td>
+                <td className="px-4 py-2 font-medium">{s.search_query ? `🔍 ${s.search_query}` : `@${s.source_username}`}</td>
                 <td className="px-4 py-2">{accLabel(s.threads_account_id)}</td>
                 <td className="px-4 py-2">每 {s.poll_interval_minutes} 分</td>
                 <td className="px-4 py-2">

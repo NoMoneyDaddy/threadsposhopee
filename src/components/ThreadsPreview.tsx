@@ -11,7 +11,8 @@ export default function ThreadsPreview({
   replyText,
   mediaUrl,
   mediaType,
-  media
+  media,
+  replyMedia
 }: {
   accountLabel?: string;
   mainText: string;
@@ -19,6 +20,7 @@ export default function ThreadsPreview({
   mediaUrl?: string | null;
   mediaType?: string | null;
   media?: DraftMedia[];
+  replyMedia?: DraftMedia[];
 }) {
   const handle = (accountLabel || "your_account").replace(/^@/, "");
   // 優先用 media 陣列；為空時退回單一 mediaUrl/mediaType（向後相容）
@@ -29,9 +31,29 @@ export default function ThreadsPreview({
         ? [{ url: mediaUrl, type: mediaType }]
         : [];
   const carousel = items.length > 1;
+  const replyItems: DraftMedia[] = replyMedia ?? [];
   // 留言＝串文接續貼文（Threads 上會顯示成 1/2、2/2 的串文鏈，非一般留言）
-  const hasReply = Boolean(replyText && replyText.trim());
+  const hasReply = Boolean((replyText && replyText.trim()) || replyItems.length > 0);
   const total = hasReply ? 2 : 1;
+  // 媒體縮圖渲染（主文與留言共用）
+  const renderMedia = (list: DraftMedia[]) => {
+    const multi = list.length > 1;
+    return (
+      <div className={multi ? "mt-2 flex gap-2 overflow-x-auto pb-1" : "mt-2"}>
+        {list.map((m, i) => {
+          const cls = multi
+            ? "h-44 w-44 shrink-0 rounded-2xl border object-cover"
+            : "max-h-72 w-full rounded-2xl border object-cover";
+          return m.type === "image" ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img key={`${m.url}-${i}`} src={cloudinaryThumb(m.url, 600)} alt="" loading="lazy" className={cls} />
+          ) : (
+            <video key={`${m.url}-${i}`} src={m.url} controls className={cls} />
+          );
+        })}
+      </div>
+    );
+  };
   return (
     <div className="rounded-xl border bg-surface p-4">
       <div className="mb-2 text-xs font-medium text-ink-3">預覽（Threads 串文）</div>
@@ -51,21 +73,7 @@ export default function ThreadsPreview({
           <div className="mt-0.5 whitespace-pre-wrap break-words text-sm text-ink">
             {mainText || <span className="text-ink-3">正文預覽…</span>}
           </div>
-          {items.length > 0 && (
-            <div className={carousel ? "mt-2 flex gap-2 overflow-x-auto pb-1" : "mt-2"}>
-              {items.map((m, i) => {
-                const cls = carousel
-                  ? "h-44 w-44 shrink-0 rounded-2xl border object-cover"
-                  : "max-h-72 w-full rounded-2xl border object-cover";
-                return m.type === "image" ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img key={`${m.url}-${i}`} src={cloudinaryThumb(m.url, 600)} alt="" loading="lazy" className={cls} />
-                ) : (
-                  <video key={`${m.url}-${i}`} src={m.url} controls className={cls} />
-                );
-              })}
-            </div>
-          )}
+          {items.length > 0 && renderMedia(items)}
           {carousel && <div className="mt-1 text-xs text-ink-3">輪播 {items.length} 則媒體</div>}
           <div className="mt-2 flex gap-5 text-ink-3">
             <span className="text-xs">♡ 讚</span>
@@ -86,6 +94,7 @@ export default function ThreadsPreview({
               <span className="text-ink-3">· 接續</span>
             </div>
             <div className="mt-0.5 whitespace-pre-wrap break-words text-sm text-brand">{replyText}</div>
+            {replyItems.length > 0 && renderMedia(replyItems)}
           </div>
         </div>
       )}

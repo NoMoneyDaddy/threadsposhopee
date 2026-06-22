@@ -275,13 +275,20 @@ export async function incrementImportCount(id: string): Promise<void> {
   if (error) throw new Error(`累加匯入次數失敗：${error.message}`);
 }
 
-// 貢獻分數＝該使用者所有素材被匯入總次數（資料庫端 SUM；不限目前是否仍分享，取消分享不歸零歷史貢獻）。
+// 貢獻分數＝被匯入次數 + 分享中素材篇數 + 資料貢獻紅利（單一來源走 DB RPC，見 migration 0042）。
 export async function getContributionScore(ownerId: string): Promise<number> {
   if (isDemoMode) return 0;
   const sb = getServiceClient()!;
   const { data, error } = await sb.rpc("get_contribution_score", { p_owner: ownerId });
   if (error) throw new Error(`取得貢獻分數失敗：${error.message}`);
   return (data as number) ?? 0;
+}
+
+// 資料貢獻紅利＋n（用自己金鑰把分享進池的素材補上商品資料時記一次）。
+export async function incrementContributionBonus(ownerId: string, n = 1): Promise<void> {
+  if (isDemoMode || n <= 0) return;
+  const sb = getServiceClient()!;
+  await sb.rpc("increment_contribution_bonus", { p_owner: ownerId, p_n: n });
 }
 
 // 連結健檢 worker 用：取最久沒檢查、目前仍有效的素材（跨租戶）。
@@ -294,6 +301,8 @@ export type MaterialToCheck = {
   clean_product_url: string | null;
   link: string;
   affiliate_sub_id: string | null;
+  shared: boolean; // 是否分享進公共池（資料貢獻紅利判定）
+  commission_rate: string | null; // 現有分潤率（null＝尚未補上，首次補上記紅利）
 };
 // ownerId 有值時只撈該 owner 的素材（owner 手動觸發健檢用）；null = 全租戶（cron worker）。
 export async function listMaterialsToCheck(
@@ -304,7 +313,7 @@ export async function listMaterialsToCheck(
   const sb = getServiceClient()!;
   let q = sb
     .from("materials")
-    .select("id, owner_id, shop_id, item_id, clean_product_url, affiliate_short_link, affiliate_sub_id, affiliate_checked_at")
+    .select("id, owner_id, shop_id, item_id, clean_product_url, affiliate_short_link, affiliate_sub_id, affiliate_checked_at, shared, commission_rate")
     .eq("affiliate_valid", true)
     .not("affiliate_short_link", "is", null);
   if (ownerId) q = q.eq("owner_id", ownerId);
@@ -318,7 +327,9 @@ export async function listMaterialsToCheck(
       item_id: m.item_id,
       clean_product_url: m.clean_product_url ?? null,
       link: m.affiliate_short_link as string,
-      affiliate_sub_id: m.affiliate_sub_id ?? null
+      affiliate_sub_id: m.affiliate_sub_id ?? null,
+      shared: Boolean(m.shared),
+      commission_rate: m.commission_rate ?? null
     }));
 }
 
@@ -354,4 +365,24 @@ export async function setAffiliateChecked(id: string, dead: boolean): Promise<vo
   const patch: Record<string, unknown> = { affiliate_checked_at: new Date().toISOString() };
   if (dead) patch.affiliate_valid = false;
   await sb.from("materials").update(patch).eq("id", id);
+}
+
+// 更新素材目前分潤率（顯示用）：健檢時順手刷新，附查詢時間。限本人。
+export async function setMaterialCommission(
+  id: string,
+  ownerId: string,
+  rate: string | null,
+  checkedAt: string
+): Promise<void> {
+  if (isDemoMode) {
+    const m = demo.materials.find((x) => x.id === id);
+    if (m) Object.assign(m, { commission_rate: rate, commission_checked_at: checkedAt });
+    return;
+  }
+  const sb = getServiceClient()!;
+  await sb
+    .from("materials")
+    .update({ commission_rate: rate, commission_checked_at: checkedAt })
+    .eq("id", id)
+    .eq("owner_id", ownerId);
 }

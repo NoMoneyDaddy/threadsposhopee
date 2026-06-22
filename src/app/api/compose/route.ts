@@ -37,6 +37,11 @@ export async function POST(req: Request) {
     if (!["publish", "schedule", "draft", "queue"].includes(action)) {
       return NextResponse.json({ ok: false, error: "不支援的發文動作" }, { status: 400 });
     }
+    // 發布版面：'all_in_main'＝影片+圖+連結全發主文、不另發留言；其餘（含未帶）＝拆分（split）。
+    if (body.post_mode !== undefined && body.post_mode !== null && !["split", "all_in_main"].includes(body.post_mode)) {
+      return NextResponse.json({ ok: false, error: "post_mode 只支援 split 或 all_in_main" }, { status: 400 });
+    }
+    const postMode: "all_in_main" | null = body.post_mode === "all_in_main" ? "all_in_main" : null;
 
     // 越權防護：發文帳號必須屬於當前使用者（service-role 繞過 RLS，務必應用層驗證）
     if (!isDemoMode && !(await userOwnsThreadsAccount(threads_account_id, user.id))) {
@@ -121,13 +126,17 @@ export async function POST(req: Request) {
         product_name: material?.product_name ?? null,
         clean_product_url: material?.clean_product_url ?? null,
         shopee_short_link: material?.affiliate_short_link ?? null,
+        commission_rate: material?.commission_rate ?? null,
+        commission_checked_at: material?.commission_checked_at ?? null,
         media_type: material ? material.media_type : selfMediaType,
         source_media_url: material ? material.source_media_url : selfMediaUrl,
         cloudinary_media_url: material ? material.cloudinary_media_url : selfCloudUrl,
+        media: material ? material.media ?? [] : [],
         main_text: material ? (typeof body.main_text === "string" ? body.main_text : material.main_text) : freeMain,
         reply_text: typeof body.reply_text === "string" ? body.reply_text : material?.reply_text ?? null,
         reply_delay_minutes: replyDelayOverride,
         ai_raw: material?.ai_raw ?? null,
+        post_mode: postMode,
         status,
         scheduled_at
       });

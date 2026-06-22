@@ -25,6 +25,8 @@ interface PublishInput {
   mediaUrl?: string | null;
   mediaType?: "image" | "video" | "none";
   replyText?: string | null; // 發成功後自動留言（放分潤連結）
+  replyMedia?: DraftMedia[]; // 留言（2/2）要帶的媒體（通常 1 張圖）
+  postMode?: "split" | "all_in_main" | null; // all_in_main＝影片+圖+連結全發主文、不另發留言
   deferReply?: boolean; // true=只發主文、不立即留言（留言改由延遲 worker 補），回傳 replyDeferred
 }
 
@@ -43,17 +45,22 @@ function isValidMedia(m: unknown): m is DraftMedia {
 // maxDuration；真逾時會留 publishing → reclaim 標 needs_verification（H2），人工確認後重試。
 export const MAX_CAROUSEL_ITEMS = 20;
 
+// 過濾無效項並截斷至輪播上限。
+function clampMedia(items: DraftMedia[]): DraftMedia[] {
+  const valid = items.filter(isValidMedia);
+  if (valid.length > MAX_CAROUSEL_ITEMS) {
+    log.warn("輪播項數超過 Threads 上限，截斷至前 20 項", { total: valid.length, max: MAX_CAROUSEL_ITEMS });
+    return valid.slice(0, MAX_CAROUSEL_ITEMS);
+  }
+  return valid;
+}
+
 function resolveMedia(input: PublishInput): DraftMedia[] {
-  let items: DraftMedia[] = [];
-  if (input.media && input.media.length > 0) items = input.media.filter(isValidMedia);
-  else if (input.mediaUrl && (input.mediaType === "image" || input.mediaType === "video")) {
-    items = [{ url: input.mediaUrl, type: input.mediaType }];
+  if (input.media && input.media.length > 0) return clampMedia(input.media);
+  if (input.mediaUrl && (input.mediaType === "image" || input.mediaType === "video")) {
+    return [{ url: input.mediaUrl, type: input.mediaType }];
   }
-  if (items.length > MAX_CAROUSEL_ITEMS) {
-    log.warn("輪播項數超過 Threads 上限，截斷至前 20 項", { total: items.length, max: MAX_CAROUSEL_ITEMS });
-    items = items.slice(0, MAX_CAROUSEL_ITEMS);
-  }
-  return items;
+  return [];
 }
 
 // 對單一媒體項設定容器參數（IMAGE/VIDEO + 對應 url）。
@@ -103,13 +110,21 @@ async function waitForContainerReady(creationId: string, token: string): Promise
 }
 
 // 建立要發布的頂層容器，回傳 creationId 與是否需在 publish 前等待就緒。
-async function buildCreation(input: PublishInput, media: DraftMedia[]): Promise<{ creationId: string; needWait: boolean }> {
+// replyToId 有值＝這是某主貼文下的留言（串文 2/2），reply_to_id 設在頂層容器（輪播設在母容器）。
+async function buildCreation(
+  userId: string,
+  token: string,
+  text: string,
+  media: DraftMedia[],
+  replyToId?: string
+): Promise<{ creationId: string; needWait: boolean }> {
   // 純文字或單一媒體：單一容器（文案放這裡）
   if (media.length <= 1) {
-    const params = new URLSearchParams({ text: input.text });
+    const params = new URLSearchParams({ text });
     if (media.length === 1) setMediaParams(params, media[0]);
     else params.set("media_type", "TEXT");
-    const creationId = await postThreads(input.threadsUserId, input.accessToken, params);
+    if (replyToId) params.set("reply_to_id", replyToId);
+    const creationId = await postThreads(userId, token, params);
     return { creationId, needWait: media[0]?.type === "video" };
   }
 
@@ -118,12 +133,13 @@ async function buildCreation(input: PublishInput, media: DraftMedia[]): Promise<
   for (const item of media) {
     const p = new URLSearchParams({ is_carousel_item: "true" });
     setMediaParams(p, item);
-    const childId = await postThreads(input.threadsUserId, input.accessToken, p);
-    if (item.type === "video") await waitForContainerReady(childId, input.accessToken);
+    const childId = await postThreads(userId, token, p);
+    if (item.type === "video") await waitForContainerReady(childId, token);
     childIds.push(childId);
   }
-  const cp = new URLSearchParams({ media_type: "CAROUSEL", text: input.text, children: childIds.join(",") });
-  const creationId = await postThreads(input.threadsUserId, input.accessToken, cp);
+  const cp = new URLSearchParams({ media_type: "CAROUSEL", text, children: childIds.join(",") });
+  if (replyToId) cp.set("reply_to_id", replyToId);
+  const creationId = await postThreads(userId, token, cp);
   return { creationId, needWait: true };
 }
 
@@ -138,33 +154,35 @@ async function publishContainer(userId: string, token: string, creationId: strin
   return id;
 }
 
-// 在指定主貼文下發一則留言（串文 2/2，放分潤連結），回傳留言貼文 id。
+// 在指定主貼文下發一則留言（串文 2/2，放分潤連結＋可選媒體），回傳留言貼文 id。
 // 給「立即留言」與「延遲補留言 worker」共用。
 export async function publishReply(
   threadsUserId: string,
   accessToken: string,
   postId: string,
-  replyText: string
+  replyText: string,
+  replyMedia: DraftMedia[] = []
 ): Promise<string> {
-  const replyParams = new URLSearchParams({
-    access_token: accessToken,
-    media_type: "TEXT",
-    text: replyText,
-    reply_to_id: postId
-  });
-  // URL 安全驗證已收斂於 fetchThreadsPost
-  const c = await fetchThreadsPost(`${GRAPH}/${threadsUserId}/threads`, { method: "POST", body: replyParams });
-  if (!c.ok) throw new Error(`留言容器建立失敗 ${c.status}: ${await c.text()}`);
-  const replyCreation = (await c.json()).id;
-  return publishContainer(threadsUserId, accessToken, replyCreation);
+  const media = clampMedia(replyMedia);
+  const { creationId, needWait } = await buildCreation(threadsUserId, accessToken, replyText, media, postId);
+  if (needWait) await waitForContainerReady(creationId, accessToken);
+  return publishContainer(threadsUserId, accessToken, creationId);
 }
 
 export async function publishToThreads(
   input: PublishInput
 ): Promise<{ postId: string; replyDeferred?: boolean; replyFailed?: boolean }> {
-  const media = resolveMedia(input);
+  const mainMedia = resolveMedia(input);
+  const replyMedia = clampMedia(input.replyMedia ?? []);
+
+  // 全部發主文：影片＋圖＋（留言文案內含的）分潤連結全部放主文，不另發留言。
+  // 主文媒體 = 原主文媒體 ＋ 留言媒體合併；主文文案 = 正文＋留言文案。
+  const allInMain = input.postMode === "all_in_main";
+  const text = allInMain && input.replyText ? [input.text, input.replyText].filter(Boolean).join("\n\n") : input.text;
+  const media = allInMain ? clampMedia([...mainMedia, ...replyMedia]) : mainMedia;
+
   // 建容器/等就緒：失敗代表「尚未發布」，可安全重試（沿用原錯誤 → 呼叫端標 failed）。
-  const { creationId, needWait } = await buildCreation(input, media);
+  const { creationId, needWait } = await buildCreation(input.threadsUserId, input.accessToken, text, media);
   if (needWait) await waitForContainerReady(creationId, input.accessToken);
   // 發布步驟：一旦送出 threads_publish 即「可能已發出」，失敗包成 PublishUncertainError，
   // 讓呼叫端標 needs_verification（人工確認）而非 failed，避免重發雙貼。
@@ -175,15 +193,16 @@ export async function publishToThreads(
     throw new PublishUncertainError(e);
   }
 
-  if (!input.replyText) return { postId };
+  // 全部發主文模式：留言內容已併入主文，不再發留言。
+  if (allInMain || !input.replyText) return { postId };
 
   // 延遲留言：只發主文，留言交給延遲 worker 之後補（防「秒留言」固定行為）
   if (input.deferReply) return { postId, replyDeferred: true };
 
-  // 立即在貼文下留言放分潤連結（提高觸及，連結不放正文）。
+  // 立即在貼文下留言放分潤連結（提高觸及，連結不放正文）＋可選留言媒體。
   // 留言失敗不影響主貼文，但回傳 replyFailed 讓呼叫端把 reply_status 落成 failed（不要謊報 published）。
   try {
-    await publishReply(input.threadsUserId, input.accessToken, postId, input.replyText);
+    await publishReply(input.threadsUserId, input.accessToken, postId, input.replyText, replyMedia);
   } catch (e) {
     log.warn("留言發布失敗", { postId, err: e });
     return { postId, replyFailed: true };

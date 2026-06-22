@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { normalizeDraftMedia } from "./media";
+import { normalizeDraftMedia, normalizeReplyMedia, isQualifiedMediaSet } from "./media";
 
 test("media 陣列優先，過濾無效項", () => {
   const r = normalizeDraftMedia({
@@ -42,4 +42,20 @@ test("media 陣列存在但全無效時，回退單一 media 欄位", () => {
 
 test("全空 → 空陣列", () => {
   assert.deepEqual(normalizeDraftMedia({}), []);
+});
+
+test("normalizeReplyMedia：過濾無效項、不退回主文單一欄位", () => {
+  assert.deepEqual(
+    normalizeReplyMedia({ reply_media: [{ url: "r.jpg", type: "image" }, { url: "", type: "image" }] }),
+    [{ url: "r.jpg", type: "image" }]
+  );
+  // 無 reply_media 不應外溢主文媒體
+  assert.deepEqual(normalizeReplyMedia({}), []);
+});
+
+test("isQualifiedMediaSet：需 ≥1 影片 + ≥1 圖", () => {
+  assert.equal(isQualifiedMediaSet([{ url: "a.mp4", type: "video" }, { url: "b.jpg", type: "image" }]), true);
+  assert.equal(isQualifiedMediaSet([{ url: "b.jpg", type: "image" }]), false);
+  assert.equal(isQualifiedMediaSet([{ url: "a.mp4", type: "video" }]), false);
+  assert.equal(isQualifiedMediaSet([]), false);
 });

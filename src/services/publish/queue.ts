@@ -21,23 +21,27 @@ import {
   isPublishPaused,
   getAccountCircuitUntil,
   tripAccountCircuit,
-  clearAccountCircuit
+  clearAccountCircuit,
+  getContributionScore,
+  getSponsorRewardMode
 } from "@/lib/store";
+import { canOwnLink } from "@/lib/contribution";
 import { publishToThreads, publishReply, PublishUncertainError } from "@/services/threads/publish";
 import { getOwnerUserId } from "@/lib/auth";
 import {
   getSponsorConfig,
-  getSponsorRecord,
-  setSponsorRecord,
+  countSponsorToday,
+  appendSponsorRecord,
   getSponsorPick,
   shouldSponsor,
   swapAffiliateLink,
   taipeiParts,
   type SponsorPick
 } from "@/lib/sponsor";
+import { sponsorQuota } from "@/services/publish/sponsor-quota";
 import { resolveSponsorResources, buildSponsorLinkForAccount } from "@/services/sponsor/link";
 import { log } from "@/lib/logger";
-import { normalizeDraftMedia } from "@/lib/media";
+import { normalizeDraftMedia, normalizeReplyMedia } from "@/lib/media";
 import { shardOf, circuitOpen, nextPacingSkipReason } from "@/services/publish/cadence";
 import { replyDelayMinutes } from "@/services/publish/reply-timing";
 import { sendAlert, sendUserAlert } from "@/lib/notify";
@@ -134,7 +138,9 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
   const sponsorCfg = await getSponsorConfig();
   const sponsorTaipei = taipeiParts();
   const sponsorOwnerId = sponsorCfg.enabled && !isDemoMode ? await getOwnerUserId().catch(() => null) : null;
-  const sponsorDoneCache: Record<string, boolean> = {}; // accId -> 今天已發贊助文
+  const sponsorCountCache: Record<string, number> = {}; // accId -> 今天已發贊助文篇數
+  // 自賺資格＋自己的贊助連結資源（依 owner 快取）：超額 slot 用貢獻者自己的分潤連結。
+  const sponsorOwnLinkCache: Record<string, { eligible: boolean; res: Awaited<ReturnType<typeof resolveSponsorResources>> | null }> = {};
   const sponsorPickCache: Record<string, SponsorPick | null> = {}; // accId -> 使用者自選
   // 有商品原始連結＋owner → 整輪取一次資源（金鑰/affiliate_id/自訂 subId＋展開連結），供每帳號即時轉連結。
   const sponsorRes =
@@ -239,20 +245,26 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
       continue;
     }
 
+    // all_in_main：影片+圖+連結全發主文、不另發留言（留言文案併入主文，不走延遲留言流程）。
+    const allInMain = draft.post_mode === "all_in_main";
+    const hasReply = Boolean(draft.reply_text) && !allInMain;
     // 留言延遲：>0 表示主文先發、留言之後補（防「秒留言」固定行為）。逐則可覆寫。
-    const replyDelay = draft.reply_text
+    const replyDelay = hasReply
       ? replyDelayMinutes(draft.id, env.replyDelayFloorMinutes, env.replyDelayJitterMinutes, draft.reply_delay_minutes)
       : 0;
-    const deferReply = Boolean(draft.reply_text) && replyDelay > 0;
+    const deferReply = hasReply && replyDelay > 0;
 
     // 贊助文判定：啟用＋非 owner 帳號＋冷門時段＋今天尚未做過 → 就地換連結（DB 原文不動）。
     let sponsorLinkUsed: string | null = null;
+    let sponsorOwnLinkUsed = false; // 此篇是否用「貢獻者自己的」連結（超額 slot 自賺）
     let pubMainText = draft.main_text ?? "";
     let pubReplyText = draft.reply_text;
     if (sponsorCfg.enabled && !isDemoMode) {
-      if (!(accId in sponsorDoneCache)) {
-        sponsorDoneCache[accId] = Boolean(await getSponsorRecord(accId, sponsorTaipei.date).catch(() => null));
+      // 每日配額：依該帳號每日上限換算（max(保底, floor(上限/perPosts))）；今日已達配額則不再贊助。
+      if (!(accId in sponsorCountCache)) {
+        sponsorCountCache[accId] = await countSponsorToday(accId, sponsorTaipei.date).catch(() => 0);
       }
+      const sponsorQuotaToday = sponsorQuota(pp.maxPerDay);
       const isOwnerAccount = Boolean(sponsorOwnerId) && draft.owner_id === sponsorOwnerId;
       if (!(accId in sponsorPickCache)) {
         sponsorPickCache[accId] = await getSponsorPick(accId).catch(() => null);
@@ -265,15 +277,37 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
           hour: sponsorTaipei.hour,
           offPeakStart: sponsorCfg.offPeakStart,
           offPeakEnd: sponsorCfg.offPeakEnd,
-          alreadyDoneToday: sponsorDoneCache[accId],
+          alreadyDoneToday: sponsorCountCache[accId] >= sponsorQuotaToday,
           thisDraftId: draft.id,
           pickDraftId: pick?.draftId ?? null,
           pickHour: pick?.hour ?? null
         })
       ) {
-        // 每帳號即時轉連結（sp_<帳號碼>）；失敗退回靜態後備連結。
+        // 保底 slot（每日第 1 篇）走平台分潤連結（平台保本）；超額 slot 開放「自賺資格」貢獻者換自己的連結。
+        const SPONSOR_FLOOR = 1;
+        const isSurplus = (sponsorCountCache[accId] ?? 0) >= SPONSOR_FLOOR;
         let link: string | null = sponsorCfg.affiliateLink || null;
-        if (sponsorRes) {
+        let useOwn = false;
+        if (isSurplus && draft.owner_id) {
+          const oid = draft.owner_id;
+          if (!(oid in sponsorOwnLinkCache)) {
+            const score = await getContributionScore(oid).catch(() => 0);
+            const mode = await getSponsorRewardMode(oid).catch(() => "exempt" as const);
+            const eligible = mode === "own_link" && canOwnLink(score);
+            const res = eligible && sponsorCfg.productUrl ? await resolveSponsorResources(sponsorCfg.productUrl, oid).catch(() => null) : null;
+            sponsorOwnLinkCache[oid] = { eligible, res };
+          }
+          const own = sponsorOwnLinkCache[oid];
+          if (own.eligible && own.res) {
+            const ownLink = await buildSponsorLinkForAccount(own.res, accId).catch(() => null);
+            if (ownLink) {
+              link = ownLink;
+              useOwn = true;
+            }
+          }
+        }
+        // 非自賺：用平台每帳號即時連結（sp_<帳號碼>）；失敗退回靜態後備連結。
+        if (!useOwn && sponsorRes) {
           const perAcct = await buildSponsorLinkForAccount(sponsorRes, accId).catch(() => null);
           if (perAcct) link = perAcct;
         }
@@ -281,6 +315,7 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
           pubMainText = swapAffiliateLink(draft.main_text, draft.shopee_short_link, link);
           pubReplyText = draft.reply_text ? swapAffiliateLink(draft.reply_text, draft.shopee_short_link, link) : draft.reply_text;
           sponsorLinkUsed = link;
+          sponsorOwnLinkUsed = useOwn;
         }
       }
     }
@@ -300,20 +335,23 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
           text: pubMainText,
           media: normalizeDraftMedia(draft),
           replyText: pubReplyText,
+          replyMedia: normalizeReplyMedia(draft),
+          postMode: draft.post_mode,
           deferReply
         });
         postId = res.postId;
         replyFailedInline = Boolean(res.replyFailed);
       }
 
-      // 贊助文發布成功 → 記錄當日紀錄（供驗證），DB 草稿原文未動＝自動還原。
+      // 贊助文發布成功 → 追加當日紀錄（供驗證），DB 草稿原文未動＝自動還原。
       if (sponsorLinkUsed) {
-        sponsorDoneCache[accId] = true;
-        await setSponsorRecord(accId, sponsorTaipei.date, {
+        sponsorCountCache[accId] = (sponsorCountCache[accId] ?? 0) + 1;
+        await appendSponsorRecord(accId, sponsorTaipei.date, {
           postId,
           link: sponsorLinkUsed,
           ownerId: draft.owner_id ?? "",
-          at: nowIso
+          at: nowIso,
+          ownLink: sponsorOwnLinkUsed || undefined // 自賺連結：驗證/裁罰時略過（非平台分潤）
         }).catch((e) => log.warn("寫入贊助文紀錄失敗", { accId, err: e }));
       }
 
@@ -321,7 +359,7 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
       // 立即留言：依實際成功與否落 published/failed（不要謊報 published）
       const replyPatch = deferReply
         ? { reply_status: "pending" as const, reply_due_at: new Date(nowMs + replyDelay * 60000).toISOString() }
-        : draft.reply_text
+        : hasReply
           ? { reply_status: replyFailedInline ? ("failed" as const) : ("published" as const) }
           : {};
       // CAS 落地：只在仍是 publishing 時寫 published，避免覆寫掉並行 reclaim 已改成的
@@ -418,7 +456,13 @@ async function publishDueReplies(startTime: number, shard?: ShardOpts): Promise<
       }
       const creds = await getThreadsCredentials(d.threads_account_id, ownerId);
       if (!creds) throw new Error("找不到 Threads 帳號憑證");
-      const replyPostId = await publishReply(creds.threadsUserId, creds.accessToken, d.published_post_id, d.reply_text);
+      const replyPostId = await publishReply(
+        creds.threadsUserId,
+        creds.accessToken,
+        d.published_post_id,
+        d.reply_text,
+        normalizeReplyMedia(d)
+      );
       await markReplyPublished(d.id, ownerId, replyPostId);
       out.published++;
     } catch (e) {

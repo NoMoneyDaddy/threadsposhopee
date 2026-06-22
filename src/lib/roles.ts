@@ -2,7 +2,6 @@
 // - 自動身份組依「貢獻分數」（分享素材被匯入總次數）分階，各階一枚勳章。
 // - 手動身份組（reviewer 審查員）由管理員賦予，存 profiles.roles；管理員（owner）以 email 判定。
 // - 頂級素材＝匯入數＋收藏數的加權分達門檻，用於推薦排序與標記。
-import { SPONSOR_EXEMPT_CONTRIBUTION } from "./contribution";
 
 export type ManualRole = "reviewer";
 export const MANUAL_ROLES: ManualRole[] = ["reviewer"];
@@ -19,7 +18,8 @@ export type Badge = {
 const TIERS: { min: number; badge: Badge }[] = [
   { min: 0, badge: { key: "rookie", label: "新手", emoji: "🌱", tone: "neutral" } },
   { min: 1, badge: { key: "contributor", label: "貢獻者", emoji: "✨", tone: "brand" } },
-  { min: SPONSOR_EXEMPT_CONTRIBUTION, badge: { key: "high", label: "高貢獻者", emoji: "🏅", tone: "success" } },
+  // 勳章階梯為「榮譽顯示」，與獎勵門檻（contribution.ts）脫鉤、各自獨立。
+  { min: 5, badge: { key: "high", label: "高貢獻者", emoji: "🏅", tone: "success" } },
   { min: 20, badge: { key: "elite", label: "頂級貢獻者", emoji: "👑", tone: "warn" } }
 ];
 

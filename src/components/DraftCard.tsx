@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import type { Draft } from "@/lib/types";
 import { CharCount } from "@/components/ThreadsPreview";
 import ThreadsPreview from "@/components/ThreadsPreview";
-import { normalizeDraftMedia } from "@/lib/media";
+import { normalizeDraftMedia, normalizeReplyMedia, isQualifiedMediaSet } from "@/lib/media";
+import { formatCommissionRate } from "@/lib/product-name";
+import { cloudinaryThumb } from "@/lib/img";
 import { checkThreadsContent, THREADS_MAX_HASHTAGS } from "@/lib/threads-content";
 import { isLowRelevance } from "@/lib/relevance";
 
@@ -35,6 +37,14 @@ function DraftCard({
   const [busy, setBusy] = useState<string | null>(null);
   const [mainText, setMainText] = useState(draft.main_text ?? "");
   const [replyText, setReplyText] = useState(draft.reply_text ?? "");
+  const [shopeeLink, setShopeeLink] = useState(draft.shopee_short_link ?? "");
+  // 媒體指派（主文／留言）：把草稿全部媒體攤平標 slot，編輯時可逐項切換
+  type MediaSlot = { url: string; type: "image" | "video"; slot: "main" | "reply" };
+  const initMediaSlots = (): MediaSlot[] => [
+    ...normalizeDraftMedia(draft).map((m) => ({ ...m, slot: "main" as const })),
+    ...normalizeReplyMedia(draft).map((m) => ({ ...m, slot: "reply" as const }))
+  ];
+  const [mediaSlots, setMediaSlots] = useState<MediaSlot[]>(initMediaSlots);
   const [msg, setMsg] = useState<string | null>(null);
   const [compliance, setCompliance] = useState<{ risk: string; advice: string } | null>(null);
   const [variants, setVariants] = useState<{ mainText: string; replyText: string }[] | null>(null);
@@ -94,8 +104,11 @@ function DraftCard({
   useEffect(() => {
     setMainText(draft.main_text ?? "");
     setReplyText(draft.reply_text ?? "");
+    setShopeeLink(draft.shopee_short_link ?? "");
+    setMediaSlots(initMediaSlots());
     setSchedTime(toLocalInput(draft.scheduled_at));
-  }, [draft.main_text, draft.reply_text, draft.scheduled_at]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft.main_text, draft.reply_text, draft.shopee_short_link, draft.media, draft.reply_media, draft.scheduled_at]);
 
   async function call(action: string, extra: Record<string, unknown> = {}) {
     setBusy(action);
@@ -111,6 +124,11 @@ function DraftCard({
       if ((action === "regenerate" || action === "edit") && json.draft) {
         setMainText(json.draft.main_text ?? "");
         setReplyText(json.draft.reply_text ?? "");
+        setShopeeLink(json.draft.shopee_short_link ?? "");
+        setMediaSlots([
+          ...normalizeDraftMedia(json.draft).map((m) => ({ ...m, slot: "main" as const })),
+          ...normalizeReplyMedia(json.draft).map((m) => ({ ...m, slot: "reply" as const }))
+        ]);
       }
       if (action === "edit") setEditing(false);
       router.refresh();
@@ -122,6 +140,10 @@ function DraftCard({
   }
 
   const done = draft.status === "published" || draft.status === "rejected";
+
+  // 合格素材組：主文＋留言所有媒體一起算，需 ≥1 影片 + ≥1 圖。
+  const qualified = isQualifiedMediaSet([...normalizeDraftMedia(draft), ...normalizeReplyMedia(draft)]);
+  const allInMain = draft.post_mode === "all_in_main";
 
   // 延遲留言（串文 2/2）狀態：主文已發、留言由 cron 之後補。只在有設定留言時提示。
   const rs = draft.reply_status;
@@ -182,6 +204,17 @@ function DraftCard({
               @{accountLabel}
             </span>
           )}
+          <span
+            className={"rounded px-2 py-0.5 text-xs " + (qualified ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700")}
+            title={qualified ? "合格素材組（含影片＋圖）" : "建議湊成 1 影片＋至少 1 圖，成效較佳"}
+          >
+            {qualified ? "✅ 合格" : "⚠️ 素材組"}
+          </span>
+          {allInMain && (
+            <span className="rounded bg-surface-2 px-2 py-0.5 text-xs text-ink-2" title="影片＋圖＋分潤連結全發主文，不另發留言">
+              全主文
+            </span>
+          )}
           <span className="rounded bg-surface-2 px-2 py-0.5 text-xs text-ink-2">{draft.status}</span>
         </span>
       </div>
@@ -220,10 +253,55 @@ function DraftCard({
             placeholder="留言區（含分潤連結）"
             aria-label="留言區（含分潤連結）"
           />
+          <input
+            className="w-full rounded border px-2 py-1 text-xs"
+            value={shopeeLink}
+            onChange={(e) => setShopeeLink(e.target.value)}
+            placeholder="分潤連結（可自行覆寫；留空則沿用自動轉換）"
+            aria-label="分潤連結"
+          />
+          {mediaSlots.length > 0 && (
+            <div className="space-y-1">
+              <div className="text-xs text-ink-2">媒體指派（主文／留言 2/2）</div>
+              <div className="flex flex-wrap gap-3">
+                {mediaSlots.map((m, i) => (
+                  <div key={`${m.url}-${i}`} className="flex flex-col items-center gap-1">
+                    {m.type === "image" ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={cloudinaryThumb(m.url, 96)} alt="" loading="lazy" className="h-14 w-14 rounded border object-cover" />
+                    ) : (
+                      <video src={m.url} className="h-14 w-14 rounded border object-cover" />
+                    )}
+                    <select
+                      className="rounded border px-1 py-0.5 text-[11px]"
+                      aria-label="媒體歸屬"
+                      value={m.slot}
+                      onChange={(e) =>
+                        setMediaSlots((prev) =>
+                          prev.map((x, j) => (j === i ? { ...x, slot: e.target.value as "main" | "reply" } : x))
+                        )
+                      }
+                    >
+                      <option value="main">主文</option>
+                      <option value="reply">留言</option>
+                    </select>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="flex gap-2">
             <button
               disabled={busy === "edit"}
-              onClick={() => call("edit", { main_text: mainText, reply_text: replyText })}
+              onClick={() =>
+                call("edit", {
+                  main_text: mainText,
+                  reply_text: replyText,
+                  shopee_short_link: shopeeLink,
+                  media: mediaSlots.filter((m) => m.slot === "main").map(({ url, type }) => ({ url, type })),
+                  reply_media: mediaSlots.filter((m) => m.slot === "reply").map(({ url, type }) => ({ url, type }))
+                })
+              }
               className="rounded bg-brand px-3 py-1 text-xs text-white disabled:opacity-50"
             >
               {busy === "edit" ? "儲存中…" : "儲存"}
@@ -242,17 +320,25 @@ function DraftCard({
           mediaUrl={draft.cloudinary_media_url}
           mediaType={draft.media_type}
           media={normalizeDraftMedia(draft)}
+          replyMedia={normalizeReplyMedia(draft)}
         />
       )}
 
-      <a
-        href={draft.shopee_short_link ?? "#"}
-        target="_blank"
-        rel="noreferrer"
-        className="mt-2 truncate text-xs text-brand hover:underline"
-      >
-        {draft.shopee_short_link}
-      </a>
+      <div className="mt-2 flex items-center gap-2">
+        <a
+          href={draft.shopee_short_link ?? "#"}
+          target="_blank"
+          rel="noreferrer"
+          className="min-w-0 truncate text-xs text-brand hover:underline"
+        >
+          {draft.shopee_short_link}
+        </a>
+        {formatCommissionRate(draft.commission_rate) && (
+          <span className="shrink-0 rounded bg-surface-2 px-1.5 py-0.5 text-[10px] text-ink-2" title="建立時的分潤率（會隨時間變動）">
+            分潤 {formatCommissionRate(draft.commission_rate)}
+          </span>
+        )}
+      </div>
 
       {typeof dupSimilarity === "number" && (
         <div className="mt-2 rounded bg-amber-50 p-2 text-xs text-amber-700" role="alert">

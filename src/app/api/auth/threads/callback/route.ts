@@ -30,8 +30,11 @@ export async function GET(req: Request) {
   const state = url.searchParams.get("state");
   const savedState = cookies().get("threads_oauth_state")?.value;
   if (!code) return back("缺少授權碼");
-  if (!state || !savedState || state !== savedState)
-    return back("授權驗證失敗（常見於手機在 Threads App／不同瀏覽器完成授權）。請在同一個瀏覽器、建議用電腦完成，或改用手動填入 access token。");
+  if (!state || !savedState || state !== savedState) {
+    const res = back("授權驗證失敗（常見於手機在 Threads App／不同瀏覽器完成授權）。請在同一個瀏覽器、建議用電腦完成，或改用手動填入 access token。");
+    res.cookies.set("threads_oauth_state", "", { maxAge: 0, path: "/" }); // 失敗即清掉殘留 state，下次重試乾淨
+    return res;
+  }
 
   try {
     const acc = await connectThreadsAccount({

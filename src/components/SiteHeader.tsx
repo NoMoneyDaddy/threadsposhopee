@@ -3,16 +3,17 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-type NavItem = { href: string; label: string; match?: string[] };
+type NavItem = { href: string; label: string; match?: string[]; ownerOnly?: boolean };
 
 // 六大頁資訊架構（依使用流程排序、白話命名）。「文章管理」整併發文/草稿/AI代理人/素材/自動抓文。
 const NAV: NavItem[] = [
   { href: "/", label: "儀表板" },
-  { href: "/drafts", label: "文章管理", match: ["/drafts", "/compose", "/agents", "/materials", "/sources"] },
+  { href: "/drafts", label: "文章管理", match: ["/drafts", "/compose", "/agents", "/materials", "/sources", "/shared"] },
   { href: "/links", label: "轉址服務" },
   { href: "/insights", label: "成效分析" },
   { href: "/accounts", label: "帳號管理" },
-  { href: "/settings", label: "設定" }
+  { href: "/settings", label: "設定" },
+  { href: "/admin", label: "管理", ownerOnly: true }
 ];
 
 // Threads 風頂部導覽：黏性、毛玻璃、單色高對比，當前頁以實心膠囊標示。
@@ -24,7 +25,7 @@ export default function SiteHeader({
   isDemo: boolean;
 }) {
   const pathname = usePathname() ?? "";
-  const items = NAV;
+  const items = NAV.filter((n) => !n.ownerOnly || user?.isOwner);
   const isActive = (n: NavItem) => {
     const all = n.match ?? [n.href];
     return all.some((h) => (h === "/" ? pathname === "/" : pathname.startsWith(h)));

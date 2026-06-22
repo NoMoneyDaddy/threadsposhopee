@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { log } from "@/lib/logger";
-import { setMaterialShared } from "@/lib/store";
+import { setMaterialShared, getFeatureFlags } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -10,6 +10,9 @@ export async function POST(req: Request) {
   try {
     const user = await getCurrentUser();
     if (!user) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+    if (!(await getFeatureFlags()).shared) {
+      return NextResponse.json({ ok: false, error: "共享庫目前未開放" }, { status: 403 });
+    }
     const body = await req.json().catch(() => null);
     const id = (body as { material_id?: unknown })?.material_id;
     const on = (body as { on?: unknown })?.on;

@@ -11,11 +11,14 @@ export interface ExpandedProduct {
   itemId: string;
 }
 
-// 從（展開後的）蝦皮網址抽出 shop_id / item_id：支援 /product/<shop>/<item> 與 i.<shop>.<item>
-// 兩種格式，並先還原 &amp; 實體。純函式可測。
+// 從（展開後的）蝦皮網址抽出 shop_id / item_id：支援三種格式，並先還原 &amp; 實體。純函式可測。
+// - /product/<shop>/<item>
+// - i.<shop>.<item>（一般商品頁）
+// - /<slug>/<shop>/<item>（分潤短連結展開後常見，slug 非 product，如 /opaanlp/16416577/17686209143）
 export function parseShopeeIds(url: string): { shopId: string; itemId: string } | null {
   const cleaned = url.replace(/&amp;/g, "&");
-  const match = cleaned.match(/\/product\/(\d+)\/(\d+)/) ?? cleaned.match(/i\.(\d+)\.(\d+)/);
+  const match =
+    cleaned.match(/i\.(\d+)\.(\d+)/) ?? cleaned.match(/\/[^/?#]+\/(\d+)\/(\d+)(?:[/?#]|$)/);
   if (!match) return null;
   return { shopId: match[1], itemId: match[2] };
 }

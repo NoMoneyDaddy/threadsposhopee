@@ -37,6 +37,10 @@ export default async function AccountsPage({
   searchParams: { threads?: string; note?: string };
 }) {
   const user = await getCurrentUser();
+  // 未登入（且非 demo）不可用 demo-user 當後備查資料（service-role 僅以 owner_id 過濾，後備 id 會變存取金鑰）。
+  if (!user && !isDemoMode) {
+    return <div className="rounded-2xl border border-dashed p-10 text-center text-ink-2">請先登入。</div>;
+  }
   const ownerId = user?.id ?? "demo-user";
   const [threads, shopee] = await Promise.all([listThreadsAccounts(ownerId), listShopeeAccounts(ownerId)]);
   const oauthReady = !isDemoMode && Boolean(env.threadsAppId && env.threadsRedirectUri);

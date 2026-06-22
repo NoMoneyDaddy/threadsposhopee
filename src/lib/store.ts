@@ -109,6 +109,7 @@ export {
   listThreadsAccounts,
   getThreadsCredentials,
   userOwnsThreadsAccount,
+  userOwnsShopeeAccount,
   listThreadsAccountTokens,
   createThreadsAccount,
   upsertThreadsAccountFromOAuth,
@@ -195,6 +196,7 @@ export async function setCopyPrefs(ownerId: string, prefs: unknown): Promise<Cop
 // 監看來源資料層 + 來源貼文去重已拆到 ./sources-store；re-export 維持匯入點不變。
 export {
   listSources,
+  listAllEnabledSources,
   createSource,
   setSourceEnabled,
   deleteSource,

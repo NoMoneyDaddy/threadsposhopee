@@ -5,13 +5,19 @@ import { isDemoMode } from "./env";
 import { demo } from "./demo-store";
 import type { Source } from "./types";
 
-// 監看來源是 owner 專屬。listSources 無參數版供背景排程（取全部啟用來源 = owner 的）。
-export async function listSources(ownerId?: string): Promise<Source[]> {
+// 單一使用者的來源（面向使用者路徑一律帶 ownerId 做多租戶過濾）。
+export async function listSources(ownerId: string): Promise<Source[]> {
   if (isDemoMode) return demo.sources;
   const sb = getServiceClient()!;
-  let q = sb.from("sources").select("*");
-  if (ownerId) q = q.eq("owner_id", ownerId);
-  const { data } = await q;
+  const { data } = await sb.from("sources").select("*").eq("owner_id", ownerId);
+  return (data ?? []) as Source[];
+}
+
+// 僅供背景總排程：跨租戶取「全部啟用」來源（明確命名，避免在面向使用者路徑誤用無 owner 過濾的查詢）。
+export async function listAllEnabledSources(): Promise<Source[]> {
+  if (isDemoMode) return demo.sources.filter((s) => s.enabled);
+  const sb = getServiceClient()!;
+  const { data } = await sb.from("sources").select("*").eq("enabled", true);
   return (data ?? []) as Source[];
 }
 

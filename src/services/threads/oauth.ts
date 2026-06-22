@@ -43,27 +43,45 @@ export async function exchangeCodeForToken(input: {
   return { accessToken: json.access_token, userId: String(json.user_id) };
 }
 
-// 取得 Threads 使用者名稱（顯示用 label）。
-export async function getThreadsUsername(accessToken: string): Promise<string> {
-  const url = `${GRAPH}/v1.0/me?fields=username&access_token=${accessToken}`;
-  const res = await fetchWithTimeout(url);
-  if (!res.ok) throw new Error(`取 username 失敗 ${res.status}: ${await res.text()}`);
-  const json = await res.json();
-  return json.username ?? "";
+export interface ThreadsProfile {
+  username: string;
+  name: string; // Threads 上的顯示名稱
+  avatarUrl: string; // 個人頭像 URL（可能為空）
 }
 
-// 完整連帳號：code → 長期 token + user_id + username + 到期日。
+// 取得 Threads 個人檔案（username / 顯示名稱 / 頭像）。顯示用。
+export async function getThreadsProfile(accessToken: string): Promise<ThreadsProfile> {
+  const url = `${GRAPH}/v1.0/me?fields=username,name,threads_profile_picture_url&access_token=${encodeURIComponent(accessToken)}`;
+  const res = await fetchWithTimeout(url);
+  if (!res.ok) throw new Error(`取個人檔案失敗 ${res.status}: ${await res.text()}`);
+  const json = await res.json();
+  return {
+    username: json.username ?? "",
+    name: json.name ?? "",
+    avatarUrl: json.threads_profile_picture_url ?? ""
+  };
+}
+
+// 完整連帳號：code → 長期 token + user_id + 個人檔案（username/名稱/頭像）+ 到期日。
 export async function connectThreadsAccount(input: {
   clientId: string;
   clientSecret: string;
   redirectUri: string;
   code: string;
-}): Promise<{ userId: string; username: string; accessToken: string; expiresAt: string }> {
+}): Promise<{ userId: string; username: string; name: string; avatarUrl: string; accessToken: string; expiresAt: string }> {
   const { accessToken: shortToken, userId } = await exchangeCodeForToken(input);
   const { accessToken, expiresInSec } = await exchangeForLongLivedToken(shortToken, input.clientSecret);
-  const username = await getThreadsUsername(accessToken).catch(() => "");
+  // 個人檔案抓取失敗不阻斷連結（頭像/名稱屬選配，可日後重新授權補上）。
+  const profile = await getThreadsProfile(accessToken).catch(() => ({ username: "", name: "", avatarUrl: "" }));
   // 防禦：API 若回傳缺失/非數值的 expires_in，避免 new Date(NaN).toISOString() 拋 RangeError；預設 60 天
   const seconds = typeof expiresInSec === "number" && !Number.isNaN(expiresInSec) ? expiresInSec : 60 * 24 * 60 * 60;
   const expiresAt = new Date(Date.now() + seconds * 1000).toISOString();
-  return { userId, username: username || `threads_${userId}`, accessToken, expiresAt };
+  return {
+    userId,
+    username: profile.username || `threads_${userId}`,
+    name: profile.name,
+    avatarUrl: profile.avatarUrl,
+    accessToken,
+    expiresAt
+  };
 }

@@ -118,6 +118,7 @@ export {
   getShopeeCredentials,
   createShopeeAccount,
   setThreadsAccountStatus,
+  renameThreadsAccount,
   deleteThreadsAccount,
   deleteThreadsAccountsByThreadsUserId,
   deleteShopeeAccount,

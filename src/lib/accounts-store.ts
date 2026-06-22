@@ -15,7 +15,7 @@ export async function listThreadsAccounts(ownerId: string): Promise<ThreadsAccou
   const sb = getServiceClient()!;
   const { data } = await sb
     .from("threads_accounts")
-    .select("id,label,threads_user_id,token_expires_at,status")
+    .select("id,label,threads_user_id,display_name,avatar_url,token_expires_at,status")
     .eq("owner_id", ownerId);
   return (data ?? []) as ThreadsAccount[];
 }
@@ -144,17 +144,21 @@ export async function createThreadsAccount(
       token_expires_at: input.token_expires_at ?? null,
       status: "active"
     })
-    .select("id,label,threads_user_id,token_expires_at,status")
+    .select("id,label,threads_user_id,display_name,avatar_url,token_expires_at,status")
     .single();
   if (error) throw error;
   return data as ThreadsAccount;
 }
 
-// OAuth 連帳號：依 (owner_id, threads_user_id) upsert。已存在則更新 token，否則新增。
+// OAuth 連帳號：依 (owner_id, threads_user_id) 新增或更新。
+// 既有帳號重新授權時更新 token 與個人檔案（顯示名稱/頭像），但「保留使用者自訂暱稱（label）」不被 username 覆蓋。
+const THREADS_ACC_COLS = "id,label,threads_user_id,display_name,avatar_url,token_expires_at,status";
 export async function upsertThreadsAccountFromOAuth(
   input: {
     label: string;
     threads_user_id: string;
+    display_name?: string | null;
+    avatar_url?: string | null;
     access_token: string;
     token_expires_at: string;
   },
@@ -163,8 +167,9 @@ export async function upsertThreadsAccountFromOAuth(
   if (isDemoMode) {
     const existing = demo.threadsAccounts.find((a) => a.threads_user_id === input.threads_user_id);
     if (existing) {
-      existing.label = input.label;
       existing.token_expires_at = input.token_expires_at;
+      existing.display_name = input.display_name ?? existing.display_name ?? null;
+      existing.avatar_url = input.avatar_url ?? existing.avatar_url ?? null;
       existing.status = "active";
       return existing;
     }
@@ -172,29 +177,68 @@ export async function upsertThreadsAccountFromOAuth(
       id: randomUUID(),
       label: input.label,
       threads_user_id: input.threads_user_id,
+      display_name: input.display_name ?? null,
+      avatar_url: input.avatar_url ?? null,
       token_expires_at: input.token_expires_at,
       status: "active"
     };
     demo.threadsAccounts.unshift(acc);
     return acc;
   }
-  // 用 upsert 確保原子性、避免併發競態（依 migration 0006 的 (owner_id, threads_user_id) 唯一索引）
   const sb = getServiceClient()!;
-  const payload = {
-    owner_id: ownerId,
-    threads_user_id: input.threads_user_id,
-    label: input.label,
+  // 個人檔案＋token 欄位：新增與重新授權皆會寫入。
+  const profile = {
     access_token_enc: encrypt(input.access_token),
     token_expires_at: input.token_expires_at,
-    status: "active"
+    display_name: input.display_name ?? null,
+    avatar_url: input.avatar_url ?? null,
+    status: "active" as const
   };
+  // 先查既有列：存在則只更新（保留 label 自訂暱稱）；否則新增（label 預設帶入 username）。
+  // OAuth 回呼為單一使用者請求、無併發，(owner_id, threads_user_id) 唯一索引仍防重複。
+  const existing = await sb
+    .from("threads_accounts")
+    .select("id")
+    .eq("owner_id", ownerId)
+    .eq("threads_user_id", input.threads_user_id)
+    .maybeSingle();
+  if (existing.data) {
+    const { data, error } = await sb
+      .from("threads_accounts")
+      .update(profile)
+      .eq("id", existing.data.id)
+      .select(THREADS_ACC_COLS)
+      .single();
+    if (error) throw error;
+    return data as ThreadsAccount;
+  }
   const { data, error } = await sb
     .from("threads_accounts")
-    .upsert(payload, { onConflict: "owner_id,threads_user_id" })
-    .select("id,label,threads_user_id,token_expires_at,status")
+    .insert({ owner_id: ownerId, threads_user_id: input.threads_user_id, label: input.label, ...profile })
+    .select(THREADS_ACC_COLS)
     .single();
   if (error) throw error;
   return data as ThreadsAccount;
+}
+
+// 重新命名發文帳號的自訂暱稱（label）。多租戶：以 owner_id 過濾。
+export async function renameThreadsAccount(id: string, ownerId: string, label: string): Promise<boolean> {
+  if (isDemoMode) {
+    const a = demo.threadsAccounts.find((x) => x.id === id);
+    if (!a) return false;
+    a.label = label;
+    return true;
+  }
+  const sb = getServiceClient()!;
+  const { data, error } = await sb
+    .from("threads_accounts")
+    .update({ label })
+    .eq("id", id)
+    .eq("owner_id", ownerId)
+    .select("id")
+    .maybeSingle();
+  if (error) throw error;
+  return Boolean(data);
 }
 
 export async function listShopeeAccounts(ownerId: string): Promise<ShopeeAccount[]> {

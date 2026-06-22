@@ -12,7 +12,7 @@ test("草稿：狀態分頁與關鍵字篩選", async ({ page }) => {
   const search = page.getByPlaceholder("搜尋商品名／正文／連結");
   await expect(search).toBeVisible();
   await search.fill("zzz_不存在的關鍵字_zzz");
-  await expect(page.getByText("沒有符合條件的草稿。")).toBeVisible();
+  await expect(page.getByText("沒有符合目前篩選條件的草稿。")).toBeVisible();
 });
 
 test("發文：表單欄位可見", async ({ page }) => {

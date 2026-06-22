@@ -441,6 +441,23 @@ export async function listApprovedDrafts(limit = APPROVED_DRAFTS_BATCH): Promise
   return (data ?? []) as Draft[];
 }
 
+// 是否已有「其他使用者」發布過完全相同的正文（禁止不同使用者用相同文案，避免重複內容被降觸及）。
+export async function mainTextUsedByOtherOwner(text: string | null | undefined, ownerId: string): Promise<boolean> {
+  if (isDemoMode) return false;
+  const t = (text ?? "").trim();
+  if (!t) return false;
+  const sb = getServiceClient()!;
+  const { data } = await sb
+    .from("drafts")
+    .select("id")
+    .eq("main_text", text as string)
+    .eq("status", "published")
+    .neq("owner_id", ownerId)
+    .limit(1)
+    .maybeSingle();
+  return Boolean(data);
+}
+
 // 發後讀回自動驗證 worker 用：跨租戶取 needs_verification 草稿（最舊優先）。僅 cron 呼叫。
 export async function listNeedsVerificationAll(limit = 30): Promise<Draft[]> {
   if (isDemoMode) {

@@ -15,9 +15,12 @@ import {
   setThreadsAccountStatus,
   listActiveThreadsAccountsAll,
   listDrafts,
+  getContributionScore,
+  getSponsorRewardMode,
   getCachedJson,
   setCachedJson
 } from "@/lib/store";
+import { isSponsorExempt } from "@/lib/contribution";
 import { getPostText } from "@/services/threads/verify";
 import { resolveSponsorResources, buildSponsorLinkForAccount } from "@/services/sponsor/link";
 import { publishToThreads } from "@/services/threads/publish";
@@ -44,18 +47,40 @@ export async function ensureSponsorPosts(ownerUserId: string | null): Promise<{ 
   const accounts = (await listActiveThreadsAccountsAll().catch(() => [])).filter((a) => a.owner_id !== ownerUserId);
   const start = Date.now();
   let idx = 0;
+  // 高貢獻者回饋：exempt＝免每日贊助文；own_link＝照發但換成自己的分潤連結（自己賺）。按 owner 快取。
+  const rewardByOwner = new Map<string, { high: boolean; mode: "exempt" | "own_link" }>();
   for (const acc of accounts) {
     if (Date.now() - start > 40000) break; // 守 maxDuration
+    const oid = acc.owner_id;
+    if (!oid) continue;
     try {
+      let reward = rewardByOwner.get(oid);
+      if (reward === undefined) {
+        const high = isSponsorExempt(await getContributionScore(oid).catch(() => 0));
+        const mode = high ? await getSponsorRewardMode(oid).catch(() => "exempt" as const) : "exempt";
+        reward = { high, mode };
+        rewardByOwner.set(oid, reward);
+      }
+      if (reward.high && reward.mode === "exempt") continue; // 高貢獻者選擇免贊助文
       if (await getSponsorRecord(acc.id, tp.date)) continue; // 今天已有贊助文（佇列已換）
       const pick = await getSponsorPick(acc.id);
       if (pick?.draftId) continue; // 使用者自選 → 交由佇列處理，不重複補發
-      const link = (res ? await buildSponsorLinkForAccount(res, acc.id).catch(() => null) : null) || cfg.affiliateLink || null;
+
+      // own_link：高貢獻者照發贊助文，但連結換成「他自己」的分潤連結（用自己的蝦皮金鑰重產）。
+      const useOwnLink = reward.high && reward.mode === "own_link";
+      let link: string | null;
+      if (useOwnLink) {
+        const mres = cfg.productUrl ? await resolveSponsorResources(cfg.productUrl, oid).catch(() => null) : null;
+        link = mres ? await buildSponsorLinkForAccount(mres, acc.id).catch(() => null) : null;
+        if (!link) continue; // 沒綁金鑰／重產失敗 → 不退回平台連結（避免幫他發了卻沒回饋）
+      } else {
+        link = (res ? await buildSponsorLinkForAccount(res, acc.id).catch(() => null) : null) || cfg.affiliateLink || null;
+      }
       if (!link) continue;
       const tmpl = ownerDrafts[idx % ownerDrafts.length];
       idx++;
       const text = swapAffiliateLink(tmpl.main_text, tmpl.shopee_short_link, link);
-      const creds = await getThreadsCredentials(acc.id, acc.owner_id);
+      const creds = await getThreadsCredentials(acc.id, oid);
       if (!creds) continue;
       const r = await publishToThreads({
         threadsUserId: creds.threadsUserId,
@@ -65,7 +90,7 @@ export async function ensureSponsorPosts(ownerUserId: string | null): Promise<{ 
         replyText: null,
         deferReply: false
       });
-      await setSponsorRecord(acc.id, tp.date, { postId: r.postId, link, ownerId: acc.owner_id, at: new Date().toISOString() });
+      await setSponsorRecord(acc.id, tp.date, { postId: r.postId, link, ownerId: oid, at: new Date().toISOString(), ownLink: useOwnLink || undefined });
       out.created++;
     } catch (e) {
       log.warn("自動補發贊助文失敗", { accId: acc.id, err: e });
@@ -86,6 +111,7 @@ export async function verifySponsorPosts(): Promise<{ checked: number; violation
   for (const { accountId, date, rec } of entries) {
     out.checked++;
     try {
+      if (rec.ownLink) continue; // 高貢獻者用自己連結的贊助文：非平台分潤，不做連結驗證/裁罰
       const creds = await getThreadsCredentials(accountId, rec.ownerId);
       if (!creds) continue; // 帳號已不存在 → 略過（不誤判暫停）
       const text = await getPostText(rec.postId, creds.accessToken);

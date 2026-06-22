@@ -38,7 +38,13 @@ export {
   listEvergreenDueAll,
   touchEvergreen,
   isEvergreenDue,
-  type MaterialToCheck
+  setMaterialShared,
+  listSharedMaterials,
+  getSharedMaterial,
+  incrementImportCount,
+  getContributionScore,
+  type MaterialToCheck,
+  type SharedMaterial
 } from "./materials-store";
 
 // 草稿資料層（CRUD/排程時段/發文佇列/延遲留言生命週期）已拆到 ./drafts-store；
@@ -66,6 +72,7 @@ export {
   updateDraftStatusAtomic,
   listApprovedDrafts,
   listNeedsVerificationAll,
+  mainTextUsedByOtherOwner,
   listApprovedDraftsForShard,
   type PublishedPostRef,
   type ReplyDueDraft
@@ -126,6 +133,9 @@ export {
   getBioSettings,
   setBioSettings,
   normalizeBioHandle,
+  getSponsorRewardMode,
+  setSponsorRewardMode,
+  type SponsorRewardMode,
   getUserPlan,
   setUserPlan
 } from "./credentials";

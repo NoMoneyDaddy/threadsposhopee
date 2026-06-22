@@ -117,6 +117,102 @@ export async function touchEvergreen(id: string): Promise<void> {
   await sb.from("materials").update({ evergreen_last_at: new Date().toISOString() }).eq("id", id);
 }
 
+// ── 共享素材庫 ───────────────────────────────────────────────
+// 公共池對外投影：不含分潤連結/subId（那是各人自己的）。
+export type SharedMaterial = {
+  id: string;
+  owner_id: string | null;
+  shop_id: string;
+  item_id: string;
+  product_name: string | null;
+  clean_product_url: string | null;
+  media_type: "image" | "video" | "none" | null;
+  cloudinary_media_url: string | null;
+  main_text: string | null;
+  reply_text: string | null;
+  import_count: number;
+  created_at: string;
+};
+
+// 依「原始商品」(shop_id+item_id) 去重，保留每個商品被匯入最多的一筆（others 已依 import_count 排序）。純函式可測。
+export function dedupeSharedByProduct(rows: SharedMaterial[]): SharedMaterial[] {
+  const seen = new Set<string>();
+  const out: SharedMaterial[] = [];
+  for (const m of rows) {
+    const key = `${m.shop_id}:${m.item_id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(m);
+  }
+  return out;
+}
+
+// 開關某素材是否分享進公共池（多租戶：owner_id 過濾）。
+export async function setMaterialShared(id: string, ownerId: string, on: boolean): Promise<boolean> {
+  if (isDemoMode) {
+    const m = demo.materials.find((x) => x.id === id);
+    if (m) m.shared = on;
+    return Boolean(m);
+  }
+  const sb = getServiceClient()!;
+  const { data, error } = await sb
+    .from("materials")
+    .update({ shared: on })
+    .eq("id", id)
+    .eq("owner_id", ownerId)
+    .select("id")
+    .maybeSingle();
+  if (error) throw new Error(`更新分享設定失敗：${error.message}`);
+  return Boolean(data);
+}
+
+// 列出公共池（排除瀏覽者自己的；不含分潤連結）。依被匯入次數排序、再依商品去重，回傳前 limit 筆。
+export async function listSharedMaterials(viewerOwnerId: string, limit = 60): Promise<SharedMaterial[]> {
+  if (isDemoMode) return [];
+  const sb = getServiceClient()!;
+  // 多抓一些（去重前），讓同商品的多筆不會佔滿名額。
+  const { data } = await sb
+    .from("materials")
+    .select("id, owner_id, shop_id, item_id, product_name, clean_product_url, media_type, cloudinary_media_url, main_text, reply_text, import_count, created_at")
+    .eq("shared", true)
+    .eq("affiliate_valid", true)
+    .neq("owner_id", viewerOwnerId)
+    .order("import_count", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(limit * 3);
+  return dedupeSharedByProduct((data ?? []) as SharedMaterial[]).slice(0, limit);
+}
+
+// 取一筆共享素材（供匯入：需 clean_product_url；任何登入者可匯入，故不帶 owner 過濾，但必須 shared）。
+export async function getSharedMaterial(id: string): Promise<SharedMaterial | null> {
+  if (isDemoMode) return null;
+  const sb = getServiceClient()!;
+  const { data } = await sb
+    .from("materials")
+    .select("id, owner_id, product_name, clean_product_url, media_type, cloudinary_media_url, main_text, reply_text, import_count, created_at")
+    .eq("id", id)
+    .eq("shared", true)
+    .maybeSingle();
+  return (data as SharedMaterial) ?? null;
+}
+
+// 累加被匯入次數（資料庫端原子 +1，避免競態與多次往返）。
+export async function incrementImportCount(id: string): Promise<void> {
+  if (isDemoMode) return;
+  const sb = getServiceClient()!;
+  const { error } = await sb.rpc("increment_material_import", { p_id: id });
+  if (error) throw new Error(`累加匯入次數失敗：${error.message}`);
+}
+
+// 貢獻分數＝該使用者所有素材被匯入總次數（資料庫端 SUM；不限目前是否仍分享，取消分享不歸零歷史貢獻）。
+export async function getContributionScore(ownerId: string): Promise<number> {
+  if (isDemoMode) return 0;
+  const sb = getServiceClient()!;
+  const { data, error } = await sb.rpc("get_contribution_score", { p_owner: ownerId });
+  if (error) throw new Error(`取得貢獻分數失敗：${error.message}`);
+  return (data as number) ?? 0;
+}
+
 // 連結健檢 worker 用：取最久沒檢查、目前仍有效的素材（跨租戶）。
 // 健檢用的精簡素材投影（含重產所需欄位）。
 export type MaterialToCheck = {

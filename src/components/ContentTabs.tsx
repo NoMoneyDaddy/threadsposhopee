@@ -11,6 +11,7 @@ const TABS: Tab[] = [
   { href: "/compose", label: "發文" },
   { href: "/agents", label: "AI 代理人" },
   { href: "/materials", label: "素材" },
+  { href: "/shared", label: "共享庫" },
   { href: "/sources", label: "自動抓文", ownerOnly: true }
 ];
 

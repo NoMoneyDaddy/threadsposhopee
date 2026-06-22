@@ -153,6 +153,7 @@ export interface SponsorRecord {
   at: string;
   verified?: boolean;
   violated?: boolean;
+  ownLink?: boolean; // 高貢獻者選「換自己連結」：此篇用其自有分潤連結，非平台贊助，不納入違規驗證
 }
 
 function recKey(accountId: string, date: string): string {

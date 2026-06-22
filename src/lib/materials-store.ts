@@ -47,7 +47,7 @@ export async function createMaterial(input: Partial<Material>, ownerId: string):
       Object.assign(existing, input);
       return existing;
     }
-    const material = { id: randomUUID(), affiliate_valid: true, created_at: new Date().toISOString(), ...input } as Material;
+    const material = { id: randomUUID(), affiliate_valid: true, created_at: new Date().toISOString(), ...input, owner_id: ownerId } as Material;
     demo.materials.unshift(material);
     return material;
   }
@@ -273,6 +273,28 @@ export async function incrementImportCount(id: string): Promise<void> {
   const sb = getServiceClient()!;
   const { error } = await sb.rpc("increment_material_import", { p_id: id });
   if (error) throw new Error(`累加匯入次數失敗：${error.message}`);
+}
+
+// 刪除自己的素材（限本人）。回傳是否真的刪到。
+// 註：貢獻分數由 SQL 即時從 materials 表計算（被匯入次數＋分享篇數），刪除後分數自然下降，無需另行扣分。
+export async function deleteMaterial(id: string, ownerId: string): Promise<boolean> {
+  if (isDemoMode) {
+    // 與非 demo 分支一致地帶 owner_id 過濾，維持多租戶授權語義。
+    const i = demo.materials.findIndex((m) => m.id === id && m.owner_id === ownerId);
+    if (i < 0) return false;
+    demo.materials.splice(i, 1);
+    return true;
+  }
+  const sb = getServiceClient()!;
+  const { data, error } = await sb
+    .from("materials")
+    .delete()
+    .eq("id", id)
+    .eq("owner_id", ownerId)
+    .select("id")
+    .maybeSingle();
+  if (error) throw error;
+  return Boolean(data);
 }
 
 // 貢獻分數＝被匯入次數 + 分享中素材篇數 + 資料貢獻紅利（單一來源走 DB RPC，見 migration 0042）。

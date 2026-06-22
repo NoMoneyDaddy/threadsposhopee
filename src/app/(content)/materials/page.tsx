@@ -5,6 +5,7 @@ import BulkRepostButton from "@/components/BulkRepostButton";
 import EmptyState from "@/components/EmptyState";
 import EvergreenToggle from "@/components/EvergreenToggle";
 import ShareToggle from "@/components/ShareToggle";
+import { DeleteButton } from "@/components/RowActions";
 import { listMaterials, listThreadsAccounts } from "@/lib/store";
 import { getItemRevenueMap, type ItemRevenue } from "@/services/shopee/report";
 import { getCurrentUser } from "@/lib/auth";
@@ -89,6 +90,10 @@ export default async function MaterialsPage() {
               <RepostButton materialId={m.id} threadsAccounts={accounts} />
               <EvergreenToggle materialId={m.id} initial={Boolean(m.evergreen)} />
               <ShareToggle materialId={m.id} initial={Boolean(m.shared)} />
+              <DeleteButton
+                endpoint={`/api/materials/${m.id}`}
+                confirm={`確定刪除此素材？此動作無法復原${m.shared ? "，且會降低你的貢獻分數（已分享的素材被匯入次數不再計分）" : ""}。`}
+              />
             </div>
           </div>
         ))}

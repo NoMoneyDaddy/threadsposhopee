@@ -18,6 +18,7 @@ import { tokenExpiryState } from "@/lib/token-expiry";
 import ThreadsAccountForm from "@/components/ThreadsAccountForm";
 import ShopeeAccountForm from "@/components/ShopeeAccountForm";
 import ApifyForm from "@/components/ApifyForm";
+import DeleteAccountButton from "@/components/DeleteAccountButton";
 import GeminiForm from "@/components/GeminiForm";
 import AffiliateIdForm from "@/components/AffiliateIdForm";
 import SubIdForm from "@/components/SubIdForm";
@@ -218,8 +219,16 @@ export default async function AccountsPage({
       </section>
 
       <p className="text-sm text-ink-3">
-        🔒 access token / secret 以 AES-256-GCM 加密存放，前端不會回傳明文。
+        🔒 你綁定的所有金鑰／權杖（Threads／Shopee／Gemini／Apify／Cloudinary／R2）皆以 AES-256-GCM 加密、僅在伺服器使用，
+        只用於你自己的帳號、永不分享或外露給其他使用者；前端不會回傳明文。
       </p>
+
+      {user && !isDemoMode && (
+        <section>
+          <h2 className="mb-2 text-lg font-semibold text-red-600">危險區</h2>
+          <DeleteAccountButton />
+        </section>
+      )}
     </div>
   );
 }

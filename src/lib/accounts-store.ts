@@ -321,6 +321,40 @@ export async function deleteShopeeAccount(id: string, ownerId: string): Promise<
   return Boolean(data);
 }
 
+// 永久刪除整個使用者帳號（不可復原）。
+// 做法：先刪 Supabase auth 使用者，靠 FK 的 ON DELETE CASCADE 連動清除其所有自有資料
+// （profiles/drafts/materials/sources/threads_accounts/shopee_accounts/ai_agents/
+//  push_subscriptions/redirect_links… 及其下游 processed_posts/metrics/ai_agent_seen）。
+// 相較手動逐表刪，可避免「刪一半才失敗」的半刪狀態，也不會因新增資料表漏刪而漂移。
+export async function deleteOwnerAccount(ownerId: string): Promise<void> {
+  if (isDemoMode) return;
+  const sb = getServiceClient()!;
+  // 先記下此人所有 Threads 帳號 id：刪 auth 使用者後帳號列會被 cascade 清掉、無法再列舉，
+  // 需先取出以清除「以帳號 id 為鍵」的贊助文 app_state（紀錄/自選/違規累計）。
+  const { data: accs } = await sb.from("threads_accounts").select("id").eq("owner_id", ownerId);
+  const accountIds = (accs ?? []).map((a) => (a as { id: string }).id);
+
+  // 核心刪除：失敗則上拋，讓呼叫端回報（此時尚未動任何資料，可安全重試）。
+  const { error: authErr } = await sb.auth.admin.deleteUser(ownerId);
+  if (authErr) throw new Error(`刪除登入帳號失敗：${authErr.message}`);
+
+  // 以下為「未隨 FK cascade 連動」的殘留資料，盡力清除；失敗僅記錄、不影響整體結果
+  // （帳號與主資料已移除，殘留不致洩漏且可日後清理）。
+  // 註：已發佈到 Threads 的「貼文本身」無法由 API 刪除（無刪文端點），須由使用者自行移除。
+  try {
+    // 贊助文 app_state：key-value 表，無 FK，需以先前取得的帳號 id 逐一清。
+    for (const accId of accountIds) {
+      await sb.from("app_state").delete().like("key", `sponsor:rec:${accId}:%`);
+      await sb.from("app_state").delete().eq("key", `sponsor:pick:${accId}`);
+      await sb.from("app_state").delete().eq("key", `sponsor_strikes:${accId}`);
+    }
+    // material_favorites.owner_id 無 FK：使用者收藏「別人」素材的列不會隨自己素材的 cascade 一起刪。
+    await sb.from("material_favorites").delete().eq("owner_id", ownerId);
+  } catch (e) {
+    log.error("刪除帳號後清理殘留資料失敗（帳號已刪除）", { ownerId, err: e });
+  }
+}
+
 // 取某使用者啟用中的 Threads 帳號 + 解密 token（儀表板查額度用）
 // 跨租戶 worker 查詢（僅由 cron 呼叫、不吃使用者輸入）：所有 active 發文帳號（id/owner/threadsUser）。
 // 用於贊助文自動補發：找出今天還沒有贊助文的非 owner 帳號。

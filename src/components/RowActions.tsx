@@ -4,12 +4,20 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 // 通用刪除按鈕：確認後對 endpoint 發 DELETE，成功則重新整理。
-export function DeleteButton({ endpoint, label = "刪除" }: { endpoint: string; label?: string }) {
+export function DeleteButton({
+  endpoint,
+  label = "刪除",
+  confirm: confirmMsg = "確定要刪除嗎？此動作無法復原。"
+}: {
+  endpoint: string;
+  label?: string;
+  confirm?: string;
+}) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
 
   async function onDelete() {
-    if (!confirm("確定要刪除嗎？此動作無法復原。")) return;
+    if (!confirm(confirmMsg)) return;
     setBusy(true);
     try {
       const res = await fetch(endpoint, { method: "DELETE" });

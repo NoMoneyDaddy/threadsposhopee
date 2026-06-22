@@ -2,6 +2,7 @@ import { sendAlert, sendUserAlert } from "@/lib/notify";
 import { runAllSources } from "@/services/pipeline/run";
 import { runPublishQueue } from "@/services/publish/queue";
 import { refreshExpiringTokens } from "@/services/threads/refresh";
+import { reconcileNeedsVerification } from "@/services/threads/reconcile";
 import { checkAffiliateLinks } from "@/services/materials/linkcheck";
 import { runEvergreen } from "@/services/materials/evergreen";
 import { buildDailyDigest } from "@/services/digest/daily";
@@ -59,6 +60,11 @@ export async function runCronAll(now: Date = new Date()): Promise<Record<string,
       key: "aiAgents",
       run: runAiAgents, // 內部以 last_run_at 守門，每代理人每日約一次；產出進草稿待審
       warn: (r) => (r?.created ? `🤖 AI 代理人新增 ${r.created} 篇草稿（待審）` : null)
+    },
+    {
+      key: "reconcile",
+      run: reconcileNeedsVerification, // 發後讀回比對：確定已發出的「待確認」自動標 published（不自動重發）
+      warn: (r) => (r?.resolved ? `✅ 自動確認 ${r.resolved} 則已發布（原待確認）` : null)
     }
   ];
   // 每天展期一次（03:00–03:14 視窗，避免每 15 分重複）

@@ -441,6 +441,21 @@ export async function listApprovedDrafts(limit = APPROVED_DRAFTS_BATCH): Promise
   return (data ?? []) as Draft[];
 }
 
+// 發後讀回自動驗證 worker 用：跨租戶取 needs_verification 草稿（最舊優先）。僅 cron 呼叫。
+export async function listNeedsVerificationAll(limit = 30): Promise<Draft[]> {
+  if (isDemoMode) {
+    return demo.drafts.filter((d) => d.status === "needs_verification").slice(0, limit);
+  }
+  const sb = getServiceClient()!;
+  const { data } = await sb
+    .from("drafts")
+    .select("*")
+    .eq("status", "needs_verification")
+    .order("created_at", { ascending: true })
+    .limit(limit);
+  return (data ?? []) as Draft[];
+}
+
 // 分片模式專用：分頁掃描 approved 草稿、用 matches 過濾出屬於本片的，累積到 perShardLimit 或掃完。
 // 避免「全域 limit 先截斷再記憶體分片」造成某些 shard 反覆拿到 0 筆（starvation）：本片若不在
 // 全域最舊 N 筆內，仍能往後翻頁找到自己的草稿。maxPages×pageSize 為總掃描列數上限（記憶體封頂）。

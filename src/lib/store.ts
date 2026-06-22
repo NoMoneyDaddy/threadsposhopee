@@ -65,6 +65,7 @@ export {
   requeueReply,
   updateDraftStatusAtomic,
   listApprovedDrafts,
+  listNeedsVerificationAll,
   listApprovedDraftsForShard,
   type PublishedPostRef,
   type ReplyDueDraft

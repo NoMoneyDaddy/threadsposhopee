@@ -32,7 +32,7 @@ export default function SubIdForm({ initial }: { initial: string | null }) {
   }
 
   return (
-    <div className="rounded-2xl border bg-surface p-4">
+    <div className="card p-4">
       <div className="mb-1 font-medium">自訂連結來源標記（選填）</div>
       <p className="mb-2 text-xs text-ink-2">
         會加在你的分潤連結上，出現在蝦皮分潤報表，方便分辨哪個帳號／活動帶來成交。
@@ -54,18 +54,14 @@ export default function SubIdForm({ initial }: { initial: string | null }) {
       </div>
       <div className="flex flex-wrap gap-2">
         <input
-          className="min-w-0 flex-1 rounded-xl border px-3 py-2 text-sm"
+          className="input min-w-0 flex-1"
           aria-label="自訂分潤 subId"
           placeholder="例如 myshop_{date}"
           value={subId}
           onChange={(e) => setSubId(e.target.value)}
           maxLength={50}
         />
-        <button
-          onClick={save}
-          disabled={busy}
-          className="shrink-0 rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-        >
+        <button onClick={save} disabled={busy} className="btn btn-brand shrink-0">
           {busy ? "儲存中…" : "儲存"}
         </button>
       </div>

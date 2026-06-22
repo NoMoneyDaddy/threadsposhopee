@@ -32,7 +32,7 @@ export default function NotifyPrefsForm({ initial }: { initial: NotifyPrefs }) {
   }
 
   return (
-    <div className="rounded-2xl border bg-surface p-4">
+    <div className="card p-4">
       <div className="mb-1 font-medium">通知開關</div>
       <p className="mb-2 text-xs text-ink-2">選擇要收到哪些通知（需先綁 Telegram／Discord）。</p>
       <div className="grid gap-1.5 sm:grid-cols-2">
@@ -48,11 +48,7 @@ export default function NotifyPrefsForm({ initial }: { initial: NotifyPrefs }) {
         ))}
       </div>
       <div className="mt-2 flex items-center gap-3">
-        <button
-          onClick={save}
-          disabled={busy}
-          className="rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-        >
+        <button onClick={save} disabled={busy} className="btn btn-brand">
           {busy ? "儲存中…" : "儲存"}
         </button>
         {msg && <span className="text-sm text-ink-2" role="status" aria-live="polite">{msg}</span>}

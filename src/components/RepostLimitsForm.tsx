@@ -33,7 +33,7 @@ export default function RepostLimitsForm({ initial }: { initial: { perAccount: n
   }
 
   return (
-    <div className="rounded-2xl border bg-surface p-4">
+    <div className="card p-4">
       <div className="mb-1 font-medium">重複發文上限（你的設定）</div>
       <p className="mb-2 text-xs text-ink-2">
         限制「同一素材」可重複排入佇列／發布的次數，避免過度洗版被降觸及。留空或 0＝不限。
@@ -42,7 +42,7 @@ export default function RepostLimitsForm({ initial }: { initial: { perAccount: n
         <div>
           <label className="block text-xs text-ink-2">單帳號上限</label>
           <input
-            className="w-28 rounded-xl border px-3 py-2 text-sm"
+            className="input w-28"
             inputMode="numeric"
             placeholder="不限"
             value={perAccount}
@@ -53,7 +53,7 @@ export default function RepostLimitsForm({ initial }: { initial: { perAccount: n
         <div>
           <label className="block text-xs text-ink-2">跨帳號合計上限</label>
           <input
-            className="w-28 rounded-xl border px-3 py-2 text-sm"
+            className="input w-28"
             inputMode="numeric"
             placeholder="不限"
             value={total}
@@ -61,11 +61,7 @@ export default function RepostLimitsForm({ initial }: { initial: { perAccount: n
             aria-label="跨帳號重發合計上限"
           />
         </div>
-        <button
-          onClick={save}
-          disabled={busy}
-          className="ml-auto shrink-0 rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-        >
+        <button onClick={save} disabled={busy} className="btn btn-brand ml-auto shrink-0">
           {busy ? "儲存中…" : "儲存"}
         </button>
       </div>

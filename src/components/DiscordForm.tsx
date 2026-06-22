@@ -32,21 +32,17 @@ export default function DiscordForm({ bound }: { bound: boolean }) {
   }
 
   return (
-    <div className="rounded-2xl border bg-surface p-4">
+    <div className="card p-4">
       <div className="mb-2 flex items-center justify-between">
         <span className="font-medium">個人 Discord 通知</span>
-        {bound ? (
-          <span className="rounded bg-green-100 px-2 py-0.5 text-xs text-green-700">已連結</span>
-        ) : (
-          <span className="rounded bg-surface-2 px-2 py-0.5 text-xs text-ink-2">未連結</span>
-        )}
+        {bound ? <span className="badge-success">已連結</span> : <span className="badge-neutral">未連結</span>}
       </div>
       <p className="mb-2 text-xs text-ink-2">
         在 Discord 頻道「編輯頻道 → 整合 → 建立 Webhook」複製 Webhook URL 貼上。可與 Telegram 同時啟用。
       </p>
       <div className="flex flex-wrap gap-2">
         <input
-          className="min-w-0 flex-1 rounded-xl border px-3 py-2 text-sm"
+          className="input min-w-0 flex-1"
           type="url"
           placeholder={bound ? "貼上新的 webhook 以更新" : "https://discord.com/api/webhooks/..."}
           value={url}
@@ -55,7 +51,7 @@ export default function DiscordForm({ bound }: { bound: boolean }) {
         <button
           onClick={() => call({ url: url.trim() }, "bind")}
           disabled={!!busy || !url.trim()}
-          className="rounded-xl bg-brand px-4 py-2 text-sm text-white hover:opacity-90 disabled:opacity-50"
+          className="btn btn-brand shrink-0"
         >
           {busy === "bind" ? "連結中…" : bound ? "更新" : "連結並測試"}
         </button>
@@ -63,7 +59,7 @@ export default function DiscordForm({ bound }: { bound: boolean }) {
           <button
             onClick={() => call({ unbind: true }, "unbind")}
             disabled={!!busy}
-            className="rounded-xl border px-4 py-2 text-sm text-ink-2 hover:bg-surface-2 disabled:opacity-50"
+            className="btn btn-outline shrink-0"
           >
             {busy === "unbind" ? "解除中…" : "解除"}
           </button>

@@ -41,14 +41,14 @@ export default function PublishPrefsForm({
   }
 
   return (
-    <div className="rounded-2xl border bg-surface p-4">
+    <div className="card p-4">
       <div className="mb-1 font-medium">發文節奏（你的設定）</div>
       <p className="mb-2 text-xs text-ink-2">
         控制「加入佇列」的發文時段，與每個發文帳號的最小間隔／每日上限。留空沿用系統預設。
       </p>
       <label className="mb-1 block text-xs text-ink-2">發文時段（HH:MM，逗號分隔；台北時間）</label>
       <input
-        className="mb-2 w-full rounded-xl border px-3 py-2 text-sm"
+        className="input mb-2"
         placeholder="09:00,12:30,20:00"
         value={slots}
         onChange={(e) => setSlots(e.target.value)}
@@ -58,7 +58,7 @@ export default function PublishPrefsForm({
         <div>
           <label className="block text-xs text-ink-2">最小間隔（分）</label>
           <input
-            className="w-28 rounded-xl border px-3 py-2 text-sm"
+            className="input w-28"
             inputMode="numeric"
             value={gap}
             onChange={(e) => /^\d*$/.test(e.target.value) && setGap(e.target.value)}
@@ -68,18 +68,14 @@ export default function PublishPrefsForm({
         <div>
           <label className="block text-xs text-ink-2">每日上限（每帳號）</label>
           <input
-            className="w-28 rounded-xl border px-3 py-2 text-sm"
+            className="input w-28"
             inputMode="numeric"
             value={maxPerDay}
             onChange={(e) => /^\d*$/.test(e.target.value) && setMaxPerDay(e.target.value)}
             aria-label="每日上限"
           />
         </div>
-        <button
-          onClick={save}
-          disabled={busy}
-          className="ml-auto shrink-0 rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-        >
+        <button onClick={save} disabled={busy} className="btn btn-brand ml-auto shrink-0">
           {busy ? "儲存中…" : "儲存"}
         </button>
       </div>

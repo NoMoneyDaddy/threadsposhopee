@@ -36,13 +36,13 @@ export default function GeminiForm({ bound }: { bound: boolean }) {
   }
 
   return (
-    <div className="rounded-2xl border bg-surface p-4">
+    <div className="card p-4">
       <div className="mb-2 flex items-center justify-between">
         <span className="font-medium">AI 文案（Gemini）綁定</span>
         {bound ? (
-          <span className="rounded bg-green-100 px-2 py-0.5 text-xs text-green-700">已綁定</span>
+          <span className="badge-success">已綁定</span>
         ) : (
-          <span className="rounded bg-surface-2 px-2 py-0.5 text-xs text-ink-2">未綁定</span>
+          <span className="badge-neutral">未綁定</span>
         )}
       </div>
       <p className="mb-2 text-xs text-ink-2">
@@ -50,7 +50,7 @@ export default function GeminiForm({ bound }: { bound: boolean }) {
       </p>
       <div className="flex flex-wrap gap-2">
         <input
-          className="min-w-0 flex-1 rounded-xl border px-3 py-2 text-sm"
+          className="input min-w-0 flex-1"
           type="password"
           placeholder={bound ? "貼上新的 key 以更新" : "Gemini API key"}
           value={key}
@@ -59,7 +59,7 @@ export default function GeminiForm({ bound }: { bound: boolean }) {
         <button
           onClick={save}
           disabled={busy}
-          className="shrink-0 rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          className="btn btn-brand shrink-0"
         >
           {busy ? "儲存中…" : bound ? "更新" : "綁定"}
         </button>

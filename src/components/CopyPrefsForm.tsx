@@ -94,7 +94,7 @@ export default function CopyPrefsForm({ initial }: { initial: CopyPrefs }) {
   }
 
   return (
-    <div className="rounded-2xl border bg-surface p-4">
+    <div className="card p-4">
       <div className="mb-1 font-medium">AI 文案客製化</div>
       <p className="mb-3 text-xs text-ink-2">生成貼文時套用的全域偏好。正文與留言可分開設定。</p>
 
@@ -125,7 +125,7 @@ export default function CopyPrefsForm({ initial }: { initial: CopyPrefs }) {
         </label>
         <textarea
           id="copy-prefs-custom-prompt"
-          className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
+          className="input mt-1"
           rows={2}
           maxLength={1000}
           placeholder="例如：多強調保固與台灣出貨；不要提到價格"
@@ -135,7 +135,7 @@ export default function CopyPrefsForm({ initial }: { initial: CopyPrefs }) {
       </div>
 
       <div className="mt-3 flex items-center gap-3">
-        <button onClick={save} disabled={busy} className="rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+        <button onClick={save} disabled={busy} className="btn btn-brand">
           {busy ? "儲存中…" : "儲存偏好"}
         </button>
         {msg && <span className="text-sm text-ink-2">{msg}</span>}

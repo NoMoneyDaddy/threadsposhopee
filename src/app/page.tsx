@@ -28,7 +28,7 @@ export default async function DashboardPage() {
       {steps.length > 0 && <SetupGuide steps={steps} />}
 
       {weekly && (
-        <a href="/insights?days=7" className="block rounded-2xl border bg-surface p-4 hover:border-brand/40">
+        <a href="/insights?days=7" className="card block p-4 transition-colors hover:border-brand/40">
           <div className="mb-2 flex items-baseline justify-between">
             <h2 className="section-title text-base">本週概覽</h2>
             <span className="text-xs text-brand">查看成效 →</span>

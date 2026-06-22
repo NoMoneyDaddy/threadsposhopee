@@ -181,8 +181,19 @@ export default function DraftsExplorer({
           />
         ))}
         {filtered.length === 0 && (
-          <div className="col-span-2 rounded-2xl border border-dashed p-10 text-center text-ink-3">
-            {drafts.length === 0 ? "還沒有草稿。" : "沒有符合條件的草稿。"}
+          <div className="col-span-2 rounded-2xl border border-dashed border-strong bg-surface/50 p-10 text-center">
+            <div className="text-4xl" aria-hidden>📝</div>
+            {drafts.length === 0 ? (
+              <>
+                <p className="mt-3 font-semibold text-ink">還沒有草稿</p>
+                <p className="mx-auto mt-1.5 max-w-sm text-sm text-ink-2">
+                  草稿可來自「手動發文」存稿、AI 代理人，或自動抓文。核准後才會進入發文排程。
+                </p>
+                <a href="/compose" className="btn btn-brand mt-5">去發一篇</a>
+              </>
+            ) : (
+              <p className="mt-3 text-sm text-ink-2">沒有符合目前篩選條件的草稿。</p>
+            )}
           </div>
         )}
       </div>

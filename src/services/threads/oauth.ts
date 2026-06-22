@@ -68,19 +68,20 @@ export async function connectThreadsAccount(input: {
   clientSecret: string;
   redirectUri: string;
   code: string;
-}): Promise<{ userId: string; username: string; name: string; avatarUrl: string; accessToken: string; expiresAt: string }> {
+}): Promise<{ userId: string; username: string; name?: string; avatarUrl?: string; accessToken: string; expiresAt: string }> {
   const { accessToken: shortToken, userId } = await exchangeCodeForToken(input);
   const { accessToken, expiresInSec } = await exchangeForLongLivedToken(shortToken, input.clientSecret);
   // 個人檔案抓取失敗不阻斷連結（頭像/名稱屬選配，可日後重新授權補上）。
-  const profile = await getThreadsProfile(accessToken).catch(() => ({ username: "", name: "", avatarUrl: "" }));
+  // 失敗時回 null → name/avatarUrl 維持 undefined，重新授權時才不會以空字串覆寫既有的真實資料。
+  const profile = await getThreadsProfile(accessToken).catch(() => null);
   // 防禦：API 若回傳缺失/非數值的 expires_in，避免 new Date(NaN).toISOString() 拋 RangeError；預設 60 天
   const seconds = typeof expiresInSec === "number" && !Number.isNaN(expiresInSec) ? expiresInSec : 60 * 24 * 60 * 60;
   const expiresAt = new Date(Date.now() + seconds * 1000).toISOString();
   return {
     userId,
-    username: profile.username || `threads_${userId}`,
-    name: profile.name,
-    avatarUrl: profile.avatarUrl,
+    username: profile?.username || `threads_${userId}`,
+    name: profile?.name,
+    avatarUrl: profile?.avatarUrl,
     accessToken,
     expiresAt
   };

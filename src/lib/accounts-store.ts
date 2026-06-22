@@ -168,8 +168,9 @@ export async function upsertThreadsAccountFromOAuth(
     const existing = demo.threadsAccounts.find((a) => a.threads_user_id === input.threads_user_id);
     if (existing) {
       existing.token_expires_at = input.token_expires_at;
-      existing.display_name = input.display_name ?? existing.display_name ?? null;
-      existing.avatar_url = input.avatar_url ?? existing.avatar_url ?? null;
+      // 僅在有提供時才覆寫，避免抓檔失敗（undefined）清空既有頭像/名稱。
+      if (input.display_name !== undefined) existing.display_name = input.display_name;
+      if (input.avatar_url !== undefined) existing.avatar_url = input.avatar_url;
       existing.status = "active";
       return existing;
     }
@@ -186,14 +187,21 @@ export async function upsertThreadsAccountFromOAuth(
     return acc;
   }
   const sb = getServiceClient()!;
-  // 個人檔案＋token 欄位：新增與重新授權皆會寫入。
-  const profile = {
+  // token 欄位每次必更新。個人檔案（顯示名稱/頭像）僅在有提供時才寫入：
+  // 抓檔失敗時為 undefined，條件式略過以免清空既有真實資料。
+  const profile: {
+    access_token_enc: string;
+    token_expires_at: string;
+    status: "active";
+    display_name?: string | null;
+    avatar_url?: string | null;
+  } = {
     access_token_enc: encrypt(input.access_token),
     token_expires_at: input.token_expires_at,
-    display_name: input.display_name ?? null,
-    avatar_url: input.avatar_url ?? null,
-    status: "active" as const
+    status: "active"
   };
+  if (input.display_name !== undefined) profile.display_name = input.display_name;
+  if (input.avatar_url !== undefined) profile.avatar_url = input.avatar_url;
   // 先查既有列：存在則只更新（保留 label 自訂暱稱）；否則新增（label 預設帶入 username）。
   // OAuth 回呼為單一使用者請求、無併發，(owner_id, threads_user_id) 唯一索引仍防重複。
   const existing = await sb
@@ -202,6 +210,7 @@ export async function upsertThreadsAccountFromOAuth(
     .eq("owner_id", ownerId)
     .eq("threads_user_id", input.threads_user_id)
     .maybeSingle();
+  if (existing.error) throw existing.error; // 查詢異常勿吞，否則會誤走 insert 撞唯一鍵
   if (existing.data) {
     const { data, error } = await sb
       .from("threads_accounts")

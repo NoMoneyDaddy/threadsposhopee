@@ -321,6 +321,24 @@ export async function deleteShopeeAccount(id: string, ownerId: string): Promise<
   return Boolean(data);
 }
 
+// 永久刪除整個使用者帳號：清除其所有自有資料（草稿/素材/來源/發文與分潤帳號/設定檔），再刪 auth 使用者。
+// 不可復原。多租戶：一律以 owner_id 過濾，只刪自己的列。逐表 best-effort（單表失敗記錄但續刪其他）。
+export async function deleteOwnerAccount(ownerId: string): Promise<void> {
+  if (isDemoMode) return;
+  const sb = getServiceClient()!;
+  // 先清子資料（以 owner_id 過濾），最後刪 profiles 與 auth 使用者。
+  const tables = ["drafts", "materials", "sources", "threads_accounts", "shopee_accounts"];
+  for (const t of tables) {
+    const { error } = await sb.from(t).delete().eq("owner_id", ownerId);
+    if (error) throw new Error(`刪除 ${t} 失敗：${error.message}`);
+  }
+  const { error: profErr } = await sb.from("profiles").delete().eq("id", ownerId);
+  if (profErr) throw new Error(`刪除設定檔失敗：${profErr.message}`);
+  // 刪 Supabase auth 使用者（service-role admin）。失敗則上拋，讓呼叫端回報（資料已清，帳號待重試）。
+  const { error: authErr } = await sb.auth.admin.deleteUser(ownerId);
+  if (authErr) throw new Error(`刪除登入帳號失敗：${authErr.message}`);
+}
+
 // 取某使用者啟用中的 Threads 帳號 + 解密 token（儀表板查額度用）
 // 跨租戶 worker 查詢（僅由 cron 呼叫、不吃使用者輸入）：所有 active 發文帳號（id/owner/threadsUser）。
 // 用於贊助文自動補發：找出今天還沒有贊助文的非 owner 帳號。

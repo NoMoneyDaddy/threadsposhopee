@@ -275,6 +275,27 @@ export async function incrementImportCount(id: string): Promise<void> {
   if (error) throw new Error(`累加匯入次數失敗：${error.message}`);
 }
 
+// 刪除自己的素材（限本人）。回傳是否真的刪到。
+// 註：貢獻分數由 SQL 即時從 materials 表計算（被匯入次數＋分享篇數），刪除後分數自然下降，無需另行扣分。
+export async function deleteMaterial(id: string, ownerId: string): Promise<boolean> {
+  if (isDemoMode) {
+    const i = demo.materials.findIndex((m) => m.id === id);
+    if (i < 0) return false;
+    demo.materials.splice(i, 1);
+    return true;
+  }
+  const sb = getServiceClient()!;
+  const { data, error } = await sb
+    .from("materials")
+    .delete()
+    .eq("id", id)
+    .eq("owner_id", ownerId)
+    .select("id")
+    .maybeSingle();
+  if (error) throw error;
+  return Boolean(data);
+}
+
 // 貢獻分數＝被匯入次數 + 分享中素材篇數 + 資料貢獻紅利（單一來源走 DB RPC，見 migration 0042）。
 export async function getContributionScore(ownerId: string): Promise<number> {
   if (isDemoMode) return 0;

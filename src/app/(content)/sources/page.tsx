@@ -69,7 +69,11 @@ export default async function SourcesPage() {
                 <td className="px-4 py-2">{accLabel(s.threads_account_id)}</td>
                 <td className="px-4 py-2">每 {s.poll_interval_minutes} 分</td>
                 <td className="px-4 py-2">
-                  <span className="rounded bg-blue-50 px-2 py-0.5 text-blue-600">進審核佇列</span>
+                  {s.auto_publish ? (
+                    <span className="rounded bg-amber-50 px-2 py-0.5 text-amber-700">免審直發</span>
+                  ) : (
+                    <span className="rounded bg-blue-50 px-2 py-0.5 text-blue-600">進審核佇列</span>
+                  )}
                 </td>
                 <td className="px-4 py-2">{s.enabled ? "✅ 啟用" : "⏸ 停用"}</td>
                 <td className="px-4 py-2">
@@ -78,6 +82,11 @@ export default async function SourcesPage() {
                       endpoint={`/api/sources/${s.id}`}
                       body={{ enabled: !s.enabled }}
                       label={s.enabled ? "⏸ 停用" : "▶ 啟用"}
+                    />
+                    <ToggleButton
+                      endpoint={`/api/sources/${s.id}`}
+                      body={{ auto_publish: !s.auto_publish }}
+                      label={s.auto_publish ? "改回待審" : "改免審直發"}
                     />
                     <DeleteButton endpoint={`/api/sources/${s.id}`} />
                   </div>

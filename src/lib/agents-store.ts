@@ -16,12 +16,13 @@ export interface AiAgent {
   search_query: string;
   threads_account_id: string | null;
   use_redirect: boolean;
+  auto_publish: boolean; // 免審直接排程（預設 false＝產出仍待人工核准）
   enabled: boolean;
   last_run_at: string | null;
 }
 
 const COLS =
-  "id, owner_id, name, tone, domain, emoji_level, hashtag_pool, length, source_mode, rss_feeds, search_query, threads_account_id, use_redirect, enabled, last_run_at";
+  "id, owner_id, name, tone, domain, emoji_level, hashtag_pool, length, source_mode, rss_feeds, search_query, threads_account_id, use_redirect, auto_publish, enabled, last_run_at";
 
 export interface AiAgentInput {
   name: string;
@@ -35,6 +36,7 @@ export interface AiAgentInput {
   search_query?: string;
   threads_account_id?: string | null;
   use_redirect?: boolean;
+  auto_publish?: boolean;
 }
 
 export async function listAiAgents(ownerId: string): Promise<AiAgent[]> {
@@ -59,7 +61,7 @@ export async function createAiAgent(ownerId: string, input: AiAgentInput): Promi
     .insert({ owner_id: ownerId, ...input })
     .select(COLS)
     .single();
-  if (error) throw new Error(`建立代理人失敗：${error.message}`);
+  if (error) throw new Error(`建立小編失敗：${error.message}`);
   return data as AiAgent;
 }
 
@@ -67,7 +69,7 @@ export async function updateAiAgent(id: string, ownerId: string, patch: Partial<
   if (isDemoMode) return;
   const sb = getServiceClient()!;
   const { error } = await sb.from("ai_agents").update(patch).eq("id", id).eq("owner_id", ownerId);
-  if (error) throw new Error(`更新代理人失敗：${error.message}`);
+  if (error) throw new Error(`更新小編失敗：${error.message}`);
 }
 
 export async function deleteAiAgent(id: string, ownerId: string): Promise<void> {

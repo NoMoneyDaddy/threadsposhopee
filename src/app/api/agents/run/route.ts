@@ -15,7 +15,7 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}));
     const id = typeof body.id === "string" ? body.id : "";
     const agent = id ? await getAiAgent(id, user.id) : null;
-    if (!agent) return NextResponse.json({ ok: false, error: "找不到代理人" }, { status: 404 });
+    if (!agent) return NextResponse.json({ ok: false, error: "找不到小編" }, { status: 404 });
 
     const key = await getGeminiKey(user.id);
     if (!key) return NextResponse.json({ ok: false, error: "請先在帳號管理綁定 Gemini 金鑰" }, { status: 400 });

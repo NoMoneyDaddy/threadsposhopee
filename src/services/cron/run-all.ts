@@ -59,8 +59,8 @@ export async function runCronAll(now: Date = new Date()): Promise<Record<string,
     },
     {
       key: "aiAgents",
-      run: runAiAgents, // 內部以 last_run_at 守門，每代理人每日約一次；產出進草稿待審
-      warn: (r) => (r?.created ? `🤖 AI 代理人新增 ${r.created} 篇草稿（待審）` : null)
+      run: runAiAgents, // 內部以 last_run_at 守門，每個小編每日約一次；產出預設進草稿待審
+      warn: (r) => (r?.created ? `🤖 AI 小編新增 ${r.created} 篇貼文（待審或已排程）` : null)
     },
     {
       key: "reconcile",

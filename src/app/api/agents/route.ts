@@ -15,7 +15,7 @@ export async function POST(req: Request) {
 
     const body = await req.json().catch(() => ({}));
     const name = typeof body.name === "string" ? body.name.trim() : "";
-    if (!name) return NextResponse.json({ ok: false, error: "請填代理人名稱" }, { status: 400 });
+    if (!name) return NextResponse.json({ ok: false, error: "請填小編名稱" }, { status: 400 });
     if (!getAiDomain(body.domain)) return NextResponse.json({ ok: false, error: "領域不存在" }, { status: 400 });
 
     const searchQuery = typeof body.search_query === "string" ? body.search_query.trim().slice(0, 100) : "";
@@ -38,7 +38,8 @@ export async function POST(req: Request) {
       length: Number.isInteger(length) && length >= 50 && length <= 500 ? length : 200,
       search_query: searchQuery,
       threads_account_id: typeof body.threads_account_id === "string" ? body.threads_account_id : null,
-      use_redirect: body.use_redirect === true
+      use_redirect: body.use_redirect === true,
+      auto_publish: body.auto_publish === true
     });
     return NextResponse.json({ ok: true, id: agent.id });
   } catch (e) {

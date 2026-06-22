@@ -44,9 +44,9 @@ export default function DefaultAffiliateForm({ initial, suggested }: { initial: 
 
   return (
     <div className="card p-4">
-      <div className="mb-1 font-medium">AI 代理人預設分潤連結</div>
+      <div className="mb-1 font-medium">AI 小編預設分潤連結</div>
       <p className="mb-2 text-xs text-ink-2">
-        AI 代理人發文若開啟 go2read 中轉，訪客按「繼續」會前往這個分潤連結（一次設定、不必每篇重設）。
+        AI 小編發文若開啟 go2read 中轉，訪客按「繼續」會前往這個分潤連結（一次設定、不必每篇重設）。
         貼一般蝦皮商品／商城連結即可，<b>存檔時會自動用你的蝦皮金鑰轉成分潤連結</b>（已是分潤連結則不重複轉）。
         留空＝中轉頁只導向新聞來源、不附分潤。需先到帳號管理綁定蝦皮金鑰或 affiliate_id 才能轉分潤。
       </p>

@@ -76,6 +76,26 @@ export async function setSourceEnabled(id: string, ownerId: string, enabled: boo
   return Boolean(data);
 }
 
+// 切換來源「免審直接排程」（opt-in）。多租戶：以 owner_id 過濾，只動得到自己的列。
+export async function setSourceAutoPublish(id: string, ownerId: string, autoPublish: boolean): Promise<boolean> {
+  if (isDemoMode) {
+    const s = demo.sources.find((x) => x.id === id);
+    if (!s) return false;
+    s.auto_publish = autoPublish;
+    return true;
+  }
+  const sb = getServiceClient()!;
+  const { data, error } = await sb
+    .from("sources")
+    .update({ auto_publish: autoPublish })
+    .eq("id", id)
+    .eq("owner_id", ownerId)
+    .select("id")
+    .maybeSingle();
+  if (error) throw error;
+  return Boolean(data);
+}
+
 export async function deleteSource(id: string, ownerId: string): Promise<boolean> {
   if (isDemoMode) {
     const i = demo.sources.findIndex((x) => x.id === id);

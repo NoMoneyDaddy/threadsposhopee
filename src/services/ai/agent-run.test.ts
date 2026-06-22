@@ -12,7 +12,7 @@ test("sourceHash：穩定、忽略前後空白、不同連結不同", () => {
 const agent: AiAgent = {
   id: "1", owner_id: "o", name: "阿哲", tone: "愛吐槽", domain: "tech",
   emoji_level: "none", hashtag_pool: ["#科技"], length: 200, source_mode: "rss",
-  rss_feeds: [], search_query: "", threads_account_id: null, use_redirect: false, enabled: true, last_run_at: null
+  rss_feeds: [], search_query: "", threads_account_id: null, use_redirect: false, auto_publish: false, enabled: true, last_run_at: null
 };
 
 test("buildAgentPrompt：含名稱/領域/素材，emoji=none 指示不用 emoji", () => {

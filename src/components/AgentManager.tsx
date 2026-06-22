@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AI_DOMAINS } from "@/lib/ai-domains";
+import { FieldHint } from "@/components/FieldHint";
 
 interface Agent {
   id: string;
@@ -11,13 +12,14 @@ interface Agent {
   enabled: boolean;
   last_run_at: string | null;
   use_redirect: boolean;
+  auto_publish: boolean;
 }
 interface AccountOpt {
   id: string;
   label: string | null;
 }
 
-// AI 代理人管理：建立 ＋ 列表（開關/立即跑/刪除）。
+// AI 小編管理：建立 ＋ 列表（開關/立即跑/刪除）。
 export default function AgentManager({ agents, accounts }: { agents: Agent[]; accounts: AccountOpt[] }) {
   const router = useRouter();
   const [name, setName] = useState("");
@@ -26,6 +28,7 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
   const [tone, setTone] = useState("");
   const [accountId, setAccountId] = useState("");
   const [useRedirect, setUseRedirect] = useState(false);
+  const [autoPublish, setAutoPublish] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -49,12 +52,14 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
         search_query: searchQuery,
         tone,
         threads_account_id: accountId || null,
-        use_redirect: useRedirect
+        use_redirect: useRedirect,
+        auto_publish: autoPublish
       });
       if (!r.ok) throw new Error(r.error);
       setName("");
       setTone("");
       setSearchQuery("");
+      setAutoPublish(false);
       router.refresh();
     } catch (e) {
       setMsg(e instanceof Error ? e.message : String(e));
@@ -69,16 +74,23 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
     router.refresh();
     setBusy(null);
   }
+  async function toggleAuto(a: Agent) {
+    if (!a.auto_publish && !confirm(`開啟「免審直接排程」後，小編「${a.name}」產出的貼文會自動發文、不經人工審核。確定開啟？`)) return;
+    setBusy(a.id);
+    await api(`/api/agents/${a.id}`, "PATCH", { auto_publish: !a.auto_publish }).catch(() => {});
+    router.refresh();
+    setBusy(null);
+  }
   async function runNow(a: Agent) {
     setBusy(a.id);
     setMsg(null);
     const r = await api("/api/agents/run", "POST", { id: a.id }).catch(() => ({ ok: false, error: "失敗" }));
-    setMsg(r.ok ? "✅ 已產生 1 篇草稿，請到草稿頁審核。" : `⚠️ ${r.error}`);
+    setMsg(r.ok ? "✅ 已產生 1 篇（依小編設定進待審草稿或自動排程）。" : `⚠️ ${r.error}`);
     router.refresh();
     setBusy(null);
   }
   async function remove(a: Agent) {
-    if (!confirm(`刪除代理人「${a.name}」？`)) return;
+    if (!confirm(`刪除小編「${a.name}」？`)) return;
     setBusy(a.id);
     await api(`/api/agents/${a.id}`, "DELETE").catch(() => {});
     router.refresh();
@@ -90,7 +102,7 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
   return (
     <div className="space-y-6">
       <form onSubmit={create} className="card-p space-y-3">
-        <h2 className="section-title">新增代理人</h2>
+        <h2 className="section-title">新增小編</h2>
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <label className="label" htmlFor="ag-name">名稱</label>
@@ -130,16 +142,29 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
             來源連結改用短連結（可順便附分潤）
           </label>
         </div>
+        <div>
+          <label className="flex items-center gap-2 text-sm text-ink-2">
+            <input type="checkbox" checked={autoPublish} onChange={(e) => setAutoPublish(e.target.checked)} />
+            免審直接排程（自動發文）
+          </label>
+          {autoPublish ? (
+            <FieldHint tone="warn">
+              小編產出的貼文將不經人工審核，自動排進你的發文時段直接發出。請確認領域/口吻設定無誤，內容違規或失準的風險由你自負。
+            </FieldHint>
+          ) : (
+            <FieldHint>預設關閉：小編產文一律進草稿待你審核，核准後才發布。可隨時於下方清單調整。</FieldHint>
+          )}
+        </div>
         <button type="submit" disabled={busy === "create"} className="btn btn-brand">
-          {busy === "create" ? "建立中…" : "建立代理人"}
+          {busy === "create" ? "建立中…" : "建立小編"}
         </button>
         {msg && <p className="text-sm text-ink-2">{msg}</p>}
       </form>
 
       <section className="rounded-2xl border bg-surface p-5">
-        <h2 className="section-title mb-3">我的代理人</h2>
+        <h2 className="section-title mb-3">我的小編</h2>
         {agents.length === 0 ? (
-          <p className="text-sm text-ink-3">還沒有代理人。建立後可「立即跑一篇」或開啟每日自動產文（皆進草稿待審）。</p>
+          <p className="text-sm text-ink-3">還沒有小編。建立後可「立即跑一篇」或開啟每日自動產文（預設進草稿待審）。</p>
         ) : (
           <ul className="divide-y divide-border">
             {agents.map((a) => (
@@ -148,14 +173,18 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
                   <div className="text-sm font-medium">
                     {a.name} <span className="badge-neutral ml-1">{domLabel(a.domain)}</span>
                     {a.use_redirect && <span className="badge-brand ml-1">短連結</span>}
+                    {a.auto_publish && <span className="badge-brand ml-1">免審直發</span>}
                   </div>
                   <div className="text-xs text-ink-3">
-                    {a.enabled ? "每日自動產文（待審）" : "已停用"}
+                    {a.enabled ? (a.auto_publish ? "每日自動產文＋免審直接發" : "每日自動產文（待審）") : "已停用"}
                     {a.last_run_at && ` · 上次 ${new Date(a.last_run_at).toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })}`}
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <button disabled={!!busy} onClick={() => runNow(a)} className="btn btn-outline btn-sm">立即跑一篇</button>
+                  <button disabled={!!busy} onClick={() => toggleAuto(a)} className="btn btn-sm btn-ghost" title="切換免審直接排程">
+                    {a.auto_publish ? "改回待審" : "改免審直發"}
+                  </button>
                   <button disabled={!!busy} onClick={() => toggle(a)} className="btn btn-sm btn-ghost">
                     {a.enabled ? "停用" : "啟用"}
                   </button>

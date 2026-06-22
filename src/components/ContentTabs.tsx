@@ -5,11 +5,11 @@ import { usePathname } from "next/navigation";
 
 type Tab = { href: string; label: string; ownerOnly?: boolean };
 
-// 文章管理的次導覽：把發文、草稿、AI 代理人、素材、自動抓文整併在同一個頁面群組底下。
+// 文章管理的次導覽：把發文、草稿、AI 小編、素材、自動抓文整併在同一個頁面群組底下。
 const TABS: Tab[] = [
   { href: "/drafts", label: "草稿" },
   { href: "/compose", label: "發文" },
-  { href: "/agents", label: "AI 代理人" },
+  { href: "/agents", label: "AI 小編" },
   { href: "/materials", label: "素材" },
   { href: "/shared", label: "共享庫" },
   { href: "/sources", label: "自動抓文" }

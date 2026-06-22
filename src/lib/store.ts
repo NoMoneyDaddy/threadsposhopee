@@ -201,6 +201,7 @@ export {
   listAllEnabledSources,
   createSource,
   setSourceEnabled,
+  setSourceAutoPublish,
   deleteSource,
   isPostProcessed,
   markPostProcessed,

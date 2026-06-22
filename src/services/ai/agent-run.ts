@@ -7,6 +7,7 @@ import { getGeminiKey, getDefaultAffiliateUrl } from "@/lib/credentials";
 import { getAiDomain, defaultFeedsForDomain, googleNewsRss } from "@/lib/ai-domains";
 import { maxSimilarity } from "@/lib/text-similarity";
 import { createDraft } from "@/lib/drafts-store";
+import { autoScheduleApproved } from "@/services/publish/auto-schedule";
 import { userOwnsThreadsAccount } from "@/lib/store";
 import { createRedirectLink } from "@/lib/redirect-store";
 import {
@@ -118,14 +119,21 @@ export async function runAgentOnce(agent: AiAgent, geminiKey: string): Promise<A
     }
     const mainText = `${body}\n\n📎 來源：${sourceUrl}`;
 
-    const draft = await createDraft({
-      owner_id: agent.owner_id,
-      threads_account_id: agent.threads_account_id,
-      main_text: mainText,
-      reply_text: null,
-      status: "draft",
-      source_agent_id: agent.id
-    });
+    // 預設：待人工核准。小編開啟「免審直接排程」時自動排進下一個空時段並標記已核准；無空檔則退回待審保底。
+    const makeDraft = (status: "draft" | "approved", scheduled_at: string | null) =>
+      createDraft({
+        owner_id: agent.owner_id,
+        threads_account_id: agent.threads_account_id,
+        main_text: mainText,
+        reply_text: null,
+        status,
+        scheduled_at,
+        source_agent_id: agent.id
+      });
+    let draft = agent.auto_publish
+      ? await autoScheduleApproved(agent.owner_id, (slot) => makeDraft("approved", slot))
+      : null;
+    if (!draft) draft = await makeDraft("draft", null);
     await markSeen(agent.id, hash, item.title);
     return { ok: true, draftId: draft.id };
   }

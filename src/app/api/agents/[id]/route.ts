@@ -14,6 +14,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (typeof body.name === "string" && body.name.trim()) patch.name = body.name.trim();
   if (typeof body.tone === "string") patch.tone = body.tone.slice(0, 300);
   if (typeof body.use_redirect === "boolean") patch.use_redirect = body.use_redirect;
+  if (typeof body.auto_publish === "boolean") patch.auto_publish = body.auto_publish;
   if (Object.keys(patch).length === 0) return NextResponse.json({ ok: false, error: "無可更新欄位" }, { status: 400 });
   try {
     await updateAiAgent(params.id, user.id, patch);

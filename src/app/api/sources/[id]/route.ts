@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { deleteSource, setSourceEnabled } from "@/lib/store";
+import { deleteSource, setSourceEnabled, setSourceAutoPublish } from "@/lib/store";
 import { getCurrentUser, type AppUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -19,15 +19,19 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
   return NextResponse.json({ ok: true });
 }
 
-// 啟用／停用來源（停用後抓取跳過）
+// 更新來源：啟用／停用（停用後抓取跳過），或切換「免審直接排程」。
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   const ownerRes = await requireUser();
   if (ownerRes.error) return ownerRes.error;
   const body = await req.json().catch(() => ({}));
-  if (typeof body.enabled !== "boolean") {
-    return NextResponse.json({ ok: false, error: "enabled 必須是 boolean" }, { status: 400 });
+  let ok: boolean;
+  if (typeof body.auto_publish === "boolean") {
+    ok = await setSourceAutoPublish(params.id, ownerRes.user.id, body.auto_publish);
+  } else if (typeof body.enabled === "boolean") {
+    ok = await setSourceEnabled(params.id, ownerRes.user.id, body.enabled);
+  } else {
+    return NextResponse.json({ ok: false, error: "enabled 或 auto_publish 必須是 boolean" }, { status: 400 });
   }
-  const ok = await setSourceEnabled(params.id, ownerRes.user.id, body.enabled);
   if (!ok) return NextResponse.json({ ok: false, error: "找不到來源或無權限" }, { status: 404 });
   return NextResponse.json({ ok: true });
 }

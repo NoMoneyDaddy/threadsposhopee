@@ -1,4 +1,4 @@
-// 贊助文章驗證（功能 B 階段 3）：抓回已發的贊助文，確認平台分潤連結仍在；
+// 贊助文驗證（功能 B 階段 3）：抓回已發的贊助文，確認平台分潤連結仍在；
 // 被刪除或竄改 → 暫停該 Threads 帳號發文（恢復走帳號管理的手動啟用）。由 /api/cron/all 觸發。
 import {
   listSponsorRecordsToVerify,
@@ -139,14 +139,14 @@ export async function verifySponsorPosts(): Promise<{ checked: number; violation
           );
           await sendUserAlert(
             rec.ownerId,
-            `⚠️ 你的贊助文章連結多次（${strikes} 次）被移除或竄改，該帳號發文已暫停。請至帳號管理重新啟用並遵守贊助文章規則。`,
+            `⚠️ 你的贊助文連結多次（${strikes} 次）被移除或竄改，該帳號發文已暫停。請至帳號管理重新啟用並遵守贊助文規則。`,
             "sponsor_violation"
           ).catch(() => {});
         } else {
           // 未達上限：只提醒、不暫停
           await sendUserAlert(
             rec.ownerId,
-            `🔔 提醒：你的贊助文章連結被移除或竄改（第 ${strikes}/${SPONSOR_VIOLATION_LIMIT} 次）。累計達上限才會暫停發文，請遵守贊助文章規則。`,
+            `🔔 提醒：你的贊助文連結被移除或竄改（第 ${strikes}/${SPONSOR_VIOLATION_LIMIT} 次）。累計達上限才會暫停發文，請遵守贊助文規則。`,
             "sponsor_violation"
           ).catch(() => {});
         }

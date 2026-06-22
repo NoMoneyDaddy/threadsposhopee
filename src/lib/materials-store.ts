@@ -117,7 +117,7 @@ export async function touchEvergreen(id: string): Promise<void> {
   await sb.from("materials").update({ evergreen_last_at: new Date().toISOString() }).eq("id", id);
 }
 
-// ── 共享素材庫 ───────────────────────────────────────────────
+// ── 共享庫 ───────────────────────────────────────────────
 // 公共池對外投影：不含分潤連結/subId（那是各人自己的）。
 export type SharedMaterial = {
   id: string;

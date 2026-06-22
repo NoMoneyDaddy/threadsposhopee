@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { fetchWithTimeout } from "@/lib/http";
 import type { SponsorConfig } from "@/lib/sponsor";
 
-// owner 限定：設定贊助文章（要替換進待發草稿的平台分潤連結、冷門時段、開關）。
+// owner 限定：設定贊助文（要替換進待發草稿的平台分潤連結、冷門時段、開關）。
 export default function SponsorConfigForm({ initial }: { initial: SponsorConfig }) {
   const router = useRouter();
   const [enabled, setEnabled] = useState(initial.enabled);
@@ -48,14 +48,14 @@ export default function SponsorConfigForm({ initial }: { initial: SponsorConfig 
 
   return (
     <div className="rounded-2xl border bg-surface p-4">
-      <div className="mb-1 font-medium">贊助文章（管理者）</div>
+      <div className="mb-1 font-medium">贊助文（管理者）</div>
       <p className="mb-2 text-xs text-ink-2">
         非管理者帳號每天 1 篇於冷門時段，把該篇待發草稿的分潤連結暫時替換為下方平台連結後發布、發後還原。
-        規則見 <a href="/sponsored" className="text-brand underline">《贊助文章規則》</a>。
+        規則見 <a href="/sponsored" className="text-brand underline">《贊助文規則》</a>。
       </p>
       <label className="mb-2 flex items-center gap-2 text-sm">
         <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
-        啟用贊助文章
+        啟用贊助文
       </label>
       <input
         className="mb-2 w-full rounded-xl border px-3 py-2 text-sm"

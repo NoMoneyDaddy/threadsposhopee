@@ -37,7 +37,7 @@ export async function setRoles(ownerId: string, roles: ManualRole[]): Promise<vo
 
 // ── 熱設定旗標（feature flags，存 app_state，改了立即生效、不隨重新部署消失）────
 export type FeatureFlags = {
-  shared: boolean; // 共享素材庫
+  shared: boolean; // 共享庫
   leaderboard: boolean; // 貢獻排行榜
   favorites: boolean; // 收藏功能
 };

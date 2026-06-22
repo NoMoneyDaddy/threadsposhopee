@@ -1,4 +1,4 @@
-// 贊助文章分潤連結：用商品「原始連結」＋ owner 金鑰即時轉成「每帳號 sp_<帳號碼>」分潤連結。
+// 贊助文分潤連結：用商品「原始連結」＋ owner 金鑰即時轉成「每帳號 sp_<帳號碼>」分潤連結。
 // 失敗時上層退回靜態後備連結（無每帳號追蹤）。
 import { expandShopeeLink } from "@/services/shopee/expand";
 import { generateAffiliateLink, buildAffiliateRedirectLink } from "@/services/shopee/affiliate";

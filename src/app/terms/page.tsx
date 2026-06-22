@@ -31,11 +31,11 @@ export default function TermsPage() {
         </p>
       </Section>
 
-      <Section title="贊助文章">
+      <Section title="贊助文">
         <p>
           免費使用本服務即同意：每個發文帳號（管理者帳號除外）每天會有 1 篇貼文於冷門時段以平台分潤連結發布。
           系統會於網站介面事前標示，完整規則請見
-          <a href="/sponsored" className="text-brand underline">《贊助文章規則》</a>。
+          <a href="/sponsored" className="text-brand underline">《贊助文規則》</a>。
         </p>
       </Section>
 

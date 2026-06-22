@@ -135,7 +135,7 @@ export default function SelfComposeForm({
       </div>
       <div>
         <label htmlFor="self-compose-reply" className="mb-1 block text-sm font-medium text-ink">
-          留言區（接續貼文 2/2，選填）
+          留言（串文 2/2，選填）
         </label>
         <textarea
           id="self-compose-reply"

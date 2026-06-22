@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { FeatureFlags } from "@/lib/store";
 
 const LABELS: { key: keyof FeatureFlags; label: string; hint: string }[] = [
-  { key: "shared", label: "共享素材庫", hint: "關閉後使用者無法分享/匯入共享素材" },
+  { key: "shared", label: "共享庫", hint: "關閉後使用者無法分享/匯入共享素材" },
   { key: "leaderboard", label: "貢獻排行榜", hint: "共享庫頂部的排行榜展示" },
   { key: "favorites", label: "收藏功能", hint: "使用者可收藏共享素材" }
 ];

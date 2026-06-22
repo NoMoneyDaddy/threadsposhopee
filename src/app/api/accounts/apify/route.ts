@@ -11,7 +11,7 @@ export async function POST(req: Request) {
   try {
     const user = await getCurrentUser();
     if (!user) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
-    if (!user.isOwner) return NextResponse.json({ ok: false, error: "只有管理者可綁定爬蟲憑證" }, { status: 403 });
+    if (!user.isOwner) return NextResponse.json({ ok: false, error: "只有管理者可綁定抓取憑證" }, { status: 403 });
 
     const body = await req.json().catch(() => ({}));
     const token = typeof body.token === "string" ? body.token.trim() : "";

@@ -64,7 +64,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <a href="/guide" className="hover:text-ink">金鑰教學</a>
                 <a href="/privacy" className="hover:text-ink">隱私權政策</a>
                 <a href="/terms" className="hover:text-ink">服務條款</a>
-                <a href="/sponsored" className="hover:text-ink">贊助文章規則</a>
+                <a href="/sponsored" className="hover:text-ink">贊助文規則</a>
               </nav>
             </div>
           </footer>

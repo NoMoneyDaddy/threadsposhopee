@@ -78,7 +78,7 @@ export default function SourceForm({
       <input className={input} type="number" min={1} title="輪詢間隔（分鐘）" value={form.poll_interval_minutes} onChange={(e) => set("poll_interval_minutes", e.target.value)} />
       <input className={input} type="number" min={1} title="每次抓幾篇" value={form.posts_limit} onChange={(e) => set("posts_limit", e.target.value)} />
       <p className="text-xs text-ink-3 md:col-span-2">
-        爬取的內容會先進「文案佇列」待你審核，核准後才會發布（可在佇列頁批次核准／加入佇列）。
+        抓取的內容會先進「文案佇列」待你審核，核准後才會發布（可在佇列頁批次核准／加入佇列）。
       </p>
       <div className="flex items-center gap-3 md:col-span-2">
         <button disabled={busy} className="rounded-xl bg-brand px-4 py-2 text-sm text-white disabled:opacity-50">

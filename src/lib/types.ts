@@ -55,7 +55,7 @@ export interface Material {
   ai_generated_at?: string | null;
   evergreen?: boolean | null; // 常青回收：定期自動重排成待審草稿
   evergreen_last_at?: string | null; // 上次常青重排時間（算「到期」用）
-  shared?: boolean | null; // 是否分享進公共素材池
+  shared?: boolean | null; // 是否分享進公共共享庫
   import_count?: number | null; // 被別人匯入的次數（貢獻分數）
   created_at: string;
 }

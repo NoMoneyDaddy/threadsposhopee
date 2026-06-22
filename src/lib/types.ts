@@ -86,6 +86,11 @@ export interface Draft {
   // 多媒體（輪播）：人工拖拉上傳/排序後存這裡；空陣列時退回上面單一 media 欄位（向後相容）。
   // DB 為 jsonb NOT NULL default '[]'，讀取一律是陣列，故型別不含 null。
   media?: DraftMedia[];
+  // 留言（串文 2/2）要帶的媒體（通常 1 張圖）。空陣列＝純文字留言。
+  reply_media?: DraftMedia[];
+  // 發布版面：'split'（預設，null 同）＝主文媒體＋留言（含分潤連結＋reply_media）；
+  // 'all_in_main'＝影片＋圖＋連結全發主文，不另發留言。
+  post_mode?: "split" | "all_in_main" | null;
   main_text?: string | null;
   reply_text?: string | null;
   ai_raw?: string | null;

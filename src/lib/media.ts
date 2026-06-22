@@ -20,3 +20,19 @@ export function normalizeDraftMedia(
   }
   return [];
 }
+
+// 留言（2/2）媒體：僅過濾無效項，不退回舊單一欄位（舊欄位屬主文媒體，不應外溢到留言）。
+export function normalizeReplyMedia(d: Pick<Draft, "reply_media">): DraftMedia[] {
+  if (!Array.isArray(d.reply_media)) return [];
+  return d.reply_media.filter(
+    (m): m is DraftMedia =>
+      Boolean(m) && typeof m.url === "string" && m.url.length > 0 && (m.type === "image" || m.type === "video")
+  );
+}
+
+// 合格素材組：至少 1 部影片 + 至少 1 張圖片（跨主文＋留言的所有媒體一起算）。
+export function isQualifiedMediaSet(media: DraftMedia[]): boolean {
+  const hasVideo = media.some((m) => m.type === "video");
+  const hasImage = media.some((m) => m.type === "image");
+  return hasVideo && hasImage;
+}

@@ -37,6 +37,11 @@ export async function POST(req: Request) {
     if (!["publish", "schedule", "draft", "queue"].includes(action)) {
       return NextResponse.json({ ok: false, error: "不支援的發文動作" }, { status: 400 });
     }
+    // 發布版面：'all_in_main'＝影片+圖+連結全發主文、不另發留言；其餘（含未帶）＝拆分（split）。
+    if (body.post_mode !== undefined && body.post_mode !== null && !["split", "all_in_main"].includes(body.post_mode)) {
+      return NextResponse.json({ ok: false, error: "post_mode 只支援 split 或 all_in_main" }, { status: 400 });
+    }
+    const postMode: "all_in_main" | null = body.post_mode === "all_in_main" ? "all_in_main" : null;
 
     // 越權防護：發文帳號必須屬於當前使用者（service-role 繞過 RLS，務必應用層驗證）
     if (!isDemoMode && !(await userOwnsThreadsAccount(threads_account_id, user.id))) {
@@ -128,6 +133,7 @@ export async function POST(req: Request) {
         reply_text: typeof body.reply_text === "string" ? body.reply_text : material?.reply_text ?? null,
         reply_delay_minutes: replyDelayOverride,
         ai_raw: material?.ai_raw ?? null,
+        post_mode: postMode,
         status,
         scheduled_at
       });

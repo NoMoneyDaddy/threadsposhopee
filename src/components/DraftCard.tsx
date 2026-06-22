@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import type { Draft } from "@/lib/types";
 import { CharCount } from "@/components/ThreadsPreview";
 import ThreadsPreview from "@/components/ThreadsPreview";
-import { normalizeDraftMedia } from "@/lib/media";
+import { normalizeDraftMedia, normalizeReplyMedia, isQualifiedMediaSet } from "@/lib/media";
 import { checkThreadsContent, THREADS_MAX_HASHTAGS } from "@/lib/threads-content";
 import { isLowRelevance } from "@/lib/relevance";
 
@@ -123,6 +123,10 @@ function DraftCard({
 
   const done = draft.status === "published" || draft.status === "rejected";
 
+  // 合格素材組：主文＋留言所有媒體一起算，需 ≥1 影片 + ≥1 圖。
+  const qualified = isQualifiedMediaSet([...normalizeDraftMedia(draft), ...normalizeReplyMedia(draft)]);
+  const allInMain = draft.post_mode === "all_in_main";
+
   // 延遲留言（串文 2/2）狀態：主文已發、留言由 cron 之後補。只在有設定留言時提示。
   const rs = draft.reply_status;
   const showReply = draft.status === "published" && rs && rs !== "none";
@@ -180,6 +184,17 @@ function DraftCard({
           {accountLabel && (
             <span className="max-w-[8rem] truncate rounded bg-brand/10 px-2 py-0.5 text-xs text-brand" title={`發到 ${accountLabel}`}>
               @{accountLabel}
+            </span>
+          )}
+          <span
+            className={"rounded px-2 py-0.5 text-xs " + (qualified ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700")}
+            title={qualified ? "合格素材組（含影片＋圖）" : "建議湊成 1 影片＋至少 1 圖，成效較佳"}
+          >
+            {qualified ? "✅ 合格" : "⚠️ 素材組"}
+          </span>
+          {allInMain && (
+            <span className="rounded bg-surface-2 px-2 py-0.5 text-xs text-ink-2" title="影片＋圖＋分潤連結全發主文，不另發留言">
+              全主文
             </span>
           )}
           <span className="rounded bg-surface-2 px-2 py-0.5 text-xs text-ink-2">{draft.status}</span>

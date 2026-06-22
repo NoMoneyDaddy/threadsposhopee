@@ -278,7 +278,10 @@ export async function reclaimStalePublishing(staleMinutes = 15): Promise<number>
 // 與 listApprovedDrafts 同屬「跨租戶 worker 查詢」：只由 publishDueReplies（背景）呼叫、
 // 絕不吃使用者輸入；實際發文/更新仍以該列自己的 owner_id 過濾（見 mark* / getThreadsCredentials）。
 // 只回傳補留言會用到的欄位（型別誠實標示，避免誤用其他 Draft 欄位拿到 undefined）
-export type ReplyDueDraft = Pick<Draft, "id" | "owner_id" | "threads_account_id" | "published_post_id" | "reply_text">;
+export type ReplyDueDraft = Pick<
+  Draft,
+  "id" | "owner_id" | "threads_account_id" | "published_post_id" | "reply_text" | "reply_media"
+>;
 export async function listRepliesDue(limit = 20): Promise<ReplyDueDraft[]> {
   const nowIso = new Date().toISOString();
   if (isDemoMode) {
@@ -289,7 +292,7 @@ export async function listRepliesDue(limit = 20): Promise<ReplyDueDraft[]> {
   const sb = getServiceClient()!;
   const { data, error } = await sb
     .from("drafts")
-    .select("id, owner_id, threads_account_id, published_post_id, reply_text")
+    .select("id, owner_id, threads_account_id, published_post_id, reply_text, reply_media")
     .eq("reply_status", "pending")
     .not("reply_due_at", "is", null)
     .lte("reply_due_at", nowIso)

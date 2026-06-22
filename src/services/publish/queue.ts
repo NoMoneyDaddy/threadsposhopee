@@ -37,7 +37,7 @@ import {
 } from "@/lib/sponsor";
 import { resolveSponsorResources, buildSponsorLinkForAccount } from "@/services/sponsor/link";
 import { log } from "@/lib/logger";
-import { normalizeDraftMedia } from "@/lib/media";
+import { normalizeDraftMedia, normalizeReplyMedia } from "@/lib/media";
 import { shardOf, circuitOpen, nextPacingSkipReason } from "@/services/publish/cadence";
 import { replyDelayMinutes } from "@/services/publish/reply-timing";
 import { sendAlert, sendUserAlert } from "@/lib/notify";
@@ -239,11 +239,14 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
       continue;
     }
 
+    // all_in_main：影片+圖+連結全發主文、不另發留言（留言文案併入主文，不走延遲留言流程）。
+    const allInMain = draft.post_mode === "all_in_main";
+    const hasReply = Boolean(draft.reply_text) && !allInMain;
     // 留言延遲：>0 表示主文先發、留言之後補（防「秒留言」固定行為）。逐則可覆寫。
-    const replyDelay = draft.reply_text
+    const replyDelay = hasReply
       ? replyDelayMinutes(draft.id, env.replyDelayFloorMinutes, env.replyDelayJitterMinutes, draft.reply_delay_minutes)
       : 0;
-    const deferReply = Boolean(draft.reply_text) && replyDelay > 0;
+    const deferReply = hasReply && replyDelay > 0;
 
     // 贊助文判定：啟用＋非 owner 帳號＋冷門時段＋今天尚未做過 → 就地換連結（DB 原文不動）。
     let sponsorLinkUsed: string | null = null;
@@ -300,6 +303,8 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
           text: pubMainText,
           media: normalizeDraftMedia(draft),
           replyText: pubReplyText,
+          replyMedia: normalizeReplyMedia(draft),
+          postMode: draft.post_mode,
           deferReply
         });
         postId = res.postId;
@@ -321,7 +326,7 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
       // 立即留言：依實際成功與否落 published/failed（不要謊報 published）
       const replyPatch = deferReply
         ? { reply_status: "pending" as const, reply_due_at: new Date(nowMs + replyDelay * 60000).toISOString() }
-        : draft.reply_text
+        : hasReply
           ? { reply_status: replyFailedInline ? ("failed" as const) : ("published" as const) }
           : {};
       // CAS 落地：只在仍是 publishing 時寫 published，避免覆寫掉並行 reclaim 已改成的
@@ -418,7 +423,13 @@ async function publishDueReplies(startTime: number, shard?: ShardOpts): Promise<
       }
       const creds = await getThreadsCredentials(d.threads_account_id, ownerId);
       if (!creds) throw new Error("找不到 Threads 帳號憑證");
-      const replyPostId = await publishReply(creds.threadsUserId, creds.accessToken, d.published_post_id, d.reply_text);
+      const replyPostId = await publishReply(
+        creds.threadsUserId,
+        creds.accessToken,
+        d.published_post_id,
+        d.reply_text,
+        normalizeReplyMedia(d)
+      );
       await markReplyPublished(d.id, ownerId, replyPostId);
       out.published++;
     } catch (e) {

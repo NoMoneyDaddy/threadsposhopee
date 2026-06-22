@@ -1,6 +1,6 @@
 import { getThreadsCredentials, updateDraftStatus } from "@/lib/store";
 import { publishToThreads } from "@/services/threads/publish";
-import { normalizeDraftMedia } from "@/lib/media";
+import { normalizeDraftMedia, normalizeReplyMedia } from "@/lib/media";
 import { replyDelayMinutes } from "@/services/publish/reply-timing";
 import { env } from "@/lib/env";
 import type { Draft } from "@/lib/types";
@@ -15,23 +15,28 @@ export async function publishDraftNow(draft: Draft, ownerId: string): Promise<{ 
   try {
     const creds = await getThreadsCredentials(draft.threads_account_id, ownerId);
     if (!creds) throw new Error("找不到 Threads 帳號憑證");
+    // all_in_main：留言文案併入主文、不另發留言（不走延遲留言流程）
+    const allInMain = draft.post_mode === "all_in_main";
+    const hasReply = Boolean(draft.reply_text) && !allInMain;
     // 留言延遲：>0 表示主文先發、留言之後由 cron 補（防「秒留言」固定行為）
-    const replyDelay = draft.reply_text
+    const replyDelay = hasReply
       ? replyDelayMinutes(draft.id, env.replyDelayFloorMinutes, env.replyDelayJitterMinutes, draft.reply_delay_minutes)
       : 0;
-    const deferReply = Boolean(draft.reply_text) && replyDelay > 0;
+    const deferReply = hasReply && replyDelay > 0;
     const { postId, replyFailed } = await publishToThreads({
       threadsUserId: creds.threadsUserId,
       accessToken: creds.accessToken,
       text: draft.main_text ?? "",
       media: normalizeDraftMedia(draft),
       replyText: draft.reply_text,
+      replyMedia: normalizeReplyMedia(draft),
+      postMode: draft.post_mode,
       deferReply
     });
     const nowMs = Date.now();
     const replyPatch = deferReply
       ? { reply_status: "pending" as const, reply_due_at: new Date(nowMs + replyDelay * 60000).toISOString() }
-      : draft.reply_text
+      : hasReply
         ? { reply_status: replyFailed ? ("failed" as const) : ("published" as const) }
         : {};
     await updateDraftStatus(draft.id, "published", {

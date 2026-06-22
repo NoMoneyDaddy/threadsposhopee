@@ -35,6 +35,7 @@ function DraftCard({
   const [busy, setBusy] = useState<string | null>(null);
   const [mainText, setMainText] = useState(draft.main_text ?? "");
   const [replyText, setReplyText] = useState(draft.reply_text ?? "");
+  const [shopeeLink, setShopeeLink] = useState(draft.shopee_short_link ?? "");
   const [msg, setMsg] = useState<string | null>(null);
   const [compliance, setCompliance] = useState<{ risk: string; advice: string } | null>(null);
   const [variants, setVariants] = useState<{ mainText: string; replyText: string }[] | null>(null);
@@ -94,8 +95,9 @@ function DraftCard({
   useEffect(() => {
     setMainText(draft.main_text ?? "");
     setReplyText(draft.reply_text ?? "");
+    setShopeeLink(draft.shopee_short_link ?? "");
     setSchedTime(toLocalInput(draft.scheduled_at));
-  }, [draft.main_text, draft.reply_text, draft.scheduled_at]);
+  }, [draft.main_text, draft.reply_text, draft.shopee_short_link, draft.scheduled_at]);
 
   async function call(action: string, extra: Record<string, unknown> = {}) {
     setBusy(action);
@@ -111,6 +113,7 @@ function DraftCard({
       if ((action === "regenerate" || action === "edit") && json.draft) {
         setMainText(json.draft.main_text ?? "");
         setReplyText(json.draft.reply_text ?? "");
+        setShopeeLink(json.draft.shopee_short_link ?? "");
       }
       if (action === "edit") setEditing(false);
       router.refresh();
@@ -235,10 +238,17 @@ function DraftCard({
             placeholder="留言區（含分潤連結）"
             aria-label="留言區（含分潤連結）"
           />
+          <input
+            className="w-full rounded border px-2 py-1 text-xs"
+            value={shopeeLink}
+            onChange={(e) => setShopeeLink(e.target.value)}
+            placeholder="分潤連結（可自行覆寫；留空則沿用自動轉換）"
+            aria-label="分潤連結"
+          />
           <div className="flex gap-2">
             <button
               disabled={busy === "edit"}
-              onClick={() => call("edit", { main_text: mainText, reply_text: replyText })}
+              onClick={() => call("edit", { main_text: mainText, reply_text: replyText, shopee_short_link: shopeeLink })}
               className="rounded bg-brand px-3 py-1 text-xs text-white disabled:opacity-50"
             >
               {busy === "edit" ? "儲存中…" : "儲存"}

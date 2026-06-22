@@ -21,7 +21,7 @@ export async function generateWithGemini(
   apiKey?: string | null,
   temperature = 0.9
 ): Promise<string> {
-  const key = apiKey || env.geminiApiKey;
+  const key = apiKey;
   if (!key) throw new Error("無 Gemini 金鑰"); // 先擋空金鑰，避免送出 key=undefined 的必失敗外呼
   const parts: any[] = [{ text: prompt }];
 
@@ -97,7 +97,7 @@ export async function generateWithGemini(
 
 // 純文字生成（無媒體）：給「成效歸因摘要」等非文案用途共用。失敗會拋錯，由呼叫端決定降級。
 export async function geminiText(prompt: string, apiKey?: string | null, temperature = 0.4, maxOutputTokens = 400): Promise<string> {
-  const key = apiKey || env.geminiApiKey;
+  const key = apiKey;
   if (!key) throw new Error("無 Gemini 金鑰");
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${env.geminiModel}:generateContent?key=${key}`;
   const res = await fetchWithRetry(assertSafePublicUrl(url).href, {

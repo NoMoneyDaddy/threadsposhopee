@@ -4,7 +4,6 @@ import { expandShopeeLink } from "@/services/shopee/expand";
 import { generateAffiliateLink, buildAffiliateRedirectLink } from "@/services/shopee/affiliate";
 import { normalizeSubId } from "@/services/shopee/subid";
 import { getShopeeCredentials, getShopeeAffiliateId, getShopeeSubId } from "@/lib/store";
-import { env } from "@/lib/env";
 
 export interface SponsorLinkResources {
   cleanUrl: string | null; // 展開後的乾淨商品連結（整輪快取一次）
@@ -13,17 +12,13 @@ export interface SponsorLinkResources {
   ownerSubId: string | null; // owner 自訂 subId 基底
 }
 
-// 整輪取一次：owner 的 Shopee 金鑰（自綁優先、否則 env）／affiliate_id／自訂 subId，並展開商品原始連結。
+// 整輪取一次：owner 自綁的 Shopee 金鑰／affiliate_id／自訂 subId，並展開商品原始連結。
 export async function resolveSponsorResources(productUrl: string, ownerId: string): Promise<SponsorLinkResources> {
-  const [creds, ownerAffiliateId, ownerSubId] = await Promise.all([
+  const [ownerCreds, ownerAffiliateId, ownerSubId] = await Promise.all([
     getShopeeCredentials(ownerId).catch(() => null),
     getShopeeAffiliateId(ownerId).catch(() => null),
     getShopeeSubId(ownerId).catch(() => null)
   ]);
-  let ownerCreds = creds;
-  if (!ownerCreds && env.shopeeAppId && env.shopeeSecret) {
-    ownerCreds = { appId: env.shopeeAppId, secret: env.shopeeSecret, subId: env.shopeeDefaultSubId };
-  }
   const expanded = await expandShopeeLink(productUrl).catch(() => null);
   const cleanUrl = expanded?.cleanUrl ?? productUrl;
   return { cleanUrl, ownerCreds, ownerAffiliateId, ownerSubId };

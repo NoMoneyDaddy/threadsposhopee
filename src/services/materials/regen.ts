@@ -1,6 +1,6 @@
 // 失效分潤連結自動重產：短連結過期（非商品下架）時，用同樣的 subId 重新產生一條。
 // 解析金鑰順序同 fromUrl：自綁 Shopee API → owner 退環境變數 → affiliate_id 自組 an_redir。
-import { env, isDemoMode } from "@/lib/env";
+import { isDemoMode } from "@/lib/env";
 import { generateAffiliateLink, buildAffiliateRedirectLink, buildSubIds } from "@/services/shopee/affiliate";
 import { getShopeeCredentials, getShopeeAffiliateId, type MaterialToCheck } from "@/lib/store";
 
@@ -22,12 +22,7 @@ export async function regenerateAffiliateLink(
 ): Promise<{ link: string; subId: string } | null> {
   if (isDemoMode || !m.owner_id || !m.clean_product_url) return null;
 
-  let creds = await getShopeeCredentials(m.owner_id);
-  // owner 沒自綁則退環境變數金鑰（僅限該素材確實屬於 owner）
-  if (!creds && ownerUserId && m.owner_id === ownerUserId && env.shopeeAppId && env.shopeeSecret) {
-    creds = { appId: env.shopeeAppId, secret: env.shopeeSecret, subId: env.shopeeDefaultSubId };
-  }
-
+  const creds = await getShopeeCredentials(m.owner_id);
   if (creds) {
     const subIds = subIdsForRegen(m.affiliate_sub_id, m.item_id, creds.subId);
     const link = await generateAffiliateLink(creds.appId, creds.secret, m.clean_product_url, subIds);

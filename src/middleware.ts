@@ -47,9 +47,13 @@ export async function middleware(req: NextRequest) {
   if (req.method !== "GET" && req.method !== "HEAD") {
     const origin = req.headers.get("origin");
     if (origin) {
+      // 反向代理後 url.host 可能是內部位址（如 localhost:8080），改用瀏覽器實際送的對外
+      // Host（與短網域判斷一致），否則正常同源操作會被誤判為跨來源而擋掉。
+      const reqHost =
+        req.headers.get("x-forwarded-host")?.split(",")[0]?.trim() || req.headers.get("host") || url.host;
       let sameOrigin = false;
       try {
-        sameOrigin = new URL(origin).host === url.host; // 解析失敗（如 "null"/畸形）視為跨來源
+        sameOrigin = new URL(origin).host === reqHost; // 解析失敗（如 "null"/畸形）視為跨來源
       } catch {
         sameOrigin = false;
       }

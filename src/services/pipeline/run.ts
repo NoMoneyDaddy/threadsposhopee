@@ -6,7 +6,6 @@
 import { scrapeLatestPosts } from "@/services/scraper/threads";
 import { expandShopeeLink } from "@/services/shopee/expand";
 import { buildMaterialForProduct } from "@/services/materials/build";
-import { env } from "@/lib/env";
 import { log } from "@/lib/logger";
 import { sendUserAlert } from "@/lib/notify";
 import { getOwnerUserId } from "@/lib/auth";
@@ -25,14 +24,9 @@ import {
 } from "@/lib/store";
 import type { Source } from "@/lib/types";
 
-// owner 的 Shopee 金鑰：優先自綁（shopee_accounts），沒綁退回環境變數
+// owner 的 Shopee 金鑰：一律吃自綁（shopee_accounts），未綁回 null（不再用環境變數）。
 async function ownerShopeeCreds(ownerId: string): Promise<{ appId: string; secret: string; subId: string } | null> {
-  const bound = await getShopeeCredentials(ownerId);
-  if (bound) return bound;
-  if (env.shopeeAppId && env.shopeeSecret) {
-    return { appId: env.shopeeAppId, secret: env.shopeeSecret, subId: env.shopeeDefaultSubId };
-  }
-  return null;
+  return getShopeeCredentials(ownerId);
 }
 
 export interface PipelineResult {
@@ -59,7 +53,7 @@ export async function runSourcePipeline(source: Source, ownerId: string): Promis
     notes: []
   };
 
-  // 子系統憑證一次解析（自綁優先，退回 env）：Apify（爬蟲）、Shopee（分潤）、Gemini（AI）
+  // 子系統憑證一次解析（一律自綁）：Apify（爬蟲）、Shopee（分潤）、Gemini（AI）
   const apify = await getApifyCredentials(ownerId);
   const shopeeCreds = await ownerShopeeCreds(ownerId);
   const geminiKey = await getGeminiKey(ownerId);

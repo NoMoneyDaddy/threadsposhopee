@@ -1,6 +1,9 @@
-import { env, isDemoMode } from "@/lib/env";
+import { isDemoMode } from "@/lib/env";
 import sampleThread from "@/fixtures/sample-thread.json";
 import { fetchWithRetry } from "@/lib/http";
+
+// 使用者未指定 actor 時的預設 Threads 爬蟲 actor。
+const DEFAULT_THREADS_ACTOR = "igview-owner/threads-scraper-lite";
 
 export interface ScrapedPost {
   postId: string;
@@ -57,20 +60,20 @@ export function parseThreadPayload(payload: any): ScrapedPost[] {
 }
 
 // 呼叫 Apify Threads Scraper 取得來源帳號最新貼文。Demo 模式直接回 fixture。
-// creds：使用者自己綁的 Apify token/actor；沒傳則退回全域 env（向後相容）。
+// creds：使用者自己綁的 Apify token/actor（一律自綁，不再用全域 env）。
 export async function scrapeLatestPosts(
   username: string,
   postsLimit = 1,
   creds?: { token: string; actor?: string | null } | null
 ): Promise<ScrapedPost[]> {
-  const token = creds?.token || env.apifyToken;
-  const actor = creds?.actor || env.apifyActor;
+  const token = creds?.token;
+  const actor = creds?.actor || DEFAULT_THREADS_ACTOR;
   // Demo 模式才回假資料；正式環境沒金鑰要報錯，避免靜默吞掉（誤以為有在爬）
   if (isDemoMode) {
     return parseThreadPayload(sampleThread);
   }
   if (!token) {
-    throw new Error("未綁定 Apify token（到帳號管理綁定，或設 APIFY_TOKEN）");
+    throw new Error("未綁定 Apify token（請到帳號管理綁定你自己的 Apify 金鑰）");
   }
 
   const url = `https://api.apify.com/v2/acts/${actor.replace("/", "~")}/run-sync-get-dataset-items?token=${token}`;

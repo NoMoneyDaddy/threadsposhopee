@@ -1,5 +1,3 @@
-import { env } from "@/lib/env";
-
 export interface CloudinaryUsage {
   creditsUsed: number;
   creditsLimit: number;
@@ -7,14 +5,20 @@ export interface CloudinaryUsage {
   resources: number;
 }
 
-// 查 Cloudinary 用量（需設定 CLOUDINARY_API_KEY/SECRET，未設定回 null）。
-export async function getCloudinaryUsage(): Promise<CloudinaryUsage | null> {
-  if (!env.cloudinaryCloud || !env.cloudinaryApiKey || !env.cloudinaryApiSecret) return null;
+export interface CloudinaryUsageCreds {
+  cloud: string;
+  apiKey: string;
+  apiSecret: string;
+}
+
+// 查 Cloudinary 用量（吃使用者自綁的完整金鑰；沒綁或缺欄位回 null）。
+export async function getCloudinaryUsage(creds: CloudinaryUsageCreds | null): Promise<CloudinaryUsage | null> {
+  if (!creds?.cloud || !creds.apiKey || !creds.apiSecret) return null;
   try {
-    const auth = btoa(`${env.cloudinaryApiKey}:${env.cloudinaryApiSecret}`);
+    const auth = btoa(`${creds.apiKey}:${creds.apiSecret}`);
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 8000);
-    const res = await fetch(`https://api.cloudinary.com/v1_1/${env.cloudinaryCloud}/usage`, {
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${encodeURIComponent(creds.cloud)}/usage`, {
       headers: { Authorization: `Basic ${auth}` },
       cache: "no-store",
       signal: controller.signal

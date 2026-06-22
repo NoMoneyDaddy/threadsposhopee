@@ -1,10 +1,10 @@
-import { getPublishInsights } from "@/lib/store";
+import { getPublishInsights, getShopeeCredentials } from "@/lib/store";
 import { listThreadsAccounts } from "@/lib/accounts-store";
 import { getAffiliateRevenue, type AffiliateRevenue } from "@/services/shopee/report";
 import { getEngagementCached, bestPostingTimes, type EngagementSummary } from "@/services/threads/engagement";
 import { detectReachDrop } from "@/services/threads/reach";
 import { getCurrentUser } from "@/lib/auth";
-import { env, isDemoMode } from "@/lib/env";
+import { isDemoMode } from "@/lib/env";
 import { INSIGHTS_PERIODS as PERIODS, resolveInsightsRange } from "@/lib/insights-range";
 
 export const dynamic = "force-dynamic";
@@ -15,26 +15,30 @@ export const maxDuration = 30;
 export default async function InsightsPage({
   searchParams
 }: {
-  searchParams: { days?: string; from?: string; to?: string };
+  searchParams: { days?: string };
 }) {
   const user = await getCurrentUser();
   if (!user) return <div className="text-center text-sm text-red-500">請先登入。</div>;
 
-  const { startMs, endMs, days, label: rangeLabel, custom } = resolveInsightsRange(searchParams);
+  const { startMs, endMs, days, label: rangeLabel } = resolveInsightsRange(searchParams);
 
   // 帳號清單查一次，供 getPublishInsights（分項報表）與分潤歸因共用，避免同請求重複查 threads_accounts。
   const accounts = await listThreadsAccounts(user.id).catch(() => []);
   // 三項彼此無依賴（發布統計／分潤收益／互動數據），改 Promise.all 並行避免序列瀑布。
   const [data, revResult, engagement] = await Promise.all([
     getPublishInsights(user.id, { startMs, endMs }, accounts.map((a) => ({ id: a.id, label: a.label }))),
-    // 分潤收益（僅 owner、且有設金鑰時才抓；失敗則優雅降級），用 IIFE 保留自身 try/catch。
+    // 分潤收益吃使用者「自己」綁的 Shopee 金鑰；沒綁就不顯示（回 null）。失敗則優雅降級，用 IIFE 保留自身 try/catch。
     (async (): Promise<{ revenue: AffiliateRevenue | null; revenueErr: string | null }> => {
-      if (!(user.isOwner && !isDemoMode && env.shopeeAppId && env.shopeeSecret)) {
-        return { revenue: null, revenueErr: null };
-      }
+      if (isDemoMode) return { revenue: null, revenueErr: null };
+      const creds = await getShopeeCredentials(user.id).catch(() => null);
+      if (!creds) return { revenue: null, revenueErr: null };
       try {
         // 依 sp_<帳號碼> 把分潤歸因到各帳號（共用上方 accounts）
-        const revenue = await getAffiliateRevenue({ startMs, endMs }, accounts.map((a) => ({ id: a.id, label: a.label })));
+        const revenue = await getAffiliateRevenue(
+          { appId: creds.appId, secret: creds.secret },
+          { startMs, endMs },
+          accounts.map((a) => ({ id: a.id, label: a.label }))
+        );
         return { revenue, revenueErr: null };
       } catch (e) {
         return { revenue: null, revenueErr: e instanceof Error ? e.message : String(e) };
@@ -53,46 +57,25 @@ export default async function InsightsPage({
         <p className="text-sm text-ink-2">
           {rangeLabel}共發布 <b className="text-brand">{data.totalPublished}</b> 篇。
         </p>
-        <div className="mt-2 flex flex-wrap gap-1.5">
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
           {PERIODS.map((p) => (
             <a
               key={p.days}
               href={`/insights?days=${p.days}`}
               className={`rounded-full px-3 py-1 text-xs ${
-                !custom && p.days === days ? "bg-brand text-white" : "bg-surface-2 text-ink-2 hover:bg-neutral-200"
+                p.days === days ? "bg-brand text-white" : "bg-surface-2 text-ink-2 hover:bg-neutral-200"
               }`}
             >
               {p.label}
             </a>
           ))}
-        </div>
-        {/* 自訂日期區間（GET 表單；台北日期） */}
-        <form method="get" className="mt-2 flex flex-wrap items-end gap-2">
-          <label className="text-xs text-ink-2">
-            起<input type="date" name="from" defaultValue={searchParams.from ?? ""} className="ml-1 rounded-lg border px-2 py-1 text-xs" />
-          </label>
-          <label className="text-xs text-ink-2">
-            迄<input type="date" name="to" defaultValue={searchParams.to ?? ""} className="ml-1 rounded-lg border px-2 py-1 text-xs" />
-          </label>
-          <button type="submit" className="rounded-lg bg-surface-2 px-3 py-1 text-xs text-ink-2 hover:bg-neutral-200">
-            套用區間
-          </button>
-          {custom && (
-            <a href="/insights" className="rounded-lg px-2 py-1 text-xs text-ink-3 hover:text-ink">
-              清除
-            </a>
-          )}
           <a
-            href={`/api/insights/export?${new URLSearchParams(
-              custom
-                ? { from: searchParams.from ?? "", to: searchParams.to ?? "" }
-                : { days: String(days) }
-            ).toString()}`}
-            className="rounded-lg border border-brand/40 px-3 py-1 text-xs text-brand hover:bg-brand/10"
+            href={`/api/insights/export?days=${days}`}
+            className="ml-auto rounded-lg border border-brand/40 px-3 py-1 text-xs text-brand hover:bg-brand/10"
           >
             匯出 CSV
           </a>
-        </form>
+        </div>
       </div>
 
       {revenue && <RevenueSection r={revenue} />}

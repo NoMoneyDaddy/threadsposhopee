@@ -116,6 +116,7 @@ export {
   getRepostLimits,
   setRepostLimits,
   getUserCloudinary,
+  getUserCloudinaryFull,
   setUserCloudinary,
   getUserPlan,
   setUserPlan

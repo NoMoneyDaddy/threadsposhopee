@@ -2,8 +2,10 @@
 // 用 owner 的環境變數金鑰；沿用既有 HMAC 簽名與帶逾時的 fetch。
 import { callShopeeGql } from "@/services/shopee/gql";
 import { normalizeSubId } from "@/services/shopee/subid";
-import { env } from "@/lib/env";
-import { getCachedJson, setCachedJson } from "@/lib/store";
+import { getCachedJson, setCachedJson, getShopeeCredentials } from "@/lib/store";
+
+// 各使用者自綁的 Shopee 分潤 Open API 金鑰（解密後）。分潤收益一律吃「自己的」金鑰。
+export type ShopeeCreds = { appId: string; secret: string };
 
 interface ReportItem {
   itemName: string | null;
@@ -65,11 +67,19 @@ export function parseMoney(s: string | null | undefined): number {
 }
 const num = parseMoney;
 
+// 蝦皮 conversionReport 僅能查「近 3 個月」，起點早於此會回 error 11001 而整個讀取失敗。
+// 用 88 天為上限（保守涵蓋最短的 3 個曆月，避免邊界被拒）；起點早於上限則夾到上限。純函式可測。
+export const SHOPEE_MAX_LOOKBACK_SEC = 88 * 86400;
+export function clampShopeeStart(startSec: number, nowSec: number): number {
+  const earliest = nowSec - SHOPEE_MAX_LOOKBACK_SEC;
+  return startSec < earliest ? earliest : startSec;
+}
+
 // 抓指定時間窗（秒）轉換報表（分頁，最多抓 maxPages 頁避免吃滿時間）。
-async function fetchConversions(start: number, end: number, maxPages = 10): Promise<{ nodes: ReportNode[]; truncated: boolean }> {
-  const appId = env.shopeeAppId;
-  const secret = env.shopeeSecret;
-  if (!appId || !secret) throw new Error("未設定 Shopee 分潤金鑰");
+async function fetchConversions(creds: ShopeeCreds, start: number, end: number, maxPages = 10): Promise<{ nodes: ReportNode[]; truncated: boolean }> {
+  const { appId, secret } = creds;
+  // 守住蝦皮 3 個月限制（任何呼叫端都受保護）。
+  start = clampShopeeStart(start, Math.floor(Date.now() / 1000));
 
   const nodes: ReportNode[] = [];
   let scrollId = "";
@@ -105,13 +115,16 @@ async function fetchConversions(start: number, end: number, maxPages = 10): Prom
 
 // 接受「近 N 天」（數字）或明確時間窗 { startMs, endMs }（自訂區間）。
 export async function getAffiliateRevenue(
+  creds: ShopeeCreds,
   arg: number | { startMs: number; endMs: number } = 30,
   accounts?: { id: string; label: string | null }[]
 ): Promise<AffiliateRevenue> {
   const end = typeof arg === "number" ? Math.floor(Date.now() / 1000) : Math.floor(arg.endMs / 1000);
-  const start = typeof arg === "number" ? end - arg * 86400 : Math.floor(arg.startMs / 1000);
+  const rawStart = typeof arg === "number" ? end - arg * 86400 : Math.floor(arg.startMs / 1000);
+  // 夾到蝦皮 3 個月上限，讓 days 標示與實際抓取一致（避免「近 365 天」卻只有近 3 個月資料）。
+  const start = clampShopeeStart(rawStart, Math.floor(Date.now() / 1000));
   const days = Math.max(1, Math.round((end - start) / 86400));
-  const { nodes, truncated } = await fetchConversions(start, end);
+  const { nodes, truncated } = await fetchConversions(creds, start, end);
 
   const statusMap = new Map<string, { count: number; commission: number }>();
   const itemMap = new Map<string, { commission: number; count: number }>();
@@ -206,8 +219,11 @@ export async function getItemRevenueMap(ownerId: string, days = 30): Promise<Rec
   const key = `item_revenue:${ownerId}:${days}`;
   const cached = await getCachedJson<Record<string, ItemRevenue>>(key, 6 * 3600_000).catch(() => null);
   if (cached) return cached;
+  // 吃該使用者自綁的 Shopee 金鑰；未綁則無資料可回（不擋素材頁）。
+  const creds = await getShopeeCredentials(ownerId).catch(() => null);
+  if (!creds) return {};
   const end = Math.floor(Date.now() / 1000);
-  const { nodes } = await fetchConversions(end - days * 86400, end);
+  const { nodes } = await fetchConversions({ appId: creds.appId, secret: creds.secret }, end - days * 86400, end);
   const map = aggregateItemRevenue(nodes);
   await setCachedJson(key, map).catch(() => {});
   return map;

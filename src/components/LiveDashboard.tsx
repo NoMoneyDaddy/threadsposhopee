@@ -103,7 +103,8 @@ function Autopilot({ lastCronAt, demo }: { lastCronAt?: string | null; demo: boo
   if (!lastCronAt) {
     return (
       <div className="rounded-2xl border border-border bg-surface-2 p-3 text-sm text-ink-2">
-        🅿️ 自動駕駛尚未啟動 — 請到 Zeabur 設一條 Cron 打 <code>/api/cron/all</code>（每 15 分）。
+        ⏸️ 自動排程還沒開 — 開了之後系統才會<b>自動抓文、自動發文</b>。開啟方式：到部署平台
+        Zeabur 新增一個「定時任務（Cron Job）」，每 15 分鐘呼叫一次網址 <code>/api/cron/all</code>。
       </div>
     );
   }
@@ -154,7 +155,7 @@ function RunQueueButton({ onDone }: { onDone: () => void }) {
         aria-busy={busy}
         className="rounded-xl border border-brand/40 bg-orange-50 px-3 py-1.5 text-sm text-brand hover:bg-orange-100 disabled:opacity-50"
       >
-        {busy ? "發送中…" : "⚡ 立即跑一輪佇列"}
+        {busy ? "發送中…" : "⚡ 立即發送排隊貼文"}
       </button>
       {msg && <span className="text-xs text-ink-2">{msg}</span>}
     </div>
@@ -285,7 +286,7 @@ export default function LiveDashboard() {
       {data.publishPaused && (
         <div className="flex items-center gap-2 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
           <span className="h-2 w-2 rounded-full bg-red-500" />
-          ⏸️ 自動發文已暫停 — cron 與「立即跑一輪」整批跳過。草稿頁單篇「核准並發布」仍可手動發。
+          ⏸️ 自動發文已暫停 — 自動排程與「立即發送排隊貼文」都會整批跳過。草稿頁單篇「核准並發布」仍可手動發。
         </div>
       )}
       {data.isOwner && !data.demo && (
@@ -330,11 +331,11 @@ export default function LiveDashboard() {
         </div>
       )}
       <div className="flex flex-wrap items-center gap-2">
-        <Chip label="Supabase" on={Boolean(data.services.supabase)} />
-        <Chip label={`AI (${data.services.ai_provider})`} on={Boolean(data.services.gemini)} />
-        <Chip label="Apify 爬蟲" on={Boolean(data.services.apify)} />
-        <Chip label="Shopee 分潤" on={Boolean(data.services.shopee)} />
-        <Chip label="Cloudinary" on={Boolean(data.services.cloudinary)} />
+        <Chip label="資料庫" on={Boolean(data.services.supabase)} />
+        <Chip label="AI 文案" on={Boolean(data.services.gemini)} />
+        <Chip label="自動抓文" on={Boolean(data.services.apify)} />
+        <Chip label="蝦皮分潤" on={Boolean(data.services.shopee)} />
+        <Chip label="圖片影片空間" on={Boolean(data.services.cloudinary)} />
         <span className="ml-auto flex items-center gap-2 text-xs text-ink-3">
           {loading && <span className="h-2 w-2 animate-pulse rounded-full bg-green-400" />}
           更新於 {new Date(data.at).toLocaleTimeString("zh-TW")}

@@ -1,6 +1,18 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { aggregateItemRevenue, attributeRevenueByAccount, parseMoney } from "./report";
+import { aggregateItemRevenue, attributeRevenueByAccount, parseMoney, clampShopeeStart, SHOPEE_MAX_LOOKBACK_SEC } from "./report";
+
+test("clampShopeeStart：早於 3 個月上限則夾到上限", () => {
+  const now = 1_700_000_000;
+  const tooEarly = now - 365 * 86400;
+  assert.equal(clampShopeeStart(tooEarly, now), now - SHOPEE_MAX_LOOKBACK_SEC);
+});
+
+test("clampShopeeStart：在上限內則原樣保留", () => {
+  const now = 1_700_000_000;
+  const recent = now - 30 * 86400;
+  assert.equal(clampShopeeStart(recent, now), recent);
+});
 
 test("parseMoney：去千分位逗號正確解析", () => {
   assert.equal(parseMoney("1,234.50"), 1234.5);

@@ -218,15 +218,55 @@ export async function getUserCloudinary(ownerId: string): Promise<{ cloud: strin
   return { cloud, preset };
 }
 
-export async function setUserCloudinary(ownerId: string, cloud: string | null, preset: string | null): Promise<void> {
+// 完整 Cloudinary 金鑰（cloud + API key/secret，解密）：供「用量面板」查詢用。沒綁回 null。
+// 與 getUserCloudinary（上傳用 cloud+preset）分開：API key/secret 為機密，加密存。
+export async function getUserCloudinaryFull(
+  ownerId: string
+): Promise<{ cloud: string; apiKey: string; apiSecret: string } | null> {
+  if (isDemoMode) return null;
+  const sb = getServiceClient()!;
+  const { data, error } = await sb
+    .from("profiles")
+    .select("cloudinary_cloud, cloudinary_api_key_enc, cloudinary_api_secret_enc")
+    .eq("id", ownerId)
+    .maybeSingle();
+  if (error) {
+    log.warn("讀取 Cloudinary 完整金鑰失敗", { ownerId, err: error.message });
+    return null;
+  }
+  const cloud = data?.cloudinary_cloud?.trim();
+  if (!cloud || !data?.cloudinary_api_key_enc || !data?.cloudinary_api_secret_enc) return null;
+  try {
+    return { cloud, apiKey: decrypt(data.cloudinary_api_key_enc), apiSecret: decrypt(data.cloudinary_api_secret_enc) };
+  } catch (e) {
+    log.error("解密 Cloudinary API 金鑰失敗", { ownerId, err: e });
+    return null;
+  }
+}
+
+// 儲存 Cloudinary 設定。apiKey/apiSecret 為選填（給用量面板用）：傳空白＝不變動；cloud 清空＝整組解除（含金鑰）。
+export async function setUserCloudinary(
+  ownerId: string,
+  cloud: string | null,
+  preset: string | null,
+  apiKey?: string | null,
+  apiSecret?: string | null
+): Promise<void> {
   if (isDemoMode) return;
   const sb = getServiceClient()!;
-  const { error } = await sb
-    .from("profiles")
-    .upsert(
-      { id: ownerId, cloudinary_cloud: cloud || null, cloudinary_preset: preset || null },
-      { onConflict: "id" }
-    );
+  const patch: Record<string, unknown> = {
+    id: ownerId,
+    cloudinary_cloud: cloud || null,
+    cloudinary_preset: preset || null
+  };
+  if (!cloud) {
+    patch.cloudinary_api_key_enc = null;
+    patch.cloudinary_api_secret_enc = null;
+  } else {
+    if (apiKey && apiKey.trim()) patch.cloudinary_api_key_enc = encrypt(apiKey.trim());
+    if (apiSecret && apiSecret.trim()) patch.cloudinary_api_secret_enc = encrypt(apiSecret.trim());
+  }
+  const { error } = await sb.from("profiles").upsert(patch, { onConflict: "id" });
   if (error) throw new Error(`儲存 Cloudinary 設定失敗：${error.message}`);
 }
 

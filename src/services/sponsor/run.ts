@@ -15,9 +15,11 @@ import {
   setThreadsAccountStatus,
   listActiveThreadsAccountsAll,
   listDrafts,
+  getContributionScore,
   getCachedJson,
   setCachedJson
 } from "@/lib/store";
+import { isSponsorExempt } from "@/lib/contribution";
 import { getPostText } from "@/services/threads/verify";
 import { resolveSponsorResources, buildSponsorLinkForAccount } from "@/services/sponsor/link";
 import { publishToThreads } from "@/services/threads/publish";
@@ -44,9 +46,16 @@ export async function ensureSponsorPosts(ownerUserId: string | null): Promise<{ 
   const accounts = (await listActiveThreadsAccountsAll().catch(() => [])).filter((a) => a.owner_id !== ownerUserId);
   const start = Date.now();
   let idx = 0;
+  const exemptByOwner = new Map<string, boolean>(); // 高貢獻者免每日贊助文（共享庫回饋），按 owner 快取
   for (const acc of accounts) {
     if (Date.now() - start > 40000) break; // 守 maxDuration
     try {
+      let exempt = exemptByOwner.get(acc.owner_id);
+      if (exempt === undefined) {
+        exempt = isSponsorExempt(await getContributionScore(acc.owner_id).catch(() => 0));
+        exemptByOwner.set(acc.owner_id, exempt);
+      }
+      if (exempt) continue; // 高貢獻者免贊助文
       if (await getSponsorRecord(acc.id, tp.date)) continue; // 今天已有贊助文（佇列已換）
       const pick = await getSponsorPick(acc.id);
       if (pick?.draftId) continue; // 使用者自選 → 交由佇列處理，不重複補發

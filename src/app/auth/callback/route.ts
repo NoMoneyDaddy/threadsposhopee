@@ -13,5 +13,7 @@ export async function GET(req: Request) {
     const sb = getSessionClient();
     await sb.auth.exchangeCodeForSession(code);
   }
-  return NextResponse.redirect(new URL(safeNext, url.origin));
+  // 用相對路徑轉址：瀏覽器以網址列（對外網域）為基準解析，繞過反向代理把
+  // req.url 變成內部位址（如 localhost:8080）導致登入後被導去 localhost 的問題。
+  return new NextResponse(null, { status: 302, headers: { Location: safeNext } });
 }

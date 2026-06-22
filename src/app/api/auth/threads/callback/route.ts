@@ -12,11 +12,13 @@ export const maxDuration = 60;
 // Threads 授權回呼：用 code 換長期 token，upsert 成發文帳號，導回帳號管理。
 export async function GET(req: Request) {
   const url = new URL(req.url);
+  // 相對路徑轉址：避免反向代理後 url.origin 變內部位址（localhost:8080）而導去錯誤網域。
+  const redirectTo = (path: string) => new NextResponse(null, { status: 302, headers: { Location: path } });
   const back = (note: string, ok = false) =>
-    NextResponse.redirect(new URL(`/accounts?threads=${ok ? "ok" : "err"}&note=${encodeURIComponent(note)}`, url.origin));
+    redirectTo(`/accounts?threads=${ok ? "ok" : "err"}&note=${encodeURIComponent(note)}`);
 
   const user = await getCurrentUser();
-  if (!user) return NextResponse.redirect(new URL("/login", url.origin));
+  if (!user) return redirectTo("/login");
   if (isDemoMode || !env.threadsAppId || !env.threadsAppSecret || !env.threadsRedirectUri) {
     return back("尚未設定 Threads App");
   }

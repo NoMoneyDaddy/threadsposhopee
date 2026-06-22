@@ -8,7 +8,11 @@ export const dynamic = "force-dynamic";
 // Meta 資料刪除請求回呼（Data Deletion Request Callback）：驗證 signed_request 後刪除該
 // Threads 使用者資料，並依規回傳 { url, confirmation_code }（url 為可查詢的刪除狀態頁）。
 export async function POST(req: Request) {
-  const origin = new URL(req.url).origin;
+  // Meta 需要可對外存取的絕對網址；反向代理後 req.url 是內部位址，改用 x-forwarded-* 還原對外網域。
+  const fwdHost = req.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+  const fwdProto = req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  const url = new URL(req.url);
+  const origin = fwdHost ? `${fwdProto || "https"}://${fwdHost}` : url.origin;
   if (isDemoMode || !env.threadsAppSecret) {
     return NextResponse.json({ url: `${origin}/data-deletion`, confirmation_code: "demo" });
   }

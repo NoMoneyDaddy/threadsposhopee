@@ -233,6 +233,26 @@ export async function listFavoritedIds(ownerId: string, ids: string[]): Promise<
   return new Set((data ?? []).map((r) => r.material_id as string));
 }
 
+// 選品雷達：全站（含自己）最熱門的共享商品，依「匯入＋收藏」加權分數排序、再依商品去重。
+// 與 listSharedMaterials 不同：不排除瀏覽者自己（雷達是全站熱度榜，純探索用）。
+export async function listHotProducts(limit = 12): Promise<SharedMaterial[]> {
+  if (isDemoMode) return [];
+  const sb = getServiceClient()!;
+  const { data } = await sb
+    .from("materials")
+    .select(SHARED_COLS)
+    .eq("shared", true)
+    .eq("affiliate_valid", true)
+    .neq("review_status", "removed")
+    .order("favorite_count", { ascending: false })
+    .order("import_count", { ascending: false })
+    .limit(limit * 4);
+  const rows = (data ?? []) as SharedMaterial[];
+  const score = (m: SharedMaterial) => Math.max(0, m.import_count) + Math.max(0, m.favorite_count) * 2;
+  rows.sort((a, b) => score(b) - score(a));
+  return dedupeSharedByProduct(rows).slice(0, limit);
+}
+
 // 取一筆共享素材（供匯入：需 clean_product_url；任何登入者可匯入，故不帶 owner 過濾，但必須 shared）。
 export async function getSharedMaterial(id: string): Promise<SharedMaterial | null> {
   if (isDemoMode) return null;

@@ -40,6 +40,7 @@ export {
   isEvergreenDue,
   setMaterialShared,
   listSharedMaterials,
+  listHotProducts,
   listSharedForReview,
   setMaterialReview,
   toggleMaterialFavorite,
@@ -93,6 +94,8 @@ export {
   listNeedsVerificationAll,
   mainTextUsedByOtherOwner,
   listApprovedDraftsForShard,
+  listPublishedDates,
+  countPublished,
   type PublishedPostRef,
   type ReplyDueDraft
 } from "./drafts-store";

@@ -513,3 +513,35 @@ export async function listApprovedDraftsForShard(
   }
   return out;
 }
+
+// streak 用：某使用者近 sinceDays 天內「已發布」草稿的台北日期清單（可重複，呼叫端去重）。
+export async function listPublishedDates(ownerId: string, sinceDays = 120): Promise<string[]> {
+  const sinceIso = new Date(Date.now() - sinceDays * 86400_000).toISOString();
+  const toTaipei = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { timeZone: "Asia/Taipei" });
+  if (isDemoMode) {
+    return demo.drafts
+      .filter((d) => d.status === "published" && (d.published_at ?? d.created_at) >= sinceIso)
+      .map((d) => toTaipei(d.published_at ?? d.created_at));
+  }
+  const sb = getServiceClient()!;
+  const { data } = await sb
+    .from("drafts")
+    .select("published_at")
+    .eq("owner_id", ownerId)
+    .eq("status", "published")
+    .gte("published_at", sinceIso)
+    .limit(5000);
+  return (data ?? []).filter((r) => r.published_at).map((r) => toTaipei(r.published_at as string));
+}
+
+// 成就用：某使用者「已發布」草稿總數（count head，輕量）。
+export async function countPublished(ownerId: string): Promise<number> {
+  if (isDemoMode) return demo.drafts.filter((d) => d.status === "published").length;
+  const sb = getServiceClient()!;
+  const { count } = await sb
+    .from("drafts")
+    .select("*", { count: "exact", head: true })
+    .eq("owner_id", ownerId)
+    .eq("status", "published");
+  return count ?? 0;
+}

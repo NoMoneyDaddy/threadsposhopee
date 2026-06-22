@@ -1,9 +1,12 @@
 import RunPipelineButton from "@/components/RunPipelineButton";
 import LiveDashboard from "@/components/LiveDashboard";
 import SetupGuide from "@/components/SetupGuide";
+import HotProductsRadar from "@/components/HotProductsRadar";
+import AchievementsCard from "@/components/AchievementsCard";
 import { getCurrentUser } from "@/lib/auth";
 import { getSetupSteps } from "@/lib/setup-status";
-import { getPublishInsights } from "@/lib/store";
+import { getPublishInsights, getFeatureFlags, listHotProducts, getContributionScore, listPublishedDates, countPublished, type SharedMaterial } from "@/lib/store";
+import { computeStreak, taipeiDateStr, achievementsFor } from "@/lib/streak";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +17,23 @@ export default async function DashboardPage() {
   const weekly = user
     ? await getPublishInsights(user.id, { startMs: Date.now() - 7 * 86400_000, endMs: Date.now() }).catch(() => null)
     : null;
+
+  // 選品雷達（全站熱門共享商品；共享庫開啟才顯示）＋ 成就/連續發文。
+  let hot: SharedMaterial[] = [];
+  let streak = 0;
+  let achievements = achievementsFor({ published: 0, contribution: 0, streak: 0 });
+  if (user) {
+    const flags = await getFeatureFlags().catch(() => null);
+    const [h, contribution, pubDates, publishedCount] = await Promise.all([
+      flags?.shared ? listHotProducts(8).catch(() => []) : Promise.resolve([]),
+      getContributionScore(user.id).catch(() => 0),
+      listPublishedDates(user.id).catch(() => []),
+      countPublished(user.id).catch(() => 0)
+    ]);
+    hot = h;
+    streak = computeStreak(pubDates, taipeiDateStr(Date.now()));
+    achievements = achievementsFor({ published: publishedCount, contribution, streak });
+  }
 
   return (
     <div className="space-y-6">
@@ -49,6 +69,10 @@ export default async function DashboardPage() {
           </div>
         </a>
       )}
+
+      {user && <AchievementsCard streak={streak} achievements={achievements} />}
+
+      {user && <HotProductsRadar items={hot} />}
 
       <LiveDashboard />
     </div>

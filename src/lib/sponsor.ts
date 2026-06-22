@@ -160,49 +160,75 @@ function recKey(accountId: string, date: string): string {
   return `sponsor:rec:${accountId}:${date}`;
 }
 
-export async function getSponsorRecord(accountId: string, date: string): Promise<SponsorRecord | null> {
-  if (isDemoMode) return null;
-  const sb = getServiceClient()!;
-  const { data } = await sb.from("app_state").select("value").eq("key", recKey(accountId, date)).maybeSingle();
-  if (!data?.value) return null;
+// 每日多篇贊助文：同一 (帳號,日期) 下可有多篇（依每日配額）。
+// 儲存：app_state 單列 value = SponsorRecord[]（舊資料為單一物件，讀取時包成陣列向後相容）。
+function parseRecords(value: string | null | undefined): SponsorRecord[] {
+  if (!value) return [];
   try {
-    return JSON.parse(data.value) as SponsorRecord;
+    const v = JSON.parse(value);
+    return Array.isArray(v) ? (v as SponsorRecord[]) : [v as SponsorRecord];
   } catch {
-    return null;
+    return [];
   }
 }
 
-export async function setSponsorRecord(accountId: string, date: string, rec: SponsorRecord): Promise<void> {
+export async function getSponsorRecords(accountId: string, date: string): Promise<SponsorRecord[]> {
+  if (isDemoMode) return [];
+  const sb = getServiceClient()!;
+  const { data } = await sb.from("app_state").select("value").eq("key", recKey(accountId, date)).maybeSingle();
+  return parseRecords(data?.value);
+}
+
+// 今日已發贊助文篇數（配額閘門用）。
+export async function countSponsorToday(accountId: string, date: string): Promise<number> {
+  return (await getSponsorRecords(accountId, date)).length;
+}
+
+// 追加一筆當日贊助紀錄（讀現有陣列 → push → 寫回）。
+export async function appendSponsorRecord(accountId: string, date: string, rec: SponsorRecord): Promise<void> {
   if (isDemoMode) return;
   const sb = getServiceClient()!;
+  const recs = await getSponsorRecords(accountId, date);
+  recs.push(rec);
   await sb
     .from("app_state")
-    .upsert({ key: recKey(accountId, date), value: JSON.stringify(rec), updated_at: new Date().toISOString() }, { onConflict: "key" });
+    .upsert({ key: recKey(accountId, date), value: JSON.stringify(recs), updated_at: new Date().toISOString() }, { onConflict: "key" });
+}
+
+// 更新當日第 index 筆（驗證寫回 verified/violated）。
+export async function updateSponsorRecordAt(accountId: string, date: string, index: number, rec: SponsorRecord): Promise<void> {
+  if (isDemoMode) return;
+  const sb = getServiceClient()!;
+  const recs = await getSponsorRecords(accountId, date);
+  if (index < 0 || index >= recs.length) return;
+  recs[index] = rec;
+  await sb
+    .from("app_state")
+    .upsert({ key: recKey(accountId, date), value: JSON.stringify(recs), updated_at: new Date().toISOString() }, { onConflict: "key" });
 }
 
 export interface SponsorRecordEntry {
   accountId: string;
   date: string;
+  index: number; // 當日陣列中的位置（驗證寫回用）
   rec: SponsorRecord;
 }
 
-// 撈出「尚未驗證、且已發出超過 minAgeMs」的贊助紀錄（給驗證排程用）。
+// 撈出「尚未驗證、且已發出超過 minAgeMs」的贊助紀錄（給驗證排程用）。逐列展開陣列、附 index。
 export async function listSponsorRecordsToVerify(minAgeMs: number): Promise<SponsorRecordEntry[]> {
   if (isDemoMode) return [];
   const sb = getServiceClient()!;
   const { data } = await sb.from("app_state").select("key,value").like("key", "sponsor:rec:%");
   const out: SponsorRecordEntry[] = [];
   for (const row of data ?? []) {
-    try {
-      const rec = JSON.parse(row.value) as SponsorRecord;
-      if (rec.verified) continue;
-      if (Date.now() - new Date(rec.at).getTime() < minAgeMs) continue;
-      const m = /^sponsor:rec:(.+):(\d{4}-\d{2}-\d{2})$/.exec(row.key);
-      if (!m) continue;
-      out.push({ accountId: m[1], date: m[2], rec });
-    } catch {
-      // 壞資料略過
-    }
+    const m = /^sponsor:rec:(.+):(\d{4}-\d{2}-\d{2})$/.exec(row.key);
+    if (!m) continue;
+    const recs = parseRecords(row.value);
+    recs.forEach((rec, index) => {
+      if (rec.verified) return;
+      if (Date.now() - new Date(rec.at).getTime() < minAgeMs) return;
+      out.push({ accountId: m[1], date: m[2], index, rec });
+    });
   }
   return out;
 }

@@ -27,14 +27,15 @@ import { publishToThreads, publishReply, PublishUncertainError } from "@/service
 import { getOwnerUserId } from "@/lib/auth";
 import {
   getSponsorConfig,
-  getSponsorRecord,
-  setSponsorRecord,
+  countSponsorToday,
+  appendSponsorRecord,
   getSponsorPick,
   shouldSponsor,
   swapAffiliateLink,
   taipeiParts,
   type SponsorPick
 } from "@/lib/sponsor";
+import { sponsorQuota } from "@/services/publish/sponsor-quota";
 import { resolveSponsorResources, buildSponsorLinkForAccount } from "@/services/sponsor/link";
 import { log } from "@/lib/logger";
 import { normalizeDraftMedia, normalizeReplyMedia } from "@/lib/media";
@@ -134,7 +135,7 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
   const sponsorCfg = await getSponsorConfig();
   const sponsorTaipei = taipeiParts();
   const sponsorOwnerId = sponsorCfg.enabled && !isDemoMode ? await getOwnerUserId().catch(() => null) : null;
-  const sponsorDoneCache: Record<string, boolean> = {}; // accId -> 今天已發贊助文
+  const sponsorCountCache: Record<string, number> = {}; // accId -> 今天已發贊助文篇數
   const sponsorPickCache: Record<string, SponsorPick | null> = {}; // accId -> 使用者自選
   // 有商品原始連結＋owner → 整輪取一次資源（金鑰/affiliate_id/自訂 subId＋展開連結），供每帳號即時轉連結。
   const sponsorRes =
@@ -253,9 +254,11 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
     let pubMainText = draft.main_text ?? "";
     let pubReplyText = draft.reply_text;
     if (sponsorCfg.enabled && !isDemoMode) {
-      if (!(accId in sponsorDoneCache)) {
-        sponsorDoneCache[accId] = Boolean(await getSponsorRecord(accId, sponsorTaipei.date).catch(() => null));
+      // 每日配額：依該帳號每日上限換算（max(保底, floor(上限/perPosts))）；今日已達配額則不再贊助。
+      if (!(accId in sponsorCountCache)) {
+        sponsorCountCache[accId] = await countSponsorToday(accId, sponsorTaipei.date).catch(() => 0);
       }
+      const sponsorQuotaToday = sponsorQuota(pp.maxPerDay);
       const isOwnerAccount = Boolean(sponsorOwnerId) && draft.owner_id === sponsorOwnerId;
       if (!(accId in sponsorPickCache)) {
         sponsorPickCache[accId] = await getSponsorPick(accId).catch(() => null);
@@ -268,7 +271,7 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
           hour: sponsorTaipei.hour,
           offPeakStart: sponsorCfg.offPeakStart,
           offPeakEnd: sponsorCfg.offPeakEnd,
-          alreadyDoneToday: sponsorDoneCache[accId],
+          alreadyDoneToday: sponsorCountCache[accId] >= sponsorQuotaToday,
           thisDraftId: draft.id,
           pickDraftId: pick?.draftId ?? null,
           pickHour: pick?.hour ?? null
@@ -311,10 +314,10 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
         replyFailedInline = Boolean(res.replyFailed);
       }
 
-      // 贊助文發布成功 → 記錄當日紀錄（供驗證），DB 草稿原文未動＝自動還原。
+      // 贊助文發布成功 → 追加當日紀錄（供驗證），DB 草稿原文未動＝自動還原。
       if (sponsorLinkUsed) {
-        sponsorDoneCache[accId] = true;
-        await setSponsorRecord(accId, sponsorTaipei.date, {
+        sponsorCountCache[accId] = (sponsorCountCache[accId] ?? 0) + 1;
+        await appendSponsorRecord(accId, sponsorTaipei.date, {
           postId,
           link: sponsorLinkUsed,
           ownerId: draft.owner_id ?? "",

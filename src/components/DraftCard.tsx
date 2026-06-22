@@ -6,6 +6,7 @@ import type { Draft } from "@/lib/types";
 import { CharCount } from "@/components/ThreadsPreview";
 import ThreadsPreview from "@/components/ThreadsPreview";
 import { normalizeDraftMedia, normalizeReplyMedia, isQualifiedMediaSet } from "@/lib/media";
+import { formatCommissionRate } from "@/lib/product-name";
 import { checkThreadsContent, THREADS_MAX_HASHTAGS } from "@/lib/threads-content";
 import { isLowRelevance } from "@/lib/relevance";
 
@@ -270,14 +271,21 @@ function DraftCard({
         />
       )}
 
-      <a
-        href={draft.shopee_short_link ?? "#"}
-        target="_blank"
-        rel="noreferrer"
-        className="mt-2 truncate text-xs text-brand hover:underline"
-      >
-        {draft.shopee_short_link}
-      </a>
+      <div className="mt-2 flex items-center gap-2">
+        <a
+          href={draft.shopee_short_link ?? "#"}
+          target="_blank"
+          rel="noreferrer"
+          className="min-w-0 truncate text-xs text-brand hover:underline"
+        >
+          {draft.shopee_short_link}
+        </a>
+        {formatCommissionRate(draft.commission_rate) && (
+          <span className="shrink-0 rounded bg-surface-2 px-1.5 py-0.5 text-[10px] text-ink-2" title="建立時的分潤率（會隨時間變動）">
+            分潤 {formatCommissionRate(draft.commission_rate)}
+          </span>
+        )}
+      </div>
 
       {typeof dupSimilarity === "number" && (
         <div className="mt-2 rounded bg-amber-50 p-2 text-xs text-amber-700" role="alert">

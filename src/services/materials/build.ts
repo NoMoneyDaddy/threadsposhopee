@@ -1,8 +1,9 @@
 // 為單一商品建立素材的共用邏輯：換分潤連結(帶追蹤 subId) → 商品名 → 媒體中轉 →
 // (可選)AI 文案 → 存素材。自動爬取流程與手動建立流程共用此函式。
 import { isDemoMode } from "@/lib/env";
-import { generateAffiliateLink, getProductName, buildSubIds, buildAffiliateRedirectLink } from "@/services/shopee/affiliate";
+import { generateAffiliateLink, getProductInfo, buildSubIds, buildAffiliateRedirectLink } from "@/services/shopee/affiliate";
 import { resolveSubIdTemplate } from "@/services/shopee/subid";
+import { cleanProductName } from "@/lib/product-name";
 import { generateCopy } from "@/services/ai/provider";
 import { uploadMediaWith, type MediaProvider } from "@/services/media/upload";
 import { createMaterial, getCopyPrefs } from "@/lib/store";
@@ -46,7 +47,8 @@ export async function buildMaterialForProduct(
   const primary = inputMedia[0] ?? null;
   let shortLink = input.originalShortLink;
   let subId: string | null = null;
-  let productName: string | null = null;
+  let productNameRaw: string | null = null;
+  let commissionRate: string | null = null; // 目前分潤率（顯示用）；隨時間變動，記查詢時間
 
   // 自訂 subId 支援範本：{date}（台北 YYYYMMDD）/{platform}/{account}（subIdTag）智能帶入。
   const account = input.subIdTag ?? "manual";
@@ -60,7 +62,9 @@ export async function buildMaterialForProduct(
       const subIds = buildSubIds(resolvedSubId || shopeeCreds.subId, account, input.itemId);
       subId = subIds.join(",");
       shortLink = await generateAffiliateLink(shopeeCreds.appId, shopeeCreds.secret, input.cleanUrl, subIds);
-      productName = await getProductName(shopeeCreds.appId, shopeeCreds.secret, input.shopId, input.itemId);
+      const info = await getProductInfo(shopeeCreds.appId, shopeeCreds.secret, input.shopId, input.itemId);
+      productNameRaw = info.productName;
+      commissionRate = info.commissionRate;
     } catch (e) {
       notes.push(`Shopee API 失敗（用原連結）：${e instanceof Error ? e.message : String(e)}`);
     }
@@ -69,20 +73,23 @@ export async function buildMaterialForProduct(
     const subIds = buildSubIds(resolvedSubId || null, account, input.itemId);
     subId = subIds.join("-");
     shortLink = buildAffiliateRedirectLink(input.cleanUrl, affiliateId, subIds);
-    productName = `商品 ${input.itemId}`;
+    productNameRaw = `商品 ${input.itemId}`;
     notes.push("未綁 Shopee API：用 affiliate_id 自組 an_redir 追蹤連結");
   } else {
-    productName = `商品 ${input.itemId}`;
+    productNameRaw = `商品 ${input.itemId}`;
     notes.push(isDemoMode ? "Demo 模式：用原連結與假商品名" : "未提供 Shopee 金鑰：直接用貼上的分潤連結");
   }
+  // 乾淨核心品名：給文案與草稿標題（避免被 SEO 關鍵字帶歪）；原始標題另存。
+  const productName = cleanProductName(productNameRaw) || productNameRaw;
 
   // 逐一中轉媒體到自綁圖床（同一篇的影片＋圖都進自己雲端）；單項失敗暫用原連結，不擋建立。
   let uploadedMedia: DraftMedia[] = inputMedia;
+  const mediaKeyHint = `${input.shopId}_${input.itemId}`; // 圖床以商品分組命名
   if (!isDemoMode && inputMedia.length > 0 && mediaProvider && mediaProvider.kind !== "none") {
     uploadedMedia = await Promise.all(
       inputMedia.map(async (m) => {
         try {
-          return { url: await uploadMediaWith(mediaProvider, m.url, m.type), type: m.type };
+          return { url: await uploadMediaWith(mediaProvider, m.url, m.type, mediaKeyHint), type: m.type };
         } catch (e) {
           notes.push(`圖床上傳失敗（暫用原連結）：${e instanceof Error ? e.message : String(e)}`);
           return m;
@@ -129,6 +136,9 @@ export async function buildMaterialForProduct(
     source_media_url: primary?.url ?? null,
     cloudinary_media_url: primaryUploaded?.url ?? null,
     media: uploadedMedia,
+    product_name_raw: productNameRaw,
+    commission_rate: commissionRate,
+    commission_checked_at: commissionRate ? now : null,
     main_text: mainText,
     reply_text: replyText,
     ai_raw: aiRaw,

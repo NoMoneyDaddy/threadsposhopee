@@ -34,8 +34,11 @@ export interface Material {
   owner_id?: string | null;
   shop_id: string;
   item_id: string;
-  product_name?: string | null;
+  product_name?: string | null; // 乾淨核心品名（給文案/卡片標題）
+  product_name_raw?: string | null; // 原始蝦皮標題（留存，可能含 SEO 關鍵字）
   clean_product_url?: string | null;
+  commission_rate?: string | null; // 目前分潤率字串小數（0.05＝5%），顯示用
+  commission_checked_at?: string | null; // 分潤率查詢時間
   affiliate_short_link?: string | null;
   affiliate_sub_id?: string | null;
   affiliate_generated_at?: string | null;
@@ -82,6 +85,8 @@ export interface Draft {
   product_name?: string | null;
   clean_product_url?: string | null;
   shopee_short_link?: string | null;
+  commission_rate?: string | null; // 建立時自素材快照的分潤率（顯示用）
+  commission_checked_at?: string | null;
   media_type?: "image" | "video" | "none" | null;
   source_media_url?: string | null;
   cloudinary_media_url?: string | null;

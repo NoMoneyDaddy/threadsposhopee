@@ -8,6 +8,7 @@ import { checkThreadsContent, THREADS_MAX_HASHTAGS } from "@/lib/threads-content
 import { parseTaipeiDateTimeLocal } from "@/lib/datetime";
 import { cloudinaryThumb } from "@/lib/img";
 import { isQualifiedMediaSet } from "@/lib/media";
+import { formatCommissionRate } from "@/lib/product-name";
 import type { DraftMedia } from "@/lib/types";
 
 const input = "w-full rounded-xl border px-3 py-2 text-sm";
@@ -173,14 +174,21 @@ export default function ComposerForm({ threadsAccounts }: { threadsAccounts: Thr
                   );
                 })()}
               </div>
-              <a
-                href={material.affiliate_short_link ?? "#"}
-                target="_blank"
-                rel="noreferrer"
-                className="truncate text-xs text-brand hover:underline"
-              >
-                {material.affiliate_short_link}
-              </a>
+              <div className="flex items-center gap-2">
+                <a
+                  href={material.affiliate_short_link ?? "#"}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="min-w-0 truncate text-xs text-brand hover:underline"
+                >
+                  {material.affiliate_short_link}
+                </a>
+                {formatCommissionRate(material.commission_rate) && (
+                  <span className="shrink-0 rounded bg-surface-2 px-1.5 py-0.5 text-[10px] text-ink-2" title="目前分潤率（會隨時間變動）">
+                    分潤 {formatCommissionRate(material.commission_rate)}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 

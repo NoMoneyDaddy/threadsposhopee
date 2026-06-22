@@ -4,7 +4,7 @@
 //
 // 簽章：AWS Signature V4（service=s3、region=auto）。用 x-amz-content-sha256: UNSIGNED-PAYLOAD
 // （R2 走 HTTPS 允許），免緩衝整檔做雜湊。簽章組裝為純函式，便於單測（注入 amzDate）。
-import { createHash, createHmac, randomUUID } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import { fetchWithRetry } from "@/lib/http";
 import { assertSafePublicUrl } from "@/lib/url-guard";
 import { log } from "@/lib/logger";
@@ -79,7 +79,22 @@ function encodeKeyPath(key: string): string {
 }
 
 // 中轉一個媒體到 R2，回傳公開讀網址。失敗則拋錯（呼叫端 fallback 用原 URL）。
-export async function uploadToR2(sourceUrl: string, type: "image" | "video", creds: R2Creds): Promise<string> {
+// 物件 key 命名：以商品分組（keyHint=<shopId>_<itemId>），檔名取來源媒體 id（同檔多尺寸/重複上傳會落同一 key，
+// 可回溯、好清理）；無法取得來源 id 時退回 URL 雜湊；keyHint 缺時退回舊的 type 分類資料夾。
+function sanitizeSeg(s: string): string {
+  return s.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64);
+}
+function stableMediaName(sourceUrl: string): string {
+  const id = sourceUrl.match(/\/(\d{6,})_\d+_\d+_n\./)?.[1];
+  return id ?? createHash("sha1").update(sourceUrl).digest("hex").slice(0, 16);
+}
+
+export async function uploadToR2(
+  sourceUrl: string,
+  type: "image" | "video",
+  creds: R2Creds,
+  keyHint?: string
+): Promise<string> {
   const safe = assertSafePublicUrl(sourceUrl);
   const src = await fetchWithRetry(safe.href, {}, 20000);
   if (!src.ok) throw new Error(`下載來源媒體失敗（${src.status}）`);
@@ -93,7 +108,8 @@ export async function uploadToR2(sourceUrl: string, type: "image" | "video", cre
       : type === "video"
         ? "mp4"
         : "jpg";
-  const key = `threads/${type}s/${Date.now()}-${randomUUID()}.${ext}`;
+  const folder = keyHint ? sanitizeSeg(keyHint) : `${type}s`;
+  const key = `threads/${folder}/${stableMediaName(sourceUrl)}.${ext}`;
   const host = `${creds.accountId}.r2.cloudflarestorage.com`;
   const canonicalPath = `/${encodeURIComponent(creds.bucket)}/${encodeKeyPath(key)}`;
   const amzDate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, "");

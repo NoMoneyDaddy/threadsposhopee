@@ -126,6 +126,8 @@ export async function POST(req: Request) {
         product_name: material?.product_name ?? null,
         clean_product_url: material?.clean_product_url ?? null,
         shopee_short_link: material?.affiliate_short_link ?? null,
+        commission_rate: material?.commission_rate ?? null,
+        commission_checked_at: material?.commission_checked_at ?? null,
         media_type: material ? material.media_type : selfMediaType,
         source_media_url: material ? material.source_media_url : selfMediaUrl,
         cloudinary_media_url: material ? material.cloudinary_media_url : selfCloudUrl,

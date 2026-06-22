@@ -29,6 +29,8 @@ export async function createDraftFromMaterial(
     product_name: material.product_name,
     clean_product_url: material.clean_product_url,
     shopee_short_link: material.affiliate_short_link,
+    commission_rate: material.commission_rate,
+    commission_checked_at: material.commission_checked_at,
     media_type: material.media_type,
     source_media_url: material.source_media_url,
     cloudinary_media_url: material.cloudinary_media_url,

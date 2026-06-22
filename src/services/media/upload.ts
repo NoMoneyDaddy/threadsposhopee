@@ -19,12 +19,14 @@ export async function getMediaProvider(ownerId: string): Promise<MediaProvider> 
 }
 
 // 用已解析的 provider 中轉一個媒體；none 直接回原 URL，失敗則由呼叫端 try/catch fallback。
+// keyHint：物件命名分組提示（如 <shopId>_<itemId>），讓同商品媒體落同一資料夾、可回溯。
 export async function uploadMediaWith(
   provider: MediaProvider,
   sourceUrl: string,
-  type: "image" | "video"
+  type: "image" | "video",
+  keyHint?: string
 ): Promise<string> {
-  if (provider.kind === "r2") return uploadToR2(sourceUrl, type, provider.creds);
-  if (provider.kind === "cloudinary") return uploadToCloudinary(sourceUrl, type, provider.creds);
+  if (provider.kind === "r2") return uploadToR2(sourceUrl, type, provider.creds, keyHint);
+  if (provider.kind === "cloudinary") return uploadToCloudinary(sourceUrl, type, provider.creds, keyHint);
   return sourceUrl;
 }

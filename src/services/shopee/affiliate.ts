@@ -69,18 +69,20 @@ export async function generateAffiliateLink(
   return data.generateShortLink.shortLink as string;
 }
 
-// 取商品名稱（對應 n8n「取得商品名稱」productOfferV2）
-export async function getProductName(
+// 取商品資訊（productOfferV2）：商品名稱 + 目前分潤率（顯示用，不做選品過濾）。
+// commissionRate 為字串小數（如 "0.05"＝5%）；隨時間變動，呼叫端應記查詢時間。
+export async function getProductInfo(
   appId: string,
   secret: string,
   shopId: string,
   itemId: string
-): Promise<string | null> {
+): Promise<{ productName: string | null; commissionRate: string | null }> {
   const query =
-    "query productOfferV2($shopId: Int64, $itemId: Int64){productOfferV2(shopId:$shopId, itemId:$itemId, limit:1){nodes{productName}}}";
+    "query productOfferV2($shopId: Int64, $itemId: Int64){productOfferV2(shopId:$shopId, itemId:$itemId, limit:1){nodes{productName commissionRate}}}";
   const data = await callShopee(appId, secret, {
     query,
     variables: { shopId: Number(shopId), itemId: Number(itemId) }
   });
-  return data?.productOfferV2?.nodes?.[0]?.productName ?? null;
+  const node = data?.productOfferV2?.nodes?.[0];
+  return { productName: node?.productName ?? null, commissionRate: node?.commissionRate ?? null };
 }

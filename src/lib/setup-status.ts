@@ -61,9 +61,9 @@ export async function getSetupSteps(user: AppUser): Promise<SetupStep[]> {
     {
       key: "cloudinary",
       title: "綁定圖片／影片存放（Cloudinary）",
-      desc: "圖片／影片會存進你自己的 Cloudinary 帳號，不耗伺服器流量。必綁，無共用後備。",
+      desc: "想發圖片／影片再綁；純文字發文不需要。綁了之後素材會存進你自己的 Cloudinary，不耗伺服器流量。",
       done: Boolean(cloud),
-      required: true,
+      required: false,
       href: "/accounts#setup-cloudinary"
     },
     {

@@ -53,7 +53,7 @@ export default async function InsightsPage({
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">成效</h1>
+        <h1 className="text-2xl font-bold">成效分析</h1>
         <p className="text-sm text-ink-2">
           {rangeLabel}共發布 <b className="text-brand">{data.totalPublished}</b> 篇。
         </p>

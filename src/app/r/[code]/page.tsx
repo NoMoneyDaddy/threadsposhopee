@@ -39,9 +39,9 @@ export default async function RedirectPage({ params }: { params: { code: string 
 
         <ContinueButton code={link.code} sourceUrl={link.sourceUrl} affiliateUrl={link.affiliateUrl} />
 
-        {/* 揭露：誠實告知含合作連結，非偽裝同意彈窗 */}
+        {/* 揭露：中性、低調但仍可讀地告知含合作連結與另開頁面行為（合規底線；不偽裝、不誇張、不點名平台） */}
         <p className="mt-3 text-[11px] leading-relaxed text-ink-3">
-          本頁含合作推廣連結，點擊「繼續」可能另開啟廣告／優惠頁面；你仍會前往原始來源。
+          本頁含合作推廣連結；點「繼續」會前往原始來源，並可能另開相關頁面。
         </p>
       </div>
     </div>

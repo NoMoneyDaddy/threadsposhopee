@@ -355,3 +355,23 @@ export async function setAffiliateChecked(id: string, dead: boolean): Promise<vo
   if (dead) patch.affiliate_valid = false;
   await sb.from("materials").update(patch).eq("id", id);
 }
+
+// 更新素材目前分潤率（顯示用）：健檢時順手刷新，附查詢時間。限本人。
+export async function setMaterialCommission(
+  id: string,
+  ownerId: string,
+  rate: string | null,
+  checkedAt: string
+): Promise<void> {
+  if (isDemoMode) {
+    const m = demo.materials.find((x) => x.id === id);
+    if (m) Object.assign(m, { commission_rate: rate, commission_checked_at: checkedAt });
+    return;
+  }
+  const sb = getServiceClient()!;
+  await sb
+    .from("materials")
+    .update({ commission_rate: rate, commission_checked_at: checkedAt })
+    .eq("id", id)
+    .eq("owner_id", ownerId);
+}

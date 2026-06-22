@@ -34,6 +34,7 @@ export {
   listMaterialsToCheck,
   reviveAffiliateLink,
   setAffiliateChecked,
+  setMaterialCommission,
   setMaterialEvergreen,
   listEvergreenDueAll,
   touchEvergreen,

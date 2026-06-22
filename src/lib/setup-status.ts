@@ -72,7 +72,7 @@ export async function getSetupSteps(user: AppUser): Promise<SetupStep[]> {
       desc: "綁 Telegram／Discord，待審與異常即時通知你。",
       done: Boolean(tg) || Boolean(dc),
       required: false,
-      href: "/accounts#setup-notify"
+      href: "/settings#setup-notify"
     }
   ];
 

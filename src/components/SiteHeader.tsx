@@ -3,18 +3,16 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-type NavItem = { href: string; label: string };
+type NavItem = { href: string; label: string; match?: string[] };
 
-// 依使用流程排序、用淺白名稱（降低學習成本）。
+// 六大頁資訊架構（依使用流程排序、白話命名）。「文章管理」整併發文/草稿/AI代理人/素材/自動抓文。
 const NAV: NavItem[] = [
   { href: "/", label: "儀表板" },
-  { href: "/compose", label: "發文" },
-  { href: "/agents", label: "AI 代理人" },
-  { href: "/drafts", label: "草稿" },
-  { href: "/insights", label: "成效" },
-  { href: "/links", label: "短連結" },
-  { href: "/sources", label: "自動抓文" },
-  { href: "/accounts", label: "帳號管理" }
+  { href: "/drafts", label: "文章管理", match: ["/drafts", "/compose", "/agents", "/materials", "/sources"] },
+  { href: "/links", label: "轉址服務" },
+  { href: "/insights", label: "成效分析" },
+  { href: "/accounts", label: "帳號管理" },
+  { href: "/settings", label: "設定" }
 ];
 
 // Threads 風頂部導覽：黏性、毛玻璃、單色高對比，當前頁以實心膠囊標示。
@@ -26,8 +24,11 @@ export default function SiteHeader({
   isDemo: boolean;
 }) {
   const pathname = usePathname();
-  const items = NAV.filter((n) => n.href !== "/sources" || user?.isOwner);
-  const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
+  const items = NAV;
+  const isActive = (n: NavItem) => {
+    const all = n.match ?? [n.href];
+    return all.some((h) => (h === "/" ? pathname === "/" : pathname.startsWith(h)));
+  };
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-surface/80 backdrop-blur-md">
@@ -58,7 +59,7 @@ export default function SiteHeader({
         <nav className="-mx-1 flex items-center gap-0.5 overflow-x-auto px-1 text-sm" aria-label="主導覽">
           {user &&
             items.map((n) => {
-              const active = isActive(n.href);
+              const active = isActive(n);
               return (
                 <Link
                   key={n.href}

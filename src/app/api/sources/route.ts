@@ -1,15 +1,19 @@
 import { NextResponse } from "next/server";
-import { createSource } from "@/lib/store";
+import { createSource, hasApifyCredentials } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-// 監看來源（爬蟲）是 owner 專屬功能
+// 監看來源（抓取）：任何綁定自己 Apify 金鑰的使用者皆可使用。
 export async function POST(req: Request) {
   try {
     const user = await getCurrentUser();
     if (!user) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
-    if (!user.isOwner) return NextResponse.json({ ok: false, error: "只有管理者可新增監看來源" }, { status: 403 });
+    // 需先綁定自己的 Apify 金鑰（抓取靠它，計費也算在自己帳上）
+    const apify = await hasApifyCredentials(user.id).catch(() => ({ bound: false }));
+    if (!apify.bound) {
+      return NextResponse.json({ ok: false, error: "請先到帳號管理綁定自己的 Apify 金鑰，才能新增監看來源" }, { status: 403 });
+    }
 
     const body = await req.json();
     const searchQuery = body.search_query ? String(body.search_query).trim() : "";

@@ -22,6 +22,7 @@ import {
   getShopeeAffiliateId
 } from "@/lib/store";
 import { getMediaProvider } from "@/services/media/upload";
+import { isDemoMode } from "@/lib/env";
 import type { Source } from "@/lib/types";
 
 // owner 的 Shopee 金鑰：一律吃自綁（shopee_accounts），未綁回 null（不再用環境變數）。
@@ -149,10 +150,9 @@ export async function runSourcePipeline(source: Source, ownerId: string): Promis
 }
 
 // 跑所有啟用中的來源（給排程 / 手動觸發用）。爬蟲是 owner 專屬，產出掛在 owner 名下。
-export async function runAllSources(): Promise<PipelineResult[]> {
-  const ownerId = (await getOwnerUserId()) ?? "demo-user";
-  // owner-scope：只撈該 owner 自己的來源（爬蟲為 owner 限定子系統），確保用對的憑證、
-  // 草稿掛在對的 owner 名下，符合多租戶過濾鐵則（不可用 listSources() 撈到跨租戶來源）。
+// 跑「單一使用者」的所有啟用來源（手動觸發、或總排程逐使用者呼叫）。
+// 多租戶：用該使用者自己的憑證，草稿掛在其名下。
+export async function runSourcesForOwner(ownerId: string): Promise<PipelineResult[]> {
   const sources = (await listSources(ownerId)).filter((s) => s.enabled);
   const results: PipelineResult[] = [];
   for (const s of sources) {
@@ -179,6 +179,25 @@ export async function runAllSources(): Promise<PipelineResult[]> {
   const newDrafts = results.reduce((n, r) => n + r.drafts.length, 0);
   if (newDrafts > 0) {
     await sendUserAlert(ownerId, `📝 有 ${newDrafts} 則新文案草稿待審核，到草稿頁核准後才會發布。`, "draft_pending").catch(() => {});
+  }
+  return results;
+}
+
+// 所有租戶：列出全部啟用來源、依 owner 分組，只跑「有綁自己 Apify 金鑰」的使用者（其餘略過）。
+// 供總排程呼叫；時間預算守 maxDuration，未跑完的下輪再跑。
+export async function runAllSources(): Promise<PipelineResult[]> {
+  if (isDemoMode) return runSourcesForOwner((await getOwnerUserId()) ?? "demo-user");
+  const start = Date.now();
+  const owners = Array.from(
+    new Set(
+      (await listSources()).filter((s) => s.enabled && s.owner_id).map((s) => s.owner_id as string)
+    )
+  );
+  const results: PipelineResult[] = [];
+  for (const ownerId of owners) {
+    if (Date.now() - start > 50000) break; // 守 maxDuration，剩餘來源下輪再跑
+    if (!(await getApifyCredentials(ownerId))) continue; // 沒綁自己 Apify 金鑰的使用者略過
+    results.push(...(await runSourcesForOwner(ownerId)));
   }
   return results;
 }

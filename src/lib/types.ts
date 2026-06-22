@@ -17,6 +17,7 @@ export interface ShopeeAccount {
 
 export interface Source {
   id: string;
+  owner_id?: string | null; // 來源歸屬使用者（多租戶過濾＋用對的 Apify 金鑰）
   threads_account_id: string;
   shopee_account_id?: string | null;
   source_username: string;

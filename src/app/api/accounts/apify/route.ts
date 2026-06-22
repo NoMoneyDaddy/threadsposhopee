@@ -6,12 +6,11 @@ import { validateApifyToken } from "@/services/validate/keys";
 
 export const dynamic = "force-dynamic";
 
-// 綁定 Apify 憑證（爬蟲子系統，owner 限定）。token 加密存放。
+// 綁定 Apify 憑證（抓取子系統）。任何登入者皆可綁自己的金鑰。token 加密存放。
 export async function POST(req: Request) {
   try {
     const user = await getCurrentUser();
     if (!user) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
-    if (!user.isOwner) return NextResponse.json({ ok: false, error: "只有管理者可綁定抓取憑證" }, { status: 403 });
 
     const body = await req.json().catch(() => ({}));
     const token = typeof body.token === "string" ? body.token.trim() : "";

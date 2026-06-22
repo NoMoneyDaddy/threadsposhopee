@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-// 爬蟲子系統：綁定自己的 Apify API token（owner 限定）。token 不回傳明文。
+// 抓取子系統：綁定自己的 Apify API token（任何使用者皆可綁自己的）。token 不回傳明文。
 export default function ApifyForm({ bound, actor }: { bound: boolean; actor: string | null }) {
   const router = useRouter();
   const [token, setToken] = useState("");
@@ -46,6 +46,10 @@ export default function ApifyForm({ bound, actor }: { bound: boolean; actor: str
       <p className="mb-2 text-xs text-ink-2">
         監看來源的抓取用你自己的 Apify 帳號。到 Apify → Settings → Integrations 取得 API token。
       </p>
+      <p className="mb-2 text-xs text-ink-3">
+        費用算在你的 Apify 帳號：免費帳號每月約 US$5 平台額度；預設 actor「igview-owner/threads-search-scraper」
+        計費約 US$5 / 每 1,000 筆結果起（實際以 Apify 商店頁為準）。建議把來源的「每次抓取篇數」設小一點省額度。
+      </p>
       <div className="space-y-2">
         <input
           className={input}
@@ -56,7 +60,7 @@ export default function ApifyForm({ bound, actor }: { bound: boolean; actor: str
         />
         <input
           className={input}
-          placeholder="Apify actor（選填，預設 igview-owner/threads-scraper-lite）"
+          placeholder="Apify actor（選填，預設 igview-owner/threads-search-scraper）"
           value={actorInput}
           onChange={(e) => setActorInput(e.target.value)}
         />

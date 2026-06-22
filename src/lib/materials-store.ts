@@ -131,6 +131,8 @@ export type SharedMaterial = {
   main_text: string | null;
   reply_text: string | null;
   import_count: number;
+  favorite_count: number;
+  review_status: string | null;
   created_at: string;
 };
 
@@ -166,21 +168,69 @@ export async function setMaterialShared(id: string, ownerId: string, on: boolean
   return Boolean(data);
 }
 
-// 列出公共池（排除瀏覽者自己的；不含分潤連結）。依被匯入次數排序、再依商品去重，回傳前 limit 筆。
+const SHARED_COLS =
+  "id, owner_id, shop_id, item_id, product_name, clean_product_url, media_type, cloudinary_media_url, main_text, reply_text, import_count, favorite_count, review_status, created_at";
+
+// 列出公共池（排除瀏覽者自己的、排除已下架；不含分潤連結）。
+// 推薦排序：匯入數＋收藏數加權（favorite_count 權重較高）→ 頂級素材優先；再依商品去重。
 export async function listSharedMaterials(viewerOwnerId: string, limit = 60): Promise<SharedMaterial[]> {
   if (isDemoMode) return [];
   const sb = getServiceClient()!;
   // 多抓一些（去重前），讓同商品的多筆不會佔滿名額。
   const { data } = await sb
     .from("materials")
-    .select("id, owner_id, shop_id, item_id, product_name, clean_product_url, media_type, cloudinary_media_url, main_text, reply_text, import_count, created_at")
+    .select(SHARED_COLS)
     .eq("shared", true)
     .eq("affiliate_valid", true)
+    .neq("review_status", "removed")
     .neq("owner_id", viewerOwnerId)
+    .order("favorite_count", { ascending: false })
     .order("import_count", { ascending: false })
     .order("created_at", { ascending: false })
     .limit(limit * 3);
   return dedupeSharedByProduct((data ?? []) as SharedMaterial[]).slice(0, limit);
+}
+
+// 審核佇列（reviewer/管理員用）：列出所有共享中的素材，含已下架與 pending，最新在前。
+export async function listSharedForReview(limit = 100): Promise<SharedMaterial[]> {
+  if (isDemoMode) return [];
+  const sb = getServiceClient()!;
+  const { data } = await sb
+    .from("materials")
+    .select(SHARED_COLS)
+    .eq("shared", true)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  return (data ?? []) as SharedMaterial[];
+}
+
+// 審核：設定共享素材的審核狀態（reviewer/管理員跨租戶操作，故不帶 owner 過濾；權限在 API 層把關）。
+export async function setMaterialReview(id: string, status: "approved" | "removed" | "pending"): Promise<void> {
+  if (isDemoMode) return;
+  const sb = getServiceClient()!;
+  const { error } = await sb.from("materials").update({ review_status: status }).eq("id", id);
+  if (error) throw new Error(`更新審核狀態失敗：${error.message}`);
+}
+
+// 切換收藏（高黏著度）：回傳切換後是否為「已收藏」。原子於 DB（RPC）。
+export async function toggleMaterialFavorite(ownerId: string, id: string): Promise<boolean> {
+  if (isDemoMode) return false;
+  const sb = getServiceClient()!;
+  const { data, error } = await sb.rpc("toggle_material_favorite", { p_owner: ownerId, p_id: id });
+  if (error) throw new Error(`切換收藏失敗：${error.message}`);
+  return Boolean(data);
+}
+
+// 取瀏覽者已收藏的素材 id 集合（用於共享庫標示收藏狀態）。
+export async function listFavoritedIds(ownerId: string, ids: string[]): Promise<Set<string>> {
+  if (isDemoMode || ids.length === 0) return new Set();
+  const sb = getServiceClient()!;
+  const { data } = await sb
+    .from("material_favorites")
+    .select("material_id")
+    .eq("owner_id", ownerId)
+    .in("material_id", ids);
+  return new Set((data ?? []).map((r) => r.material_id as string));
 }
 
 // 取一筆共享素材（供匯入：需 clean_product_url；任何登入者可匯入，故不帶 owner 過濾，但必須 shared）。
@@ -189,9 +239,10 @@ export async function getSharedMaterial(id: string): Promise<SharedMaterial | nu
   const sb = getServiceClient()!;
   const { data } = await sb
     .from("materials")
-    .select("id, owner_id, product_name, clean_product_url, media_type, cloudinary_media_url, main_text, reply_text, import_count, created_at")
+    .select(SHARED_COLS)
     .eq("id", id)
     .eq("shared", true)
+    .neq("review_status", "removed")
     .maybeSingle();
   return (data as SharedMaterial) ?? null;
 }

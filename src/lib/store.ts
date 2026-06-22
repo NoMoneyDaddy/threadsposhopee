@@ -40,12 +40,31 @@ export {
   isEvergreenDue,
   setMaterialShared,
   listSharedMaterials,
+  listSharedForReview,
+  setMaterialReview,
+  toggleMaterialFavorite,
+  listFavoritedIds,
   getSharedMaterial,
   incrementImportCount,
   getContributionScore,
   type MaterialToCheck,
   type SharedMaterial
 } from "./materials-store";
+
+// 管理員／身份組／旗標／統計／排行榜資料層。
+export {
+  getRoles,
+  setRoles,
+  resolveUserIdByEmail,
+  getFeatureFlags,
+  setFeatureFlags,
+  getAdminStats,
+  listTopContributors,
+  DEFAULT_FLAGS,
+  type FeatureFlags,
+  type AdminStats,
+  type Contributor
+} from "./admin-store";
 
 // 草稿資料層（CRUD/排程時段/發文佇列/延遲留言生命週期）已拆到 ./drafts-store；
 // 此處 re-export 維持既有 `@/lib/store` 匯入點不變（God File 漸進拆分）。

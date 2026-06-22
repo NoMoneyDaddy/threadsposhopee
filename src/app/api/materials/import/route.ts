@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { log } from "@/lib/logger";
-import { getSharedMaterial, incrementImportCount, findMaterial } from "@/lib/store";
+import { getSharedMaterial, incrementImportCount, findMaterial, getFeatureFlags } from "@/lib/store";
 import { resolveMaterialFromUrl } from "@/services/materials/fromUrl";
 import { getCurrentUser } from "@/lib/auth";
 
@@ -13,6 +13,9 @@ export async function POST(req: Request) {
   try {
     const user = await getCurrentUser();
     if (!user) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+    if (!(await getFeatureFlags()).shared) {
+      return NextResponse.json({ ok: false, error: "共享庫目前未開放" }, { status: 403 });
+    }
     const body = await req.json().catch(() => null);
     const id = (body as { id?: unknown })?.id;
     if (typeof id !== "string") return NextResponse.json({ ok: false, error: "缺少 id" }, { status: 400 });

@@ -21,8 +21,11 @@ import {
   isPublishPaused,
   getAccountCircuitUntil,
   tripAccountCircuit,
-  clearAccountCircuit
+  clearAccountCircuit,
+  getContributionScore,
+  getSponsorRewardMode
 } from "@/lib/store";
+import { canOwnLink } from "@/lib/contribution";
 import { publishToThreads, publishReply, PublishUncertainError } from "@/services/threads/publish";
 import { getOwnerUserId } from "@/lib/auth";
 import {
@@ -136,6 +139,8 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
   const sponsorTaipei = taipeiParts();
   const sponsorOwnerId = sponsorCfg.enabled && !isDemoMode ? await getOwnerUserId().catch(() => null) : null;
   const sponsorCountCache: Record<string, number> = {}; // accId -> 今天已發贊助文篇數
+  // 自賺資格＋自己的贊助連結資源（依 owner 快取）：超額 slot 用貢獻者自己的分潤連結。
+  const sponsorOwnLinkCache: Record<string, { eligible: boolean; res: Awaited<ReturnType<typeof resolveSponsorResources>> | null }> = {};
   const sponsorPickCache: Record<string, SponsorPick | null> = {}; // accId -> 使用者自選
   // 有商品原始連結＋owner → 整輪取一次資源（金鑰/affiliate_id/自訂 subId＋展開連結），供每帳號即時轉連結。
   const sponsorRes =
@@ -251,6 +256,7 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
 
     // 贊助文判定：啟用＋非 owner 帳號＋冷門時段＋今天尚未做過 → 就地換連結（DB 原文不動）。
     let sponsorLinkUsed: string | null = null;
+    let sponsorOwnLinkUsed = false; // 此篇是否用「貢獻者自己的」連結（超額 slot 自賺）
     let pubMainText = draft.main_text ?? "";
     let pubReplyText = draft.reply_text;
     if (sponsorCfg.enabled && !isDemoMode) {
@@ -277,9 +283,31 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
           pickHour: pick?.hour ?? null
         })
       ) {
-        // 每帳號即時轉連結（sp_<帳號碼>）；失敗退回靜態後備連結。
+        // 保底 slot（每日第 1 篇）走平台分潤連結（平台保本）；超額 slot 開放「自賺資格」貢獻者換自己的連結。
+        const SPONSOR_FLOOR = 1;
+        const isSurplus = (sponsorCountCache[accId] ?? 0) >= SPONSOR_FLOOR;
         let link: string | null = sponsorCfg.affiliateLink || null;
-        if (sponsorRes) {
+        let useOwn = false;
+        if (isSurplus && draft.owner_id) {
+          const oid = draft.owner_id;
+          if (!(oid in sponsorOwnLinkCache)) {
+            const score = await getContributionScore(oid).catch(() => 0);
+            const mode = await getSponsorRewardMode(oid).catch(() => "exempt" as const);
+            const eligible = mode === "own_link" && canOwnLink(score);
+            const res = eligible && sponsorCfg.productUrl ? await resolveSponsorResources(sponsorCfg.productUrl, oid).catch(() => null) : null;
+            sponsorOwnLinkCache[oid] = { eligible, res };
+          }
+          const own = sponsorOwnLinkCache[oid];
+          if (own.eligible && own.res) {
+            const ownLink = await buildSponsorLinkForAccount(own.res, accId).catch(() => null);
+            if (ownLink) {
+              link = ownLink;
+              useOwn = true;
+            }
+          }
+        }
+        // 非自賺：用平台每帳號即時連結（sp_<帳號碼>）；失敗退回靜態後備連結。
+        if (!useOwn && sponsorRes) {
           const perAcct = await buildSponsorLinkForAccount(sponsorRes, accId).catch(() => null);
           if (perAcct) link = perAcct;
         }
@@ -287,6 +315,7 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
           pubMainText = swapAffiliateLink(draft.main_text, draft.shopee_short_link, link);
           pubReplyText = draft.reply_text ? swapAffiliateLink(draft.reply_text, draft.shopee_short_link, link) : draft.reply_text;
           sponsorLinkUsed = link;
+          sponsorOwnLinkUsed = useOwn;
         }
       }
     }
@@ -321,7 +350,8 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
           postId,
           link: sponsorLinkUsed,
           ownerId: draft.owner_id ?? "",
-          at: nowIso
+          at: nowIso,
+          ownLink: sponsorOwnLinkUsed || undefined // 自賺連結：驗證/裁罰時略過（非平台分潤）
         }).catch((e) => log.warn("寫入贊助文紀錄失敗", { accId, err: e }));
       }
 

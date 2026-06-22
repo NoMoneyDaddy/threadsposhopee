@@ -100,7 +100,7 @@ export async function buildDailyDigest(): Promise<string | null> {
 
   // 成效歸因 AI 摘要（opt-in：DAILY_DIGEST_AI=1 且 owner 有 Gemini 金鑰）。失敗則略過、不擋摘要。
   if (env.dailyDigestAi && !isDemoMode) {
-    const key = (await getGeminiKey(ownerId).catch(() => null)) || env.geminiApiKey;
+    const key = await getGeminiKey(ownerId).catch(() => null);
     if (key) {
       const analysis = await summarizeInsights(input, key);
       if (analysis) digest += `\n\n🧠 AI 分析建議：\n${analysis}`;

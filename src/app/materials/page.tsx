@@ -7,7 +7,7 @@ import { listMaterials, listThreadsAccounts } from "@/lib/store";
 import { getItemRevenueMap, type ItemRevenue } from "@/services/shopee/report";
 import { getCurrentUser } from "@/lib/auth";
 import { cloudinaryThumb } from "@/lib/img";
-import { env, isDemoMode } from "@/lib/env";
+import { isDemoMode } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 
@@ -16,12 +16,12 @@ const money = (n: number) => `NT$ ${n.toLocaleString("zh-TW", { minimumFractionD
 export default async function MaterialsPage() {
   const user = await getCurrentUser();
   const ownerId = user?.id ?? "demo-user";
-  const isOwner = user?.isOwner ?? isDemoMode;
   const [materialsRaw, accounts] = await Promise.all([listMaterials(ownerId), listThreadsAccounts(ownerId)]);
 
-  // 成效回灌：owner 且有 Shopee 金鑰時，抓 itemId→佣金 對照（快取），把賺錢素材排前並標收益。
+  // 成效回灌：有自綁 Shopee 金鑰時（getItemRevenueMap 內部判斷），抓 itemId→佣金 對照（快取），
+  // 把賺錢素材排前並標收益；沒綁則回空物件、維持原順序。
   let itemRev: Record<string, ItemRevenue> = {};
-  if (isOwner && !isDemoMode && env.shopeeAppId && env.shopeeSecret) {
+  if (!isDemoMode) {
     itemRev = await getItemRevenueMap(ownerId, 30).catch(() => ({}));
   }
   const revOf = (itemId: string) => itemRev[itemId]?.commission ?? 0;

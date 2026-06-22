@@ -21,7 +21,16 @@ export async function POST(req: Request) {
     const parsed = parseCloudinaryInput((body as { cloud?: unknown })?.cloud, (body as { preset?: unknown })?.preset);
     if (!parsed.ok) return NextResponse.json({ ok: false, error: parsed.error }, { status: 400 });
 
-    await setUserCloudinary(user.id, parsed.cloud, parsed.preset);
+    // API key/secret 為選填（給用量面板用）：限基本格式，過長視為誤填。
+    const rawKey = (body as { apiKey?: unknown })?.apiKey;
+    const rawSecret = (body as { apiSecret?: unknown })?.apiSecret;
+    const apiKey = typeof rawKey === "string" ? rawKey.trim() : "";
+    const apiSecret = typeof rawSecret === "string" ? rawSecret.trim() : "";
+    if (apiKey.length > 200 || apiSecret.length > 200) {
+      return NextResponse.json({ ok: false, error: "API 金鑰格式不正確" }, { status: 400 });
+    }
+
+    await setUserCloudinary(user.id, parsed.cloud, parsed.preset, apiKey, apiSecret);
     return NextResponse.json({ ok: true });
   } catch (e) {
     log.error("儲存 Cloudinary 設定失敗", { err: e });

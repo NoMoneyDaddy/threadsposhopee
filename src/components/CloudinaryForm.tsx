@@ -8,14 +8,18 @@ import { fetchWithTimeout } from "@/lib/http";
 // 只需 cloud name 與一個「unsigned」upload preset（preset 本就設計給前端公開使用，非機密）。
 export default function CloudinaryForm({
   initialCloud,
-  initialPreset
+  initialPreset,
+  hasApiKey
 }: {
   initialCloud: string | null;
   initialPreset: string | null;
+  hasApiKey?: boolean;
 }) {
   const router = useRouter();
   const [cloud, setCloud] = useState(initialCloud ?? "");
   const [preset, setPreset] = useState(initialPreset ?? "");
+  const [apiKey, setApiKey] = useState("");
+  const [apiSecret, setApiSecret] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -28,7 +32,12 @@ export default function CloudinaryForm({
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ cloud: cloud.trim(), preset: preset.trim() })
+          body: JSON.stringify({
+            cloud: cloud.trim(),
+            preset: preset.trim(),
+            apiKey: apiKey.trim(),
+            apiSecret: apiSecret.trim()
+          })
         },
         10000
       );
@@ -72,6 +81,29 @@ export default function CloudinaryForm({
         >
           {busy ? "儲存中…" : "儲存"}
         </button>
+      </div>
+      <p className="mb-1 mt-3 text-xs text-ink-2">
+        （選填）想在儀表板看「用量」就再填 Cloudinary 後台的 <b>API Key</b> 與 <b>API Secret</b>
+        （Dashboard → Account Details）。不填也能正常上傳，只是看不到用量。
+        {hasApiKey && <span className="ml-1 text-green-700">目前已綁定，留空＝不變更。</span>}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <input
+          className="min-w-0 flex-1 rounded-xl border px-3 py-2 text-sm"
+          type="password"
+          aria-label="Cloudinary API Key"
+          placeholder={hasApiKey ? "API Key（留空＝不變更）" : "API Key（選填）"}
+          value={apiKey}
+          onChange={(e) => setApiKey(e.target.value)}
+        />
+        <input
+          className="min-w-0 flex-1 rounded-xl border px-3 py-2 text-sm"
+          type="password"
+          aria-label="Cloudinary API Secret"
+          placeholder={hasApiKey ? "API Secret（留空＝不變更）" : "API Secret（選填）"}
+          value={apiSecret}
+          onChange={(e) => setApiSecret(e.target.value)}
+        />
       </div>
       {msg && <p className="mt-1 text-sm text-ink-2" role="status" aria-live="polite">{msg}</p>}
     </div>

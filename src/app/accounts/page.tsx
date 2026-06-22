@@ -11,6 +11,7 @@ import {
   getNotifyPrefs,
   getRepostLimits,
   getUserCloudinary,
+  getUserCloudinaryFull,
   getUserTelegramChatId,
   getUserDiscordWebhook,
   getUserPlan
@@ -62,6 +63,7 @@ export default async function AccountsPage({
     repostLimits,
     notifyPrefs,
     cloudinary,
+    cloudinaryFull,
     telegramChatId,
     discordWebhook,
     plan,
@@ -77,6 +79,7 @@ export default async function AccountsPage({
     user ? getRepostLimits(ownerId) : Promise.resolve(null),
     user ? getNotifyPrefs(ownerId) : Promise.resolve(null),
     user ? getUserCloudinary(ownerId) : Promise.resolve(null),
+    user ? getUserCloudinaryFull(ownerId) : Promise.resolve(null),
     user ? getUserTelegramChatId(user.id) : Promise.resolve(null),
     user ? getUserDiscordWebhook(user.id) : Promise.resolve(null),
     user ? getUserPlan(user.id) : Promise.resolve("free" as const),
@@ -142,7 +145,11 @@ export default async function AccountsPage({
 
       {user && (
         <div id="setup-cloudinary" className="scroll-mt-24">
-          <CloudinaryForm initialCloud={cloudinary?.cloud ?? null} initialPreset={cloudinary?.preset ?? null} />
+          <CloudinaryForm
+            initialCloud={cloudinary?.cloud ?? null}
+            initialPreset={cloudinary?.preset ?? null}
+            hasApiKey={Boolean(cloudinaryFull)}
+          />
         </div>
       )}
 

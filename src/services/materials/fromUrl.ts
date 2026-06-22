@@ -2,7 +2,6 @@
 import { expandShopeeLink } from "@/services/shopee/expand";
 import { buildMaterialForProduct } from "@/services/materials/build";
 import { findMaterial, getShopeeCredentials, getGeminiKey, getShopeeAffiliateId, getShopeeSubId, getUserCloudinary } from "@/lib/store";
-import { env } from "@/lib/env";
 import type { AppUser } from "@/lib/auth";
 import type { Material } from "@/lib/types";
 
@@ -20,17 +19,14 @@ export async function resolveMaterialFromUrl(
     return { material: existing, reused: true, notes: [] };
   }
 
-  // Shopee 金鑰：優先用自綁（shopee_accounts），owner 沒綁則退回環境變數
-  let shopeeCreds = await getShopeeCredentials(ownerId);
-  if (!shopeeCreds && user.isOwner && env.shopeeAppId && env.shopeeSecret) {
-    shopeeCreds = { appId: env.shopeeAppId, secret: env.shopeeSecret, subId: env.shopeeDefaultSubId };
-  }
+  // Shopee 金鑰：一律用自綁（shopee_accounts），沒綁則改走 affiliate_id 後備（見下）。
+  const shopeeCreds = await getShopeeCredentials(ownerId);
   // AI 文案只用「使用者自己綁的」Gemini 金鑰；沒綁就略過文案，不借用系統共用金鑰。
   const geminiKey = await getGeminiKey(ownerId);
   const canCopy = withCopy && Boolean(geminiKey);
   // 沒綁 Shopee API 時的後備：用 affiliate_id 自組追蹤連結
   const affiliateId = shopeeCreds ? null : await getShopeeAffiliateId(ownerId);
-  // 各人自綁 Cloudinary（素材進自己雲端）；沒綁退回 env 共用
+  // 各人自綁 Cloudinary（素材進自己雲端）；沒綁則不中轉媒體
   const cloudinaryCreds = await getUserCloudinary(ownerId);
   const customSubId = await getShopeeSubId(ownerId);
 

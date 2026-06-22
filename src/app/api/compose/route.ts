@@ -4,10 +4,9 @@ import {
   createDraft,
   updateDraftStatus,
   userOwnsThreadsAccount,
-  getUserCloudinary,
   getPublishPrefs
 } from "@/lib/store";
-import { uploadToCloudinary } from "@/services/media/cloudinary";
+import { getMediaProvider, uploadMediaWith } from "@/services/media/upload";
 import { withNextSlot, nextOpenSlot } from "@/services/publish/slots";
 import { assertSafePublicUrl } from "@/lib/url-guard";
 import { getCurrentUser } from "@/lib/auth";
@@ -86,12 +85,12 @@ export async function POST(req: Request) {
         : "image"
       : "none";
 
-    // 媒體先中轉到 Cloudinary（自綁優先、退回 env），避免外部短效連結排程時失效。
+    // 媒體先中轉到自綁圖床（R2/Cloudinary），避免外部短效連結排程時失效。
     // 中轉失敗就沿用原 URL（與 buildMaterialForProduct 一致），不擋發文。
     let selfCloudUrl = selfMediaUrl;
     if (selfMediaUrl && selfMediaType !== "none" && !isDemoMode) {
       try {
-        selfCloudUrl = await uploadToCloudinary(selfMediaUrl, selfMediaType, await getUserCloudinary(user.id));
+        selfCloudUrl = await uploadMediaWith(await getMediaProvider(user.id), selfMediaUrl, selfMediaType);
       } catch {
         selfCloudUrl = selfMediaUrl;
       }

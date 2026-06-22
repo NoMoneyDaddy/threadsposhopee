@@ -4,7 +4,7 @@ import { isDemoMode } from "@/lib/env";
 import { generateAffiliateLink, getProductName, buildSubIds, buildAffiliateRedirectLink } from "@/services/shopee/affiliate";
 import { resolveSubIdTemplate } from "@/services/shopee/subid";
 import { generateCopy } from "@/services/ai/provider";
-import { uploadToCloudinary } from "@/services/media/cloudinary";
+import { uploadMediaWith, type MediaProvider } from "@/services/media/upload";
 import { createMaterial, getCopyPrefs } from "@/lib/store";
 import type { CopyPrefs } from "@/services/ai/prefs";
 import type { Material } from "@/lib/types";
@@ -31,7 +31,7 @@ export async function buildMaterialForProduct(
   geminiKey?: string | null, // 使用者自綁的 Gemini key；沒傳則退回 env
   copyPrefs?: CopyPrefs, // 文案偏好；上層（pipeline 迴圈）先取好傳入，避免每篇重查
   affiliateId?: string | null, // 無 API 時的後備：用 affiliate_id 組 an_redir 追蹤連結
-  cloudinaryCreds?: { cloud: string; preset: string } | null // 使用者自綁 Cloudinary；沒綁則不中轉、沿用原 URL（無 env 後備）
+  mediaProvider?: MediaProvider | null // 使用者自綁圖床（R2 或 Cloudinary）；沒綁則不中轉、沿用原 URL（無 env 後備）
 ): Promise<Material> {
   const media = input.media ?? { url: null, type: "none" as const };
   let shortLink = input.originalShortLink;
@@ -67,11 +67,11 @@ export async function buildMaterialForProduct(
   }
 
   let cloudinaryMediaUrl = media.url;
-  if (!isDemoMode && media.url && media.type !== "none") {
+  if (!isDemoMode && media.url && media.type !== "none" && mediaProvider && mediaProvider.kind !== "none") {
     try {
-      cloudinaryMediaUrl = await uploadToCloudinary(media.url, media.type, cloudinaryCreds);
+      cloudinaryMediaUrl = await uploadMediaWith(mediaProvider, media.url, media.type);
     } catch (e) {
-      notes.push(`Cloudinary 上傳失敗（暫用原連結）：${e instanceof Error ? e.message : String(e)}`);
+      notes.push(`圖床上傳失敗（暫用原連結）：${e instanceof Error ? e.message : String(e)}`);
     }
   }
 

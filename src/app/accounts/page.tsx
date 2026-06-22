@@ -8,6 +8,7 @@ import {
   getAutoReviveLinks,
   getUserCloudinary,
   getUserCloudinaryFull,
+  getUserR2,
   getUserPlan
 } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
@@ -23,6 +24,8 @@ import SubIdForm from "@/components/SubIdForm";
 import AutoReviveForm from "@/components/AutoReviveForm";
 import SelfBuyNotice from "@/components/SelfBuyNotice";
 import CloudinaryForm from "@/components/CloudinaryForm";
+import R2Form from "@/components/R2Form";
+import MediaHostCompare from "@/components/MediaHostCompare";
 import { DeleteButton, ToggleButton } from "@/components/RowActions";
 
 export const dynamic = "force-dynamic";
@@ -37,7 +40,7 @@ export default async function AccountsPage({
   const ownerId = user?.id ?? "demo-user";
   const [threads, shopee] = await Promise.all([listThreadsAccounts(ownerId), listShopeeAccounts(ownerId)]);
   const oauthReady = !isDemoMode && Boolean(env.threadsAppId && env.threadsRedirectUri);
-  const [apify, geminiBound, affiliateId, customSubId, autoRevive, cloudinary, cloudinaryFull, plan] =
+  const [apify, geminiBound, affiliateId, customSubId, autoRevive, cloudinary, cloudinaryFull, r2Settings, plan] =
     await Promise.all([
       user?.isOwner ? hasApifyCredentials(ownerId) : Promise.resolve({ bound: false, actor: null }),
       user ? hasGeminiKey(user.id) : Promise.resolve(false),
@@ -46,8 +49,11 @@ export default async function AccountsPage({
       user ? getAutoReviveLinks(ownerId) : Promise.resolve(false),
       user ? getUserCloudinary(ownerId) : Promise.resolve(null),
       user ? getUserCloudinaryFull(ownerId) : Promise.resolve(null),
+      user ? getUserR2(ownerId) : Promise.resolve(null),
       user ? getUserPlan(user.id) : Promise.resolve("free" as const)
     ]);
+  // 只把非機密欄位帶回表單初始值（accountId/bucket/publicBase）；金鑰留在 server 不外露。
+  const r2Bound = Boolean(r2Settings);
   // 方案配額（owner 不受限，顯示「無上限」）
   const accountLimit = Math.min(planLimits(plan).maxThreadsAccounts, GLOBAL_MAX_THREADS_ACCOUNTS);
 
@@ -115,7 +121,14 @@ export default async function AccountsPage({
       )}
 
       {user && (
-        <div id="setup-cloudinary" className="scroll-mt-24">
+        <div id="setup-media" className="scroll-mt-24 space-y-4">
+          <MediaHostCompare />
+          <R2Form
+            bound={r2Bound}
+            initialAccountId={r2Settings?.accountId ?? ""}
+            initialBucket={r2Settings?.bucket ?? ""}
+            initialPublicBase={r2Settings?.publicBase ?? ""}
+          />
           <CloudinaryForm
             initialCloud={cloudinary?.cloud ?? null}
             initialPreset={cloudinary?.preset ?? null}

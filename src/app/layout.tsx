@@ -61,6 +61,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <div className="mx-auto flex max-w-6xl flex-col items-center gap-2 px-4 py-6 text-center text-xs text-ink-3 sm:flex-row sm:justify-between sm:text-left">
               <p>本服務為自有的第三方發文工具，與 Shopee、Meta／Threads 無任何官方關係或授權。</p>
               <nav className="flex items-center gap-4" aria-label="頁尾">
+                <a href="/guide" className="hover:text-ink">金鑰教學</a>
                 <a href="/privacy" className="hover:text-ink">隱私權政策</a>
                 <a href="/terms" className="hover:text-ink">服務條款</a>
                 <a href="/sponsored" className="hover:text-ink">贊助文章規則</a>

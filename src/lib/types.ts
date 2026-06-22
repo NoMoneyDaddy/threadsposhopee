@@ -20,6 +20,7 @@ export interface Source {
   threads_account_id: string;
   shopee_account_id?: string | null;
   source_username: string;
+  search_query?: string | null; // 有值＝關鍵字搜尋模式；無值＝監看 source_username 帳號
   enabled: boolean;
   poll_interval_minutes: number;
   auto_publish: boolean;

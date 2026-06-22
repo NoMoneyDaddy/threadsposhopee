@@ -44,7 +44,7 @@ export interface PipelineResult {
 export async function runSourcePipeline(source: Source, ownerId: string): Promise<PipelineResult> {
   const result: PipelineResult = {
     sourceId: source.id,
-    sourceUsername: source.source_username,
+    sourceUsername: source.source_username || (source.search_query ? `🔍 ${source.search_query}` : ""),
     scanned: 0,
     created: 0,
     skipped: 0,
@@ -62,7 +62,10 @@ export async function runSourcePipeline(source: Source, ownerId: string): Promis
   const affiliateId = shopeeCreds ? null : await getShopeeAffiliateId(ownerId);
   // 各人自綁圖床（R2 或 Cloudinary，素材進自己雲端）；一次取出整迴圈重用
   const mediaProvider = await getMediaProvider(ownerId);
-  const posts = await scrapeLatestPosts(source.source_username, source.posts_limit, apify);
+  // 來源兩種模式：有 search_query → 關鍵字搜尋；否則監看 source_username 帳號。
+  const posts = source.search_query
+    ? await scrapeLatestPosts({ searchQuery: source.search_query, sort: "recent" }, source.posts_limit, apify)
+    : await scrapeLatestPosts({ username: source.source_username }, source.posts_limit, apify);
   result.scanned = posts.length;
   // 一次預載本來源已處理的貼文 id（取代逐篇 isPostProcessed 查詢，消除 N+1）
   const processedIds = await listProcessedPostIds(
@@ -105,7 +108,8 @@ export async function runSourcePipeline(source: Source, ownerId: string): Promis
             originalShortLink: post.shopeeLinks[0],
             media: { url: post.mediaUrl, type: post.mediaType },
             sourceText: post.text,
-            subIdTag: source.source_username,
+            // 關鍵字模式 source_username 可能為空，改用貼文作者當 subId 追蹤標籤
+            subIdTag: post.username || source.source_username || "search",
             withCopy: true
           },
           ownerId,
@@ -154,7 +158,7 @@ export async function runAllSources(): Promise<PipelineResult[]> {
       log.error("來源爬取流程失敗", { ownerId, sourceId: s.id, sourceUsername: s.source_username, err: msg });
       results.push({
         sourceId: s.id,
-        sourceUsername: s.source_username,
+        sourceUsername: s.source_username || (s.search_query ? `🔍 ${s.search_query}` : ""),
         scanned: 0,
         created: 0,
         skipped: 0,

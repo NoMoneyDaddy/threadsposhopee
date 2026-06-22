@@ -12,14 +12,20 @@ export async function POST(req: Request) {
     if (!user.isOwner) return NextResponse.json({ ok: false, error: "只有管理者可新增監看來源" }, { status: 403 });
 
     const body = await req.json();
-    if (!body.threads_account_id || !body.source_username) {
-      return NextResponse.json({ ok: false, error: "缺少 threads_account_id 或 source_username" }, { status: 400 });
+    const searchQuery = body.search_query ? String(body.search_query).trim() : "";
+    const sourceUsername = body.source_username ? String(body.source_username).trim() : "";
+    if (!body.threads_account_id || (!sourceUsername && !searchQuery)) {
+      return NextResponse.json(
+        { ok: false, error: "缺少 threads_account_id，且 source_username／search_query 至少要填一個" },
+        { status: 400 }
+      );
     }
     const source = await createSource(
       {
         threads_account_id: body.threads_account_id,
         shopee_account_id: body.shopee_account_id || null,
-        source_username: String(body.source_username),
+        source_username: sourceUsername,
+        search_query: searchQuery || null,
         poll_interval_minutes:
           body.poll_interval_minutes && Number(body.poll_interval_minutes) > 0
             ? Number(body.poll_interval_minutes)

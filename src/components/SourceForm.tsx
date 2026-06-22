@@ -18,6 +18,7 @@ export default function SourceForm({
   const [msg, setMsg] = useState<string | null>(null);
   const [form, setForm] = useState({
     source_username: "",
+    search_query: "",
     threads_account_id: threadsAccounts[0]?.id ?? "",
     shopee_account_id: "",
     poll_interval_minutes: "15",
@@ -30,6 +31,10 @@ export default function SourceForm({
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (!form.source_username.trim() && !form.search_query.trim()) {
+      setMsg("❌ 帳號或關鍵字至少填一個");
+      return;
+    }
     setBusy(true);
     setMsg(null);
     try {
@@ -56,7 +61,9 @@ export default function SourceForm({
   return (
     <form onSubmit={submit} className="grid gap-2 rounded-2xl border bg-surface p-4 md:grid-cols-2">
       <div className="font-medium md:col-span-2">新增監看來源</div>
-      <input className={input} placeholder="來源 Threads 帳號（@username）" value={form.source_username} onChange={(e) => set("source_username", e.target.value)} required />
+      <input className={input} placeholder="來源 Threads 帳號（@username）" value={form.source_username} onChange={(e) => set("source_username", e.target.value)} />
+      <input className={input} placeholder="或：搜尋關鍵字（如「蝦皮 零食」）" value={form.search_query} onChange={(e) => set("search_query", e.target.value)} />
+      <p className="text-xs text-ink-3 md:col-span-2">帳號或關鍵字擇一：填帳號＝監看該帳號新貼文；填關鍵字＝搜尋含該關鍵字的貼文。</p>
       <select className={input} value={form.threads_account_id} onChange={(e) => set("threads_account_id", e.target.value)}>
         {threadsAccounts.map((a) => (
           <option key={a.id} value={a.id}>發文到：{a.label}</option>

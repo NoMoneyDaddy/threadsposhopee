@@ -7,7 +7,8 @@ export interface AiAgent {
   owner_id: string;
   name: string;
   tone: string;
-  domain: string;
+  domain: string; // 主領域（顯示/相容用）
+  domains: string[]; // 實際橫跨的多領域（為空時沿用 domain）
   emoji_level: string;
   hashtag_pool: string[];
   length: number;
@@ -22,12 +23,13 @@ export interface AiAgent {
 }
 
 const COLS =
-  "id, owner_id, name, tone, domain, emoji_level, hashtag_pool, length, source_mode, rss_feeds, search_query, threads_account_id, use_redirect, auto_publish, enabled, last_run_at";
+  "id, owner_id, name, tone, domain, domains, emoji_level, hashtag_pool, length, source_mode, rss_feeds, search_query, threads_account_id, use_redirect, auto_publish, enabled, last_run_at";
 
 export interface AiAgentInput {
   name: string;
   tone?: string;
   domain: string;
+  domains?: string[];
   emoji_level?: string;
   hashtag_pool?: string[];
   length?: number;

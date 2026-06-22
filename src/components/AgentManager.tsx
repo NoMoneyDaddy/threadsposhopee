@@ -9,10 +9,12 @@ interface Agent {
   id: string;
   name: string;
   domain: string;
+  domains: string[];
   enabled: boolean;
   last_run_at: string | null;
   use_redirect: boolean;
   auto_publish: boolean;
+  threads_account_id: string | null;
 }
 interface AccountOpt {
   id: string;
@@ -23,7 +25,7 @@ interface AccountOpt {
 export default function AgentManager({ agents, accounts }: { agents: Agent[]; accounts: AccountOpt[] }) {
   const router = useRouter();
   const [name, setName] = useState("");
-  const [domain, setDomain] = useState(AI_DOMAINS[0].id);
+  const [domains, setDomains] = useState<string[]>([AI_DOMAINS[0].id]);
   const [searchQuery, setSearchQuery] = useState("");
   const [tone, setTone] = useState("");
   const [accountId, setAccountId] = useState("");
@@ -48,7 +50,7 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
     try {
       const r = await api("/api/agents", "POST", {
         name,
-        domain,
+        domains,
         search_query: searchQuery,
         tone,
         threads_account_id: accountId || null,
@@ -74,12 +76,28 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
     router.refresh();
     setBusy(null);
   }
+  function toggleDomain(id: string) {
+    setDomains((prev) => (prev.includes(id) ? prev.filter((d) => d !== id) : [...prev, id]));
+  }
+
   async function toggleAuto(a: Agent) {
-    if (!a.auto_publish && !confirm(`開啟「免審直接排程」後，小編「${a.name}」產出的貼文會自動發文、不經人工審核。確定開啟？`)) return;
+    if (!a.auto_publish) {
+      if (!a.threads_account_id) {
+        alert("❌ 此小編未指定發文帳號，無法開啟免審直接排程。請重新建立並指定帳號。");
+        return;
+      }
+      if (!confirm(`開啟「免審直接排程」後，小編「${a.name}」產出的貼文會自動發文、不經人工審核。確定開啟？`)) return;
+    }
     setBusy(a.id);
-    await api(`/api/agents/${a.id}`, "PATCH", { auto_publish: !a.auto_publish }).catch(() => {});
-    router.refresh();
-    setBusy(null);
+    try {
+      const r = await api(`/api/agents/${a.id}`, "PATCH", { auto_publish: !a.auto_publish });
+      if (!r.ok) throw new Error(r.error || "更新失敗");
+      router.refresh();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
   }
   async function runNow(a: Agent) {
     setBusy(a.id);
@@ -103,21 +121,31 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
     <div className="space-y-6">
       <form onSubmit={create} className="card-p space-y-3">
         <h2 className="section-title">新增小編</h2>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <label className="label" htmlFor="ag-name">名稱</label>
-            <input id="ag-name" className="input" required value={name} onChange={(e) => setName(e.target.value)} placeholder="例：科技宅阿哲" />
-          </div>
-          <div>
-            <label className="label" htmlFor="ag-domain">領域</label>
-            <select id="ag-domain" className="input" value={domain} onChange={(e) => setDomain(e.target.value)}>
-              {AI_DOMAINS.map((d) => (
-                <option key={d.id} value={d.id}>{d.label}</option>
-              ))}
-            </select>
-          </div>
+        <div>
+          <label className="label" htmlFor="ag-name">名稱</label>
+          <input id="ag-name" className="input" required value={name} onChange={(e) => setName(e.target.value)} placeholder="例：科技宅阿哲" />
         </div>
-        {domain === "custom" && (
+        <div>
+          <span className="label">領域（可複選，橫跨多種主題）</span>
+          <div className="flex flex-wrap gap-1.5">
+            {AI_DOMAINS.map((d) => {
+              const on = domains.includes(d.id);
+              return (
+                <button
+                  type="button"
+                  key={d.id}
+                  onClick={() => toggleDomain(d.id)}
+                  className={on ? "badge-brand cursor-pointer" : "badge-neutral cursor-pointer opacity-70"}
+                  aria-pressed={on}
+                >
+                  {on ? "✓ " : ""}{d.label}
+                </button>
+              );
+            })}
+          </div>
+          <FieldHint>勾選多個領域＝小編會橫跨這些主題輪流取材。至少選一個。</FieldHint>
+        </div>
+        {domains.includes("custom") && (
           <div>
             <label className="label" htmlFor="ag-q">自訂主題關鍵字（必填）</label>
             <input id="ag-q" className="input" required value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="例：露營 裝備、植物 園藝" />
@@ -130,7 +158,15 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <label className="label" htmlFor="ag-acc">發文帳號（選填，可留草稿再指定）</label>
-            <select id="ag-acc" className="input" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+            <select
+              id="ag-acc"
+              className="input"
+              value={accountId}
+              onChange={(e) => {
+                setAccountId(e.target.value);
+                if (!e.target.value) setAutoPublish(false); // 取消帳號＝免審直發失去依據
+              }}
+            >
               <option value="">（不指定）</option>
               {accounts.map((a) => (
                 <option key={a.id} value={a.id}>{a.label ?? a.id}</option>
@@ -144,7 +180,17 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
         </div>
         <div>
           <label className="flex items-center gap-2 text-sm text-ink-2">
-            <input type="checkbox" checked={autoPublish} onChange={(e) => setAutoPublish(e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={autoPublish}
+              onChange={(e) => {
+                if (e.target.checked && !accountId) {
+                  alert("❌ 請先選擇「發文帳號」，才能開啟免審直接排程");
+                  return;
+                }
+                setAutoPublish(e.target.checked);
+              }}
+            />
             免審直接排程（自動發文）
           </label>
           {autoPublish ? (
@@ -171,7 +217,10 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
               <li key={a.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
                 <div className="min-w-0">
                   <div className="text-sm font-medium">
-                    {a.name} <span className="badge-neutral ml-1">{domLabel(a.domain)}</span>
+                    {a.name}{" "}
+                    <span className="badge-neutral ml-1">
+                      {(a.domains?.length ? a.domains : [a.domain]).map(domLabel).join("、")}
+                    </span>
                     {a.use_redirect && <span className="badge-brand ml-1">短連結</span>}
                     {a.auto_publish && <span className="badge-brand ml-1">免審直發</span>}
                   </div>

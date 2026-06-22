@@ -27,10 +27,12 @@ export default async function AgentsPage() {
           id: a.id,
           name: a.name,
           domain: a.domain,
+          domains: a.domains ?? [],
           enabled: a.enabled,
           last_run_at: a.last_run_at,
           use_redirect: a.use_redirect,
-          auto_publish: a.auto_publish
+          auto_publish: a.auto_publish,
+          threads_account_id: a.threads_account_id
         }))}
         accounts={accounts.map((a) => ({ id: a.id, label: a.label }))}
       />

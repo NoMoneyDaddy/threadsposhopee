@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { geminiText } from "@/services/ai/gemini";
 import { fetchRssItems, type RssItem } from "@/services/ai/rss";
 import { getGeminiKey, getDefaultAffiliateUrl } from "@/lib/credentials";
-import { getAiDomain, defaultFeedsForDomain, googleNewsRss } from "@/lib/ai-domains";
+import { getAiDomain, defaultFeedsForDomain, googleNewsRss, resolveDomainIds } from "@/lib/ai-domains";
 import { maxSimilarity } from "@/lib/text-similarity";
 import { createDraft } from "@/lib/drafts-store";
 import { autoScheduleApproved } from "@/services/publish/auto-schedule";
@@ -37,14 +37,18 @@ const EMOJI_RULE: Record<string, string> = {
 
 // 組產文 prompt。純函式可測。
 export function buildAgentPrompt(agent: AiAgent, item: { title: string; description: string }): string {
-  const domain = getAiDomain(agent.domain);
+  const domains = resolveDomainIds(agent)
+    .map((id) => getAiDomain(id))
+    .filter((d): d is NonNullable<typeof d> => Boolean(d));
+  const label = domains.length ? domains.map((d) => d.label).join("、") : agent.domain;
   const emoji = EMOJI_RULE[agent.emoji_level] ?? EMOJI_RULE.light;
   const tags = agent.hashtag_pool.length ? `結尾可加入這些 hashtag（擇要）：${agent.hashtag_pool.join(" ")}。` : "";
-  const sensitive = domain?.sensitive
+  // 任一領域屬敏感即加保守規則。
+  const sensitive = domains.some((d) => d.sensitive)
     ? "務必保守：不誹謗、不臆測未經證實的指控、不洩漏個資、不煽動對立，立場中性。"
     : "";
   return [
-    `你是社群寫手「${agent.name}」。風格：${agent.tone || "自然、口語"}。領域：${domain?.label ?? agent.domain}。`,
+    `你是社群寫手「${agent.name}」。風格：${agent.tone || "自然、口語"}。領域：${label}。`,
     `根據以下新聞素材，寫一篇繁體中文 Threads 貼文，約 ${agent.length} 字，口吻一致、像真人分享，不要像新聞稿、不要逐字照抄。`,
     `${emoji}${tags}${sensitive}`,
     `只輸出貼文正文，不要前言、不要 markdown、不要加「來源」。`,
@@ -54,11 +58,23 @@ export function buildAgentPrompt(agent: AiAgent, item: { title: string; descript
   ].join("\n");
 }
 
-// 抓來源項目（目前支援 rss；空 feeds 用領域預設 Google News RSS）。
+// 抓來源項目（目前支援 rss；空 feeds 用領域預設 Google News RSS）。橫跨多領域時彙整各領域來源。
 async function fetchItems(agent: AiAgent): Promise<RssItem[]> {
-  let feeds = agent.rss_feeds.length ? agent.rss_feeds : defaultFeedsForDomain(agent.domain);
-  // 自訂主題（或領域無預設）：用 search_query 組 Google News RSS。
-  if (!feeds.length && agent.search_query.trim()) feeds = [googleNewsRss(agent.search_query.trim())];
+  let feeds: string[] = [];
+  if (agent.rss_feeds.length) {
+    feeds = agent.rss_feeds;
+  } else {
+    for (const id of resolveDomainIds(agent)) {
+      // 自訂主題用 search_query 組查詢（其 keyword 為空）；其餘用領域預設 Google News RSS。
+      if (id === "custom") {
+        if (agent.search_query.trim()) feeds.push(googleNewsRss(agent.search_query.trim()));
+      } else {
+        feeds.push(...defaultFeedsForDomain(id));
+      }
+    }
+    // 完全沒有有效領域但有自訂關鍵字時的保底。
+    if (!feeds.length && agent.search_query.trim()) feeds.push(googleNewsRss(agent.search_query.trim()));
+  }
   const all: RssItem[] = [];
   for (const f of feeds) {
     all.push(...(await fetchRssItems(f)));

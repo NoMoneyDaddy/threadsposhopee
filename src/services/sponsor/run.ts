@@ -21,7 +21,7 @@ import {
   getCachedJson,
   setCachedJson
 } from "@/lib/store";
-import { isSponsorExempt } from "@/lib/contribution";
+import { isSponsorExempt, canOwnLink } from "@/lib/contribution";
 import { getPostText } from "@/services/threads/verify";
 import { resolveSponsorResources, buildSponsorLinkForAccount } from "@/services/sponsor/link";
 import { publishToThreads } from "@/services/threads/publish";
@@ -48,8 +48,8 @@ export async function ensureSponsorPosts(ownerUserId: string | null): Promise<{ 
   const accounts = (await listActiveThreadsAccountsAll().catch(() => [])).filter((a) => a.owner_id !== ownerUserId);
   const start = Date.now();
   let idx = 0;
-  // 高貢獻者回饋：exempt＝免每日贊助文；own_link＝照發但換成自己的分潤連結（自己賺）。按 owner 快取。
-  const rewardByOwner = new Map<string, { high: boolean; mode: "exempt" | "own_link" }>();
+  // 高貢獻者回饋：exempt＝免每日贊助文（門檻較低）；own_link＝照發但換成自己的分潤連結自賺（門檻更高）。按 owner 快取。
+  const rewardByOwner = new Map<string, { high: boolean; ownLink: boolean }>();
   for (const acc of accounts) {
     if (Date.now() - start > 40000) break; // 守 maxDuration
     const oid = acc.owner_id;
@@ -57,19 +57,21 @@ export async function ensureSponsorPosts(ownerUserId: string | null): Promise<{ 
     try {
       let reward = rewardByOwner.get(oid);
       if (reward === undefined) {
-        const high = isSponsorExempt(await getContributionScore(oid).catch(() => 0));
+        const score = await getContributionScore(oid).catch(() => 0);
+        const high = isSponsorExempt(score);
         const mode = high ? await getSponsorRewardMode(oid).catch(() => "exempt" as const) : "exempt";
-        reward = { high, mode };
+        // 自賺需達更高門檻：選了 own_link 但分數不夠 → 退回 exempt（仍免發，但不自賺）。
+        reward = { high, ownLink: mode === "own_link" && canOwnLink(score) };
         rewardByOwner.set(oid, reward);
       }
-      if (reward.high && reward.mode === "exempt") continue; // 高貢獻者選擇免贊助文
+      if (reward.high && !reward.ownLink) continue; // 免贊助（含選 own_link 但未達自賺門檻者）
       // 安全網只保底「至少 1 篇」；配額>1 的額外贊助由發文佇列在當日達成（此處不追量）。
       if ((await countSponsorToday(acc.id, tp.date)) >= 1) continue;
       const pick = await getSponsorPick(acc.id);
       if (pick?.draftId) continue; // 使用者自選 → 交由佇列處理，不重複補發
 
       // own_link：高貢獻者照發贊助文，但連結換成「他自己」的分潤連結（用自己的蝦皮金鑰重產）。
-      const useOwnLink = reward.high && reward.mode === "own_link";
+      const useOwnLink = reward.ownLink;
       let link: string | null;
       if (useOwnLink) {
         const mres = cfg.productUrl ? await resolveSponsorResources(cfg.productUrl, oid).catch(() => null) : null;

@@ -27,7 +27,9 @@ export default function DeleteAccountButton() {
     <div className="rounded-2xl border border-red-200 bg-red-50/40 p-4">
       <div className="mb-1 text-sm font-medium text-red-600">刪除帳號</div>
       <p className="mb-3 text-xs text-ink-2">
-        永久刪除你的帳號與所有自有資料（草稿、素材、來源、發文與分潤帳號、設定）。此動作無法復原。
+        永久刪除你的帳號與所有自有資料（草稿、素材、來源、發文與分潤帳號、設定、贊助文紀錄）。此動作無法復原。
+        <br />
+        ⚠️ 已發佈到 Threads 的貼文（含贊助文）<span className="font-medium">不會</span>被自動刪除（Threads 無提供刪文 API），如需移除請自行到 Threads 操作。
       </p>
       {!open ? (
         <button onClick={() => setOpen(true)} className="rounded-xl border border-red-300 px-3 py-2 text-sm text-red-600 hover:bg-red-50">

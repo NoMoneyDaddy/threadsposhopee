@@ -18,7 +18,9 @@ export async function POST() {
     log.error("刪除帳號失敗", { ownerId: user.id, err: e });
     return NextResponse.json({ ok: false, error: "刪除帳號時發生問題，請稍後再試或聯絡我們" }, { status: 500 });
   }
-  // 清除本機 session（帳號已不存在）。失敗不影響刪除結果。
-  await getSessionClient().auth.signOut().catch(() => {});
+  // 清除本機 session（帳號已不存在）。失敗不影響刪除結果，但仍記錄以便排查。
+  await getSessionClient()
+    .auth.signOut()
+    .catch((e) => log.warn("刪除帳號後登出失敗（不影響刪除結果）", { ownerId: user.id, err: e }));
   return NextResponse.json({ ok: true });
 }

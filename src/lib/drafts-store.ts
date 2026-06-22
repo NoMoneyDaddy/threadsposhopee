@@ -32,6 +32,7 @@ export async function createDraftFromMaterial(
     media_type: material.media_type,
     source_media_url: material.source_media_url,
     cloudinary_media_url: material.cloudinary_media_url,
+    media: material.media ?? [],
     main_text: material.main_text,
     reply_text: material.reply_text,
     ai_raw: material.ai_raw,

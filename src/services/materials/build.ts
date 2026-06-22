@@ -7,14 +7,16 @@ import { generateCopy } from "@/services/ai/provider";
 import { uploadMediaWith, type MediaProvider } from "@/services/media/upload";
 import { createMaterial, getCopyPrefs } from "@/lib/store";
 import type { CopyPrefs } from "@/services/ai/prefs";
-import type { Material } from "@/lib/types";
+import type { Material, DraftMedia } from "@/lib/types";
 
 interface BuildMaterialInput {
   shopId: string;
   itemId: string;
   cleanUrl: string;
   originalShortLink: string;
+  // 單一媒體（向後相容）或多媒體（同一篇的影片＋圖）。兩者擇一傳入。
   media?: { url: string | null; type: "image" | "video" | "none" };
+  mediaList?: DraftMedia[];
   sourceText?: string;
   subIdTag?: string; // 追蹤用：來源帳號或 "manual"
   customSubId?: string | null; // 使用者自訂 subId（套用兩種連結）；空＝用預設
@@ -33,7 +35,15 @@ export async function buildMaterialForProduct(
   affiliateId?: string | null, // 無 API 時的後備：用 affiliate_id 組 an_redir 追蹤連結
   mediaProvider?: MediaProvider | null // 使用者自綁圖床（R2 或 Cloudinary）；沒綁則不中轉、沿用原 URL（無 env 後備）
 ): Promise<Material> {
-  const media = input.media ?? { url: null, type: "none" as const };
+  // 媒體清單：優先 mediaList（多媒體），否則退回單一 media 欄位。過濾無效項。
+  const inputMedia: DraftMedia[] =
+    input.mediaList && input.mediaList.length > 0
+      ? input.mediaList.filter((m): m is DraftMedia => Boolean(m?.url) && (m.type === "image" || m.type === "video"))
+      : input.media && input.media.url && input.media.type !== "none"
+        ? [{ url: input.media.url, type: input.media.type }]
+        : [];
+  // 主要媒體（第一個）：供文案產生與單一 media 欄位向後相容。
+  const primary = inputMedia[0] ?? null;
   let shortLink = input.originalShortLink;
   let subId: string | null = null;
   let productName: string | null = null;
@@ -66,14 +76,21 @@ export async function buildMaterialForProduct(
     notes.push(isDemoMode ? "Demo 模式：用原連結與假商品名" : "未提供 Shopee 金鑰：直接用貼上的分潤連結");
   }
 
-  let cloudinaryMediaUrl = media.url;
-  if (!isDemoMode && media.url && media.type !== "none" && mediaProvider && mediaProvider.kind !== "none") {
-    try {
-      cloudinaryMediaUrl = await uploadMediaWith(mediaProvider, media.url, media.type);
-    } catch (e) {
-      notes.push(`圖床上傳失敗（暫用原連結）：${e instanceof Error ? e.message : String(e)}`);
-    }
+  // 逐一中轉媒體到自綁圖床（同一篇的影片＋圖都進自己雲端）；單項失敗暫用原連結，不擋建立。
+  let uploadedMedia: DraftMedia[] = inputMedia;
+  if (!isDemoMode && inputMedia.length > 0 && mediaProvider && mediaProvider.kind !== "none") {
+    uploadedMedia = await Promise.all(
+      inputMedia.map(async (m) => {
+        try {
+          return { url: await uploadMediaWith(mediaProvider, m.url, m.type), type: m.type };
+        } catch (e) {
+          notes.push(`圖床上傳失敗（暫用原連結）：${e instanceof Error ? e.message : String(e)}`);
+          return m;
+        }
+      })
+    );
   }
+  const primaryUploaded = uploadedMedia[0] ?? null;
 
   let mainText: string | null = null;
   let replyText: string | null = null;
@@ -86,8 +103,8 @@ export async function buildMaterialForProduct(
         productName: productName ?? "這個好物",
         shopeeShortLink: shortLink,
         sourceText: input.sourceText,
-        mediaUrl: media.url,
-        mediaType: media.type
+        mediaUrl: primary?.url ?? null,
+        mediaType: primary?.type ?? "none"
       },
       geminiKey,
       prefs
@@ -108,9 +125,10 @@ export async function buildMaterialForProduct(
     affiliate_sub_id: subId,
     affiliate_generated_at: now,
     affiliate_valid: true,
-    media_type: media.type,
-    source_media_url: media.url,
-    cloudinary_media_url: cloudinaryMediaUrl,
+    media_type: primary?.type ?? "none",
+    source_media_url: primary?.url ?? null,
+    cloudinary_media_url: primaryUploaded?.url ?? null,
+    media: uploadedMedia,
     main_text: mainText,
     reply_text: replyText,
     ai_raw: aiRaw,

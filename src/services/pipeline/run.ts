@@ -112,7 +112,7 @@ export async function runSourcePipeline(source: Source, ownerId: string): Promis
             itemId: expanded.itemId,
             cleanUrl: expanded.cleanUrl,
             originalShortLink: post.shopeeLinks[0],
-            media: { url: post.mediaUrl, type: post.mediaType },
+            mediaList: post.media,
             sourceText: post.text,
             // 關鍵字模式 source_username 可能為空，改用貼文作者當 subId 追蹤標籤
             subIdTag: post.username || source.source_username || "search",

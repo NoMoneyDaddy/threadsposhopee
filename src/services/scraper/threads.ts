@@ -1,6 +1,7 @@
 import { isDemoMode } from "@/lib/env";
 import sampleThread from "@/fixtures/sample-thread.json";
 import { fetchWithRetry } from "@/lib/http";
+import type { DraftMedia } from "@/lib/types";
 
 // Threads 搜尋爬蟲 actor（取代舊的帳號時間軸 actor）：可用關鍵字搜尋，或用 from 過濾單一帳號。
 const DEFAULT_THREADS_ACTOR = "igview-owner/threads-search-scraper";
@@ -10,6 +11,9 @@ export interface ScrapedPost {
   username: string; // 原貼文作者（subId 追蹤用）
   isReply: boolean;
   text: string;
+  // 全部媒體（去重後；影片在前）。供「同一篇」合格素材組（影片＋圖）整組帶入。
+  media: DraftMedia[];
+  // 主要媒體（media[0]）：向後相容單一媒體欄位。
   mediaType: "image" | "video" | "none";
   mediaUrl: string | null;
   shopeeLinks: string[];
@@ -25,19 +29,32 @@ function postIdFromUrl(url: string): string {
   return m ? m[1] : "";
 }
 
-// 取貼文的「主要媒體」：優先影片，否則第一張圖。
-// 注意：allImages/allVideos 多是「同一檔的多種尺寸變體」（URL 路徑含同一媒體 id），
-// 不是多個不同媒體；故只取代表（cover）一個，避免把同圖重複當輪播。
-function pickMedia(item: any): { type: "image" | "video"; url: string } | null {
-  const video = item.videoUrl || (Array.isArray(item.allVideos) ? item.allVideos[0] : null);
-  if (typeof video === "string" && video) return { type: "video", url: video };
-  const image = item.imageUrl || (Array.isArray(item.allImages) ? item.allImages[0] : null);
-  if (typeof image === "string" && image) return { type: "image", url: image };
-  return null;
+// 同一媒體常以多種尺寸變體出現（URL 路徑含同一媒體 id，如 /<id>_<...>_n.jpg），
+// 取此 id 當去重鍵，避免把同圖/同片重複當成多個媒體。
+function mediaId(url: string): string {
+  return url.match(/\/(\d{6,})_\d+_\d+_n\./)?.[1] ?? url;
 }
 
-// 把 search scraper 的扁平 dataset items 攤平成 ScrapedPost[]：每個 item 即一則貼文。
-// 媒體取主要一個（影片優先，否則 cover 圖）。純函式可測。
+// 收集貼文的全部去重媒體（影片在前，便於主要媒體為影片）：
+// 同一篇含影片＋圖時，兩者都會被收進來，供合格素材組（1 影片＋≥1 圖）整組使用。
+function collectMedia(item: any): DraftMedia[] {
+  const out: DraftMedia[] = [];
+  const seen = new Set<string>();
+  const push = (url: unknown, type: "image" | "video") => {
+    if (typeof url !== "string" || !url) return;
+    const key = `${type}:${mediaId(url)}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push({ url, type });
+  };
+  push(item.videoUrl, "video");
+  if (Array.isArray(item.allVideos)) for (const u of item.allVideos) push(u, "video");
+  push(item.imageUrl, "image");
+  if (Array.isArray(item.allImages)) for (const u of item.allImages) push(u, "image");
+  return out;
+}
+
+// 把 search scraper 的扁平 dataset items 攤平成 ScrapedPost[]：每個 item 即一則貼文。純函式可測。
 export function parseSearchPosts(items: any[]): ScrapedPost[] {
   if (!Array.isArray(items)) return [];
   const out: ScrapedPost[] = [];
@@ -46,14 +63,15 @@ export function parseSearchPosts(items: any[]): ScrapedPost[] {
     const text: string = item.captionText ?? "";
     const postId = postIdFromUrl(item.postUrl ?? "");
     if (!postId) continue;
-    const media = pickMedia(item);
+    const media = collectMedia(item);
     out.push({
       postId,
       username: item.username ?? "",
       isReply: Boolean(item.isReply),
       text,
-      mediaType: media?.type ?? "none",
-      mediaUrl: media?.url ?? null,
+      media,
+      mediaType: media[0]?.type ?? "none",
+      mediaUrl: media[0]?.url ?? null,
       shopeeLinks: Array.from(text.matchAll(SHOPEE_SHORT_RE)).map((m) => m[1])
     });
   }

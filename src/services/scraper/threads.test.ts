@@ -17,24 +17,34 @@ test("parseSearchPosts：從 postUrl 取貼文 id、抽蝦皮短連結、標記 
     username: "double_corn2025",
     isReply: true,
     text: "泰國小老板海苔棒棒捲\nhttps://s.shopee.tw/4VacwWMMCr",
+    media: [],
     mediaType: "none",
     mediaUrl: null,
     shopeeLinks: ["https://s.shopee.tw/4VacwWMMCr"]
   });
 });
 
-test("parseSearchPosts：取主要媒體（影片優先於圖）", () => {
+test("parseSearchPosts：收集去重媒體（影片在前，同圖多尺寸去重）", () => {
   const v = parseSearchPosts([
-    { captionText: "x", postUrl: "https://www.threads.com/@u/post/A", imageUrl: "cover.jpg", videoUrl: "clip.mp4" }
+    {
+      captionText: "x",
+      postUrl: "https://www.threads.com/@u/post/A",
+      imageUrl: "https://c/v/t51/713685048_111_222_n.jpg?stp=e15_tt6",
+      videoUrl: "clip.mp4",
+      allImages: [
+        "https://c/v/t51/713685048_111_222_n.jpg?stp=p480x480", // 同一張圖不同尺寸 → 去重
+        "https://c/v/t51/999999999_333_444_n.jpg?stp=e15_tt6" // 不同圖 → 保留
+      ]
+    }
+  ]);
+  // 影片在前，圖去重後 2 張 → 共 3 個媒體
+  assert.deepEqual(v[0].media, [
+    { url: "clip.mp4", type: "video" },
+    { url: "https://c/v/t51/713685048_111_222_n.jpg?stp=e15_tt6", type: "image" },
+    { url: "https://c/v/t51/999999999_333_444_n.jpg?stp=e15_tt6", type: "image" }
   ]);
   assert.equal(v[0].mediaType, "video");
   assert.equal(v[0].mediaUrl, "clip.mp4");
-
-  const img = parseSearchPosts([
-    { captionText: "x", postUrl: "https://www.threads.com/@u/post/B", imageUrl: "", allImages: ["full.jpg", "p480.jpg"] }
-  ]);
-  assert.equal(img[0].mediaType, "image");
-  assert.equal(img[0].mediaUrl, "full.jpg");
 });
 
 test("parseSearchPosts：沒有 postUrl 的項目略過", () => {

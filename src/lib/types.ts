@@ -44,6 +44,8 @@ export interface Material {
   media_type?: "image" | "video" | "none" | null;
   source_media_url?: string | null;
   cloudinary_media_url?: string | null;
+  // 多媒體（同一篇貼文的影片＋圖）：空陣列時退回上面單一 media 欄位（向後相容）。
+  media?: DraftMedia[];
   main_text?: string | null;
   reply_text?: string | null;
   ai_raw?: string | null;

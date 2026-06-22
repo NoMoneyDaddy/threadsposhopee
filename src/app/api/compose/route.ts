@@ -129,6 +129,7 @@ export async function POST(req: Request) {
         media_type: material ? material.media_type : selfMediaType,
         source_media_url: material ? material.source_media_url : selfMediaUrl,
         cloudinary_media_url: material ? material.cloudinary_media_url : selfCloudUrl,
+        media: material ? material.media ?? [] : [],
         main_text: material ? (typeof body.main_text === "string" ? body.main_text : material.main_text) : freeMain,
         reply_text: typeof body.reply_text === "string" ? body.reply_text : material?.reply_text ?? null,
         reply_delay_minutes: replyDelayOverride,

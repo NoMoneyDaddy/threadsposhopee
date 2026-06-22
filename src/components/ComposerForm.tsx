@@ -161,9 +161,11 @@ export default function ComposerForm({ threadsAccounts }: { threadsAccounts: Thr
                 <div className="truncate text-sm font-medium">{material.product_name ?? "（商品）"}</div>
                 {(() => {
                   const mediaList: DraftMedia[] =
-                    material.cloudinary_media_url && (material.media_type === "image" || material.media_type === "video")
-                      ? [{ url: material.cloudinary_media_url, type: material.media_type }]
-                      : [];
+                    material.media && material.media.length > 0
+                      ? material.media
+                      : material.cloudinary_media_url && (material.media_type === "image" || material.media_type === "video")
+                        ? [{ url: material.cloudinary_media_url, type: material.media_type }]
+                        : [];
                   return (
                     <span className={"shrink-0 rounded px-1.5 py-0.5 text-[10px] " + (isQualifiedMediaSet(mediaList) ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700")}>
                       {isQualifiedMediaSet(mediaList) ? "✅ 合格素材組" : "⚠️ 建議 1 影片＋≥1 圖"}

@@ -142,7 +142,8 @@ export async function getDefaultAffiliateUrl(ownerId: string): Promise<string | 
   if (isDemoMode) return null;
   const sb = getServiceClient();
   if (!sb) return null;
-  const { data } = await sb.from("profiles").select("default_affiliate_url").eq("id", ownerId).maybeSingle();
+  const { data, error } = await sb.from("profiles").select("default_affiliate_url").eq("id", ownerId).maybeSingle();
+  if (error) throw new Error(`讀取預設分潤連結失敗：${error.message}`);
   const v = data?.default_affiliate_url;
   return typeof v === "string" && v.trim() ? v.trim() : null;
 }

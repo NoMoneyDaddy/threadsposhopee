@@ -84,7 +84,12 @@ export async function runAgentOnce(agent: AiAgent, geminiKey: string): Promise<A
 
   const recentTitles = await recentSeenTitles(agent.id, SEEN_WINDOW_MS);
   // 預設分潤連結：走 go2read 中轉時，「繼續」要去的分潤連結（使用者一次設定、套用所有代理人貼文）。
-  const defaultAffiliateUrl = agent.use_redirect ? await getDefaultAffiliateUrl(agent.owner_id).catch(() => null) : null;
+  const defaultAffiliateUrl = agent.use_redirect
+    ? await getDefaultAffiliateUrl(agent.owner_id).catch((err) => {
+        log.error("取得代理人預設分潤連結失敗", { agentId: agent.id, err });
+        return null;
+      })
+    : null;
 
   for (const item of items) {
     const hash = sourceHash(item.link);

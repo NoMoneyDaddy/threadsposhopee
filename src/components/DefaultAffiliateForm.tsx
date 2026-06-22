@@ -50,7 +50,13 @@ export default function DefaultAffiliateForm({ initial, suggested }: { initial: 
         貼一般蝦皮商品／商城連結即可，<b>存檔時會自動用你的蝦皮金鑰轉成分潤連結</b>（已是分潤連結則不重複轉）。
         留空＝中轉頁只導向新聞來源、不附分潤。需先到帳號管理綁定蝦皮金鑰或 affiliate_id 才能轉分潤。
       </p>
-      <div className="flex flex-wrap gap-2">
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          save();
+        }}
+        className="flex flex-wrap gap-2"
+      >
         <input
           className="input min-w-0 flex-1"
           aria-label="預設分潤連結"
@@ -58,10 +64,10 @@ export default function DefaultAffiliateForm({ initial, suggested }: { initial: 
           value={url}
           onChange={(e) => setUrl(e.target.value)}
         />
-        <button onClick={() => save()} disabled={busy} className="btn btn-brand shrink-0">
+        <button type="submit" disabled={busy} className="btn btn-brand shrink-0">
           {busy ? "儲存中…" : "儲存"}
         </button>
-      </div>
+      </form>
       <button
         type="button"
         onClick={() => save(suggested)}

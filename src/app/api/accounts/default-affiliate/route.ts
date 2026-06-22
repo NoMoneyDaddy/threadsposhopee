@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { log } from "@/lib/logger";
 import { setDefaultAffiliateUrl } from "@/lib/store";
 import { resolveAffiliateUrl } from "@/services/shopee/affiliate-link";
+import { assertSafePublicUrl } from "@/lib/url-guard";
 import { getCurrentUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +21,12 @@ export async function POST(req: Request) {
     if (!url) {
       await setDefaultAffiliateUrl(user.id, null);
       return NextResponse.json({ ok: true, url: null });
+    }
+    // 提前驗證使用者輸入（不安全/格式錯誤 → 400，而非轉換/存檔時才 500）。
+    try {
+      assertSafePublicUrl(url);
+    } catch (err) {
+      return NextResponse.json({ ok: false, error: err instanceof Error ? err.message : "無效或不安全的連結" }, { status: 400 });
     }
     // 先轉分潤（已是分潤連結則原樣）；轉換結果再存（內含 SSRF/協定驗證）。
     const resolved = await resolveAffiliateUrl(user.id, url);

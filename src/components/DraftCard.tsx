@@ -7,6 +7,7 @@ import { CharCount } from "@/components/ThreadsPreview";
 import ThreadsPreview from "@/components/ThreadsPreview";
 import { normalizeDraftMedia, normalizeReplyMedia, isQualifiedMediaSet } from "@/lib/media";
 import { formatCommissionRate } from "@/lib/product-name";
+import { cloudinaryThumb } from "@/lib/img";
 import { checkThreadsContent, THREADS_MAX_HASHTAGS } from "@/lib/threads-content";
 import { isLowRelevance } from "@/lib/relevance";
 
@@ -37,6 +38,13 @@ function DraftCard({
   const [mainText, setMainText] = useState(draft.main_text ?? "");
   const [replyText, setReplyText] = useState(draft.reply_text ?? "");
   const [shopeeLink, setShopeeLink] = useState(draft.shopee_short_link ?? "");
+  // 媒體指派（主文／留言）：把草稿全部媒體攤平標 slot，編輯時可逐項切換
+  type MediaSlot = { url: string; type: "image" | "video"; slot: "main" | "reply" };
+  const initMediaSlots = (): MediaSlot[] => [
+    ...normalizeDraftMedia(draft).map((m) => ({ ...m, slot: "main" as const })),
+    ...normalizeReplyMedia(draft).map((m) => ({ ...m, slot: "reply" as const }))
+  ];
+  const [mediaSlots, setMediaSlots] = useState<MediaSlot[]>(initMediaSlots);
   const [msg, setMsg] = useState<string | null>(null);
   const [compliance, setCompliance] = useState<{ risk: string; advice: string } | null>(null);
   const [variants, setVariants] = useState<{ mainText: string; replyText: string }[] | null>(null);
@@ -97,8 +105,10 @@ function DraftCard({
     setMainText(draft.main_text ?? "");
     setReplyText(draft.reply_text ?? "");
     setShopeeLink(draft.shopee_short_link ?? "");
+    setMediaSlots(initMediaSlots());
     setSchedTime(toLocalInput(draft.scheduled_at));
-  }, [draft.main_text, draft.reply_text, draft.shopee_short_link, draft.scheduled_at]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft.main_text, draft.reply_text, draft.shopee_short_link, draft.media, draft.reply_media, draft.scheduled_at]);
 
   async function call(action: string, extra: Record<string, unknown> = {}) {
     setBusy(action);
@@ -115,6 +125,10 @@ function DraftCard({
         setMainText(json.draft.main_text ?? "");
         setReplyText(json.draft.reply_text ?? "");
         setShopeeLink(json.draft.shopee_short_link ?? "");
+        setMediaSlots([
+          ...normalizeDraftMedia(json.draft).map((m) => ({ ...m, slot: "main" as const })),
+          ...normalizeReplyMedia(json.draft).map((m) => ({ ...m, slot: "reply" as const }))
+        ]);
       }
       if (action === "edit") setEditing(false);
       router.refresh();
@@ -246,10 +260,48 @@ function DraftCard({
             placeholder="分潤連結（可自行覆寫；留空則沿用自動轉換）"
             aria-label="分潤連結"
           />
+          {mediaSlots.length > 0 && (
+            <div className="space-y-1">
+              <div className="text-xs text-ink-2">媒體指派（主文／留言 2/2）</div>
+              <div className="flex flex-wrap gap-3">
+                {mediaSlots.map((m, i) => (
+                  <div key={`${m.url}-${i}`} className="flex flex-col items-center gap-1">
+                    {m.type === "image" ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={cloudinaryThumb(m.url, 96)} alt="" loading="lazy" className="h-14 w-14 rounded border object-cover" />
+                    ) : (
+                      <video src={m.url} className="h-14 w-14 rounded border object-cover" />
+                    )}
+                    <select
+                      className="rounded border px-1 py-0.5 text-[11px]"
+                      aria-label="媒體歸屬"
+                      value={m.slot}
+                      onChange={(e) =>
+                        setMediaSlots((prev) =>
+                          prev.map((x, j) => (j === i ? { ...x, slot: e.target.value as "main" | "reply" } : x))
+                        )
+                      }
+                    >
+                      <option value="main">主文</option>
+                      <option value="reply">留言</option>
+                    </select>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="flex gap-2">
             <button
               disabled={busy === "edit"}
-              onClick={() => call("edit", { main_text: mainText, reply_text: replyText, shopee_short_link: shopeeLink })}
+              onClick={() =>
+                call("edit", {
+                  main_text: mainText,
+                  reply_text: replyText,
+                  shopee_short_link: shopeeLink,
+                  media: mediaSlots.filter((m) => m.slot === "main").map(({ url, type }) => ({ url, type })),
+                  reply_media: mediaSlots.filter((m) => m.slot === "reply").map(({ url, type }) => ({ url, type }))
+                })
+              }
               className="rounded bg-brand px-3 py-1 text-xs text-white disabled:opacity-50"
             >
               {busy === "edit" ? "儲存中…" : "儲存"}
@@ -268,6 +320,7 @@ function DraftCard({
           mediaUrl={draft.cloudinary_media_url}
           mediaType={draft.media_type}
           media={normalizeDraftMedia(draft)}
+          replyMedia={normalizeReplyMedia(draft)}
         />
       )}
 

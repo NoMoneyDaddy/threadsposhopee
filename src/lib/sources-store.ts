@@ -80,7 +80,8 @@ export async function setSourceEnabled(id: string, ownerId: string, enabled: boo
 export async function getSource(id: string, ownerId: string): Promise<Source | null> {
   if (isDemoMode) return demo.sources.find((s) => s.id === id && s.owner_id === ownerId) ?? null;
   const sb = getServiceClient()!;
-  const { data } = await sb.from("sources").select("*").eq("id", id).eq("owner_id", ownerId).maybeSingle();
+  const { data, error } = await sb.from("sources").select("*").eq("id", id).eq("owner_id", ownerId).maybeSingle();
+  if (error) throw error; // 查詢異常勿吞成 null（否則會被誤判成「找不到來源」）
   return (data as Source) ?? null;
 }
 

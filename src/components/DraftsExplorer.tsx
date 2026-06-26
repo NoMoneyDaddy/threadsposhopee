@@ -164,7 +164,7 @@ export default function DraftsExplorer({
           >
             <option value="all">全部帳號</option>
             {accountOptions.map((o) => (
-              <option key={o.value} value={o.value}>@{o.label}</option>
+              <option key={o.value} value={o.value}>{o.value === NONE ? o.label : `@${o.label}`}</option>
             ))}
           </select>
         )}

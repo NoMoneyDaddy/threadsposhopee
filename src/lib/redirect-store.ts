@@ -4,6 +4,7 @@ import { getServiceClient } from "./supabase/server";
 import { isDemoMode } from "./env";
 import { assertSafePublicUrl } from "./url-guard";
 import { randomShortCode } from "./shortcode";
+import { fetchLinkPreview } from "@/services/og/preview";
 
 export interface RedirectLinkInput {
   sourceUrl: string;
@@ -34,11 +35,30 @@ export interface BioPage {
   links: { code: string; title: string | null; imageUrl: string | null }[];
 }
 
+// 補齊預覽欄位：使用者自填的優先；缺的才從來源 OG 自動抓（任一缺即抓一次，best-effort）。
+async function resolvePreviewMeta(
+  input: RedirectLinkInput
+): Promise<{ title: string | null; imageUrl: string | null; description: string | null }> {
+  let title = input.title ?? null;
+  let imageUrl = input.imageUrl ?? null;
+  let description = input.description ?? null;
+  if (!title || !imageUrl || !description) {
+    const og = await fetchLinkPreview(input.sourceUrl);
+    title = title ?? og.title;
+    imageUrl = imageUrl ?? og.imageUrl;
+    description = description ?? og.description;
+  }
+  return { title, imageUrl, description };
+}
+
 // 建立短連結：驗證 URL（SSRF/協定），產生唯一 code（衝突重試），回傳 code。
 export async function createRedirectLink(ownerId: string, input: RedirectLinkInput): Promise<string> {
   // 來源必填、分潤選填；皆須為安全公開 URL（擋內網/非法協定/開放重定向濫用）。
   assertSafePublicUrl(input.sourceUrl);
   if (input.affiliateUrl) assertSafePublicUrl(input.affiliateUrl);
+
+  // 自動預覽：使用者未自填標題/預覽圖/描述時，best-effort 抓來源 OG 帶入（供中轉頁與 Threads unfurl）。
+  const meta = await resolvePreviewMeta(input);
 
   if (isDemoMode) return randomShortCode();
   const sb = getServiceClient()!;
@@ -49,9 +69,9 @@ export async function createRedirectLink(ownerId: string, input: RedirectLinkInp
       code,
       source_url: input.sourceUrl,
       affiliate_url: input.affiliateUrl ?? null,
-      title: input.title ?? null,
-      image_url: input.imageUrl ?? null,
-      description: input.description ?? null
+      title: meta.title,
+      image_url: meta.imageUrl,
+      description: meta.description
     });
     if (!error) return code;
     // 唯一鍵衝突（code 重複）→ 換一個重試；其餘錯誤直接拋出。

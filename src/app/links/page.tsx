@@ -1,6 +1,6 @@
 import { getCurrentUser } from "@/lib/auth";
 import { listRedirectLinks } from "@/lib/redirect-store";
-import { getBioSettings } from "@/lib/store";
+import { getBioSettings, getDefaultAffiliateUrl } from "@/lib/store";
 import RedirectLinkForm from "@/components/RedirectLinkForm";
 import RedirectLinkRow from "@/components/RedirectLinkRow";
 import EmptyState from "@/components/EmptyState";
@@ -13,9 +13,10 @@ export const dynamic = "force-dynamic";
 export default async function LinksPage() {
   const user = await getCurrentUser();
   if (!user) return <div className="text-center text-sm text-red-500">請先登入。</div>;
-  const [links, bio] = await Promise.all([
+  const [links, bio, defaultAffiliateUrl] = await Promise.all([
     listRedirectLinks(user.id).catch(() => []),
-    getBioSettings(user.id).catch(() => ({ handle: null, title: null }))
+    getBioSettings(user.id).catch(() => ({ handle: null, title: null })),
+    getDefaultAffiliateUrl(user.id).catch(() => null)
   ]);
 
   return (
@@ -25,7 +26,7 @@ export default async function LinksPage() {
         <p className="text-sm text-ink-2">把長連結變成你自己的短連結；別人點開會先看到預覽頁，再前往原始來源（可順便附上合作推廣連結）。</p>
       </div>
 
-      <RedirectLinkForm />
+      <RedirectLinkForm defaultAffiliateUrl={defaultAffiliateUrl} />
 
       <SelfBuyNotice />
 

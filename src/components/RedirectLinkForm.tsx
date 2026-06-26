@@ -3,8 +3,18 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+// 來源是否為蝦皮網址（含分潤短網域）→ 提示可一鍵套用預設分潤連結。
+function isShopeeUrl(u: string): boolean {
+  try {
+    const host = new URL(u).host.toLowerCase().replace(/^www\./, "");
+    return host === "shopee.tw" || host === "s.shopee.tw" || host === "shope.ee";
+  } catch {
+    return false;
+  }
+}
+
 // 建立 go2read 短連結。送出後刷新列表並顯示產生的短連結。
-export default function RedirectLinkForm() {
+export default function RedirectLinkForm({ defaultAffiliateUrl }: { defaultAffiliateUrl?: string | null }) {
   const router = useRouter();
   const [sourceUrl, setSourceUrl] = useState("");
   const [affiliateUrl, setAffiliateUrl] = useState("");
@@ -12,6 +22,7 @@ export default function RedirectLinkForm() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [created, setCreated] = useState<string | null>(null);
+  const showShopeeHint = isShopeeUrl(sourceUrl) && !affiliateUrl.trim();
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -48,6 +59,20 @@ export default function RedirectLinkForm() {
       <div>
         <label className="label" htmlFor="rl-aff">分潤／導流連結（選填）</label>
         <input id="rl-aff" className="input" value={affiliateUrl} onChange={(e) => setAffiliateUrl(e.target.value)} placeholder="https://s.shopee.tw/..." />
+        {showShopeeHint &&
+          (defaultAffiliateUrl ? (
+            <button
+              type="button"
+              onClick={() => setAffiliateUrl(defaultAffiliateUrl)}
+              className="mt-1.5 rounded-lg border px-2.5 py-1 text-xs text-brand hover:bg-orange-50"
+            >
+              偵測到蝦皮連結 — 套用我的預設分潤連結
+            </button>
+          ) : (
+            <p className="mt-1.5 text-xs text-ink-3">
+              偵測到蝦皮連結。可到 <a href="/accounts#setup-shopee" className="text-brand underline">帳號管理</a> 設定預設分潤連結，之後一鍵套用。
+            </p>
+          ))}
       </div>
       <div>
         <label className="label" htmlFor="rl-title">標題（選填，中轉頁/分享預覽用）</label>

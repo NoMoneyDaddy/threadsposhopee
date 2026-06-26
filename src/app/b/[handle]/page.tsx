@@ -16,9 +16,11 @@ export default async function BioPage({ params }: { params: { handle: string } }
   const page = await getBioPageByHandle(params.handle).catch(() => null);
   if (!page) notFound();
 
-  const title = page.title ?? `@${params.handle}`;
+  // 正規化 handle：去除可能的前導 @（避免 @@username 與 monogram 取到 @）。
+  const cleanHandle = params.handle.replace(/^@+/, "");
+  const title = page.title ?? `@${cleanHandle}`;
   // 頭像缺省用標題/handle 首字做 monogram（避免空頭像；取首個可見字元，支援中英/emoji）。
-  const monogram = [...(page.title?.trim() || params.handle)][0]?.toUpperCase() ?? "@";
+  const monogram = [...(page.title?.trim() || cleanHandle)][0]?.toUpperCase() ?? "@";
 
   return (
     <div className="relative min-h-[100dvh] overflow-hidden">
@@ -32,7 +34,7 @@ export default async function BioPage({ params }: { params: { handle: string } }
           </div>
         </div>
         <h1 className="text-center text-xl font-bold tracking-tight">{title}</h1>
-        {page.title && <p className="mt-0.5 text-sm text-ink-3">@{params.handle}</p>}
+        {page.title && <p className="mt-0.5 text-sm text-ink-3">@{cleanHandle}</p>}
         <span aria-hidden className="accent-line mb-7 mt-4 block h-1 w-12 rounded-full" />
 
         {page.links.length === 0 ? (

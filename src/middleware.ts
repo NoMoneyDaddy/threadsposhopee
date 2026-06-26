@@ -43,6 +43,15 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
+  // 唯讀防護：管理者「以成員視角檢視」期間（帶 view_as cookie）一律擋下狀態變更請求，
+  // 確保只看不動到成員資料。例外：view-as 切換/解除本身與登出，否則無法退出。
+  if (req.method !== "GET" && req.method !== "HEAD" && req.cookies.get("view_as")?.value) {
+    const exempt = url.pathname.startsWith("/api/admin/view-as") || url.pathname.startsWith("/auth/");
+    if (!exempt) {
+      return NextResponse.json({ ok: false, error: "成員視角為唯讀，請先結束檢視再操作" }, { status: 403 });
+    }
+  }
+
   // CSRF 縱深防禦：狀態變更請求若帶 Origin，必須同源（瀏覽器跨站 POST 一定帶 Origin）。
   // 公開端點（cron／Meta 回呼）已在上方放行；server-to-server 無 Origin 不受影響。
   if (req.method !== "GET" && req.method !== "HEAD") {

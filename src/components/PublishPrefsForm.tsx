@@ -26,7 +26,13 @@ export default function PublishPrefsForm({
   const [msg, setMsg] = useState<string | null>(null);
 
   const parsedSlots = parseSlots(slots);
-  const slotsInvalid = slots.trim() !== "" && parsedSlots.length === 0;
+  // 任一非空 token 不符合 HH:MM 就算無效（不只「全部都無效」才擋）：
+  // 例如 09:00,25:00 後端會默默丟掉 25:00，這裡先擋下，避免顯示與實際儲存不一致。
+  const slotsInvalid = slots
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean)
+    .some((t) => parseSlots(t).length === 0);
   const gapNum = Number(gap);
   const gapValid = Number.isFinite(gapNum) && gapNum > 0;
   const lowGap = gapValid && gapNum < RECOMMENDED_MIN_GAP_MINUTES;

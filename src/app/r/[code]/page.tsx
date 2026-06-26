@@ -27,10 +27,14 @@ export default async function RedirectPage({ params }: { params: { code: string 
   if (!link) notFound();
   await bumpRedirectClick(params.code).catch(() => {}); // best-effort 計數，不擋頁
 
-  // 來源網域（顯示「即將前往哪裡」，增加信任感）。
+  // 來源網域（縮圖佔位用）＋來源網址縮略（顯示「即將前往哪裡」，增加信任感）。
   let sourceHost = "";
+  let sourceDisplay = "";
   try {
-    sourceHost = new URL(link.sourceUrl).host.replace(/^www\./, "");
+    const u = new URL(link.sourceUrl);
+    sourceHost = u.host.replace(/^www\./, "");
+    const s = sourceHost + u.pathname + u.search;
+    sourceDisplay = s.length > 42 ? `${s.slice(0, 42)}…` : s;
   } catch {
     /* 忽略無法解析的來源 */
   }
@@ -68,15 +72,15 @@ export default async function RedirectPage({ params }: { params: { code: string 
           <div className="p-5 text-center">
             <h1 className="text-xl font-bold leading-snug tracking-tight">{link.title ?? "即將前往"}</h1>
             {link.description && <p className="mt-2 line-clamp-3 text-sm text-ink-2">{link.description}</p>}
-            {sourceHost && (
-              <p className="mt-3 inline-flex items-center gap-1 rounded-full bg-surface-2 px-2.5 py-1 text-xs text-ink-3">
-                即將前往 <span className="font-medium text-ink-2">{sourceHost}</span>
+            {sourceDisplay && (
+              <p className="mt-3 inline-flex max-w-full items-center gap-1 rounded-full bg-surface-2 px-2.5 py-1 text-xs text-ink-3">
+                即將前往 <span className="truncate font-medium text-ink-2" title={link.sourceUrl}>{sourceDisplay}</span>
               </p>
             )}
             <ContinueButton code={link.code} sourceUrl={link.sourceUrl} affiliateUrl={link.affiliateUrl} />
-            {/* 揭露：中性、低調但仍可讀地告知含合作連結與另開頁面行為（合規底線；不偽裝、不誇張、不點名平台） */}
+            {/* 揭露：中性、低調但仍可讀地告知含合作連結（合規底線；不偽裝、不誇張、不點名平台） */}
             <p className="mt-3 text-[11px] leading-relaxed text-ink-3">
-              本頁含合作推廣連結；點「繼續」會前往原始來源，並可能另開相關頁面。
+              本站含推廣連結以維護運轉，點擊「繼續」前往觀看文章。
             </p>
           </div>
         </div>

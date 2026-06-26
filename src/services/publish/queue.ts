@@ -300,16 +300,16 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
             }
             const own = sponsorOwnLinkCache[oid];
             if (own.eligible && own.creds) {
-              const ownLink = await buildSponsorLinkForAccount({ cleanUrl: draftCleanUrl, ...own.creds }, accId).catch(() => null);
+              const ownLink = await buildSponsorLinkForAccount({ cleanUrl: draftCleanUrl, ...own.creds }, accId, sponsorCfg.subIds).catch(() => null);
               if (ownLink) {
                 link = ownLink;
                 useOwn = true;
               }
             }
           }
-          // 非自賺：用 owner 金鑰把該篇商品重產成每帳號（sp_<帳號碼>）的 owner 分潤連結。
+          // 非自賺：用 owner 金鑰把該篇商品重產成 owner 分潤連結，套用 owner 設定的贊助 sub_id。
           if (!useOwn && sponsorOwnerCreds) {
-            const perAcct = await buildSponsorLinkForAccount({ cleanUrl: draftCleanUrl, ...sponsorOwnerCreds }, accId).catch(() => null);
+            const perAcct = await buildSponsorLinkForAccount({ cleanUrl: draftCleanUrl, ...sponsorOwnerCreds }, accId, sponsorCfg.subIds).catch(() => null);
             if (perAcct) link = perAcct;
           }
         }

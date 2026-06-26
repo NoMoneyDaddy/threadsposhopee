@@ -2,18 +2,23 @@
 // 存 app_state 單列（key=sponsor_config），demo 走預設值。
 import { getServiceClient } from "./supabase/server";
 import { isDemoMode } from "./env";
+import { parseSubIdSlots, isValidSubIdTemplate } from "@/services/shopee/subid";
 
 export interface SponsorConfig {
   enabled: boolean;
   offPeakStart: number; // 冷門時段起（小時 0–23，Asia/Taipei）
   offPeakEnd: number; // 冷門時段迄（小時 0–24）
+  // 贊助分潤連結的自訂 sub_id（逗號分隔，最多 5 格，對齊蝦皮 sub_id1..5）。
+  // 每格支援變數 {date}/{time}/{platform}/{account}/{item}，建連結時自動代換。例：sponsor,{date}
+  subIds: string;
 }
 
 const KEY = "sponsor_config";
 export const DEFAULT_SPONSOR_CONFIG: SponsorConfig = {
   enabled: false,
   offPeakStart: 2,
-  offPeakEnd: 5
+  offPeakEnd: 5,
+  subIds: "sponsor"
 };
 
 export async function getSponsorConfig(): Promise<SponsorConfig> {
@@ -229,7 +234,8 @@ export async function listSponsorRecordsToVerify(minAgeMs: number): Promise<Spon
   return out;
 }
 
-// 正規化＋驗證輸入（小時界線）。贊助文連結改為「就地改寫各篇貼文的商品連結」，不再需要設定商品/連結。
+// 正規化＋驗證輸入（小時界線＋贊助 sub_id 多格）。贊助文連結改為「就地改寫各篇貼文的商品連結」，
+// owner 只需設定要套在贊助連結上的 sub_id（可含變數）。
 export function normalizeSponsorConfig(input: Partial<SponsorConfig>): { ok: true; cfg: SponsorConfig } | { ok: false; error: string } {
   const enabled = Boolean(input.enabled);
   const offPeakStart = Number(input.offPeakStart);
@@ -237,5 +243,9 @@ export function normalizeSponsorConfig(input: Partial<SponsorConfig>): { ok: tru
   if (!Number.isInteger(offPeakStart) || !Number.isInteger(offPeakEnd) || offPeakStart < 0 || offPeakStart > 23 || offPeakEnd < 1 || offPeakEnd > 24 || offPeakStart >= offPeakEnd) {
     return { ok: false, error: "冷門時段需為 0–24 的整數且起 < 迄" };
   }
-  return { ok: true, cfg: { enabled, offPeakStart, offPeakEnd } };
+  const slots = parseSubIdSlots(typeof input.subIds === "string" ? input.subIds : "");
+  if (slots.some((s) => !isValidSubIdTemplate(s))) {
+    return { ok: false, error: "贊助 sub_id 每格僅能含英數、底線與變數 {date}/{time}/{platform}/{account}/{item}（單格上限 50）" };
+  }
+  return { ok: true, cfg: { enabled, offPeakStart, offPeakEnd, subIds: slots.join(",") } };
 }

@@ -2,7 +2,7 @@
 // 失敗時上層退回靜態後備連結（無每帳號追蹤）。
 import { expandShopeeLink } from "@/services/shopee/expand";
 import { generateAffiliateLink, buildAffiliateRedirectLink } from "@/services/shopee/affiliate";
-import { normalizeSubId, normalizeSubIds, parseSubIdSlots } from "@/services/shopee/subid";
+import { normalizeSubIds, parseSubIdSlots, resolveSubIdTemplate } from "@/services/shopee/subid";
 import { getShopeeCredentials, getShopeeAffiliateId, getShopeeSubId } from "@/lib/store";
 
 export interface SponsorLinkResources {
@@ -34,12 +34,24 @@ export async function cleanProductUrlFromDraft(d: {
   return expanded?.cleanUrl ?? null;
 }
 
-// 為某帳號產生帶 sp_<帳號碼> subId 的贊助分潤連結。無金鑰/失敗回 null。
-export async function buildSponsorLinkForAccount(res: SponsorLinkResources, accountId: string): Promise<string | null> {
+// 為某帳號產生贊助分潤連結，sub_id 用 owner 設定的贊助 subId 範本（逐格代換變數）。無金鑰/失敗回 null。
+// subIdTemplate：逗號分隔多格，支援 {date}/{time}/{platform}/{account}/{item}；未設則回退 owner 既有 subId。
+export async function buildSponsorLinkForAccount(
+  res: SponsorLinkResources,
+  accountId: string,
+  subIdTemplate?: string | null
+): Promise<string | null> {
   if (!res.cleanUrl) return null;
-  const acctSub = normalizeSubId(`sp_${accountId.slice(0, 8)}`);
-  // owner 自訂 subId 可能為多格（逗號分隔）；逐格正規化後＋帳號標記，取前 5。
-  const subIds = normalizeSubIds([...parseSubIdSlots(res.ownerSubId), acctSub]);
+  const now = new Date();
+  const ctx = {
+    date: now.toLocaleDateString("en-CA", { timeZone: "Asia/Taipei" }).replace(/-/g, ""),
+    time: now.toLocaleTimeString("en-GB", { timeZone: "Asia/Taipei", hour: "2-digit", minute: "2-digit", hour12: false }).replace(":", ""),
+    platform: "threads",
+    account: accountId.slice(0, 8),
+    item: ""
+  };
+  const template = subIdTemplate?.trim() ? subIdTemplate : res.ownerSubId;
+  const subIds = normalizeSubIds(parseSubIdSlots(template).map((slot) => resolveSubIdTemplate(slot, ctx)));
   try {
     if (res.ownerCreds) {
       return await generateAffiliateLink(res.ownerCreds.appId, res.ownerCreds.secret, res.cleanUrl, subIds);

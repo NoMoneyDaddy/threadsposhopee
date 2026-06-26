@@ -82,10 +82,10 @@ export async function ensureSponsorPosts(ownerUserId: string | null): Promise<{ 
       if (useOwnLink) {
         if (!ownCredsByOwner.has(oid)) ownCredsByOwner.set(oid, await resolveSponsorOwnerCreds(oid).catch(() => null));
         const cc = ownCredsByOwner.get(oid) ?? null;
-        link = cc ? await buildSponsorLinkForAccount({ cleanUrl, ...cc }, acc.id).catch(() => null) : null;
+        link = cc ? await buildSponsorLinkForAccount({ cleanUrl, ...cc }, acc.id, cfg.subIds).catch(() => null) : null;
         if (!link) continue; // 沒綁金鑰／重產失敗 → 不退回平台連結（避免幫他發了卻沒回饋）
       } else {
-        link = ownerCreds ? await buildSponsorLinkForAccount({ cleanUrl, ...ownerCreds }, acc.id).catch(() => null) : null;
+        link = ownerCreds ? await buildSponsorLinkForAccount({ cleanUrl, ...ownerCreds }, acc.id, cfg.subIds).catch(() => null) : null;
       }
       if (!link) continue;
       const text = swapAffiliateLink(tmpl.main_text, tmpl.shopee_short_link, link);

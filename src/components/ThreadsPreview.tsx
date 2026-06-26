@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import type { DraftMedia } from "@/lib/types";
 import { cloudinaryThumb } from "@/lib/img";
 
@@ -28,12 +29,23 @@ export default function ThreadsPreview({
 }) {
   const handle = (accountLabel || "your_account").replace(/^@/, "");
   const name = displayName?.trim() || handle;
-  // 真實頭像（#171 起各帳號可帶 avatar_url）；無則退回灰色漸層佔位圓。
+  // 頭像載入失敗（過期/失效 URL）時退回佔位圓；avatarUrl 變動時重置。
+  const [avatarFailed, setAvatarFailed] = useState(false);
+  useEffect(() => setAvatarFailed(false), [avatarUrl]);
+  // 真實頭像（#171 起各帳號可帶 avatar_url）；無或載入失敗則退回灰色漸層佔位圓。
   // 用區域渲染函數（非內部元件）：避免每次 render 重建元件型別導致頭像 remount／閃爍。
+  // referrerPolicy=no-referrer：與 AccountsPage 一致，載入第三方頭像不外送 Referer（隱私）。
   const renderAvatar = () =>
-    avatarUrl ? (
+    avatarUrl && !avatarFailed ? (
       // eslint-disable-next-line @next/next/no-img-element
-      <img src={avatarUrl} alt="" loading="lazy" className="h-9 w-9 shrink-0 rounded-full border object-cover" />
+      <img
+        src={avatarUrl}
+        alt=""
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        onError={() => setAvatarFailed(true)}
+        className="h-9 w-9 shrink-0 rounded-full border object-cover"
+      />
     ) : (
       <div className="h-9 w-9 shrink-0 rounded-full bg-gradient-to-br from-neutral-300 to-neutral-400" />
     );

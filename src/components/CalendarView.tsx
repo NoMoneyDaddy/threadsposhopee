@@ -12,11 +12,14 @@ export interface CalItem {
 }
 
 const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
+const TZ = "Asia/Taipei";
+const pad2 = (n: number) => String(n).padStart(2, "0");
 
-// 本地日期 key（YYYY-MM-DD，Asia/Taipei 由瀏覽器本地時區呈現）。
+// 把某個時間點（instant）在 Asia/Taipei 的日期算成 YYYY-MM-DD（en-CA 即此格式）。
+// 一律固定台北時區，避免 SSR/瀏覽器時區不同造成日分桶/今日高亮不一致（hydration mismatch）。
+const ymdFmt = new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" });
 function dayKey(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  return ymdFmt.format(d);
 }
 
 // 狀態 → 色票（與草稿頁語意一致）。
@@ -28,9 +31,10 @@ function statusClass(status: string): string {
 
 // 內容行事曆月檢視：唯讀，依排程/發布時間把貼文落到日格。
 export default function CalendarView({ items }: { items: CalItem[] }) {
-  // 以「本月」為起點（用本地時間建構，避免 UTC 位移到鄰月）。
-  const today = new Date();
-  const [cursor, setCursor] = useState({ year: today.getFullYear(), month: today.getMonth() });
+  // 今天（台北）作為起點與高亮基準；以 dayKey 拆出年月，避免瀏覽器時區造成跨日偏移。
+  const todayKey = dayKey(new Date());
+  const [ty, tm] = todayKey.split("-").map(Number); // ty=年, tm=月(1-based)
+  const [cursor, setCursor] = useState({ year: ty, month: tm - 1 });
 
   // 依本地日 key 分桶，桶內依時間排序。
   const byDay = useMemo(() => {
@@ -48,26 +52,22 @@ export default function CalendarView({ items }: { items: CalItem[] }) {
     return m;
   }, [items]);
 
-  // 月格：補前置空白到週日對齊，總是補滿整週。
+  // 月格：以日數字建構（純日曆，不經時區轉換），補前置空白對齊週日、補滿整週。
   const cells = useMemo(() => {
-    const first = new Date(cursor.year, cursor.month, 1);
     const daysInMonth = new Date(cursor.year, cursor.month + 1, 0).getDate();
-    const lead = first.getDay(); // 0=週日
-    const out: (Date | null)[] = [];
+    const lead = new Date(cursor.year, cursor.month, 1).getDay(); // 0=週日
+    const out: (number | null)[] = [];
     for (let i = 0; i < lead; i++) out.push(null);
-    for (let d = 1; d <= daysInMonth; d++) out.push(new Date(cursor.year, cursor.month, d));
+    for (let d = 1; d <= daysInMonth; d++) out.push(d);
     while (out.length % 7 !== 0) out.push(null);
     return out;
   }, [cursor]);
 
-  const todayKey = dayKey(today);
+  // 月份前綴（台北）：用來算「本月幾則」與日格 key 對齊。
+  const monthPrefix = `${cursor.year}-${pad2(cursor.month + 1)}`;
   const monthCount = useMemo(
-    () =>
-      items.filter((it) => {
-        const d = new Date(it.iso);
-        return d.getFullYear() === cursor.year && d.getMonth() === cursor.month;
-      }).length,
-    [items, cursor.year, cursor.month]
+    () => items.filter((it) => dayKey(new Date(it.iso)).startsWith(monthPrefix)).length,
+    [items, monthPrefix]
   );
 
   const shift = (delta: number) => {
@@ -85,7 +85,7 @@ export default function CalendarView({ items }: { items: CalItem[] }) {
           </span>
           <button onClick={() => shift(1)} className="btn btn-outline btn-sm" aria-label="下個月">→</button>
           <button
-            onClick={() => setCursor({ year: today.getFullYear(), month: today.getMonth() })}
+            onClick={() => setCursor({ year: ty, month: tm - 1 })}
             className="btn btn-ghost btn-sm"
           >
             今天
@@ -98,19 +98,19 @@ export default function CalendarView({ items }: { items: CalItem[] }) {
         {WEEKDAYS.map((w) => (
           <div key={w} className="bg-surface-2 py-1.5 text-xs font-medium text-ink-3">{w}</div>
         ))}
-        {cells.map((date, i) => {
-          if (!date) return <div key={`e-${i}`} className="min-h-[5.5rem] bg-surface/40" />;
-          const k = dayKey(date);
+        {cells.map((day, i) => {
+          if (!day) return <div key={`e-${i}`} className="min-h-[5.5rem] bg-surface/40" />;
+          const k = `${monthPrefix}-${pad2(day)}`;
           const dayItems = byDay.get(k) ?? [];
           const isToday = k === todayKey;
           return (
             <div key={k} className="min-h-[5.5rem] bg-surface p-1 text-left align-top">
               <div className={`mb-1 text-xs tabular-nums ${isToday ? "font-bold text-brand" : "text-ink-3"}`}>
-                {isToday ? `● ${date.getDate()}` : date.getDate()}
+                {isToday ? `● ${day}` : day}
               </div>
               <div className="flex flex-col gap-1">
                 {dayItems.slice(0, 3).map((it) => {
-                  const t = new Date(it.iso).toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit", hour12: false });
+                  const t = new Date(it.iso).toLocaleTimeString("zh-TW", { timeZone: TZ, hour: "2-digit", minute: "2-digit", hour12: false });
                   return (
                     <Link
                       key={it.id}

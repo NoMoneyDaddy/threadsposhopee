@@ -50,11 +50,11 @@ export default function DraftsExplorer({
       if (d.threads_account_id) ids.add(d.threads_account_id);
       else hasNone = true;
     }
-    const opts = [...ids].map((id) => ({ value: id, label: accountLabels[id] ?? id }));
+    const opts = [...ids].map((id) => ({ value: id, label: accountMeta[id]?.label ?? id }));
     opts.sort((a, b) => a.label.localeCompare(b.label, "zh-Hant"));
     if (hasNone) opts.push({ value: NONE, label: "（未指定帳號）" });
     return opts;
-  }, [drafts, accountLabels]);
+  }, [drafts, accountMeta]);
 
   // 防鎖死：若選項少於 2（切換器會隱藏）或當前選取的帳號已不存在，重設回「全部帳號」，
   // 否則篩選會卡在隱藏狀態、列表恆空且使用者無從重設。

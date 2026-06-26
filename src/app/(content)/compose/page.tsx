@@ -1,5 +1,4 @@
 import ComposerForm from "@/components/ComposerForm";
-import BatchCompose from "@/components/BatchCompose";
 import SelfComposeForm from "@/components/SelfComposeForm";
 import { listThreadsAccounts, getUserCloudinary } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
@@ -42,11 +41,6 @@ export default async function ComposePage() {
         <SelfComposeForm threadsAccounts={accounts} cloud={cc?.cloud ?? null} preset={cc?.preset ?? null} />
       </div>
 
-      <div className="pt-2">
-        <h2 className="mb-1 text-lg font-semibold">批次發文</h2>
-        <p className="mb-2 text-sm text-ink-2">一次貼多個連結，全部產生文案後加入佇列（自動排時段）或存草稿。</p>
-        <BatchCompose threadsAccounts={accounts} />
-      </div>
     </div>
   );
 }

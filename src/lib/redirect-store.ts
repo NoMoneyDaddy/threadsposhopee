@@ -104,6 +104,48 @@ export async function listRedirectLinks(ownerId: string, limit = 100): Promise<R
   }));
 }
 
+// 編輯短連結（多租戶：以 owner_id 過濾，只動得到自己的列）。短碼不變，只改目的地/分潤/標題；
+// 刻意不動 image_url/description（避免編輯時把既有預覽圖/描述清空）。
+// URL 一律過 SSRF 守衛；回傳是否命中該 owner 的列（達成擁有權檢查）。
+export async function updateRedirectLink(
+  code: string,
+  ownerId: string,
+  input: Pick<RedirectLinkInput, "sourceUrl" | "affiliateUrl" | "title">
+): Promise<boolean> {
+  assertSafePublicUrl(input.sourceUrl);
+  if (input.affiliateUrl) assertSafePublicUrl(input.affiliateUrl);
+  if (isDemoMode) return true;
+  const sb = getServiceClient()!;
+  const { data, error } = await sb
+    .from("redirect_links")
+    .update({
+      source_url: input.sourceUrl,
+      affiliate_url: input.affiliateUrl ?? null,
+      title: input.title ?? null
+    })
+    .eq("code", code)
+    .eq("owner_id", ownerId)
+    .select("code")
+    .maybeSingle();
+  if (error) throw new Error(`更新短連結失敗：${error.message}`);
+  return Boolean(data);
+}
+
+// 刪除短連結（多租戶：以 owner_id 過濾）。回傳是否命中（找不到/非本人＝false）。
+export async function deleteRedirectLink(code: string, ownerId: string): Promise<boolean> {
+  if (isDemoMode) return true;
+  const sb = getServiceClient()!;
+  const { data, error } = await sb
+    .from("redirect_links")
+    .delete()
+    .eq("code", code)
+    .eq("owner_id", ownerId)
+    .select("code")
+    .maybeSingle();
+  if (error) throw new Error(`刪除短連結失敗：${error.message}`);
+  return Boolean(data);
+}
+
 // 開關某短連結是否顯示在 bio 頁（多租戶：以 owner_id 過濾）。
 export async function setRedirectInBio(code: string, ownerId: string, on: boolean): Promise<boolean> {
   if (isDemoMode) return true;

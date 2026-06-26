@@ -130,8 +130,16 @@ export default function RedirectLinkRow({ link }: { link: RedirectLinkView }) {
     <li className="flex flex-col gap-2 py-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="min-w-0">
-          <div className="truncate text-sm font-medium">{link.title ?? link.sourceUrl}</div>
-          <div className="truncate text-xs text-ink-3">{link.sourceUrl}</div>
+          <a
+            href={shortUrl}
+            target="_blank"
+            rel="noopener"
+            className="block truncate text-sm font-medium text-brand hover:underline"
+            title={`開啟短連結：${shortUrl}`}
+          >
+            {link.title ?? link.sourceUrl}
+          </a>
+          <div className="truncate text-xs text-ink-3">{shortUrl} · {link.sourceUrl}</div>
           {msg && <p className="text-xs text-red-500">❌ {msg}</p>}
         </div>
         <div className="flex shrink-0 items-center gap-2">

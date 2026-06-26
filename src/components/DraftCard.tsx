@@ -138,6 +138,10 @@ function DraftCard({
         ]);
       }
       if (action === "edit") setEditing(false);
+      if (action === "shorten") {
+        const skipped = typeof json.skipped === "number" ? json.skipped : 0;
+        setMsg(`已轉換 ${json.shortened} 個連結${skipped > 0 ? `（另有 ${skipped} 個超過上限未處理）` : ""}`);
+      }
       router.refresh();
     } catch (e) {
       setMsg(e instanceof Error ? e.message : String(e));

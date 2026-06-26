@@ -34,7 +34,7 @@ export default async function ComposePage() {
           還沒有發文帳號。可先到「帳號管理」新增 Threads 帳號，或先「存草稿」之後再發。
         </div>
       )}
-      <ComposerForm threadsAccounts={accounts} />
+      <ComposerForm threadsAccounts={accounts} cloud={cc?.cloud ?? null} preset={cc?.preset ?? null} />
 
       <div className="pt-2">
         <h2 className="mb-1 text-lg font-semibold">自寫一則直推</h2>

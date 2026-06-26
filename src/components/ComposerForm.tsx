@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ThreadsAccount, Material } from "@/lib/types";
 import ThreadsPreview, { CharCount } from "@/components/ThreadsPreview";
+import CloudinaryUpload from "@/components/CloudinaryUpload";
 import { checkThreadsContent, THREADS_MAX_HASHTAGS } from "@/lib/threads-content";
 import { parseTaipeiDateTimeLocal } from "@/lib/datetime";
 import { cloudinaryThumb } from "@/lib/img";
@@ -14,13 +15,24 @@ import type { DraftMedia } from "@/lib/types";
 const input = "w-full rounded-xl border px-3 py-2 text-sm";
 const THREADS_LIMIT = 500;
 
-export default function ComposerForm({ threadsAccounts }: { threadsAccounts: ThreadsAccount[] }) {
+export default function ComposerForm({
+  threadsAccounts,
+  cloud = null,
+  preset = null
+}: {
+  threadsAccounts: ThreadsAccount[];
+  cloud?: string | null;
+  preset?: string | null;
+}) {
   const router = useRouter();
   const [url, setUrl] = useState("");
   const [material, setMaterial] = useState<Material | null>(null);
   const [mainText, setMainText] = useState("");
   const [replyText, setReplyText] = useState("");
   const [replyDelay, setReplyDelay] = useState(""); // 留言延遲（分），空=用全域預設
+  // 本機上傳覆蓋媒體：使用者自上傳一張圖／影片，取代爬到的素材媒體（空＝沿用素材原媒體）。
+  const [overrideUrl, setOverrideUrl] = useState("");
+  const [overrideType, setOverrideType] = useState<"image" | "video">("image");
   const [allInMain, setAllInMain] = useState(false); // true＝影片+圖+連結全發主文，不另發留言
   const [accountId, setAccountId] = useState(threadsAccounts[0]?.id ?? "");
   const [scheduledAt, setScheduledAt] = useState("");
@@ -90,6 +102,8 @@ export default function ComposerForm({ threadsAccounts }: { threadsAccounts: Thr
           main_text: mainText,
           reply_text: replyText,
           reply_delay_minutes: replyDelay.trim() === "" ? null : Number(replyDelay),
+          media_url: overrideUrl.trim() || null,
+          media_type: overrideUrl.trim() ? overrideType : null,
           post_mode: allInMain ? "all_in_main" : "split",
           action,
           scheduled_at: scheduledAt ? parseTaipeiDateTimeLocal(scheduledAt).toISOString() : null
@@ -115,6 +129,7 @@ export default function ComposerForm({ threadsAccounts }: { threadsAccounts: Thr
       setMainText("");
       setReplyText("");
       setReplyDelay("");
+      setOverrideUrl("");
       setAllInMain(false);
       router.refresh();
     } catch (e) {
@@ -233,13 +248,40 @@ export default function ComposerForm({ threadsAccounts }: { threadsAccounts: Thr
             </div>
           )}
 
+          {/* 自上傳媒體：取代爬到的素材媒體（例如想換成自己拍的圖／影片）。 */}
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              className={input + " flex-1"}
+              value={overrideUrl}
+              onChange={(e) => setOverrideUrl(e.target.value)}
+              placeholder="自訂圖片／影片網址（選填，取代素材媒體）"
+              inputMode="url"
+              aria-label="自訂媒體網址"
+            />
+            <select
+              className="rounded-xl border px-2 py-2 text-sm"
+              value={overrideType}
+              onChange={(e) => setOverrideType(e.target.value as "image" | "video")}
+              aria-label="自訂媒體類型"
+            >
+              <option value="image">圖片</option>
+              <option value="video">影片</option>
+            </select>
+            <CloudinaryUpload
+              cloud={cloud}
+              preset={preset}
+              onUploaded={(u) => setOverrideUrl(u)}
+              onType={(t) => setOverrideType(t)}
+            />
+          </div>
+
           <ThreadsPreview
             accountLabel={threadsAccounts.find((a) => a.id === (accountId || threadsAccounts[0]?.id))?.label}
             mainText={allInMain && replyText ? [mainText, replyText].filter(Boolean).join("\n\n") : mainText}
             replyText={allInMain ? "" : replyText}
-            mediaUrl={material.cloudinary_media_url}
-            mediaType={material.media_type}
-            media={material.media}
+            mediaUrl={overrideUrl.trim() || material.cloudinary_media_url}
+            mediaType={overrideUrl.trim() ? overrideType : material.media_type}
+            media={overrideUrl.trim() ? undefined : material.media}
           />
 
           <div className="flex flex-wrap items-center gap-2">

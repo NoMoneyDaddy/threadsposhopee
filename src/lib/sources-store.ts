@@ -76,6 +76,35 @@ export async function setSourceEnabled(id: string, ownerId: string, enabled: boo
   return Boolean(data);
 }
 
+// 取單一來源（多租戶：以 owner_id 過濾）。供 API 在切 auto_publish 前驗證綁定的發文帳號。
+export async function getSource(id: string, ownerId: string): Promise<Source | null> {
+  if (isDemoMode) return demo.sources.find((s) => s.id === id && s.owner_id === ownerId) ?? null;
+  const sb = getServiceClient()!;
+  const { data, error } = await sb.from("sources").select("*").eq("id", id).eq("owner_id", ownerId).maybeSingle();
+  if (error) throw error; // 查詢異常勿吞成 null（否則會被誤判成「找不到來源」）
+  return (data as Source) ?? null;
+}
+
+// 切換來源「免審直接排程」（opt-in）。多租戶：以 owner_id 過濾，只動得到自己的列。
+export async function setSourceAutoPublish(id: string, ownerId: string, autoPublish: boolean): Promise<boolean> {
+  if (isDemoMode) {
+    const s = demo.sources.find((x) => x.id === id && x.owner_id === ownerId);
+    if (!s) return false;
+    s.auto_publish = autoPublish;
+    return true;
+  }
+  const sb = getServiceClient()!;
+  const { data, error } = await sb
+    .from("sources")
+    .update({ auto_publish: autoPublish })
+    .eq("id", id)
+    .eq("owner_id", ownerId)
+    .select("id")
+    .maybeSingle();
+  if (error) throw error;
+  return Boolean(data);
+}
+
 export async function deleteSource(id: string, ownerId: string): Promise<boolean> {
   if (isDemoMode) {
     const i = demo.sources.findIndex((x) => x.id === id);

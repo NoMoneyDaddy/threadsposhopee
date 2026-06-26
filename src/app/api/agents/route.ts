@@ -15,12 +15,26 @@ export async function POST(req: Request) {
 
     const body = await req.json().catch(() => ({}));
     const name = typeof body.name === "string" ? body.name.trim() : "";
-    if (!name) return NextResponse.json({ ok: false, error: "請填代理人名稱" }, { status: 400 });
-    if (!getAiDomain(body.domain)) return NextResponse.json({ ok: false, error: "領域不存在" }, { status: 400 });
+    if (!name) return NextResponse.json({ ok: false, error: "請填小編名稱" }, { status: 400 });
+
+    // 領域支援複選（domains 陣列），相容舊版單一 domain。至少要有一個有效領域。
+    const rawDomains: string[] = Array.isArray(body.domains)
+      ? body.domains.filter((d: unknown): d is string => typeof d === "string")
+      : typeof body.domain === "string"
+        ? [body.domain]
+        : [];
+    const domains = Array.from(new Set(rawDomains.filter((d) => getAiDomain(d))));
+    if (!domains.length) return NextResponse.json({ ok: false, error: "請至少選一個領域" }, { status: 400 });
 
     const searchQuery = typeof body.search_query === "string" ? body.search_query.trim().slice(0, 100) : "";
-    if (body.domain === "custom" && !searchQuery) {
+    if (domains.includes("custom") && !searchQuery) {
       return NextResponse.json({ ok: false, error: "自訂主題請填搜尋關鍵字" }, { status: 400 });
+    }
+
+    // 免審直接排程需指定發文帳號，否則產出的貼文無帳號可發、會卡住。
+    const threadsAccountId = typeof body.threads_account_id === "string" ? body.threads_account_id : null;
+    if (body.auto_publish === true && !threadsAccountId) {
+      return NextResponse.json({ ok: false, error: "開啟免審直接排程時，必須指定發文帳號" }, { status: 400 });
     }
 
     const emoji = EMOJI.includes(body.emoji_level) ? body.emoji_level : "light";
@@ -31,14 +45,16 @@ export async function POST(req: Request) {
 
     const agent = await createAiAgent(user.id, {
       name,
-      domain: body.domain,
+      domain: domains[0],
+      domains,
       tone: typeof body.tone === "string" ? body.tone.slice(0, 300) : "",
       emoji_level: emoji,
       hashtag_pool: tags,
       length: Number.isInteger(length) && length >= 50 && length <= 500 ? length : 200,
       search_query: searchQuery,
-      threads_account_id: typeof body.threads_account_id === "string" ? body.threads_account_id : null,
-      use_redirect: body.use_redirect === true
+      threads_account_id: threadsAccountId,
+      use_redirect: body.use_redirect === true,
+      auto_publish: body.auto_publish === true
     });
     return NextResponse.json({ ok: true, id: agent.id });
   } catch (e) {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { updateAiAgent, deleteAiAgent } from "@/lib/agents-store";
+import { updateAiAgent, deleteAiAgent, getAiAgent } from "@/lib/agents-store";
+import { isDemoMode } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 
@@ -14,8 +15,18 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (typeof body.name === "string" && body.name.trim()) patch.name = body.name.trim();
   if (typeof body.tone === "string") patch.tone = body.tone.slice(0, 300);
   if (typeof body.use_redirect === "boolean") patch.use_redirect = body.use_redirect;
+  if (typeof body.auto_publish === "boolean") patch.auto_publish = body.auto_publish;
   if (Object.keys(patch).length === 0) return NextResponse.json({ ok: false, error: "無可更新欄位" }, { status: 400 });
   try {
+    // 開啟免審直接排程前，確認此小編已指定發文帳號（否則產出無帳號可發、會卡住）。
+    // demo 模式 getAiAgent 一律回 null，跳過此前置檢查避免誤判 404。
+    if (!isDemoMode && body.auto_publish === true) {
+      const agent = await getAiAgent(params.id, user.id);
+      if (!agent) return NextResponse.json({ ok: false, error: "找不到小編" }, { status: 404 });
+      if (!agent.threads_account_id) {
+        return NextResponse.json({ ok: false, error: "此小編未指定發文帳號，無法開啟免審直接排程" }, { status: 400 });
+      }
+    }
     await updateAiAgent(params.id, user.id, patch);
     return NextResponse.json({ ok: true });
   } catch (e) {

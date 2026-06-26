@@ -52,6 +52,8 @@ export async function GET(req: Request) {
       {
         label: acc.username,
         threads_user_id: acc.userId,
+        display_name: acc.name,
+        avatar_url: acc.avatarUrl,
         access_token: acc.accessToken,
         token_expires_at: acc.expiresAt
       },

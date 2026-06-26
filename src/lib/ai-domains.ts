@@ -52,3 +52,10 @@ export function defaultFeedsForDomain(domainId: string): string[] {
   const d = getAiDomain(domainId);
   return d ? [googleNewsRss(d.keyword)] : [];
 }
+
+// 解析小編實際橫跨的領域 id：優先用 domains 陣列，為空時退回單一 domain（向後相容）。
+export function resolveDomainIds(input: { domains?: string[] | null; domain?: string | null }): string[] {
+  const ids = (input.domains ?? []).filter((id): id is string => typeof id === "string" && Boolean(getAiDomain(id)));
+  if (ids.length) return ids;
+  return input.domain && getAiDomain(input.domain) ? [input.domain] : [];
+}

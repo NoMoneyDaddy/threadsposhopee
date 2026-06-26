@@ -27,6 +27,7 @@ import SelfBuyNotice from "@/components/SelfBuyNotice";
 import CloudinaryForm from "@/components/CloudinaryForm";
 import R2Form from "@/components/R2Form";
 import MediaHostCompare from "@/components/MediaHostCompare";
+import RenameAccountButton from "@/components/RenameAccountButton";
 import { DeleteButton, ToggleButton } from "@/components/RowActions";
 
 export const dynamic = "force-dynamic";
@@ -173,9 +174,22 @@ export default async function AccountsPage({
         <div className="grid gap-3 md:grid-cols-2">
           {threads.map((a) => (
             <div key={a.id} className="rounded-2xl border bg-surface p-4">
-              <div className="flex items-center justify-between">
-                <span className="font-medium">{a.label}</span>
-                <span className="text-xs text-ink-2">{a.status}</span>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-2">
+                  {a.avatar_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={a.avatar_url} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" referrerPolicy="no-referrer" />
+                  ) : (
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-2 text-sm text-ink-2">
+                      {(a.label || "?").slice(0, 1).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <div className="truncate font-medium">{a.label}</div>
+                    {a.display_name && <div className="truncate text-xs text-ink-3">{a.display_name}</div>}
+                  </div>
+                </div>
+                <span className="shrink-0 text-xs text-ink-2">{a.status}</span>
               </div>
               <div className="mt-1 text-sm text-ink-2">user id: {a.threads_user_id}</div>
               {a.token_expires_at && (() => {
@@ -195,6 +209,7 @@ export default async function AccountsPage({
                 ) : (
                   <ToggleButton endpoint={`/api/accounts/threads/${a.id}`} body={{ status: "paused" }} label="⏸ 暫停排程" />
                 )}
+                <RenameAccountButton endpoint={`/api/accounts/threads/${a.id}`} current={a.label} />
                 <DeleteButton endpoint={`/api/accounts/threads/${a.id}`} />
               </div>
             </div>

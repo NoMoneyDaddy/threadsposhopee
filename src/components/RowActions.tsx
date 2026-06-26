@@ -39,19 +39,23 @@ export function DeleteButton({
 }
 
 // 通用切換按鈕：對 endpoint 發 PATCH(body)，成功則重新整理。
+// confirm 有值時，點擊先跳確認對話框（用於免審直發等高風險切換的防誤觸）。
 export function ToggleButton({
   endpoint,
   body,
-  label
+  label,
+  confirm: confirmMsg
 }: {
   endpoint: string;
   body: Record<string, unknown>;
   label: string;
+  confirm?: string;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
 
   async function onClick() {
+    if (confirmMsg && !confirm(confirmMsg)) return;
     setBusy(true);
     try {
       const res = await fetch(endpoint, {

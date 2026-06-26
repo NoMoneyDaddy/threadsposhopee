@@ -25,6 +25,7 @@ import {
 } from "@/lib/store";
 import { getMediaProvider } from "@/services/media/upload";
 import { notifyDraftPendingForReview } from "@/services/telegram/review";
+import { autoScheduleApproved } from "@/services/publish/auto-schedule";
 import { isDemoMode } from "@/lib/env";
 import type { Source } from "@/lib/types";
 
@@ -132,14 +133,20 @@ export async function runSourcePipeline(source: Source, ownerId: string): Promis
         );
       }
 
-      const draft = await createDraftFromMaterial(material, {
+      const base = {
         owner_id: ownerId,
         source_id: source.id,
         threads_account_id: source.threads_account_id,
-        source_post_id: post.postId,
-        // 一律待人工核准——只有審核過的草稿才能發布（不自動發到 Threads）
-        status: "draft"
-      });
+        source_post_id: post.postId
+      } as const;
+      // 預設：待人工核准（只有審核過的草稿才會發布）。
+      // 來源開啟「免審直接排程」時：自動排進下一個空時段並標記已核准；無空檔則退回待審草稿保底。
+      let draft = source.auto_publish
+        ? await autoScheduleApproved(ownerId, (slot) =>
+            createDraftFromMaterial(material, { ...base, status: "approved", scheduled_at: slot })
+          )
+        : null;
+      if (!draft) draft = await createDraftFromMaterial(material, { ...base, status: "draft" });
 
       await markPostProcessed(source.id, post.postId);
       result.created++;
@@ -194,7 +201,7 @@ export async function runSourcesForOwner(
   // 個人通知：本輪新產生的草稿待審（爬蟲掛在 owner 名下）→ 提醒 owner 去核准。
   const newDrafts = results.reduce((n, r) => n + r.drafts.length, 0);
   if (newDrafts > 0) {
-    await sendUserAlert(ownerId, `📝 有 ${newDrafts} 則新文案草稿待審核，到草稿頁核准後才會發布。`, "draft_pending").catch(() => {});
+    await sendUserAlert(ownerId, `📝 有 ${newDrafts} 則新文案（待審或已自動排程，依來源設定），詳見草稿頁。`, "draft_pending").catch(() => {});
   }
   return results;
 }

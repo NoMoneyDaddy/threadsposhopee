@@ -2,17 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { RECOMMENDED_MIN_GAP_MINUTES } from "@/lib/publish-prefs";
-
-const HHMM = /^([01]?\d|2[0-3]):[0-5]\d$/;
-// 解析使用者輸入的時段字串為合法且去重的 HH:MM 清單（與後端 parseSlots 同規則，供即時預覽）。
-function parseSlotsClient(raw: string): string[] {
-  const out: string[] = [];
-  for (const s of raw.split(",").map((x) => x.trim())) {
-    if (HHMM.test(s) && !out.includes(s)) out.push(s);
-  }
-  return out;
-}
+import { RECOMMENDED_MIN_GAP_MINUTES, parseSlots } from "@/lib/publish-prefs";
 
 // 常用時段快捷：點一下帶入。
 const PRESETS: { label: string; value: string }[] = [
@@ -35,13 +25,13 @@ export default function PublishPrefsForm({
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  const parsedSlots = parseSlotsClient(slots);
+  const parsedSlots = parseSlots(slots);
   const slotsInvalid = slots.trim() !== "" && parsedSlots.length === 0;
   const gapNum = Number(gap);
   const gapValid = Number.isFinite(gapNum) && gapNum > 0;
   const lowGap = gapValid && gapNum < RECOMMENDED_MIN_GAP_MINUTES;
-  // 把分鐘換算成「X 小時 Y 分」，讓使用者一眼看懂間隔長度。
-  const gapHuman = gapValid ? `約 ${Math.floor(gapNum / 60)} 小時${gapNum % 60 ? ` ${gapNum % 60} 分` : ""}` : "";
+  // 把分鐘換算成「X 小時 Y 分」，讓使用者一眼看懂間隔長度（<60 分不顯示，避免「0 小時」冗餘）。
+  const gapHuman = gapValid && gapNum >= 60 ? `約 ${Math.floor(gapNum / 60)} 小時${gapNum % 60 ? ` ${gapNum % 60} 分` : ""}` : "";
 
   async function save() {
     setBusy(true);

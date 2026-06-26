@@ -36,3 +36,8 @@ yarn-error.log*
 .idea
 .vscode
 *.tsbuildinfo
+
+# 本機 agent 工具（skills CLI / mobbin-search 安裝產物，非專案程式碼，勿入庫）
+/.agents/
+/.claude/skills/mobbin-search
+/skills-lock.json

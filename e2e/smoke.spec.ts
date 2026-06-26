@@ -19,9 +19,10 @@ test("首頁顯示 Demo 模式標記與導覽", async ({ page }) => {
   await expect(page.getByRole("link", { name: "成效分析", exact: true })).toBeVisible();
 });
 
-test("舊行事曆網址轉址到草稿", async ({ page }) => {
+test("行事曆頁顯示月曆檢視", async ({ page }) => {
   await page.goto("/calendar");
-  await expect(page).toHaveURL(/\/drafts$/);
+  await expect(page).toHaveURL(/\/calendar$/);
+  await expect(page.getByRole("heading", { name: "內容行事曆", level: 1 })).toBeVisible();
 });
 
 for (const p of PAGES) {

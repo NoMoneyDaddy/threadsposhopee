@@ -105,15 +105,16 @@ export async function countMaterialReposts(
   return { total: rows.length, perAccount: rows.filter((r) => r.threads_account_id === accountId).length };
 }
 
-export async function listDrafts(ownerId: string): Promise<Draft[]> {
-  if (isDemoMode) return [...demo.drafts].sort((a, b) => b.created_at.localeCompare(a.created_at));
+// limit 預設 100（草稿頁）；行事曆等需跨月一覽的場景可調大（如 500），降低資料被截斷的機率。
+export async function listDrafts(ownerId: string, limit = 100): Promise<Draft[]> {
+  if (isDemoMode) return [...demo.drafts].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, limit);
   const sb = getServiceClient()!;
   const { data } = await sb
     .from("drafts")
     .select("*")
     .eq("owner_id", ownerId)
     .order("created_at", { ascending: false })
-    .limit(100);
+    .limit(limit);
   return (data ?? []) as Draft[];
 }
 

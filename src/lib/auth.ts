@@ -66,14 +66,11 @@ export async function getCurrentUser(): Promise<AppUser | null> {
 export async function listAllUsers(): Promise<{ id: string; email: string | null }[]> {
   if (isDemoMode) return [];
   const sb = getServiceClient();
-  if (!sb) return [];
+  if (!sb) throw new Error("無法取得服務端連線"); // 不靜默回 []（會被誤當成「沒有使用者」）
   const out: { id: string; email: string | null }[] = [];
   for (let page = 1; page <= 20; page++) {
     const { data, error } = await sb.auth.admin.listUsers({ page, perPage: 200 });
-    if (error) {
-      log.error("listAllUsers 失敗", { err: error.message });
-      break;
-    }
+    if (error) throw new Error(`列出使用者失敗：${error.message}`); // 中途失敗即拋，避免回傳部分清單看似成功
     for (const u of data.users) out.push({ id: u.id, email: u.email ?? null });
     if (data.users.length < 200) break;
   }

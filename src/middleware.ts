@@ -95,13 +95,13 @@ export async function middleware(req: NextRequest) {
   const viewAs = req.cookies.get("view_as")?.value;
   if (viewAs) {
     const isOwner = Boolean(user.email && user.email.toLowerCase() === (process.env.OWNER_EMAIL ?? "").toLowerCase());
-    if (isOwner) {
-      if (req.method !== "GET" && req.method !== "HEAD" && !url.pathname.startsWith("/api/admin/view-as")) {
-        return NextResponse.json({ ok: false, error: "成員視角為唯讀，請先結束檢視再操作" }, { status: 403 });
-      }
-    } else {
-      // 非管理者不該有此 cookie：清除以免誤擋其寫入操作。
+    if (!isOwner || viewAs === user.id) {
+      // 非管理者殘留 cookie（共用電腦換人登入），或管理者自選自己（＝沒在檢視別人）：
+      // 兩者都不是有效的成員檢視，清除 cookie 以免誤擋寫入又無工具列可解除。
       res.cookies.set("view_as", "", { path: "/", maxAge: 0 });
+    } else if (req.method !== "GET" && req.method !== "HEAD" && !url.pathname.startsWith("/api/admin/view-as")) {
+      // 管理者正以「其他成員」視角檢視：唯讀，擋下狀態變更（例外：view-as 切換/解除）。
+      return NextResponse.json({ ok: false, error: "成員視角為唯讀，請先結束檢視再操作" }, { status: 403 });
     }
   }
 

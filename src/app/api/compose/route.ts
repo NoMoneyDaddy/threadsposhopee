@@ -69,7 +69,8 @@ async function autoAffiliateLinks(ownerId: string, text: string): Promise<string
   const urls = text.match(/https?:\/\/[^\s)]+/g);
   if (!urls) return text;
   let out = text;
-  for (const u of Array.from(new Set(urls))) {
+  // 依長度由長到短替換，避免短網址（長網址前綴）先被取代而損壞長網址
+  for (const u of Array.from(new Set(urls)).sort((a, b) => b.length - a.length)) {
     if (!isShopeeUrl(u)) continue;
     try {
       const r = await resolveAffiliateUrl(ownerId, u);
@@ -184,14 +185,18 @@ export async function POST(req: Request) {
     }
 
     // 多媒體（主文＋留言）：陣列優先（仿 Threads 多圖/影片輪播）。逐項驗證＋中轉到自綁圖床。
+    // getMediaProvider 放 try 外：DB/伺服器錯誤不應被當成「媒體網址不合法」(400)，應往外層 500。
+    const mediaProvider = isDemoMode ? null : await getMediaProvider(user.id);
     let mainMediaArr: DraftMedia[];
     let replyMediaArr: DraftMedia[];
     try {
-      const mediaProvider = isDemoMode ? null : await getMediaProvider(user.id);
       mainMediaArr = await processMediaArray(body.media, mediaProvider);
       replyMediaArr = await processMediaArray(body.reply_media, mediaProvider);
-    } catch {
-      return NextResponse.json({ ok: false, error: "媒體網址不合法或非公開可存取" }, { status: 400 });
+    } catch (e) {
+      return NextResponse.json(
+        { ok: false, error: e instanceof Error ? e.message : "媒體網址不合法或非公開可存取" },
+        { status: 400 }
+      );
     }
     const hasMainArr = mainMediaArr.length > 0;
 

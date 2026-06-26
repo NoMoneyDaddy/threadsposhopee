@@ -11,6 +11,7 @@ import { parseTaipeiDateTimeLocal } from "@/lib/datetime";
 
 const input = "w-full rounded-xl border px-3 py-2 text-sm";
 const THREADS_LIMIT = 500;
+const MAX_MEDIA = 20; // Threads 單篇輪播上限（對齊後端 route MAX_MEDIA）
 
 // 多媒體挑選器（主文／留言共用）：本機上傳可連續加多張，或貼網址加入；縮圖可逐張移除。
 function MediaPicker({
@@ -30,7 +31,11 @@ function MediaPicker({
   const pendingType = useRef<"image" | "video">("image");
   const [url, setUrl] = useState("");
   const [type, setType] = useState<"image" | "video">("image");
-  const add = (m: DraftMedia) => onChange([...items, m]);
+  const atLimit = items.length >= MAX_MEDIA;
+  const add = (m: DraftMedia) => {
+    if (items.length >= MAX_MEDIA) return; // 達輪播上限不再加入（後端亦會截斷）
+    onChange([...items, m]);
+  };
 
   return (
     <div className="space-y-2">
@@ -63,7 +68,7 @@ function MediaPicker({
           onType={(t) => (pendingType.current = t)}
           onUploaded={(u) => add({ url: u, type: pendingType.current })}
         />
-        <span className="text-xs text-ink-3">{hint}</span>
+        <span className="text-xs text-ink-3">{atLimit ? `已達上限 ${MAX_MEDIA} 個媒體` : hint}</span>
         <details className="ml-auto text-xs text-ink-3">
           <summary className="cursor-pointer select-none hover:text-ink">或貼網址</summary>
           <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -86,13 +91,14 @@ function MediaPicker({
             </select>
             <button
               type="button"
+              disabled={atLimit}
               onClick={() => {
                 if (url.trim()) {
                   add({ url: url.trim(), type });
                   setUrl("");
                 }
               }}
-              className="rounded-xl border px-3 py-2 text-sm hover:bg-surface-2"
+              className="rounded-xl border px-3 py-2 text-sm hover:bg-surface-2 disabled:opacity-50"
             >
               加入
             </button>

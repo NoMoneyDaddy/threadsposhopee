@@ -37,8 +37,24 @@ export default function DraftsExplorer({
   sponsor?: { enabled: boolean; pickByAccount: Record<string, string> };
 }) {
   const [status, setStatus] = useState("all");
+  const [account, setAccount] = useState("all");
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  // 帳號切換器選項：草稿中實際出現的帳號（＋未指定），數量 ≥2 才顯示（單帳號無切換意義）。
+  const NONE = "__none__";
+  const accountOptions = useMemo(() => {
+    const ids = new Set<string>();
+    let hasNone = false;
+    for (const d of drafts) {
+      if (d.threads_account_id) ids.add(d.threads_account_id);
+      else hasNone = true;
+    }
+    const opts = [...ids].map((id) => ({ value: id, label: accountLabels[id] ?? id }));
+    opts.sort((a, b) => a.label.localeCompare(b.label, "zh-Hant"));
+    if (hasNone) opts.push({ value: NONE, label: "（未指定帳號）" });
+    return opts;
+  }, [drafts, accountLabels]);
 
   // useCallback 穩定參照：讓 DraftCard 的 memo 生效（否則每次 render 新函式會使 memo 失效）。
   const toggleSelect = useCallback(
@@ -94,6 +110,7 @@ export default function DraftsExplorer({
   const filtered = useMemo(() => {
     const kw = q.trim().toLowerCase();
     return drafts.filter((d) => {
+      if (account !== "all" && (d.threads_account_id ?? NONE) !== account) return false;
       if (status === "scheduled") {
         if (!isScheduled(d)) return false;
       } else if (status !== "all" && d.status !== status) {
@@ -106,7 +123,7 @@ export default function DraftsExplorer({
         (d.shopee_short_link ?? "").toLowerCase().includes(kw)
       );
     });
-  }, [drafts, status, q]);
+  }, [drafts, status, account, q]);
 
   // 批次選取：只針對目前篩選結果中的「待審」草稿；選取集與實際待審交集，避免狀態已變的殘留。
   const pendingInView = useMemo(() => filtered.filter((d) => d.status === "draft").map((d) => d.id), [filtered]);
@@ -129,8 +146,22 @@ export default function DraftsExplorer({
             </button>
           ))}
         </div>
+        {accountOptions.length >= 2 && (
+          <select
+            className="ml-auto rounded-xl border px-3 py-1.5 text-sm"
+            value={account}
+            onChange={(e) => setAccount(e.target.value)}
+            aria-label="依發文帳號篩選"
+            title="切換檢視特定發文帳號的內容"
+          >
+            <option value="all">全部帳號</option>
+            {accountOptions.map((o) => (
+              <option key={o.value} value={o.value}>@{o.label}</option>
+            ))}
+          </select>
+        )}
         <input
-          className="ml-auto w-full rounded-xl border px-3 py-1.5 text-sm sm:w-56"
+          className={`w-full rounded-xl border px-3 py-1.5 text-sm sm:w-56 ${accountOptions.length >= 2 ? "" : "ml-auto"}`}
           placeholder="搜尋商品名／正文／連結"
           value={q}
           onChange={(e) => setQ(e.target.value)}

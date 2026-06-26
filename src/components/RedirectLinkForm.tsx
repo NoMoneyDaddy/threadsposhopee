@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -8,6 +8,8 @@ import Link from "next/link";
 export default function RedirectLinkForm({ defaultAffiliateUrl }: { defaultAffiliateUrl?: string | null }) {
   const router = useRouter();
   const [sourceUrl, setSourceUrl] = useState("");
+  // 永遠保有最新來源網址（closure 會凍結 state，故用 ref 在非同步回應落地時比對是否仍為同一網址）。
+  const sourceUrlRef = useRef("");
   const [affiliateUrl, setAffiliateUrl] = useState("");
   const [title, setTitle] = useState("");
   const [titleAuto, setTitleAuto] = useState(false); // 標題是否為自動抓來的（使用者一動就不再覆寫）
@@ -26,7 +28,8 @@ export default function RedirectLinkForm({ defaultAffiliateUrl }: { defaultAffil
     try {
       const res = await fetch(`/api/redirect/preview?url=${encodeURIComponent(u)}`);
       const json = await res.json();
-      if (json.ok && json.title) {
+      // 抓取期間使用者已改網址 → 丟棄過時結果，避免舊回應覆寫新標題。
+      if (json.ok && json.title && sourceUrlRef.current.trim() === u) {
         setTitle(json.title);
         setTitleAuto(true);
       }
@@ -53,6 +56,7 @@ export default function RedirectLinkForm({ defaultAffiliateUrl }: { defaultAffil
       const base = process.env.NEXT_PUBLIC_SHORT_DOMAIN || location.origin;
       setCreated(`${base}/r/${json.code}`);
       setSourceUrl("");
+      sourceUrlRef.current = "";
       setAffiliateUrl("");
       setTitle("");
       setTitleAuto(false);
@@ -73,7 +77,10 @@ export default function RedirectLinkForm({ defaultAffiliateUrl }: { defaultAffil
           className="input"
           required
           value={sourceUrl}
-          onChange={(e) => setSourceUrl(e.target.value)}
+          onChange={(e) => {
+            sourceUrlRef.current = e.target.value;
+            setSourceUrl(e.target.value);
+          }}
           onBlur={autofillTitle}
           placeholder="https://news.example.com/article"
         />

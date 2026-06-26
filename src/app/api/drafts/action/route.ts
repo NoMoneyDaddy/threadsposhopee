@@ -134,7 +134,13 @@ export async function POST(req: Request) {
       reply_text: draft.reply_text ? replaceUrls(draft.reply_text, map) : draft.reply_text
     });
     if (!updated) return NextResponse.json({ ok: false, error: "更新草稿失敗" }, { status: 400 });
-    return NextResponse.json({ ok: true, draft: updated, shortened: Object.keys(map).length });
+    // 超過上限被略過的連結數，讓前端能提示使用者尚有連結未轉換。
+    return NextResponse.json({
+      ok: true,
+      draft: updated,
+      shortened: Object.keys(map).length,
+      skipped: Math.max(0, urls.length - MAX_SHORTEN)
+    });
   }
   if (action === "regenerate") {
     try {

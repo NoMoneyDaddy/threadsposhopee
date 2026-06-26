@@ -88,9 +88,16 @@ async function readCappedText(res: Response, maxBytes: number): Promise<string> 
 export async function fetchLinkPreview(url: string): Promise<LinkPreview> {
   try {
     // fetchSafePublicUrl：每一跳重驗 SSRF（擋公網→30x→內網繞過）＋逾時保護＋跨域剝除敏感標頭。
+    // 用 Threads/FB 同款 unfurl UA：多數網站只對已知爬蟲回完整 og:image，
+    // 對陌生 UA 會擋或回精簡頁（縮圖抓不到的常見主因）。對齊 Threads 實際 unfurl 結果。
     const res = await fetchSafePublicUrl(
       url,
-      { headers: { accept: "text/html,application/xhtml+xml", "user-agent": "Mozilla/5.0 (compatible; iwantpo-link-preview)" } },
+      {
+        headers: {
+          accept: "text/html,application/xhtml+xml",
+          "user-agent": "Mozilla/5.0 (compatible; facebookexternalhit/1.1; +http://www.facebook.com/externalhit_uatext.php)"
+        }
+      },
       6000
     );
     if (!res.ok) return EMPTY;

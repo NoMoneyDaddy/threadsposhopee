@@ -9,7 +9,12 @@ export async function autoScheduleApproved(
   ownerId: string,
   create: (slot: string) => Promise<Draft>
 ): Promise<Draft | null> {
-  const prefs = await getPublishPrefs(ownerId).catch(() => null);
-  const slots = prefs?.slots;
+  // 讀取發文偏好失敗時回 null（讓上游退回待審草稿），不冒險用系統預設時段把內容免審直發出去。
+  let slots: string[] | undefined;
+  try {
+    slots = (await getPublishPrefs(ownerId))?.slots;
+  } catch {
+    return null;
+  }
   return withNextSlot(ownerId, (slot) => create(slot), 5, (taken) => nextOpenSlot(taken, Date.now(), 30, slots));
 }

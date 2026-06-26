@@ -77,7 +77,10 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
     setBusy(null);
   }
   function toggleDomain(id: string) {
-    setDomains((prev) => (prev.includes(id) ? prev.filter((d) => d !== id) : [...prev, id]));
+    setDomains((prev) => {
+      if (!prev.includes(id)) return [...prev, id];
+      return prev.length === 1 ? prev : prev.filter((d) => d !== id); // 至少保留一個領域
+    });
   }
 
   async function toggleAuto(a: Agent) {

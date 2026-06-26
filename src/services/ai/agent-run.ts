@@ -40,7 +40,8 @@ export function buildAgentPrompt(agent: AiAgent, item: { title: string; descript
   const domains = resolveDomainIds(agent)
     .map((id) => getAiDomain(id))
     .filter((d): d is NonNullable<typeof d> => Boolean(d));
-  const label = domains.length ? domains.map((d) => d.label).join("、") : agent.domain;
+  // 回退單一 domain 時也轉成顯示標籤（避免把內部 id 寫進提示詞）。
+  const label = domains.length ? domains.map((d) => d.label).join("、") : (getAiDomain(agent.domain)?.label ?? agent.domain);
   const emoji = EMOJI_RULE[agent.emoji_level] ?? EMOJI_RULE.light;
   const tags = agent.hashtag_pool.length ? `結尾可加入這些 hashtag（擇要）：${agent.hashtag_pool.join(" ")}。` : "";
   // 任一領域屬敏感即加保守規則。

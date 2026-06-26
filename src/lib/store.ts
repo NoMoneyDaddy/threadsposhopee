@@ -199,6 +199,7 @@ export async function setCopyPrefs(ownerId: string, prefs: unknown): Promise<Cop
 export {
   listSources,
   listAllEnabledSources,
+  getSource,
   createSource,
   setSourceEnabled,
   setSourceAutoPublish,

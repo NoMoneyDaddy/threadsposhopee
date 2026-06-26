@@ -87,6 +87,11 @@ export default async function SourcesPage() {
                       endpoint={`/api/sources/${s.id}`}
                       body={{ auto_publish: !s.auto_publish }}
                       label={s.auto_publish ? "改回待審" : "改免審直發"}
+                      confirm={
+                        s.auto_publish
+                          ? undefined
+                          : "開啟「免審直接排程」後，此來源抓到的內容會自動發文、不經人工審核。確定開啟？"
+                      }
                     />
                     <DeleteButton endpoint={`/api/sources/${s.id}`} />
                   </div>

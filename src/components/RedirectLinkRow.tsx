@@ -78,6 +78,8 @@ export default function RedirectLinkRow({ link }: { link: RedirectLinkView }) {
       router.refresh();
     } catch (e) {
       setMsg(e instanceof Error ? e.message : String(e));
+    } finally {
+      // 成功也要清 busy：router.refresh() 若延遲/未卸載此列，UI 不會卡在「刪除中…」鎖死。
       setBusy(null);
     }
   }

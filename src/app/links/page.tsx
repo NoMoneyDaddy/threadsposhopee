@@ -2,11 +2,10 @@ import { getCurrentUser } from "@/lib/auth";
 import { listRedirectLinks } from "@/lib/redirect-store";
 import { getBioSettings } from "@/lib/store";
 import RedirectLinkForm from "@/components/RedirectLinkForm";
-import CopyLink from "@/components/CopyLink";
+import RedirectLinkRow from "@/components/RedirectLinkRow";
 import EmptyState from "@/components/EmptyState";
 import SelfBuyNotice from "@/components/SelfBuyNotice";
 import BioSettingsForm from "@/components/BioSettingsForm";
-import BioToggle from "@/components/BioToggle";
 
 export const dynamic = "force-dynamic";
 
@@ -43,19 +42,18 @@ export default async function LinksPage() {
         ) : (
           <ul className="divide-y divide-border">
             {links.map((l) => (
-              <li key={l.code} className="flex flex-wrap items-center justify-between gap-2 py-3">
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-medium">{l.title ?? l.sourceUrl}</div>
-                  <div className="truncate text-xs text-ink-3">{l.sourceUrl}</div>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <span className="text-xs text-ink-2 tabular-nums">
-                    👁 {l.clicks} · ▶ {l.continues}
-                  </span>
-                  <BioToggle code={l.code} initial={l.inBio} />
-                  <CopyLink path={`/r/${l.code}`} />
-                </div>
-              </li>
+              <RedirectLinkRow
+                key={l.code}
+                link={{
+                  code: l.code,
+                  sourceUrl: l.sourceUrl,
+                  affiliateUrl: l.affiliateUrl,
+                  title: l.title,
+                  clicks: l.clicks,
+                  continues: l.continues,
+                  inBio: l.inBio
+                }}
+              />
             ))}
           </ul>
         )}

@@ -5,6 +5,7 @@ import Link from "next/link";
 import DraftCard from "@/components/DraftCard";
 import BulkDraftBar from "@/components/BulkDraftBar";
 import type { Draft } from "@/lib/types";
+import type { AccountMeta } from "@/components/DraftCard";
 import { maxSimilarity } from "@/lib/text-similarity";
 
 // 與「同帳號近期已發布貼文」高度相似才示警（重複措辭易被降觸及）。
@@ -28,11 +29,11 @@ const STATUS_TABS: { value: string; label: string }[] = [
 // 草稿搜尋／篩選：依狀態分頁 + 關鍵字（商品名／正文）即時過濾。
 export default function DraftsExplorer({
   drafts,
-  accountLabels = {},
+  accountMeta = {},
   sponsor
 }: {
   drafts: Draft[];
-  accountLabels?: Record<string, string>;
+  accountMeta?: Record<string, AccountMeta>;
   sponsor?: { enabled: boolean; pickByAccount: Record<string, string> };
 }) {
   const [status, setStatus] = useState("all");
@@ -169,7 +170,7 @@ export default function DraftsExplorer({
             key={d.id}
             draft={d}
             dupSimilarity={dupMap[d.id] >= DUP_THRESHOLD ? dupMap[d.id] : undefined}
-            accountLabel={d.threads_account_id ? accountLabels[d.threads_account_id] : undefined}
+            account={d.threads_account_id ? accountMeta[d.threads_account_id] : undefined}
             sponsorEnabled={sponsor?.enabled ?? false}
             selectable={d.status === "draft"}
             selected={selected.has(d.id)}

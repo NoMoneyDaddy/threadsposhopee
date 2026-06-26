@@ -186,12 +186,28 @@ export async function hasGeminiKey(ownerId: string): Promise<boolean> {
 }
 
 // Shopee affiliate_id（無 API 時用 an_redir 自組追蹤連結）。非機密，明文存。
+// affiliate_id 與蝦皮 Open API 的 App ID 是同一組數字 ID：未單獨設定時，自動沿用已綁的 App ID，
+// 使用者不必把同一個號碼填兩次（綁了 API 即等於有 affiliate_id）。
 export async function getShopeeAffiliateId(ownerId: string): Promise<string | null> {
   if (isDemoMode) return null;
   const sb = getServiceClient()!;
   const { data, error } = await sb.from("profiles").select("shopee_affiliate_id").eq("id", ownerId).maybeSingle();
   if (error) throw new Error(`讀取 shopee_affiliate_id 失敗：${error.message}`);
-  return data?.shopee_affiliate_id ?? null;
+  const explicit = data?.shopee_affiliate_id;
+  if (typeof explicit === "string" && explicit.trim()) return explicit.trim();
+  // 沒單獨填 → 取已綁蝦皮帳號的 App ID 當 affiliate_id（兩者同一 ID）。
+  // 多帳號時依 created_at 取最早綁定那筆，確保回退值穩定（非任意一筆）。
+  const { data: acc, error: accError } = await sb
+    .from("shopee_accounts")
+    .select("app_id")
+    .eq("owner_id", ownerId)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (accError) throw new Error(`讀取 shopee_accounts app_id 失敗：${accError.message}`);
+  // app_id 在 DB 可能存為數字或字串，一律轉字串再判斷。
+  const appId = acc?.app_id;
+  return appId != null && String(appId).trim() ? String(appId).trim() : null;
 }
 
 export async function setShopeeAffiliateId(ownerId: string, affiliateId: string | null): Promise<void> {

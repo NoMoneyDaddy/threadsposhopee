@@ -11,7 +11,7 @@ export default async function CalendarPage() {
   const user = await getCurrentUser();
   if (!user) return <div className="text-center text-sm text-red-500">請先登入。</div>;
   const [drafts, accounts] = await Promise.all([
-    listDrafts(user.id).catch(() => []),
+    listDrafts(user.id, 500).catch(() => []),
     listThreadsAccounts(user.id).catch(() => [])
   ]);
   const labels = Object.fromEntries(accounts.map((a) => [a.id, a.label]));

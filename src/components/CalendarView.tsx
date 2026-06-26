@@ -43,7 +43,8 @@ export default function CalendarView({ items }: { items: CalItem[] }) {
       if (arr) arr.push(it);
       else m.set(k, [it]);
     }
-    for (const arr of m.values()) arr.sort((a, b) => +new Date(a.iso) - +new Date(b.iso));
+    // ISO 8601 字串可直接字典序排序（等同時序），免在比較器內重複建立 Date。
+    for (const arr of m.values()) arr.sort((a, b) => a.iso.localeCompare(b.iso));
     return m;
   }, [items]);
 
@@ -60,10 +61,14 @@ export default function CalendarView({ items }: { items: CalItem[] }) {
   }, [cursor]);
 
   const todayKey = dayKey(today);
-  const monthCount = items.filter((it) => {
-    const d = new Date(it.iso);
-    return d.getFullYear() === cursor.year && d.getMonth() === cursor.month;
-  }).length;
+  const monthCount = useMemo(
+    () =>
+      items.filter((it) => {
+        const d = new Date(it.iso);
+        return d.getFullYear() === cursor.year && d.getMonth() === cursor.month;
+      }).length,
+    [items, cursor.year, cursor.month]
+  );
 
   const shift = (delta: number) => {
     const m = cursor.month + delta;

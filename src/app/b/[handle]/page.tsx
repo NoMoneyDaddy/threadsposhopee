@@ -22,11 +22,9 @@ export default async function BioPage({ params }: { params: { handle: string } }
   if (!page || !handle) notFound();
 
   const title = page.title ?? `@${handle}`;
-  // 頭像缺省用標題/handle 首字做 monogram（避免空頭像）。用 Intl.Segmenter 取第一個 grapheme，
-  // 才不會把 emoji／旗幟／結合字元切壞（[...str][0] 會）。
-  const seg = new Intl.Segmenter(undefined, { granularity: "grapheme" });
-  const firstChar = seg.segment(page.title?.trim() || handle)[Symbol.iterator]().next().value?.segment;
-  const monogram = (firstChar || "@").toUpperCase();
+  // 頭像缺省用標題/handle 首字做 monogram（避免空頭像）。以碼位拆分取首字，涵蓋中英與多數 emoji；
+  // 註：未用 Intl.Segmenter（tsconfig lib 未含其型別），罕見的組合字元/旗幟可能切不完整，可接受。
+  const monogram = ([...(page.title?.trim() || handle)][0] ?? "@").toUpperCase();
 
   return (
     <div className="relative min-h-[100dvh] overflow-hidden">

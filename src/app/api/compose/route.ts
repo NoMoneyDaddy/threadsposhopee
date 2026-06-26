@@ -71,9 +71,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "請提供發文內容（正文）" }, { status: 400 });
     }
 
-    // 自寫模式的可選媒體：先驗證是安全公開 URL（SSRF），避免發布時才失敗
+    // 可選自帶媒體：自寫模式必用；素材模式則覆蓋掉爬到的媒體（使用者自上傳一張圖／影片）。
+    // 先驗證是安全公開 URL（SSRF），避免發布時才失敗。
     let selfMediaUrl: string | null = null;
-    if (!material && typeof body.media_url === "string" && body.media_url.trim()) {
+    if (typeof body.media_url === "string" && body.media_url.trim()) {
       try {
         selfMediaUrl = assertSafePublicUrl(body.media_url.trim()).href;
       } catch {
@@ -81,7 +82,7 @@ export async function POST(req: Request) {
       }
     }
     // 媒體類型走白名單，無效值不可靜默當 image（發布時才失敗、難定位）
-    if (selfMediaUrl && body.media_type !== undefined && !["image", "video"].includes(body.media_type)) {
+    if (selfMediaUrl && body.media_type !== undefined && body.media_type !== null && !["image", "video"].includes(body.media_type)) {
       return NextResponse.json({ ok: false, error: "媒體類型只支援 image 或 video" }, { status: 400 });
     }
     const selfMediaType: "image" | "video" | "none" = selfMediaUrl
@@ -100,6 +101,8 @@ export async function POST(req: Request) {
         selfCloudUrl = selfMediaUrl;
       }
     }
+    // 是否以自帶媒體覆蓋素材媒體（素材模式下使用者自上傳時）。
+    const overrideMedia = Boolean(selfMediaUrl);
 
     // 留言延遲逐則覆寫（分）：選填非負整數（0=立即）；未填則用全域預設
     let replyDelayOverride: number | null = null;
@@ -128,10 +131,10 @@ export async function POST(req: Request) {
         shopee_short_link: material?.affiliate_short_link ?? null,
         commission_rate: material?.commission_rate ?? null,
         commission_checked_at: material?.commission_checked_at ?? null,
-        media_type: material ? material.media_type : selfMediaType,
-        source_media_url: material ? material.source_media_url : selfMediaUrl,
-        cloudinary_media_url: material ? material.cloudinary_media_url : selfCloudUrl,
-        media: material ? material.media ?? [] : [],
+        media_type: overrideMedia ? selfMediaType : material ? material.media_type : selfMediaType,
+        source_media_url: overrideMedia ? selfMediaUrl : material ? material.source_media_url : selfMediaUrl,
+        cloudinary_media_url: overrideMedia ? selfCloudUrl : material ? material.cloudinary_media_url : selfCloudUrl,
+        media: overrideMedia ? [] : material ? material.media ?? [] : [],
         main_text: material ? (typeof body.main_text === "string" ? body.main_text : material.main_text) : freeMain,
         reply_text: typeof body.reply_text === "string" ? body.reply_text : material?.reply_text ?? null,
         reply_delay_minutes: replyDelayOverride,

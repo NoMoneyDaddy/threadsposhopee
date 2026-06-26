@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 // 「繼續」一次點擊：①（有分潤時）另開分潤/優惠頁 ②本頁前往來源。
 // 分潤僅在「使用者真實點擊」時開啟＝合法計佣；絕不做零點擊自動觸發（cookie stuffing）。
@@ -20,13 +20,13 @@ export default function ContinueButton({
   const [left, setLeft] = useState(AUTO_SECONDS);
   const fired = useRef(false);
 
-  function hit() {
+  const hit = useCallback(() => {
     try {
       navigator.sendBeacon?.("/api/redirect/hit", new Blob([JSON.stringify({ code })], { type: "application/json" }));
     } catch {
       // 計數失敗不影響導流
     }
-  }
+  }, [code]);
 
   // 使用者真實點擊：開分潤（新分頁）＋本頁前往來源。
   function onContinue() {
@@ -42,18 +42,18 @@ export default function ContinueButton({
 
   // 倒數歸零自動跳轉：只前往來源原文，不開分潤（非真實點擊）。
   useEffect(() => {
+    if (fired.current) return; // 已（手動或自動）觸發跳轉→不再排計時器/更新狀態
     if (left <= 0) {
-      if (!fired.current) {
-        fired.current = true;
-        hit();
-        window.location.href = sourceUrl;
-      }
+      fired.current = true;
+      hit();
+      window.location.href = sourceUrl;
       return;
     }
-    const t = setTimeout(() => setLeft((n) => n - 1), 1000);
+    const t = setTimeout(() => {
+      if (!fired.current) setLeft((n) => n - 1);
+    }, 1000);
     return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [left]);
+  }, [left, sourceUrl, hit]);
 
   return (
     <div className="mt-5 space-y-2">

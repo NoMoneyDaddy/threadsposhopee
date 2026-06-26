@@ -119,6 +119,7 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
   }
 
   const domLabel = (id: string) => AI_DOMAINS.find((d) => d.id === id)?.label ?? id;
+  const accLabel = (id: string | null) => (id ? accounts.find((a) => a.id === id)?.label ?? id : null);
 
   return (
     <div className="space-y-6">
@@ -226,6 +227,11 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
                     </span>
                     {a.use_redirect && <span className="badge-brand ml-1">短連結</span>}
                     {a.auto_publish && <span className="badge-brand ml-1">免審直發</span>}
+                    {accLabel(a.threads_account_id) ? (
+                      <span className="badge-neutral ml-1">發文：{accLabel(a.threads_account_id)}</span>
+                    ) : (
+                      <span className="badge-neutral ml-1 opacity-70">未指定帳號</span>
+                    )}
                   </div>
                   <div className="text-xs text-ink-3">
                     {a.enabled ? (a.auto_publish ? "每日自動產文＋免審直接發" : "每日自動產文（待審）") : "已停用"}

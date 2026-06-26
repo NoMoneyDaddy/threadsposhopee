@@ -41,7 +41,7 @@ export default function SubIdForm({ initial }: { initial: string | null }) {
         <code className="font-mono">{"{time}"}</code>（發文時間）、<code className="font-mono">{"{platform}"}</code>（平台）、
         <code className="font-mono">{"{account}"}</code>（帳號）、<code className="font-mono">{"{item}"}</code>（商品編號）。
       </p>
-      <div className="mb-1 text-xs text-ink-3">點變數插入游標處，或點下方範本：</div>
+      <div className="mb-1 text-xs text-ink-3">點變數附加至尾端，或點下方範本：</div>
       <div className="mb-2 flex flex-wrap gap-1.5 text-xs">
         {["{date}", "{time}", "{platform}", "{account}", "{item}"].map((tok) => (
           <button

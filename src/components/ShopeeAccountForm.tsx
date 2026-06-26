@@ -28,7 +28,7 @@ export default function ShopeeAccountForm() {
       const json = await res.json();
       if (!json.ok) throw new Error(json.error);
       setForm({ label: "", app_id: "", secret: "" });
-      setMsg("✅ 已新增");
+      setMsg(json.warning ? `⚠️ ${json.warning}` : "✅ 已新增");
       router.refresh();
     } catch (e: any) {
       setMsg(`❌ ${e.message}`);
@@ -49,7 +49,7 @@ export default function ShopeeAccountForm() {
       </p>
       <input className={input} placeholder="顯示名稱（自取，例：我的蝦皮分潤）" value={form.label} onChange={(e) => set("label", e.target.value)} required />
       <input className={input} placeholder="App ID" value={form.app_id} onChange={(e) => set("app_id", e.target.value)} required />
-      <input className={input} placeholder="Secret（會加密儲存）" value={form.secret} onChange={(e) => set("secret", e.target.value)} required />
+      <input className={input} type="password" placeholder="Secret（會加密儲存）" value={form.secret} onChange={(e) => set("secret", e.target.value)} required />
       <div className="flex items-center gap-3">
         <button disabled={busy} className="btn btn-brand">
           {busy ? "新增中…" : "新增帳號"}

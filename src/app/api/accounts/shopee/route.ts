@@ -18,8 +18,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "缺少 label / app_id / secret" }, { status: 400 });
     }
     const subId = typeof body.default_sub_id === "string" ? body.default_sub_id.trim() : "";
-    const check = await validateShopeeCredentials(appId, secret);
-    if (!check.ok) return NextResponse.json({ ok: false, error: check.reason }, { status: 400 });
+    // 綁定前驗證僅作提示、不阻擋存檔：避免蝦皮即時驗證（簽章/權限/限流）誤判把有效金鑰擋下而「無法儲存」。
+    // 金鑰為使用者自己所有，存錯也只影響自己的連結產生（屆時會有明確錯誤可重設）。
+    const check = await validateShopeeCredentials(appId, secret).catch(() => ({ ok: false as const, reason: "驗證時發生錯誤" }));
     const account = await createShopeeAccount(
       {
         label,
@@ -29,7 +30,11 @@ export async function POST(req: Request) {
       },
       user.id
     );
-    return NextResponse.json({ ok: true, account });
+    return NextResponse.json({
+      ok: true,
+      account,
+      warning: check.ok ? undefined : `已儲存，但金鑰驗證未通過（${check.reason ?? "請確認 App ID／Secret"}），若產生連結失敗請重新確認。`
+    });
   } catch (e) {
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 500 });
   }

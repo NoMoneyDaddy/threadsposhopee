@@ -72,7 +72,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const account = await upsertThreadsAccountFromOAuth(
+    await upsertThreadsAccountFromOAuth(
       {
         label,
         threads_user_id: profile.id,
@@ -83,7 +83,8 @@ export async function POST(req: Request) {
       },
       user.id
     );
-    return NextResponse.json({ ok: true, account });
+    // 安全：不把帳號物件（含任何金鑰相關欄位）回傳前端，前端只需知道成功。
+    return NextResponse.json({ ok: true });
   } catch (e) {
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 500 });
   }

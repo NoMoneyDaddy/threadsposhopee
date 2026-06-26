@@ -17,7 +17,14 @@ export async function POST(req: Request) {
     const url: string = (body.shopee_url ?? "").trim();
     if (!url) return NextResponse.json({ ok: false, error: "缺少 shopee_url" }, { status: 400 });
 
-    const { material, reused, notes } = await resolveMaterialFromUrl(url, user, body.generate_copy !== false);
+    // 自帶媒體（選填）：取代爬到的商品圖。type 走白名單，無效值不靜默當 image。
+    const mediaUrl = typeof body.media_url === "string" && body.media_url.trim() ? body.media_url.trim() : null;
+    if (mediaUrl && body.media_type !== undefined && body.media_type !== null && !["image", "video"].includes(body.media_type)) {
+      return NextResponse.json({ ok: false, error: "媒體類型只支援 image 或 video" }, { status: 400 });
+    }
+    const media = mediaUrl ? { url: mediaUrl, type: (body.media_type === "video" ? "video" : "image") as "image" | "video" } : undefined;
+
+    const { material, reused, notes } = await resolveMaterialFromUrl(url, user, body.generate_copy !== false, media);
     return NextResponse.json({ ok: true, material, reused, notes });
   } catch (e) {
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 500 });

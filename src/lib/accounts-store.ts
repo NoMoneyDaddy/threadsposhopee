@@ -13,10 +13,12 @@ import type { ThreadsAccount, ShopeeAccount } from "./types";
 export async function listThreadsAccounts(ownerId: string): Promise<ThreadsAccount[]> {
   if (isDemoMode) return demo.threadsAccounts;
   const sb = getServiceClient()!;
-  const { data } = await sb
+  const { data, error } = await sb
     .from("threads_accounts")
     .select("id,label,threads_user_id,display_name,avatar_url,token_expires_at,status")
     .eq("owner_id", ownerId);
+  // 查詢失敗勿吞成空陣列：否則 migration 未套用/查詢異常會被 UI 誤顯示成「沒有帳號」。
+  if (error) throw error;
   return (data ?? []) as ThreadsAccount[];
 }
 
@@ -216,16 +218,27 @@ export async function upsertThreadsAccountFromOAuth(
       .from("threads_accounts")
       .update(profile)
       .eq("id", existing.data.id)
+      .eq("owner_id", ownerId) // 縱深防禦：更新一律帶 owner 過濾
       .select(THREADS_ACC_COLS)
       .single();
     if (error) throw error;
     return data as ThreadsAccount;
   }
-  const { data, error } = await sb
+  let { data, error } = await sb
     .from("threads_accounts")
     .insert({ owner_id: ownerId, threads_user_id: input.threads_user_id, label: input.label, ...profile })
     .select(THREADS_ACC_COLS)
     .single();
+  // 併發重新授權競態：兩請求都沒查到既有列、後插入者撞 (owner_id, threads_user_id) 唯一鍵（23505）→ 改為更新既有列。
+  if (error?.code === "23505") {
+    ({ data, error } = await sb
+      .from("threads_accounts")
+      .update(profile)
+      .eq("owner_id", ownerId)
+      .eq("threads_user_id", input.threads_user_id)
+      .select(THREADS_ACC_COLS)
+      .single());
+  }
   if (error) throw error;
   return data as ThreadsAccount;
 }

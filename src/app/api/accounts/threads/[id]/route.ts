@@ -17,7 +17,9 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
-  const body = await req.json().catch(() => ({}));
+  // 正規化成非 null 物件：合法 JSON null 會讓 req.json() 回傳 null，直接讀屬性會拋 TypeError。
+  const parsed = await req.json().catch(() => null);
+  const body = (parsed && typeof parsed === "object" ? parsed : {}) as { label?: unknown; status?: unknown };
   // 重新命名暱稱
   if (typeof body.label === "string") {
     const label = body.label.trim();

@@ -3,25 +3,53 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-// 自訂分潤 subId：套用到「API 轉換短連結」與「an_redir 長連結」兩種分潤連結（蝦皮報表依此分流）。
+// 蝦皮分潤連結自訂來源標記 Sub id：對齊蝦皮後台的 5 格（sub_id1..5），可增刪。
+// 每格支援範本變數 {date}/{time}/{platform}/{account}/{item}，發文建連結時自動代換。
+// 儲存：以逗號分隔成單一字串。留空＝不帶來源標記（無預設）。
+const VARS = ["{date}", "{time}", "{platform}", "{account}", "{item}"];
+
 export default function SubIdForm({ initial }: { initial: string | null }) {
   const router = useRouter();
-  const [subId, setSubId] = useState(initial ?? "");
+  const parse = (s: string | null) =>
+    (s ?? "")
+      .split(",")
+      .map((x) => x.trim())
+      .filter(Boolean)
+      .slice(0, 5);
+  const [slots, setSlots] = useState<string[]>(() => {
+    const init = parse(initial);
+    return init.length ? init : [""];
+  });
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+
+  function setSlot(i: number, v: string) {
+    setSlots((prev) => prev.map((s, idx) => (idx === i ? v.slice(0, 50) : s)));
+  }
+  function removeSlot(i: number) {
+    setSlots((prev) => (prev.length <= 1 ? [""] : prev.filter((_, idx) => idx !== i)));
+  }
+  function addSlot() {
+    setSlots((prev) => (prev.length >= 5 ? prev : [...prev, ""]));
+  }
+  function appendVar(i: number, tok: string) {
+    setSlots((prev) => prev.map((s, idx) => (idx === i ? (s + tok).slice(0, 50) : s)));
+  }
 
   async function save() {
     setBusy(true);
     setMsg(null);
     try {
+      const value = slots.map((s) => s.trim()).filter(Boolean).join(",");
       const res = await fetch("/api/accounts/shopee-sub-id", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sub_id: subId })
+        body: JSON.stringify({ sub_id: value })
       });
       const json = await res.json();
       if (!json.ok) throw new Error(json.error);
-      setSubId(json.subId ?? "");
+      const saved = parse(json.subId ?? "");
+      setSlots(saved.length ? saved : [""]);
       setMsg(json.subId ? "✅ 已儲存" : "✅ 已清除");
       router.refresh();
     } catch (e) {
@@ -34,52 +62,73 @@ export default function SubIdForm({ initial }: { initial: string | null }) {
   return (
     <div className="card p-4">
       <div className="mb-1 font-medium">蝦皮分潤連結自訂來源標記 Sub id（選填）</div>
-      <p className="mb-2 text-xs text-ink-2">
-        會加在你的分潤連結上，出現在蝦皮分潤報表，方便分辨哪個帳號／活動帶來成交。
-        留空＝用預設。<b>僅能含英數與底線</b>、長度上限 50（依蝦皮規範）。
-        共 5 個變數可自行排列組合：<code className="font-mono">{"{date}"}</code>（發文日期）、
-        <code className="font-mono">{"{time}"}</code>（發文時間）、<code className="font-mono">{"{platform}"}</code>（平台）、
-        <code className="font-mono">{"{account}"}</code>（帳號）、<code className="font-mono">{"{item}"}</code>（商品編號）。
+      <p className="mb-3 text-xs text-ink-2">
+        對齊蝦皮後台的 5 格 Sub id，出現在分潤報表方便分辨來源。<b>僅能含英數與底線</b>、單格上限 50。
+        可用變數（發文時自動代換）：
+        {VARS.map((v) => (
+          <code key={v} className="ml-1 font-mono">
+            {v}
+          </code>
+        ))}
+        。留空＝不帶來源標記。
       </p>
-      <div className="mb-1 text-xs text-ink-3">點變數附加至尾端，或點下方範本：</div>
-      <div className="mb-2 flex flex-wrap gap-1.5 text-xs">
-        {["{date}", "{time}", "{platform}", "{account}", "{item}"].map((tok) => (
-          <button
-            key={tok}
-            type="button"
-            onClick={() => setSubId((s) => (s + tok).slice(0, 50))}
-            className="rounded-lg border border-brand/40 px-2 py-1 font-mono text-brand hover:bg-orange-50"
-          >
-            {tok}
-          </button>
+
+      <div className="space-y-3">
+        {slots.map((slot, i) => (
+          <div key={i}>
+            <label className="label" htmlFor={`subid-${i}`}>
+              Sub id {i + 1}
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                id={`subid-${i}`}
+                className="input min-w-0 flex-1"
+                placeholder="例如 Electronics_FB_1212"
+                value={slot}
+                maxLength={50}
+                onChange={(e) => setSlot(i, e.target.value)}
+              />
+              <button
+                type="button"
+                onClick={() => removeSlot(i)}
+                aria-label={`移除 Sub id ${i + 1}`}
+                title="移除"
+                className="shrink-0 rounded-lg border px-2 py-2 text-ink-3 hover:bg-surface-2 hover:text-danger"
+              >
+                🗑
+              </button>
+            </div>
+            <div className="mt-1 flex flex-wrap gap-1">
+              {VARS.map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => appendVar(i, v)}
+                  className="rounded border border-brand/40 px-1.5 py-0.5 font-mono text-[11px] text-brand hover:bg-orange-50"
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
+          </div>
         ))}
       </div>
-      <div className="mb-2 flex flex-wrap gap-1.5 text-xs">
-        {["{platform}_{date}", "{account}_{date}", "{account}_{item}", "{date}_{time}"].map((tpl) => (
-          <button
-            key={tpl}
-            type="button"
-            onClick={() => setSubId(tpl)}
-            className="rounded-lg border px-2 py-1 font-mono hover:bg-surface-2"
-          >
-            {tpl}
-          </button>
-        ))}
-      </div>
-      <div className="flex flex-wrap gap-2">
-        <input
-          className="input min-w-0 flex-1"
-          aria-label="自訂分潤 subId"
-          placeholder="例如 myshop_{date}"
-          value={subId}
-          onChange={(e) => setSubId(e.target.value)}
-          maxLength={50}
-        />
-        <button onClick={save} disabled={busy} className="btn btn-brand shrink-0">
+
+      <button
+        type="button"
+        onClick={addSlot}
+        disabled={slots.length >= 5}
+        className="mt-3 flex items-center gap-1 text-sm text-brand hover:underline disabled:cursor-not-allowed disabled:text-ink-3 disabled:no-underline"
+      >
+        ＋ 添加辨識參數 Sub id（非必填）（{slots.length}/5）
+      </button>
+
+      <div className="mt-3">
+        <button onClick={save} disabled={busy} className="btn btn-brand">
           {busy ? "儲存中…" : "儲存"}
         </button>
+        {msg && <span className="ml-2 text-sm text-ink-2">{msg}</span>}
       </div>
-      {msg && <p className="mt-1 text-sm text-ink-2">{msg}</p>}
     </div>
   );
 }

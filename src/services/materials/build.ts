@@ -1,8 +1,8 @@
 // 為單一商品建立素材的共用邏輯：換分潤連結(帶追蹤 subId) → 商品名 → 媒體中轉 →
 // (可選)AI 文案 → 存素材。自動爬取流程與手動建立流程共用此函式。
 import { isDemoMode } from "@/lib/env";
-import { generateAffiliateLink, getProductInfo, buildSubIds, buildAffiliateRedirectLink } from "@/services/shopee/affiliate";
-import { resolveSubIdTemplate } from "@/services/shopee/subid";
+import { generateAffiliateLink, getProductInfo, buildAffiliateRedirectLink } from "@/services/shopee/affiliate";
+import { resolveSubIdTemplate, normalizeSubIds, parseSubIdSlots } from "@/services/shopee/subid";
 import { cleanProductName } from "@/lib/product-name";
 import { generateCopy } from "@/services/ai/provider";
 import { uploadMediaWith, type MediaProvider } from "@/services/media/upload";
@@ -50,18 +50,18 @@ export async function buildMaterialForProduct(
   let productNameRaw: string | null = null;
   let commissionRate: string | null = null; // 目前分潤率（顯示用）；隨時間變動，記查詢時間
 
-  // 自訂 subId 支援範本：{date}/{time}/{platform}/{account}/{item} 智能帶入。
+  // 自訂 subId：使用者最多 5 格（逗號分隔），每格支援範本 {date}/{time}/{platform}/{account}/{item}。
+  // 解析→逐格代換→與來源/商品併入，正規化去重後取前 5（對應蝦皮 sub_id1..5）。未設＝不帶來源標記（無預設）。
   const account = input.subIdTag ?? "manual";
   const subIdNow = new Date();
   const dateStr = subIdNow.toLocaleDateString("en-CA", { timeZone: "Asia/Taipei" }).replace(/-/g, "");
   const timeStr = subIdNow.toLocaleTimeString("en-GB", { timeZone: "Asia/Taipei", hour: "2-digit", minute: "2-digit", hour12: false }).replace(":", "");
-  const resolvedSubId = input.customSubId
-    ? resolveSubIdTemplate(input.customSubId, { date: dateStr, time: timeStr, platform: "threads", account, item: input.itemId ? String(input.itemId) : "" })
-    : "";
+  const ctx = { date: dateStr, time: timeStr, platform: "threads", account, item: input.itemId ? String(input.itemId) : "" };
+  const resolvedSlots = parseSubIdSlots(input.customSubId).map((slot) => resolveSubIdTemplate(slot, ctx));
 
   if (!isDemoMode && shopeeCreds) {
     try {
-      const subIds = buildSubIds(resolvedSubId || shopeeCreds.subId, account, input.itemId);
+      const subIds = normalizeSubIds([...resolvedSlots, account, input.itemId]);
       subId = subIds.join(",");
       shortLink = await generateAffiliateLink(shopeeCreds.appId, shopeeCreds.secret, input.cleanUrl, subIds);
       const info = await getProductInfo(shopeeCreds.appId, shopeeCreds.secret, input.shopId, input.itemId);
@@ -72,7 +72,7 @@ export async function buildMaterialForProduct(
     }
   } else if (!isDemoMode && affiliateId) {
     // 無 Open API，但有 affiliate_id：用官方 an_redir 做法自組追蹤連結（仍可分潤＋subId 分流）
-    const subIds = buildSubIds(resolvedSubId || null, account, input.itemId);
+    const subIds = normalizeSubIds([...resolvedSlots, account, input.itemId]);
     subId = subIds.join("-");
     shortLink = buildAffiliateRedirectLink(input.cleanUrl, affiliateId, subIds);
     productNameRaw = `商品 ${input.itemId}`;

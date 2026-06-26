@@ -30,6 +30,15 @@ export function isValidSubIdTemplate(s: string): boolean {
   return /^[a-zA-Z0-9_]*$/.test(s.replace(SUBID_TOKENS, ""));
 }
 
+// 自訂來源標記以「逗號分隔」存放，對應蝦皮 sub_id1..5 共 5 格。解析成陣列（去空、最多 5）。
+export function parseSubIdSlots(stored: string | null | undefined): string[] {
+  return (stored ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 5);
+}
+
 // 一組 subId：正規化、去空、去重、最多 5 個（蝦皮 sub_id1..5）。
 export function normalizeSubIds(list: (string | null | undefined)[]): string[] {
   const out: string[] = [];

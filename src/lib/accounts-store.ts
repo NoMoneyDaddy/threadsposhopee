@@ -292,7 +292,8 @@ export async function createShopeeAccount(
   input: { label: string; app_id: string; secret: string; default_sub_id?: string },
   ownerId: string
 ): Promise<ShopeeAccount> {
-  const default_sub_id = input.default_sub_id || "threadspo";
+  // 不再注入預設 "threadspo"：未填則存空字串（欄位 NOT NULL，空字串即「無預設來源標記」）。
+  const default_sub_id = input.default_sub_id?.trim() || "";
   if (isDemoMode) {
     const acc: ShopeeAccount = { id: randomUUID(), label: input.label, app_id: input.app_id, default_sub_id };
     demo.shopeeAccounts.unshift(acc);

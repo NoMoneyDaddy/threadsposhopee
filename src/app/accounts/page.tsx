@@ -227,7 +227,7 @@ export default async function AccountsPage({
             <div key={a.id} className="rounded-2xl border bg-surface p-4">
               <div className="font-medium">{a.label}</div>
               <div className="mt-1 text-sm text-ink-2">app id: {a.app_id}</div>
-              <div className="text-sm text-ink-2">預設 subId: {a.default_sub_id}</div>
+              {a.default_sub_id && <div className="text-sm text-ink-2">預設 subId: {a.default_sub_id}</div>}
               <div className="mt-2 border-t pt-2">
                 <DeleteButton endpoint={`/api/accounts/shopee/${a.id}`} />
               </div>

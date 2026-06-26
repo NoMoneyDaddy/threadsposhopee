@@ -1,6 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { normalizeSubId, normalizeSubIds, resolveSubIdTemplate, isValidSubIdTemplate } from "./subid";
+import { normalizeSubId, normalizeSubIds, resolveSubIdTemplate, isValidSubIdTemplate, parseSubIdSlots } from "./subid";
+
+test("parseSubIdSlots: 逗號分隔、去空、最多 5 格", () => {
+  assert.deepEqual(parseSubIdSlots("a, b ,,c"), ["a", "b", "c"]);
+  assert.deepEqual(parseSubIdSlots(""), []);
+  assert.deepEqual(parseSubIdSlots(null), []);
+  assert.deepEqual(parseSubIdSlots("1,2,3,4,5,6,7"), ["1", "2", "3", "4", "5"]);
+});
 
 test("isValidSubIdTemplate: 允許變數＋英數底線、擋非法/過長", () => {
   assert.equal(isValidSubIdTemplate("{platform}_{date}"), true);

@@ -1,7 +1,8 @@
 // 把「轉址搭配的蝦皮連結」轉成分潤連結：若已是分潤連結則原樣回傳（不重複轉）。
 // 用於 AI 代理人預設分潤連結等場景，讓使用者貼一般商品/商城連結也能自動帶分潤。
 import { getShopeeCredentials, getShopeeAffiliateId, getShopeeSubId } from "@/lib/store";
-import { generateAffiliateLink, buildAffiliateRedirectLink, buildSubIds } from "./affiliate";
+import { generateAffiliateLink, buildAffiliateRedirectLink } from "./affiliate";
+import { parseSubIdSlots, resolveSubIdTemplate, normalizeSubIds } from "./subid";
 import { log } from "@/lib/logger";
 
 // 判斷某連結是否「已是分潤連結」（純函式，可測）：
@@ -32,7 +33,11 @@ export async function resolveAffiliateUrl(ownerId: string, url: string): Promise
   if (!clean) return { url: clean, converted: false };
   if (isAffiliateLink(clean)) return { url: clean, converted: false };
 
-  const subIds = buildSubIds(await getShopeeSubId(ownerId).catch(() => null), "agent", "");
+  // 多格自訂 subId（逗號分隔）逐格代換後＋來源標記 "agent"，正規化取前 5。
+  const stored = await getShopeeSubId(ownerId).catch(() => null);
+  const ctx = { date: "", time: "", platform: "threads", account: "agent", item: "" };
+  const resolvedSlots = parseSubIdSlots(stored).map((s) => resolveSubIdTemplate(s, ctx));
+  const subIds = normalizeSubIds([...resolvedSlots, "agent"]);
   const creds = await getShopeeCredentials(ownerId).catch(() => null);
   if (creds) {
     try {

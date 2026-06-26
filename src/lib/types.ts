@@ -2,8 +2,10 @@
 
 export interface ThreadsAccount {
   id: string;
-  label: string;
+  label: string; // 使用者可自訂的暱稱（預設帶入 username）
   threads_user_id: string;
+  display_name?: string | null; // Threads 上的顯示名稱
+  avatar_url?: string | null; // Threads 個人頭像
   token_expires_at?: string | null;
   status: "active" | "paused" | "error";
 }

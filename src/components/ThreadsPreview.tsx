@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import type { DraftMedia } from "@/lib/types";
 import { cloudinaryThumb } from "@/lib/img";
 
@@ -7,6 +8,8 @@ import { cloudinaryThumb } from "@/lib/img";
 // 顯示正文、媒體（單張或多張輪播）、以及留言區（分潤連結），讓使用者發布前先看版面。
 export default function ThreadsPreview({
   accountLabel,
+  displayName,
+  avatarUrl,
   mainText,
   replyText,
   mediaUrl,
@@ -15,6 +18,8 @@ export default function ThreadsPreview({
   replyMedia
 }: {
   accountLabel?: string;
+  displayName?: string | null;
+  avatarUrl?: string | null;
   mainText: string;
   replyText?: string;
   mediaUrl?: string | null;
@@ -23,6 +28,27 @@ export default function ThreadsPreview({
   replyMedia?: DraftMedia[];
 }) {
   const handle = (accountLabel || "your_account").replace(/^@/, "");
+  const name = displayName?.trim() || handle;
+  // 頭像載入失敗（過期/失效 URL）時退回佔位圓；avatarUrl 變動時重置。
+  const [avatarFailed, setAvatarFailed] = useState(false);
+  useEffect(() => setAvatarFailed(false), [avatarUrl]);
+  // 真實頭像（#171 起各帳號可帶 avatar_url）；無或載入失敗則退回灰色漸層佔位圓。
+  // 用區域渲染函數（非內部元件）：避免每次 render 重建元件型別導致頭像 remount／閃爍。
+  // referrerPolicy=no-referrer：與 AccountsPage 一致，載入第三方頭像不外送 Referer（隱私）。
+  const renderAvatar = () =>
+    avatarUrl && !avatarFailed ? (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={avatarUrl}
+        alt=""
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        onError={() => setAvatarFailed(true)}
+        className="h-9 w-9 shrink-0 rounded-full border object-cover"
+      />
+    ) : (
+      <div className="h-9 w-9 shrink-0 rounded-full bg-gradient-to-br from-neutral-300 to-neutral-400" />
+    );
   // 優先用 media 陣列；為空時退回單一 mediaUrl/mediaType（向後相容）
   const items: DraftMedia[] =
     media && media.length > 0
@@ -61,14 +87,15 @@ export default function ThreadsPreview({
       {/* 主文 1/2 */}
       <div className="flex gap-3">
         <div className="flex shrink-0 flex-col items-center">
-          <div className="h-9 w-9 rounded-full bg-gradient-to-br from-neutral-300 to-neutral-400" />
+          {renderAvatar()}
           {hasReply && <div className="mt-1 w-px flex-1 bg-neutral-200" />}
         </div>
         <div className="min-w-0 flex-1 pb-3">
           <div className="flex items-center gap-1 text-sm">
-            <span className="font-semibold text-ink">{handle}</span>
+            <span className="truncate font-semibold text-ink">{name}</span>
+            {name !== handle && <span className="truncate text-ink-3">@{handle}</span>}
             {total > 1 && <span className="text-ink-3">{`1/${total}`}</span>}
-            <span className="text-ink-3">· 現在</span>
+            <span className="shrink-0 text-ink-3">· 現在</span>
           </div>
           <div className="mt-0.5 whitespace-pre-wrap break-words text-sm text-ink">
             {mainText || <span className="text-ink-3">正文預覽…</span>}
@@ -86,12 +113,13 @@ export default function ThreadsPreview({
       {/* 接續貼文 2/2（分潤連結 CTA） */}
       {hasReply && (
         <div className="flex gap-3">
-          <div className="h-9 w-9 shrink-0 rounded-full bg-gradient-to-br from-neutral-300 to-neutral-400" />
+          {renderAvatar()}
           <div className="min-w-0 flex-1 pt-1">
             <div className="flex items-center gap-1 text-sm">
-              <span className="font-semibold text-ink">{handle}</span>
-              <span className="text-ink-3">{`2/${total}`}</span>
-              <span className="text-ink-3">· 接續</span>
+              <span className="truncate font-semibold text-ink">{name}</span>
+              {name !== handle && <span className="truncate text-ink-3">@{handle}</span>}
+              <span className="shrink-0 text-ink-3">{`2/${total}`}</span>
+              <span className="shrink-0 text-ink-3">· 接續</span>
             </div>
             <div className="mt-0.5 whitespace-pre-wrap break-words text-sm text-brand">{replyText}</div>
             {replyItems.length > 0 && renderMedia(replyItems)}

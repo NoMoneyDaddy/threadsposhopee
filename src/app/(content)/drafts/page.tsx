@@ -14,8 +14,10 @@ export default async function DraftsPage() {
   // 失敗的草稿 → 可一鍵批次重試重排（卡在 publishing 者交給系統自動回收為 failed 後再重試，
   // 避免與發布中的 worker 競態造成重複發文）
   const failedIds = drafts.filter((d) => d.status === "failed").map((d) => d.id);
-  // 帳號 id → 標籤：多帳號時草稿卡顯示「要發到哪個帳號」
-  const accountLabels = Object.fromEntries(accounts.map((a) => [a.id, a.label]));
+  // 帳號 id → 身分（標籤/顯示名/頭像）：草稿卡顯示「要發到哪個帳號」＋原生預覽帶真實頭像/暱稱
+  const accountMeta = Object.fromEntries(
+    accounts.map((a) => [a.id, { label: a.label, displayName: a.display_name ?? null, avatarUrl: a.avatar_url ?? null }])
+  );
   // 贊助文：啟用且非 owner 時，草稿頁可標示／自選哪一篇為今日贊助文。
   const sponsorCfg = await getSponsorConfig();
   const sponsorEnabled = sponsorCfg.enabled && !!user && !user.isOwner;
@@ -40,7 +42,7 @@ export default async function DraftsPage() {
       <RetryFailedBar failedIds={failedIds} />
       <DraftsExplorer
         drafts={drafts}
-        accountLabels={accountLabels}
+        accountMeta={accountMeta}
         sponsor={{ enabled: sponsorEnabled, pickByAccount }}
       />
     </div>

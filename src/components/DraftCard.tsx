@@ -13,10 +13,17 @@ import { isLowRelevance } from "@/lib/relevance";
 
 // memo：草稿列表（最多 100 張）在搜尋/篩選 re-render 時，只重繪 props 變動的卡片。
 // 需搭配 DraftsExplorer 以 useCallback 穩定 onToggleSelect，否則 memo 失效。
+// 草稿要發到的 Threads 帳號身分（供卡片標籤＋原生預覽顯示真實頭像/暱稱）。
+export interface AccountMeta {
+  label: string;
+  displayName?: string | null;
+  avatarUrl?: string | null;
+}
+
 function DraftCard({
   draft,
   dupSimilarity,
-  accountLabel,
+  account,
   sponsorEnabled = false,
   isSponsorPick = false,
   selectable = false,
@@ -25,7 +32,7 @@ function DraftCard({
 }: {
   draft: Draft;
   dupSimilarity?: number;
-  accountLabel?: string;
+  account?: AccountMeta;
   sponsorEnabled?: boolean;
   isSponsorPick?: boolean;
   selectable?: boolean;
@@ -199,9 +206,9 @@ function DraftCard({
               ★ 贊助文
             </span>
           )}
-          {accountLabel && (
-            <span className="max-w-[8rem] truncate rounded bg-brand/10 px-2 py-0.5 text-xs text-brand" title={`發到 ${accountLabel}`}>
-              @{accountLabel}
+          {account?.label && (
+            <span className="max-w-[8rem] truncate rounded bg-brand/10 px-2 py-0.5 text-xs text-brand" title={`發到 ${account.label}`}>
+              @{account.label}
             </span>
           )}
           <span
@@ -314,7 +321,9 @@ function DraftCard({
       ) : (
         // 預覽素材：仿 Threads 版面呈現正文／媒體（圖或影片）／留言區分潤連結
         <ThreadsPreview
-          accountLabel={draft.product_name ?? undefined}
+          accountLabel={account?.label}
+          displayName={account?.displayName}
+          avatarUrl={account?.avatarUrl}
           mainText={mainText}
           replyText={replyText}
           mediaUrl={draft.cloudinary_media_url}

@@ -99,16 +99,23 @@ export async function getUserTelegramChatId(ownerId: string): Promise<string | n
 }
 
 // 反查：哪個使用者綁了這個 Telegram chat（Telegram 遠端審核 webhook 用，以 chat 認 owner）。
-// 同一 chat 理論上只綁一位使用者；多筆時取第一筆。查無回 null。
+// 安全：fail-closed — 同一 chat 綁到多位使用者（資料異常）時，拒絕映射（回 null），
+// 避免遠端審核權限隨機錯配到他人草稿。DB 端另有 telegram_chat_id 唯一索引防重複（見 migration）。
 export async function getOwnerByTelegramChatId(chatId: string): Promise<string | null> {
   if (isDemoMode) {
-    const hit = Object.entries(demoTelegramChatId).find(([, c]) => c === chatId);
-    return hit ? hit[0] : null;
+    const hits = Object.entries(demoTelegramChatId).filter(([, c]) => c === chatId);
+    return hits.length === 1 ? hits[0][0] : null;
   }
   const sb = getServiceClient();
   if (!sb) return null;
-  const { data } = await sb.from("profiles").select("id").eq("telegram_chat_id", chatId).limit(1).maybeSingle();
-  return (data?.id as string) ?? null;
+  // 取最多 2 筆：恰好 1 筆才映射；0 筆或 >1 筆（重複綁定異常）一律回 null。
+  const { data, error } = await sb.from("profiles").select("id").eq("telegram_chat_id", chatId).limit(2);
+  if (error) throw error;
+  if (!data || data.length !== 1) {
+    if (data && data.length > 1) log.error("同一 Telegram chat 綁到多位使用者，拒絕映射", { chatId });
+    return null;
+  }
+  return data[0].id as string;
 }
 
 // chatId 傳 null 解除綁定。

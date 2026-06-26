@@ -8,6 +8,8 @@ export interface EnvLike {
   cronSecret: string;
   supabaseUrl: string;
   supabaseServiceKey: string;
+  telegramBotToken: string;
+  telegramWebhookSecret: string;
 }
 
 export function validateEnv(e: EnvLike, isProduction: boolean): string[] {
@@ -32,6 +34,11 @@ export function validateEnv(e: EnvLike, isProduction: boolean): string[] {
   // 「已接 DB」與 env.isSupabaseConfigured 一致＝需同時有 URL 與 service key。
   if (isProduction && e.supabaseUrl && e.supabaseServiceKey && !e.cronSecret) {
     warnings.push("生產環境未設 CRON_SECRET，定時任務端點將拒絕外部觸發");
+  }
+
+  // Telegram 遠端審核：啟用 bot 卻沒設 webhook secret，公開 webhook 會 fail-closed 拒收（功能停擺）。
+  if (e.telegramBotToken && !e.telegramWebhookSecret) {
+    warnings.push("已設 TELEGRAM_BOT_TOKEN 但缺 TELEGRAM_WEBHOOK_SECRET：Telegram 遠端審核 webhook 會拒收所有請求（請設定後重新 setWebhook）");
   }
 
   return warnings;

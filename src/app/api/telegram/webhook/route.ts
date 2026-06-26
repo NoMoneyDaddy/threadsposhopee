@@ -15,12 +15,14 @@ export async function POST(req: Request) {
   const token = env.telegramBotToken;
   if (!token) return NextResponse.json({ ok: true }); // 未啟用，直接忽略
 
-  if (env.telegramWebhookSecret) {
-    const got = req.headers.get("x-telegram-bot-api-secret-token");
-    if (got !== env.telegramWebhookSecret) {
-      log.warn("Telegram webhook secret 不符，忽略");
-      return NextResponse.json({ ok: true });
-    }
+  // Fail-closed：webhook 為公開端點，未設 secret 時一律拒收（否則外部可偽造 callback 替人核准/駁回草稿）。
+  if (!env.telegramWebhookSecret) {
+    log.error("Telegram webhook 未設 TELEGRAM_WEBHOOK_SECRET，拒收（請設定後重新 setWebhook）");
+    return NextResponse.json({ ok: true });
+  }
+  if (req.headers.get("x-telegram-bot-api-secret-token") !== env.telegramWebhookSecret) {
+    log.warn("Telegram webhook secret 不符，忽略");
+    return NextResponse.json({ ok: true });
   }
 
   const update = await req.json().catch(() => null);
@@ -70,11 +72,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true });
     }
 
-    // 2) /start 或任意訊息：回覆 chat id，方便使用者貼到網站「Telegram 通知」設定完成綁定。
+    // 2) 僅 /start 指令才回覆 chat id（避免被加進群組後對每則訊息/貼圖/服務訊息洗版、觸發 rate limit）。
     const msg = (update as { message?: unknown }).message as
       | { chat?: { id: number }; text?: string }
       | undefined;
-    if (msg?.chat?.id != null) {
+    if (msg?.chat?.id != null && typeof msg.text === "string" && msg.text.startsWith("/start")) {
       await sendTelegram(
         token,
         String(msg.chat.id),

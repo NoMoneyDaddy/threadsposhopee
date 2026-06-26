@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { ThreadsAccount } from "@/lib/types";
 import ThreadsPreview, { CharCount } from "@/components/ThreadsPreview";
 import CloudinaryUpload from "@/components/CloudinaryUpload";
+import { cloudinaryThumb } from "@/lib/img";
 import { fetchWithTimeout } from "@/lib/http";
 import { parseTaipeiDateTimeLocal } from "@/lib/datetime";
 
@@ -127,7 +128,7 @@ export default function SelfComposeForm({
           rows={3}
           value={mainText}
           onChange={(e) => setMainText(e.target.value)}
-          placeholder="正文（直接打字）"
+          placeholder="有什麼新鮮事？直接打字分享…（貼文中的網址會自動變成可點連結）"
         />
         <div className="mt-1 flex justify-end">
           <CharCount text={mainText} limit={THREADS_LIMIT} />
@@ -164,30 +165,49 @@ export default function SelfComposeForm({
           </div>
         )}
       </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <input
-          className={input + " flex-1"}
-          value={mediaUrl}
-          onChange={(e) => setMediaUrl(e.target.value)}
-          placeholder="圖片／影片網址（選填）"
-          inputMode="url"
-          aria-label="媒體網址"
-        />
-        <select
-          className="rounded-xl border px-2 py-2 text-sm"
-          value={mediaType}
-          onChange={(e) => setMediaType(e.target.value as "image" | "video")}
-          aria-label="媒體類型"
-        >
-          <option value="image">圖片</option>
-          <option value="video">影片</option>
-        </select>
-        <CloudinaryUpload
-          cloud={cloud}
-          preset={preset}
-          onUploaded={(url) => setMediaUrl(url)}
-          onType={(t) => setMediaType(t)}
-        />
+      {/* 媒體：以「直接上傳」為主（仿 Threads）；已選媒體顯示縮圖＋移除；進階才貼網址 */}
+      <div className="space-y-2">
+        {mediaUrl.trim() ? (
+          <div className="flex items-center gap-3 rounded-xl border bg-surface-2 p-2">
+            {mediaType === "image" ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={cloudinaryThumb(mediaUrl, 200)} alt="" className="h-16 w-16 rounded-lg object-cover" />
+            ) : (
+              <video src={mediaUrl} className="h-16 w-16 rounded-lg object-cover" />
+            )}
+            <span className="min-w-0 flex-1 truncate text-xs text-ink-3">{mediaType === "image" ? "圖片" : "影片"}已附加</span>
+            <button type="button" onClick={() => setMediaUrl("")} className="shrink-0 text-xs text-danger hover:underline">
+              ✕ 移除媒體
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2">
+            <CloudinaryUpload cloud={cloud} preset={preset} onUploaded={(url) => setMediaUrl(url)} onType={(t) => setMediaType(t)} />
+            <span className="text-xs text-ink-3">直接上傳照片／影片</span>
+            <details className="ml-auto text-xs text-ink-3">
+              <summary className="cursor-pointer select-none hover:text-ink">或貼上媒體網址</summary>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <input
+                  className={input + " flex-1"}
+                  value={mediaUrl}
+                  onChange={(e) => setMediaUrl(e.target.value)}
+                  placeholder="圖片／影片網址"
+                  inputMode="url"
+                  aria-label="媒體網址"
+                />
+                <select
+                  className="rounded-xl border px-2 py-2 text-sm"
+                  value={mediaType}
+                  onChange={(e) => setMediaType(e.target.value as "image" | "video")}
+                  aria-label="媒體類型"
+                >
+                  <option value="image">圖片</option>
+                  <option value="video">影片</option>
+                </select>
+              </div>
+            </details>
+          </div>
+        )}
       </div>
 
       <ThreadsPreview

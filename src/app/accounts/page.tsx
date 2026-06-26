@@ -103,13 +103,16 @@ export default async function AccountsPage({
           )}
         </div>
         <p className="mt-2 text-xs text-ink-3">
-          📱 手機若按了只跳出 Threads App、無法返回完成綁定，請改用<b>電腦瀏覽器</b>操作；
-          或用下方「新增 Threads 發文帳號」<b>手動填入 access token</b>（同樣可用）。
+          📱 <b>手機請改用下方「手動新增」貼 access token</b>（最穩定）：手機點一鍵連結會被系統導去 Threads App，
+          授權後常落在另一個瀏覽器而無法返回完成綁定。OAuth 一鍵連結建議用<b>電腦瀏覽器</b>。
+          <a href="#manual-threads" className="ml-1 text-brand underline">前往手動新增 ↓</a>
         </p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <ThreadsAccountForm />
+        <div id="manual-threads" className="scroll-mt-24">
+          <ThreadsAccountForm />
+        </div>
         <div id="setup-shopee" className="scroll-mt-24">
           <ShopeeAccountForm />
         </div>

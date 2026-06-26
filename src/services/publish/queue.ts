@@ -39,7 +39,7 @@ import {
   type SponsorPick
 } from "@/lib/sponsor";
 import { sponsorQuota } from "@/services/publish/sponsor-quota";
-import { resolveSponsorResources, buildSponsorLinkForAccount } from "@/services/sponsor/link";
+import { resolveSponsorOwnerCreds, buildSponsorLinkForAccount, cleanProductUrlFromDraft } from "@/services/sponsor/link";
 import { log } from "@/lib/logger";
 import { normalizeDraftMedia, normalizeReplyMedia } from "@/lib/media";
 import { shardOf, circuitOpen, nextPacingSkipReason } from "@/services/publish/cadence";
@@ -139,14 +139,12 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
   const sponsorTaipei = taipeiParts();
   const sponsorOwnerId = sponsorCfg.enabled && !isDemoMode ? await getOwnerUserId().catch(() => null) : null;
   const sponsorCountCache: Record<string, number> = {}; // accId -> 今天已發贊助文篇數
-  // 自賺資格＋自己的贊助連結資源（依 owner 快取）：超額 slot 用貢獻者自己的分潤連結。
-  const sponsorOwnLinkCache: Record<string, { eligible: boolean; res: Awaited<ReturnType<typeof resolveSponsorResources>> | null }> = {};
+  // 自賺資格＋自己的金鑰資源（依 owner 快取）：超額 slot 用貢獻者自己的分潤連結。
+  const sponsorOwnLinkCache: Record<string, { eligible: boolean; creds: Awaited<ReturnType<typeof resolveSponsorOwnerCreds>> | null }> = {};
   const sponsorPickCache: Record<string, SponsorPick | null> = {}; // accId -> 使用者自選
-  // 有商品原始連結＋owner → 整輪取一次資源（金鑰/affiliate_id/自訂 subId＋展開連結），供每帳號即時轉連結。
-  const sponsorRes =
-    sponsorCfg.enabled && !isDemoMode && sponsorCfg.productUrl && sponsorOwnerId
-      ? await resolveSponsorResources(sponsorCfg.productUrl, sponsorOwnerId).catch(() => null)
-      : null;
+  // owner 金鑰資源整輪取一次（金鑰/affiliate_id/自訂 subId）；商品連結改用「每篇貼文自己的」就地改寫。
+  const sponsorOwnerCreds =
+    sponsorCfg.enabled && !isDemoMode && sponsorOwnerId ? await resolveSponsorOwnerCreds(sponsorOwnerId).catch(() => null) : null;
 
   for (const draft of drafts) {
     // 接近 maxDuration(60s) 上限就停手，避免草稿卡在 publishing 狀態，留待下次排程
@@ -283,33 +281,37 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
           pickHour: pick?.hour ?? null
         })
       ) {
-        // 保底 slot（每日第 1 篇）走平台分潤連結（平台保本）；超額 slot 開放「自賺資格」貢獻者換自己的連結。
+        // 就地改寫：取「該篇貼文自己的」商品連結，用 owner 金鑰重產成 owner 的分潤連結（平台保本）；
+        // 超額 slot 開放「自賺資格」貢獻者改用自己的金鑰重產（自賺）。無商品連結則略過（不改寫該篇）。
         const SPONSOR_FLOOR = 1;
         const isSurplus = (sponsorCountCache[accId] ?? 0) >= SPONSOR_FLOOR;
-        let link: string | null = sponsorCfg.affiliateLink || null;
+        const draftCleanUrl = await cleanProductUrlFromDraft(draft).catch(() => null);
+        let link: string | null = null;
         let useOwn = false;
-        if (isSurplus && draft.owner_id) {
-          const oid = draft.owner_id;
-          if (!(oid in sponsorOwnLinkCache)) {
-            const score = await getContributionScore(oid).catch(() => 0);
-            const mode = await getSponsorRewardMode(oid).catch(() => "exempt" as const);
-            const eligible = mode === "own_link" && canOwnLink(score);
-            const res = eligible && sponsorCfg.productUrl ? await resolveSponsorResources(sponsorCfg.productUrl, oid).catch(() => null) : null;
-            sponsorOwnLinkCache[oid] = { eligible, res };
-          }
-          const own = sponsorOwnLinkCache[oid];
-          if (own.eligible && own.res) {
-            const ownLink = await buildSponsorLinkForAccount(own.res, accId).catch(() => null);
-            if (ownLink) {
-              link = ownLink;
-              useOwn = true;
+        if (draftCleanUrl) {
+          if (isSurplus && draft.owner_id) {
+            const oid = draft.owner_id;
+            if (!(oid in sponsorOwnLinkCache)) {
+              const score = await getContributionScore(oid).catch(() => 0);
+              const mode = await getSponsorRewardMode(oid).catch(() => "exempt" as const);
+              const eligible = mode === "own_link" && canOwnLink(score);
+              const creds = eligible ? await resolveSponsorOwnerCreds(oid).catch(() => null) : null;
+              sponsorOwnLinkCache[oid] = { eligible, creds };
+            }
+            const own = sponsorOwnLinkCache[oid];
+            if (own.eligible && own.creds) {
+              const ownLink = await buildSponsorLinkForAccount({ cleanUrl: draftCleanUrl, ...own.creds }, accId).catch(() => null);
+              if (ownLink) {
+                link = ownLink;
+                useOwn = true;
+              }
             }
           }
-        }
-        // 非自賺：用平台每帳號即時連結（sp_<帳號碼>）；失敗退回靜態後備連結。
-        if (!useOwn && sponsorRes) {
-          const perAcct = await buildSponsorLinkForAccount(sponsorRes, accId).catch(() => null);
-          if (perAcct) link = perAcct;
+          // 非自賺：用 owner 金鑰把該篇商品重產成每帳號（sp_<帳號碼>）的 owner 分潤連結。
+          if (!useOwn && sponsorOwnerCreds) {
+            const perAcct = await buildSponsorLinkForAccount({ cleanUrl: draftCleanUrl, ...sponsorOwnerCreds }, accId).catch(() => null);
+            if (perAcct) link = perAcct;
+          }
         }
         if (link) {
           pubMainText = swapAffiliateLink(draft.main_text, draft.shopee_short_link, link);

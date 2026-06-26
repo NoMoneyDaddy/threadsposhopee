@@ -23,7 +23,7 @@ import {
 } from "@/lib/store";
 import { isSponsorExempt, canOwnLink } from "@/lib/contribution";
 import { getPostText } from "@/services/threads/verify";
-import { resolveSponsorResources, buildSponsorLinkForAccount } from "@/services/sponsor/link";
+import { resolveSponsorOwnerCreds, buildSponsorLinkForAccount, cleanProductUrlFromDraft } from "@/services/sponsor/link";
 import { publishToThreads } from "@/services/threads/publish";
 import { normalizeDraftMedia } from "@/lib/media";
 import { sendUserAlert } from "@/lib/notify";
@@ -43,8 +43,9 @@ export async function ensureSponsorPosts(ownerUserId: string | null): Promise<{ 
   if (!inOffPeak(tp.hour, cfg.offPeakStart, cfg.offPeakEnd)) return out; // 只在冷門時段補
   const ownerDrafts = (await listDrafts(ownerUserId).catch(() => [])).filter((d) => (d.main_text ?? "").trim());
   if (ownerDrafts.length === 0) return out; // 無內容可發
-  const res = cfg.productUrl ? await resolveSponsorResources(cfg.productUrl, ownerUserId).catch(() => null) : null;
-  if (!res && !cfg.affiliateLink) return out; // 無連結
+  // owner 金鑰整輪取一次；商品連結改用「owner 草稿自己的」就地改寫成 owner 分潤連結。
+  const ownerCreds = await resolveSponsorOwnerCreds(ownerUserId).catch(() => null);
+  const ownCredsByOwner = new Map<string, Awaited<ReturnType<typeof resolveSponsorOwnerCreds>> | null>();
   const accounts = (await listActiveThreadsAccountsAll().catch(() => [])).filter((a) => a.owner_id !== ownerUserId);
   const start = Date.now();
   let idx = 0;
@@ -70,19 +71,23 @@ export async function ensureSponsorPosts(ownerUserId: string | null): Promise<{ 
       const pick = await getSponsorPick(acc.id);
       if (pick?.draftId) continue; // 使用者自選 → 交由佇列處理，不重複補發
 
-      // own_link：高貢獻者照發贊助文，但連結換成「他自己」的分潤連結（用自己的蝦皮金鑰重產）。
-      const useOwnLink = reward.ownLink;
-      let link: string | null;
-      if (useOwnLink) {
-        const mres = cfg.productUrl ? await resolveSponsorResources(cfg.productUrl, oid).catch(() => null) : null;
-        link = mres ? await buildSponsorLinkForAccount(mres, acc.id).catch(() => null) : null;
-        if (!link) continue; // 沒綁金鑰／重產失敗 → 不退回平台連結（避免幫他發了卻沒回饋）
-      } else {
-        link = (res ? await buildSponsorLinkForAccount(res, acc.id).catch(() => null) : null) || cfg.affiliateLink || null;
-      }
-      if (!link) continue;
+      // 取一篇 owner 草稿當內容＋商品來源（就地改寫成分潤連結）。
       const tmpl = ownerDrafts[idx % ownerDrafts.length];
       idx++;
+      const cleanUrl = await cleanProductUrlFromDraft(tmpl).catch(() => null);
+      if (!cleanUrl) continue; // 該草稿無商品連結可改寫
+      // own_link：高貢獻者照發，但用「他自己」的金鑰重產（自賺）；否則用 owner 金鑰（平台分潤）。
+      const useOwnLink = reward.ownLink;
+      let link: string | null = null;
+      if (useOwnLink) {
+        if (!ownCredsByOwner.has(oid)) ownCredsByOwner.set(oid, await resolveSponsorOwnerCreds(oid).catch(() => null));
+        const cc = ownCredsByOwner.get(oid) ?? null;
+        link = cc ? await buildSponsorLinkForAccount({ cleanUrl, ...cc }, acc.id).catch(() => null) : null;
+        if (!link) continue; // 沒綁金鑰／重產失敗 → 不退回平台連結（避免幫他發了卻沒回饋）
+      } else {
+        link = ownerCreds ? await buildSponsorLinkForAccount({ cleanUrl, ...ownerCreds }, acc.id).catch(() => null) : null;
+      }
+      if (!link) continue;
       const text = swapAffiliateLink(tmpl.main_text, tmpl.shopee_short_link, link);
       const creds = await getThreadsCredentials(acc.id, oid);
       if (!creds) continue;

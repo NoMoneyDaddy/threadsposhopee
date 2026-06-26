@@ -41,19 +41,9 @@ test("taipeiParts: 回傳日期字串與 0–23 小時", () => {
   assert.ok(p.hour >= 0 && p.hour <= 23);
 });
 
-test("normalizeSponsorConfig: 啟用需商品原始連結或後備連結至少一項", () => {
-  // 兩者皆空 → 擋
-  assert.equal(normalizeSponsorConfig({ enabled: true, offPeakStart: 2, offPeakEnd: 5 }).ok, false);
-  // 只有商品原始連結 → ok
-  assert.equal(normalizeSponsorConfig({ enabled: true, productUrl: "https://shopee.tw/x", offPeakStart: 2, offPeakEnd: 5 }).ok, true);
-  // 只有後備連結 → ok
-  assert.equal(normalizeSponsorConfig({ enabled: true, affiliateLink: "https://s.shopee.tw/abc", offPeakStart: 2, offPeakEnd: 5 }).ok, true);
-  // 連結格式錯 → 擋
-  assert.equal(normalizeSponsorConfig({ enabled: true, affiliateLink: "not-a-url", offPeakStart: 2, offPeakEnd: 5 }).ok, false);
-});
-
-test("normalizeSponsorConfig: 停用時連結可空", () => {
-  const r = normalizeSponsorConfig({ enabled: false, affiliateLink: "", offPeakStart: 2, offPeakEnd: 5 });
+test("normalizeSponsorConfig: 啟用不需任何連結（改為就地改寫各篇貼文）", () => {
+  // 只要開關＋合法時段即可（商品/連結改為自動就地改寫，不需設定）
+  const r = normalizeSponsorConfig({ enabled: true, offPeakStart: 2, offPeakEnd: 5 });
   assert.equal(r.ok, true);
 });
 

@@ -60,11 +60,19 @@ export default function RedirectLinkRow({ link }: { link: RedirectLinkView }) {
     }
   }
 
-  function cancel() {
+  // 進/退編輯都把表單同步成最新的 link props：避免 router.refresh() 後本地 state 仍是舊快取。
+  function syncFromProps() {
     setSourceUrl(link.sourceUrl);
     setAffiliateUrl(link.affiliateUrl ?? "");
     setTitle(link.title ?? "");
     setMsg(null);
+  }
+  function startEdit() {
+    syncFromProps();
+    setEditing(true);
+  }
+  function cancel() {
+    syncFromProps();
     setEditing(false);
   }
 
@@ -105,7 +113,7 @@ export default function RedirectLinkRow({ link }: { link: RedirectLinkView }) {
         <span className="text-xs text-ink-2 tabular-nums">👁 {link.clicks} · ▶ {link.continues}</span>
         <BioToggle code={link.code} initial={link.inBio} />
         <CopyLink path={`/r/${link.code}`} />
-        <button onClick={() => setEditing(true)} disabled={!!busy} className="text-xs text-ink-2 hover:underline disabled:opacity-50">
+        <button onClick={startEdit} disabled={!!busy} className="text-xs text-ink-2 hover:underline disabled:opacity-50">
           編輯
         </button>
         <button onClick={remove} disabled={!!busy} className="text-xs text-red-500 hover:underline disabled:opacity-50">

@@ -11,7 +11,8 @@ export async function PATCH(req: Request, { params }: { params: { code: string }
     const user = await getCurrentUser();
     if (!user) return NextResponse.json({ ok: false, error: "請先登入" }, { status: 401 });
 
-    const body = await req.json().catch(() => ({}));
+    // body 為字面 "null" 時 req.json() 會回 null（繞過 catch），故再補 || {} 確保是物件。
+    const body = (await req.json().catch(() => ({}))) || {};
     const sourceUrl = typeof body.sourceUrl === "string" ? body.sourceUrl.trim() : "";
     if (!sourceUrl) return NextResponse.json({ ok: false, error: "請填來源網址" }, { status: 400 });
 

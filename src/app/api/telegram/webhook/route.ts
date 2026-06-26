@@ -8,7 +8,7 @@ import { log } from "@/lib/logger";
 export const dynamic = "force-dynamic";
 
 // Telegram 遠端審核 webhook（平台共用機器人）。
-// 安全：設了 TELEGRAM_WEBHOOK_SECRET 時，驗證 Telegram 帶的 X-Telegram-Bot-Api-Secret-Token，擋偽造請求；
+// 安全：TELEGRAM_WEBHOOK_SECRET 為必要防護——未設或標頭 X-Telegram-Bot-Api-Secret-Token 不符一律拒收（fail-closed）；
 // 授權：以 callback 來源 chat 反查綁定的使用者，且只查得到「自己的」草稿，無法越權核准他人草稿。
 // 一律回 200（非 200 會讓 Telegram 不斷重送）。
 export async function POST(req: Request) {
@@ -52,7 +52,7 @@ export async function POST(req: Request) {
         await answerTelegramCallback(token, cb.id, "未知指令");
         return NextResponse.json({ ok: true });
       }
-      const draftId = data.slice(4);
+      const draftId = data.slice((isApprove ? TG_APPROVE_PREFIX : TG_REJECT_PREFIX).length);
       const draft = await getDraft(draftId, ownerId); // 以 owner 過濾＝只動得到自己的草稿
       if (!draft) {
         await answerTelegramCallback(token, cb.id, "找不到草稿（可能已刪除）");

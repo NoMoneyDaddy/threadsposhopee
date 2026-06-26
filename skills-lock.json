@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "mobbin-search": {
+      "source": "mobbin/skills",
+      "sourceType": "github",
+      "skillPath": "skills/mobbin-search/SKILL.md",
+      "computedHash": "1f01cf85e7786cfb38c8519f7739bdc2d41747c925ba6a237e7bdf4ce4ca5d8e"
+    }
+  }
+}

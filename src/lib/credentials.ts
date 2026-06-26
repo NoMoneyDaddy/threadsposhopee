@@ -98,6 +98,19 @@ export async function getUserTelegramChatId(ownerId: string): Promise<string | n
   return typeof v === "string" && v.trim() ? v.trim() : null;
 }
 
+// 反查：哪個使用者綁了這個 Telegram chat（Telegram 遠端審核 webhook 用，以 chat 認 owner）。
+// 同一 chat 理論上只綁一位使用者；多筆時取第一筆。查無回 null。
+export async function getOwnerByTelegramChatId(chatId: string): Promise<string | null> {
+  if (isDemoMode) {
+    const hit = Object.entries(demoTelegramChatId).find(([, c]) => c === chatId);
+    return hit ? hit[0] : null;
+  }
+  const sb = getServiceClient();
+  if (!sb) return null;
+  const { data } = await sb.from("profiles").select("id").eq("telegram_chat_id", chatId).limit(1).maybeSingle();
+  return (data?.id as string) ?? null;
+}
+
 // chatId 傳 null 解除綁定。
 export async function setUserTelegramChatId(ownerId: string, chatId: string | null): Promise<void> {
   if (isDemoMode) {

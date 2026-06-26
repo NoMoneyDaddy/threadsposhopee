@@ -63,6 +63,8 @@ export const env = {
     .filter((s) => /^\d{1,2}:\d{2}$/.test(s)),
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN ?? "",
   telegramChatId: process.env.TELEGRAM_CHAT_ID ?? "",
+  // Telegram 遠端審核 webhook 驗證密鑰（設了才驗 X-Telegram-Bot-Api-Secret-Token，擋偽造請求）。
+  telegramWebhookSecret: process.env.TELEGRAM_WEBHOOK_SECRET ?? "",
   // Web Push（VAPID）：設了公私鑰才啟用瀏覽器推播。公鑰用 NEXT_PUBLIC 前綴供前端訂閱。
   vapidPublicKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "",
   vapidPrivateKey: process.env.VAPID_PRIVATE_KEY ?? "",

@@ -29,7 +29,8 @@ export default function ThreadsPreview({
   const handle = (accountLabel || "your_account").replace(/^@/, "");
   const name = displayName?.trim() || handle;
   // 真實頭像（#171 起各帳號可帶 avatar_url）；無則退回灰色漸層佔位圓。
-  const Avatar = () =>
+  // 用區域渲染函數（非內部元件）：避免每次 render 重建元件型別導致頭像 remount／閃爍。
+  const renderAvatar = () =>
     avatarUrl ? (
       // eslint-disable-next-line @next/next/no-img-element
       <img src={avatarUrl} alt="" loading="lazy" className="h-9 w-9 shrink-0 rounded-full border object-cover" />
@@ -74,7 +75,7 @@ export default function ThreadsPreview({
       {/* 主文 1/2 */}
       <div className="flex gap-3">
         <div className="flex shrink-0 flex-col items-center">
-          <Avatar />
+          {renderAvatar()}
           {hasReply && <div className="mt-1 w-px flex-1 bg-neutral-200" />}
         </div>
         <div className="min-w-0 flex-1 pb-3">
@@ -100,7 +101,7 @@ export default function ThreadsPreview({
       {/* 接續貼文 2/2（分潤連結 CTA） */}
       {hasReply && (
         <div className="flex gap-3">
-          <Avatar />
+          {renderAvatar()}
           <div className="min-w-0 flex-1 pt-1">
             <div className="flex items-center gap-1 text-sm">
               <span className="truncate font-semibold text-ink">{name}</span>

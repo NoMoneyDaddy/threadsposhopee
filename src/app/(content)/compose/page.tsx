@@ -31,7 +31,7 @@ export default async function ComposePage() {
       </div>
       {accounts.length === 0 && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
-          還沒有發文帳號。可先到「帳號管理」新增 Threads 帳號，或先「存草稿」之後再發。
+          還沒有發文帳號。請先到「帳號管理」新增 Threads 帳號（發布、排程與存草稿都需要選擇發文帳號）。
         </div>
       )}
       <SelfComposeForm threadsAccounts={accounts} cloud={cc?.cloud ?? null} preset={cc?.preset ?? null} />

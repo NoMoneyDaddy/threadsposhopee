@@ -17,7 +17,8 @@ export async function publishDraftNow(draft: Draft, ownerId: string): Promise<{ 
     if (!creds) throw new Error("找不到 Threads 帳號憑證");
     // all_in_main：留言文案併入主文、不另發留言（不走延遲留言流程）
     const allInMain = draft.post_mode === "all_in_main";
-    const hasReply = Boolean(draft.reply_text) && !allInMain;
+    // 有留言文字「或」留言媒體都算要發第 2 則串文（純媒體留言也要發出，不靜默丟棄）。
+    const hasReply = (Boolean(draft.reply_text) || normalizeReplyMedia(draft).length > 0) && !allInMain;
     // 留言延遲：>0 表示主文先發、留言之後由 cron 補（防「秒留言」固定行為）
     const replyDelay = hasReply
       ? replyDelayMinutes(draft.id, env.replyDelayFloorMinutes, env.replyDelayJitterMinutes, draft.reply_delay_minutes)

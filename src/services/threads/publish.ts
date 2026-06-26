@@ -194,7 +194,8 @@ export async function publishToThreads(
   }
 
   // 全部發主文模式：留言內容已併入主文，不再發留言。
-  if (allInMain || !input.replyText) return { postId };
+  // 無留言文字「且」無留言媒體才不發第 2 則（純媒體留言仍要發出）。
+  if (allInMain || (!input.replyText && replyMedia.length === 0)) return { postId };
 
   // 延遲留言：只發主文，留言交給延遲 worker 之後補（防「秒留言」固定行為）
   if (input.deferReply) return { postId, replyDeferred: true };
@@ -202,7 +203,7 @@ export async function publishToThreads(
   // 立即在貼文下留言放分潤連結（提高觸及，連結不放正文）＋可選留言媒體。
   // 留言失敗不影響主貼文，但回傳 replyFailed 讓呼叫端把 reply_status 落成 failed（不要謊報 published）。
   try {
-    await publishReply(input.threadsUserId, input.accessToken, postId, input.replyText, replyMedia);
+    await publishReply(input.threadsUserId, input.accessToken, postId, input.replyText ?? "", replyMedia);
   } catch (e) {
     log.warn("留言發布失敗", { postId, err: e });
     return { postId, replyFailed: true };

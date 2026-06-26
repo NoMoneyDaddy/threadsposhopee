@@ -245,7 +245,8 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
 
     // all_in_main：影片+圖+連結全發主文、不另發留言（留言文案併入主文，不走延遲留言流程）。
     const allInMain = draft.post_mode === "all_in_main";
-    const hasReply = Boolean(draft.reply_text) && !allInMain;
+    // 有留言文字「或」留言媒體都算要發第 2 則串文（純媒體留言也要發出，不靜默丟棄）。
+    const hasReply = (Boolean(draft.reply_text) || normalizeReplyMedia(draft).length > 0) && !allInMain;
     // 留言延遲：>0 表示主文先發、留言之後補（防「秒留言」固定行為）。逐則可覆寫。
     const replyDelay = hasReply
       ? replyDelayMinutes(draft.id, env.replyDelayFloorMinutes, env.replyDelayJitterMinutes, draft.reply_delay_minutes)
@@ -451,7 +452,8 @@ async function publishDueReplies(startTime: number, shard?: ShardOpts): Promise<
     try {
       // 原子認領：搶不到代表已被處理/狀態變更 → 跳過，避免重複補發
       if (!(await claimReplyForPublish(d.id, ownerId))) continue;
-      if (!d.threads_account_id || !d.published_post_id || !d.reply_text) {
+      // 純媒體留言（無文字但有 reply_media）也要補發；文字與媒體皆空才視為無內容。
+      if (!d.threads_account_id || !d.published_post_id || (!d.reply_text && normalizeReplyMedia(d).length === 0)) {
         await markReplyFailed(d.id, ownerId, "缺帳號/主貼文/留言內容，無法補留言");
         out.failed++;
         continue;
@@ -462,7 +464,7 @@ async function publishDueReplies(startTime: number, shard?: ShardOpts): Promise<
         creds.threadsUserId,
         creds.accessToken,
         d.published_post_id,
-        d.reply_text,
+        d.reply_text ?? "",
         normalizeReplyMedia(d)
       );
       await markReplyPublished(d.id, ownerId, replyPostId);

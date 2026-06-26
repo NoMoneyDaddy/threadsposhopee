@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { useRouter } from "next/navigation";
 import type { ThreadsAccount, DraftMedia } from "@/lib/types";
 import ThreadsPreview, { CharCount } from "@/components/ThreadsPreview";
@@ -22,7 +22,7 @@ function MediaPicker({
   hint
 }: {
   items: DraftMedia[];
-  onChange: (next: DraftMedia[]) => void;
+  onChange: Dispatch<SetStateAction<DraftMedia[]>>;
   cloud: string | null;
   preset: string | null;
   hint: string;
@@ -32,10 +32,9 @@ function MediaPicker({
   const [url, setUrl] = useState("");
   const [type, setType] = useState<"image" | "video">("image");
   const atLimit = items.length >= MAX_MEDIA;
-  const add = (m: DraftMedia) => {
-    if (items.length >= MAX_MEDIA) return; // 達輪播上限不再加入（後端亦會截斷）
-    onChange([...items, m]);
-  };
+  // functional update：上傳是非同步，回呼觸發時以最新狀態為基準，避免舊 closure 覆蓋掉期間的新增/移除。
+  const add = (m: DraftMedia) => onChange((prev) => (prev.length >= MAX_MEDIA ? prev : [...prev, m]));
+  const removeAt = (i: number) => onChange((prev) => prev.filter((_, idx) => idx !== i));
 
   return (
     <div className="space-y-2">
@@ -51,7 +50,7 @@ function MediaPicker({
               )}
               <button
                 type="button"
-                onClick={() => onChange(items.filter((_, idx) => idx !== i))}
+                onClick={() => removeAt(i)}
                 aria-label={`移除第 ${i + 1} 個媒體`}
                 className="absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full bg-black/70 text-[10px] text-white hover:bg-black"
               >
@@ -250,7 +249,7 @@ export default function SelfComposeForm({
         <div className="mt-2">
           <MediaPicker items={replyMedia} onChange={setReplyMedia} cloud={cloud} preset={preset} hint="留言也可加多張照片／影片" />
         </div>
-        {replyText.trim() && (
+        {(replyText.trim() || replyMedia.length > 0) && (
           <div className="mt-2 flex items-center gap-2">
             <label htmlFor="self-compose-reply-delay" className="text-xs text-ink-2">
               留言延遲（分，空＝用預設）

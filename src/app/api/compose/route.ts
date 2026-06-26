@@ -52,34 +52,41 @@ async function processMediaArray(raw: unknown, provider: MediaProvider | null): 
   return out;
 }
 
-// 只改寫蝦皮網址，避免把一般網址（新聞等）誤包成 an_redir。
+// 只改寫真正的蝦皮網域（嚴格比對，非 substring）：擋 shopee.evil.com／notshopee.example 之類
+// 偽冒域名被當成蝦皮而誤包成 an_redir。涵蓋蝦皮各地區站與分享短網域 shope.ee。
+const SHOPEE_HOST_RE = /(^|\.)shopee\.(tw|sg|ph|co\.id|co\.th|com\.my|vn|com\.br)$/;
 function isShopeeUrl(u: string): boolean {
   try {
     const h = new URL(u).hostname.toLowerCase();
-    return h.includes("shopee") || h === "shope.ee";
+    return h === "shope.ee" || SHOPEE_HOST_RE.test(h);
   } catch {
     return false;
   }
 }
 
+const URL_RE = /https?:\/\/[^\s)]+/g;
+
 // 自動偵測：把正文／留言裡的蝦皮商品連結轉成 owner 的分潤連結。
 // resolveAffiliateUrl 對「已是分潤連結（含他人 affiliate_id 或短連結）」會原樣回傳（converted=false），
 // 故已是自己分潤 ID 的連結不會被動到；僅未帶分潤的商品連結會被換成自己的。
 async function autoAffiliateLinks(ownerId: string, text: string): Promise<string> {
-  const urls = text.match(/https?:\/\/[^\s)]+/g);
-  if (!urls) return text;
-  let out = text;
-  // 依長度由長到短替換，避免短網址（長網址前綴）先被取代而損壞長網址
-  for (const u of Array.from(new Set(urls)).sort((a, b) => b.length - a.length)) {
-    if (!isShopeeUrl(u)) continue;
-    try {
-      const r = await resolveAffiliateUrl(ownerId, u);
-      if (r.converted && r.url && r.url !== u) out = out.split(u).join(r.url);
-    } catch {
-      // 轉換失敗：保留原連結，不擋發文
-    }
-  }
-  return out;
+  const targets = Array.from(new Set(text.match(URL_RE) ?? [])).filter(isShopeeUrl);
+  if (targets.length === 0) return text;
+  // 多連結並行轉換（各自 best-effort，失敗保留原連結，不擋發文）。
+  const pairs = await Promise.all(
+    targets.map(async (u): Promise<[string, string] | null> => {
+      try {
+        const r = await resolveAffiliateUrl(ownerId, u);
+        return r.converted && r.url && r.url !== u ? [u, r.url] : null;
+      } catch {
+        return null;
+      }
+    })
+  );
+  const map = new Map(pairs.filter((p): p is [string, string] => p !== null));
+  if (map.size === 0) return text;
+  // 對原文做單次 regex 替換（用完整 URL 當 key），避免逐步 split/join 造成長短網址前綴互相污染。
+  return text.replace(URL_RE, (u) => map.get(u) ?? u);
 }
 
 // 快速發文送出：用素材 + 編輯後文案建草稿，依 action 立即發 / 排程 / 存草稿。

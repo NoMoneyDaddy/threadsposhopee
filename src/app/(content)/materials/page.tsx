@@ -6,7 +6,7 @@ import EmptyState from "@/components/EmptyState";
 import EvergreenToggle from "@/components/EvergreenToggle";
 import ShareToggle from "@/components/ShareToggle";
 import { DeleteButton } from "@/components/RowActions";
-import { listMaterials, listThreadsAccounts } from "@/lib/store";
+import { listMaterials, listThreadsAccounts, getUserCloudinary } from "@/lib/store";
 import { getItemRevenueMap, type ItemRevenue } from "@/services/shopee/report";
 import { getCurrentUser } from "@/lib/auth";
 import { cloudinaryThumb } from "@/lib/img";
@@ -19,7 +19,12 @@ const money = (n: number) => `NT$ ${n.toLocaleString("zh-TW", { minimumFractionD
 export default async function MaterialsPage() {
   const user = await getCurrentUser();
   const ownerId = user?.id ?? "demo-user";
-  const [materialsRaw, accounts] = await Promise.all([listMaterials(ownerId), listThreadsAccounts(ownerId)]);
+  const [materialsRaw, accounts, ownCloud] = await Promise.all([
+    listMaterials(ownerId),
+    listThreadsAccounts(ownerId),
+    user ? getUserCloudinary(ownerId) : Promise.resolve(null)
+  ]);
+  const cc = ownCloud?.cloud && ownCloud?.preset ? ownCloud : null;
 
   // 成效回灌：有自綁 Shopee 金鑰時（getItemRevenueMap 內部判斷），抓 itemId→佣金 對照（快取），
   // 把賺錢素材排前並標收益；沒綁則回空物件、維持原順序。
@@ -44,7 +49,7 @@ export default async function MaterialsPage() {
         每個素材 = 一個商品的分潤連結＋AI 文案＋媒體。可重複「再排一篇」而不重燒 token；連結失效才會重產。
       </p>
 
-      <MaterialCreateForm />
+      <MaterialCreateForm cloud={cc?.cloud ?? null} preset={cc?.preset ?? null} />
 
       <div className="grid gap-4 md:grid-cols-2">
         {materials.map((m) => (

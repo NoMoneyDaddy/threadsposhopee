@@ -6,25 +6,37 @@ export function normalizeSubId(s: string | null | undefined): string {
   return (s ?? "").replace(/[^a-zA-Z0-9_]/g, "").slice(0, SUBID_MAX);
 }
 
-// subId 範本：把 {date}/{platform}/{account} 換成實值後再正規化。
-// date＝發文日期 YYYYMMDD（台北）；platform＝發文平台；account＝帳號短碼/暱稱。
+// subId 範本：把 5 個變數換成實值後再正規化，供使用者自由排列組合。
+// date＝發文日期 YYYYMMDD（台北）；time＝發文時間 HHmm（台北）；platform＝發文平台；
+// account＝帳號短碼/暱稱；item＝商品 itemId。
 export function resolveSubIdTemplate(
   template: string | null | undefined,
-  ctx: { date: string; platform: string; account: string }
+  ctx: { date: string; time?: string; platform: string; account: string; item?: string }
 ): string {
   const replaced = (template ?? "")
     .replace(/\{date\}/gi, ctx.date)
+    .replace(/\{time\}/gi, ctx.time ?? "")
     .replace(/\{platform\}/gi, ctx.platform)
-    .replace(/\{account\}/gi, ctx.account);
+    .replace(/\{account\}/gi, ctx.account)
+    .replace(/\{item\}/gi, ctx.item ?? "");
   return normalizeSubId(replaced);
 }
 
-const SUBID_TOKENS = /\{(date|platform|account)\}/gi;
+const SUBID_TOKENS = /\{(date|time|platform|account|item)\}/gi;
 
 // 驗證「自訂 subId 範本」：移除合法變數後，剩餘只能含英數與底線，且整體長度 ≤ 50。
 export function isValidSubIdTemplate(s: string): boolean {
   if (s.length > SUBID_MAX) return false;
   return /^[a-zA-Z0-9_]*$/.test(s.replace(SUBID_TOKENS, ""));
+}
+
+// 自訂來源標記以「逗號分隔」存放，對應蝦皮 sub_id1..5 共 5 格。解析成陣列（去空、最多 5）。
+export function parseSubIdSlots(stored: string | null | undefined): string[] {
+  return (stored ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 5);
 }
 
 // 一組 subId：正規化、去空、去重、最多 5 個（蝦皮 sub_id1..5）。

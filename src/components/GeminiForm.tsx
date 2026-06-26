@@ -37,8 +37,8 @@ export default function GeminiForm({ bound }: { bound: boolean }) {
 
   return (
     <div className="card p-4">
-      <div className="mb-2 flex items-center justify-between">
-        <span className="font-medium">AI 文案（Gemini）綁定</span>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <span className="font-medium">AI 自動寫文案（Google Gemini）</span>
         {bound ? (
           <span className="badge-success">已綁定</span>
         ) : (
@@ -46,8 +46,16 @@ export default function GeminiForm({ bound }: { bound: boolean }) {
         )}
       </div>
       <p className="mb-2 text-xs text-ink-2">
-        AI 文案用你自己的 Gemini API key。到 Google AI Studio（aistudio.google.com）取得。
+        綁定後系統會用 Gemini 幫你的商品自動產生貼文文案，金鑰免費、用你自己的額度。
       </p>
+      <a
+        href="https://aistudio.google.com/apikey"
+        target="_blank"
+        rel="noopener"
+        className="mb-2 inline-flex items-center gap-1 rounded-lg border border-brand/40 px-2.5 py-1 text-xs font-medium text-brand hover:bg-orange-50"
+      >
+        前往 Google AI Studio 取得免費 API key ↗
+      </a>
       <div className="flex flex-wrap gap-2">
         <input
           className="input min-w-0 flex-1"

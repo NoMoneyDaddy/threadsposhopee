@@ -28,6 +28,17 @@ export default function ThreadsPreview({
   replyMedia?: DraftMedia[];
 }) {
   const handle = (accountLabel || "your_account").replace(/^@/, "");
+  // 只把網址染成連結色，其餘文字維持一般色（修正整段被當成超連結的問題）。
+  const renderWithLinks = (text: string) =>
+    text.split(/(https?:\/\/[^\s]+)/g).map((part, i) =>
+      /^https?:\/\//.test(part) ? (
+        <span key={i} className="text-brand underline">
+          {part}
+        </span>
+      ) : (
+        <span key={i}>{part}</span>
+      )
+    );
   const name = displayName?.trim() || handle;
   // 頭像載入失敗（過期/失效 URL）時退回佔位圓；avatarUrl 變動時重置。
   const [avatarFailed, setAvatarFailed] = useState(false);
@@ -98,7 +109,7 @@ export default function ThreadsPreview({
             <span className="shrink-0 text-ink-3">· 現在</span>
           </div>
           <div className="mt-0.5 whitespace-pre-wrap break-words text-sm text-ink">
-            {mainText || <span className="text-ink-3">正文預覽…</span>}
+            {mainText ? renderWithLinks(mainText) : <span className="text-ink-3">正文預覽…</span>}
           </div>
           {items.length > 0 && renderMedia(items)}
           {carousel && <div className="mt-1 text-xs text-ink-3">輪播 {items.length} 則媒體</div>}
@@ -121,7 +132,7 @@ export default function ThreadsPreview({
               <span className="shrink-0 text-ink-3">{`2/${total}`}</span>
               <span className="shrink-0 text-ink-3">· 接續</span>
             </div>
-            <div className="mt-0.5 whitespace-pre-wrap break-words text-sm text-brand">{replyText}</div>
+            <div className="mt-0.5 whitespace-pre-wrap break-words text-sm text-ink">{replyText ? renderWithLinks(replyText) : null}</div>
             {replyItems.length > 0 && renderMedia(replyItems)}
           </div>
         </div>

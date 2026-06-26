@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { QRCodeCanvas } from "qrcode.react";
-import BioToggle from "@/components/BioToggle";
 import CopyLink from "@/components/CopyLink";
 
 export interface RedirectLinkView {
@@ -13,7 +12,6 @@ export interface RedirectLinkView {
   title: string | null;
   clicks: number;
   continues: number;
-  inBio: boolean;
 }
 
 // 單筆短連結列：顯示／編輯（目的地/分潤/標題，短碼不變）／刪除。
@@ -147,7 +145,6 @@ export default function RedirectLinkRow({ link }: { link: RedirectLinkView }) {
             👁 {link.clicks} · ▶ {link.continues}
             {conversion !== null && <span className="ml-1 text-ink-3" title="轉換率＝繼續/瀏覽">（{conversion}%）</span>}
           </span>
-          <BioToggle code={link.code} initial={link.inBio} />
           <CopyLink path={`/r/${link.code}`} />
           <button onClick={() => setShowQr((v) => !v)} disabled={!!busy} aria-pressed={showQr} className="text-xs text-ink-2 hover:underline disabled:opacity-50">
             QR

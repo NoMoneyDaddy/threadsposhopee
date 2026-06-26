@@ -45,21 +45,23 @@ export async function exchangeCodeForToken(input: {
 }
 
 export interface ThreadsProfile {
+  id?: string; // Threads user id（手動貼 token 時用來自動帶出帳號 id）
   username: string;
   name?: string; // Threads 上的顯示名稱（缺失時為 undefined，避免覆寫既有值）
   avatarUrl?: string; // 個人頭像 URL（缺失時為 undefined）
 }
 
-// 取得 Threads 個人檔案（username / 顯示名稱 / 頭像）。顯示用。
+// 取得 Threads 個人檔案（id / username / 顯示名稱 / 頭像）。顯示用。
 // 缺失欄位回 undefined（不要正規化成空字串）——否則重新授權時會用空值覆寫既有真實資料。
 export async function getThreadsProfile(accessToken: string): Promise<ThreadsProfile> {
-  const url = `${GRAPH}/v1.0/me?fields=username,name,threads_profile_picture_url&access_token=${encodeURIComponent(accessToken)}`;
+  const url = `${GRAPH}/v1.0/me?fields=id,username,name,threads_profile_picture_url&access_token=${encodeURIComponent(accessToken)}`;
   // 固定 Graph 主機，仍依專案規範過 SSRF 守衛再 fetch。
   const res = await fetchWithTimeout(assertSafePublicUrl(url).href);
   if (!res.ok) throw new Error(`取個人檔案失敗 ${res.status}: ${await res.text()}`);
   const json = await res.json();
   const str = (v: unknown) => (typeof v === "string" && v.trim() ? v : undefined);
   return {
+    id: str(json.id),
     username: json.username ?? "",
     name: str(json.name),
     avatarUrl: str(json.threads_profile_picture_url)

@@ -36,29 +36,37 @@ export default async function RedirectPage({ params }: { params: { code: string 
   }
 
   return (
-    <div className="relative flex min-h-[100dvh] flex-col items-center overflow-hidden px-4 py-8">
-      <div aria-hidden className="accent-line pointer-events-none absolute inset-x-0 top-0 h-28 opacity-[0.06]" />
-      {/* 品牌列：把中轉頁當作獨立導流服務（go2read） */}
-      <div className="relative mb-auto flex items-center gap-2">
-        <span aria-hidden className="accent-line grid h-7 w-7 place-items-center rounded-lg text-white">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M22 2 11 13" />
-            <path d="m22 2-7 20-4-9-9-4Z" />
-          </svg>
-        </span>
-        <span className="text-sm font-bold tracking-tight text-ink-2">go2read</span>
-      </div>
+    <div className="relative flex min-h-[100dvh] flex-col items-center justify-center overflow-hidden bg-surface-2 px-4 py-10">
+      {/* 獨立導流子服務品牌（go2read），與主站分離 */}
+      <header className="relative mb-6 flex flex-col items-center gap-1">
+        <div className="flex items-center gap-2">
+          <span aria-hidden className="accent-line grid h-8 w-8 place-items-center rounded-xl text-white shadow-[var(--shadow-card)]">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 2 11 13" />
+              <path d="m22 2-7 20-4-9-9-4Z" />
+            </svg>
+          </span>
+          <span className="text-lg font-bold tracking-tight text-ink">go2read</span>
+        </div>
+        <p className="text-xs text-ink-3">安全中轉，前往你想看的內容</p>
+      </header>
 
-      <div className="relative w-full max-w-md">
+      <main className="relative w-full max-w-md">
         <div className="overflow-hidden rounded-3xl border border-strong bg-surface shadow-[var(--shadow-card)]">
           {link.imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={link.imageUrl} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-52 w-full object-cover" />
           ) : (
-            <div aria-hidden className="accent-line grid h-52 w-full place-items-center text-4xl text-white/90">🔗</div>
+            <div aria-hidden className="accent-line flex h-44 w-full flex-col items-center justify-center gap-2 text-white/95">
+              <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+              </svg>
+              <span className="text-xs font-medium tracking-wide opacity-90">{sourceHost || "go2read"}</span>
+            </div>
           )}
           <div className="p-5 text-center">
-            <h1 className="text-xl font-bold tracking-tight">{link.title ?? "即將前往"}</h1>
+            <h1 className="text-xl font-bold leading-snug tracking-tight">{link.title ?? "即將前往"}</h1>
             {link.description && <p className="mt-2 line-clamp-3 text-sm text-ink-2">{link.description}</p>}
             {sourceHost && (
               <p className="mt-3 inline-flex items-center gap-1 rounded-full bg-surface-2 px-2.5 py-1 text-xs text-ink-3">
@@ -72,9 +80,9 @@ export default async function RedirectPage({ params }: { params: { code: string 
             </p>
           </div>
         </div>
-      </div>
+      </main>
 
-      <p className="relative mb-2 mt-auto pt-8 text-[11px] text-ink-3">由 go2read 提供安全中轉</p>
+      <footer className="relative mt-8 text-[11px] text-ink-3">由 go2read 提供安全中轉</footer>
     </div>
   );
 }

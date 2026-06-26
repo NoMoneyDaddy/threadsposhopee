@@ -2,22 +2,23 @@
 // 存 app_state 單列（key=sponsor_config），demo 走預設值。
 import { getServiceClient } from "./supabase/server";
 import { isDemoMode } from "./env";
+import { parseSubIdSlots, isValidSubIdTemplate } from "@/services/shopee/subid";
 
 export interface SponsorConfig {
   enabled: boolean;
-  productUrl: string; // 商品原始連結；系統據此用 owner 金鑰即時轉「每帳號 subId」分潤連結（可追來源）
-  affiliateLink: string; // 後備：靜態分潤短連結（無法每帳號追蹤；productUrl 為空時才用）
   offPeakStart: number; // 冷門時段起（小時 0–23，Asia/Taipei）
   offPeakEnd: number; // 冷門時段迄（小時 0–24）
+  // 贊助分潤連結的自訂 sub_id（逗號分隔，最多 5 格，對齊蝦皮 sub_id1..5）。
+  // 每格支援變數 {date}/{time}/{platform}/{account}/{item}，建連結時自動代換。例：sponsor,{date}
+  subIds: string;
 }
 
 const KEY = "sponsor_config";
 export const DEFAULT_SPONSOR_CONFIG: SponsorConfig = {
   enabled: false,
-  productUrl: "",
-  affiliateLink: "",
   offPeakStart: 2,
-  offPeakEnd: 5
+  offPeakEnd: 5,
+  subIds: "sponsor"
 };
 
 export async function getSponsorConfig(): Promise<SponsorConfig> {
@@ -233,22 +234,18 @@ export async function listSponsorRecordsToVerify(minAgeMs: number): Promise<Spon
   return out;
 }
 
-// 正規化＋驗證輸入（小時界線、連結需為 http(s)）。回傳清理後設定或錯誤訊息。
+// 正規化＋驗證輸入（小時界線＋贊助 sub_id 多格）。贊助文連結改為「就地改寫各篇貼文的商品連結」，
+// owner 只需設定要套在贊助連結上的 sub_id（可含變數）。
 export function normalizeSponsorConfig(input: Partial<SponsorConfig>): { ok: true; cfg: SponsorConfig } | { ok: false; error: string } {
   const enabled = Boolean(input.enabled);
-  const productUrl = String(input.productUrl ?? "").trim();
-  const affiliateLink = String(input.affiliateLink ?? "").trim();
   const offPeakStart = Number(input.offPeakStart);
   const offPeakEnd = Number(input.offPeakEnd);
-  const isUrl = (s: string) => /^https?:\/\//i.test(s);
-  if (productUrl && !isUrl(productUrl)) return { ok: false, error: "商品原始連結需為 http/https" };
-  if (affiliateLink && !isUrl(affiliateLink)) return { ok: false, error: "後備分潤連結需為 http/https" };
-  // 啟用時：商品原始連結（可每帳號追蹤，建議）或後備靜態分潤連結，至少要有一個。
-  if (enabled && !productUrl && !affiliateLink) {
-    return { ok: false, error: "啟用時請填商品原始連結（建議）或後備分潤連結，至少一項" };
-  }
   if (!Number.isInteger(offPeakStart) || !Number.isInteger(offPeakEnd) || offPeakStart < 0 || offPeakStart > 23 || offPeakEnd < 1 || offPeakEnd > 24 || offPeakStart >= offPeakEnd) {
     return { ok: false, error: "冷門時段需為 0–24 的整數且起 < 迄" };
   }
-  return { ok: true, cfg: { enabled, productUrl, affiliateLink, offPeakStart, offPeakEnd } };
+  const slots = parseSubIdSlots(typeof input.subIds === "string" ? input.subIds : "");
+  if (slots.some((s) => !isValidSubIdTemplate(s))) {
+    return { ok: false, error: "贊助 sub_id 每格僅能含英數、底線與變數 {date}/{time}/{platform}/{account}/{item}（單格上限 50）" };
+  }
+  return { ok: true, cfg: { enabled, offPeakStart, offPeakEnd, subIds: slots.join(",") } };
 }

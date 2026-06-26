@@ -1,21 +1,19 @@
 import { getCurrentUser } from "@/lib/auth";
 import { listRedirectLinks } from "@/lib/redirect-store";
-import { getBioSettings, getDefaultAffiliateUrl } from "@/lib/store";
+import { getDefaultAffiliateUrl } from "@/lib/store";
 import RedirectLinkForm from "@/components/RedirectLinkForm";
 import RedirectLinkRow from "@/components/RedirectLinkRow";
 import EmptyState from "@/components/EmptyState";
 import SelfBuyNotice from "@/components/SelfBuyNotice";
-import BioSettingsForm from "@/components/BioSettingsForm";
 
 export const dynamic = "force-dynamic";
 
-// go2read 短連結管理：建立 ＋ 列出（含點擊/繼續統計）＋ link-in-bio。
+// go2read 短連結管理：建立 ＋ 列出（含點擊/繼續統計）。
 export default async function LinksPage() {
   const user = await getCurrentUser();
   if (!user) return <div className="text-center text-sm text-red-500">請先登入。</div>;
-  const [links, bio, defaultAffiliateUrl] = await Promise.all([
+  const [links, defaultAffiliateUrl] = await Promise.all([
     listRedirectLinks(user.id).catch(() => []),
-    getBioSettings(user.id).catch(() => ({ handle: null, title: null })),
     getDefaultAffiliateUrl(user.id).catch(() => null)
   ]);
 
@@ -29,8 +27,6 @@ export default async function LinksPage() {
       <RedirectLinkForm defaultAffiliateUrl={defaultAffiliateUrl} />
 
       <SelfBuyNotice />
-
-      <BioSettingsForm initialHandle={bio.handle} initialTitle={bio.title} />
 
       <section className="card p-5">
         <h2 className="section-title mb-3">我的短連結</h2>
@@ -51,8 +47,7 @@ export default async function LinksPage() {
                   affiliateUrl: l.affiliateUrl,
                   title: l.title,
                   clicks: l.clicks,
-                  continues: l.continues,
-                  inBio: l.inBio
+                  continues: l.continues
                 }}
               />
             ))}

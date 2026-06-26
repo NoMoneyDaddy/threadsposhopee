@@ -1,6 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { normalizeSubId, normalizeSubIds, resolveSubIdTemplate, isValidSubIdTemplate } from "./subid";
+import { normalizeSubId, normalizeSubIds, resolveSubIdTemplate, isValidSubIdTemplate, parseSubIdSlots } from "./subid";
+
+test("parseSubIdSlots: 逗號分隔、去空、最多 5 格", () => {
+  assert.deepEqual(parseSubIdSlots("a, b ,,c"), ["a", "b", "c"]);
+  assert.deepEqual(parseSubIdSlots(""), []);
+  assert.deepEqual(parseSubIdSlots(null), []);
+  assert.deepEqual(parseSubIdSlots("1,2,3,4,5,6,7"), ["1", "2", "3", "4", "5"]);
+});
 
 test("isValidSubIdTemplate: 允許變數＋英數底線、擋非法/過長", () => {
   assert.equal(isValidSubIdTemplate("{platform}_{date}"), true);
@@ -17,6 +24,15 @@ test("resolveSubIdTemplate: 帶入日期/平台/帳號並正規化", () => {
   assert.equal(resolveSubIdTemplate("{account}-{date}", ctx), "acc1234520260621");
   assert.equal(resolveSubIdTemplate("shop_{account}", ctx), "shop_acc12345");
   assert.equal(resolveSubIdTemplate("", ctx), "");
+});
+
+test("resolveSubIdTemplate: 新增 {time}/{item} 變數（缺值＝空字串）", () => {
+  const ctx = { date: "20260621", time: "0930", platform: "threads", account: "acc1", item: "778899" };
+  assert.equal(resolveSubIdTemplate("{date}_{time}", ctx), "20260621_0930");
+  assert.equal(resolveSubIdTemplate("{account}_{item}", ctx), "acc1_778899");
+  // 缺 time/item 時代換為空字串、不殘留括號
+  assert.equal(resolveSubIdTemplate("{account}_{item}", { date: "20260621", platform: "threads", account: "acc1" }), "acc1_");
+  assert.equal(isValidSubIdTemplate("{time}_{item}"), true);
 });
 
 test("normalizeSubId: 僅留英數與底線、上限 50", () => {

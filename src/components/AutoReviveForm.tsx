@@ -23,7 +23,7 @@ export default function AutoReviveForm({ initial }: { initial: boolean }) {
       });
       const json = await res.json();
       if (!json.ok) throw new Error(json.error);
-      setMsg("✅ 已儲存");
+      setMsg(next ? "✅ 已開啟自動替換" : "✅ 已關閉自動替換");
       router.refresh();
     } catch (e) {
       setEnabled(prev);
@@ -35,7 +35,7 @@ export default function AutoReviveForm({ initial }: { initial: boolean }) {
 
   return (
     <div className="card p-4">
-      <div className="mb-1 font-medium">連結失效自動替換（選填）</div>
+      <div className="mb-1 font-medium">蝦皮連結失效自動替換（選填）</div>
       <p className="mb-2 text-xs text-ink-2">
         開啟後：分潤連結被偵測失效時，系統用資料庫保存的<b>商品原始連結</b>自動重產有效分潤連結。
         關閉（預設）則只標記失效、不自動重產（交由你決定）。

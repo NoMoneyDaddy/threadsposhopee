@@ -1,5 +1,4 @@
 import ComposerForm from "@/components/ComposerForm";
-import BatchCompose from "@/components/BatchCompose";
 import SelfComposeForm from "@/components/SelfComposeForm";
 import { listThreadsAccounts, getUserCloudinary } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
@@ -38,15 +37,10 @@ export default async function ComposePage() {
 
       <div className="pt-2">
         <h2 className="mb-1 text-lg font-semibold">自寫一則直推</h2>
-        <p className="mb-2 text-sm text-ink-2">不靠蝦皮連結，直接打字（可附一張圖／影片網址）發到 Threads。</p>
+        <p className="mb-2 text-sm text-ink-2">像 Threads 一樣：直接打字、上傳照片／影片，右側即時預覽所見即所得；貼文中的網址會自動變成可點連結。</p>
         <SelfComposeForm threadsAccounts={accounts} cloud={cc?.cloud ?? null} preset={cc?.preset ?? null} />
       </div>
 
-      <div className="pt-2">
-        <h2 className="mb-1 text-lg font-semibold">批次發文</h2>
-        <p className="mb-2 text-sm text-ink-2">一次貼多個連結，全部產生文案後加入佇列（自動排時段）或存草稿。</p>
-        <BatchCompose threadsAccounts={accounts} />
-      </div>
     </div>
   );
 }

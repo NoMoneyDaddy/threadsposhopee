@@ -3,21 +3,28 @@ import { expandShopeeLink } from "@/services/shopee/expand";
 import { buildMaterialForProduct } from "@/services/materials/build";
 import { findMaterial, getShopeeCredentials, getGeminiKey, getShopeeAffiliateId, getShopeeSubId } from "@/lib/store";
 import { getMediaProvider } from "@/services/media/upload";
+import { assertSafePublicUrl } from "@/lib/url-guard";
 import type { AppUser } from "@/lib/auth";
 import type { Material } from "@/lib/types";
 
 export async function resolveMaterialFromUrl(
   url: string,
   user: AppUser,
-  withCopy = true
+  withCopy = true,
+  media?: { url: string; type: "image" | "video" }
 ): Promise<{ material: Material; reused: boolean; notes: string[] }> {
   const ownerId = user.id;
+  // 自帶媒體先過 SSRF 守衛（擋內網/非法協定），不合法直接擋下。
+  if (media?.url) assertSafePublicUrl(media.url);
   const expanded = await expandShopeeLink(url);
   if (!expanded) throw new Error("無法從連結解析商品 id（shop_id/item_id）");
 
-  const existing = await findMaterial(expanded.shopId, expanded.itemId, ownerId);
-  if (existing && existing.affiliate_valid && existing.affiliate_short_link) {
-    return { material: existing, reused: true, notes: [] };
+  // 有自帶媒體時不沿用既有素材（否則新媒體不會生效）；否則命中有效素材直接帶出，省 token。
+  if (!media) {
+    const existing = await findMaterial(expanded.shopId, expanded.itemId, ownerId);
+    if (existing && existing.affiliate_valid && existing.affiliate_short_link) {
+      return { material: existing, reused: true, notes: [] };
+    }
   }
 
   // Shopee 金鑰：一律用自綁（shopee_accounts），沒綁則改走 affiliate_id 後備（見下）。
@@ -41,7 +48,8 @@ export async function resolveMaterialFromUrl(
       originalShortLink: url,
       subIdTag: user.isOwner ? "manual" : ownerId.slice(0, 8),
       customSubId,
-      withCopy: canCopy
+      withCopy: canCopy,
+      media: media ? { url: media.url, type: media.type } : undefined
     },
     ownerId,
     shopeeCreds,

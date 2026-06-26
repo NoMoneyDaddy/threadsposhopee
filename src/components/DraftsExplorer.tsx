@@ -56,6 +56,14 @@ export default function DraftsExplorer({
     return opts;
   }, [drafts, accountLabels]);
 
+  // 防鎖死：若選項少於 2（切換器會隱藏）或當前選取的帳號已不存在，重設回「全部帳號」，
+  // 否則篩選會卡在隱藏狀態、列表恆空且使用者無從重設。
+  useEffect(() => {
+    if (account !== "all" && (accountOptions.length < 2 || !accountOptions.some((o) => o.value === account))) {
+      setAccount("all");
+    }
+  }, [accountOptions, account]);
+
   // useCallback 穩定參照：讓 DraftCard 的 memo 生效（否則每次 render 新函式會使 memo 失效）。
   const toggleSelect = useCallback(
     (id: string) =>

@@ -111,15 +111,22 @@ export async function POST(req: Request) {
       .filter((u) => !u.includes(`${shortBase}/r/`) && !u.includes("/r/"));
     if (urls.length === 0) return NextResponse.json({ ok: false, error: "草稿內沒有可轉換的連結" }, { status: 200 });
 
+    // 並行建立（每筆會 best-effort 抓 OG 預覽，最長 ~6s）；改序列→並行避免 N 筆線性累積觸發請求逾時。
+    // 加硬上限避免單次請求處理過多連結。
+    const MAX_SHORTEN = 20;
     const map: Record<string, string> = {};
-    for (const url of urls) {
-      try {
-        const code = await createRedirectLink(user.id, { sourceUrl: url });
-        map[url] = `${shortBase}/r/${code}`;
-      } catch {
-        // 單一 URL 不合法（SSRF/協定）→ 略過，不擋其他
-      }
-    }
+    const results = await Promise.all(
+      urls.slice(0, MAX_SHORTEN).map(async (url) => {
+        try {
+          const code = await createRedirectLink(user.id, { sourceUrl: url });
+          return [url, `${shortBase}/r/${code}`] as const;
+        } catch {
+          // 單一 URL 不合法（SSRF/協定）→ 略過，不擋其他
+          return null;
+        }
+      })
+    );
+    for (const r of results) if (r) map[r[0]] = r[1];
     if (Object.keys(map).length === 0) return NextResponse.json({ ok: false, error: "連結無法轉換" }, { status: 200 });
 
     const updated = await updateDraft(id, user.id, {

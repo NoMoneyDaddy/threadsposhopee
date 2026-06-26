@@ -37,6 +37,11 @@ test("parseOgTags：什麼都沒有 → 全 null", () => {
   assert.deepEqual(r, { title: null, imageUrl: null, description: null });
 });
 
+test("parseOgTags：content 值內含另一種引號不被截斷", () => {
+  const r = parseOgTags(`<meta property="og:title" content="Bob's post">`, BASE);
+  assert.equal(r.title, "Bob's post");
+});
+
 test("parseOgTags：twitter:image 作為退路", () => {
   const r = parseOgTags(`<meta name="twitter:image" content="https://cdn.example.com/t.jpg">`, BASE);
   assert.equal(r.imageUrl, "https://cdn.example.com/t.jpg");

@@ -52,15 +52,21 @@ async function resolvePreviewMeta(
 }
 
 // 建立短連結：驗證 URL（SSRF/協定），產生唯一 code（衝突重試），回傳 code。
-export async function createRedirectLink(ownerId: string, input: RedirectLinkInput): Promise<string> {
+export async function createRedirectLink(
+  ownerId: string,
+  input: RedirectLinkInput,
+  opts: { fetchPreview?: boolean } = {}
+): Promise<string> {
   // 來源必填、分潤選填；皆須為安全公開 URL（擋內網/非法協定/開放重定向濫用）。
   assertSafePublicUrl(input.sourceUrl);
   if (input.affiliateUrl) assertSafePublicUrl(input.affiliateUrl);
 
-  // 自動預覽：使用者未自填標題/預覽圖/描述時，best-effort 抓來源 OG 帶入（供中轉頁與 Threads unfurl）。
-  const meta = await resolvePreviewMeta(input);
-
+  // demo 模式不落 DB、也不對外抓取（避免示範環境產生外部副作用/延遲）。
   if (isDemoMode) return randomShortCode();
+
+  // 自動預覽：使用者未自填標題/預覽圖/描述時，best-effort 抓來源 OG 帶入（供中轉頁與 Threads unfurl）。
+  // batch 流程（一鍵套轉址）可關閉以避免逐筆阻塞；預設開啟。
+  const meta = opts.fetchPreview === false ? { title: input.title ?? null, imageUrl: input.imageUrl ?? null, description: input.description ?? null } : await resolvePreviewMeta(input);
   const sb = getServiceClient()!;
   for (let attempt = 0; attempt < 5; attempt++) {
     const code = randomShortCode();

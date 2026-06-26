@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 // 來源是否為蝦皮網址（含分潤短網域）→ 提示可一鍵套用預設分潤連結。
 function isShopeeUrl(u: string): boolean {
@@ -70,7 +71,7 @@ export default function RedirectLinkForm({ defaultAffiliateUrl }: { defaultAffil
             </button>
           ) : (
             <p className="mt-1.5 text-xs text-ink-3">
-              偵測到蝦皮連結。可到 <a href="/accounts#setup-shopee" className="text-brand underline">帳號管理</a> 設定預設分潤連結，之後一鍵套用。
+              偵測到蝦皮連結。可到 <Link href="/accounts#setup-shopee" className="text-brand underline">帳號管理</Link> 設定預設分潤連結，之後一鍵套用。
             </p>
           ))}
       </div>

@@ -14,8 +14,15 @@ export async function POST(req: Request) {
     const id = typeof body.user_id === "string" ? body.user_id.trim() : "";
     if (!id) return NextResponse.json({ ok: false, error: "缺少 user_id" }, { status: 400 });
     const res = NextResponse.json({ ok: true });
-    // httpOnly：前端不需讀，純由 server 判定；lax 足夠（僅影響本站 GET 導覽）。
-    res.cookies.set(VIEW_AS_COOKIE, id, { httpOnly: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 8 });
+    // httpOnly：前端不需讀，純由 server 判定；lax 足夠（僅影響本站 GET 導覽）；
+    // secure（正式環境）：此 cookie 控管身分切換，僅經 HTTPS 傳輸避免中間人竊聽。
+    res.cookies.set(VIEW_AS_COOKIE, id, {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 8,
+      secure: process.env.NODE_ENV === "production"
+    });
     return res;
   } catch (e) {
     return apiError("切換成員視角失敗", e);

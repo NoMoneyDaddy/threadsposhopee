@@ -75,7 +75,7 @@ export default function ViewAsBar({ viewingAsEmail }: { viewingAsEmail: string |
   return (
     <div className="flex flex-wrap items-center justify-end gap-2 border-b border-border bg-surface-2 px-4 py-1 text-xs text-ink-3">
       <span className="mr-auto">管理者工具</span>
-      <details onToggle={(e) => (e.currentTarget as HTMLDetailsElement).open && loadUsers()}>
+      <details className="relative" onToggle={(e) => (e.currentTarget as HTMLDetailsElement).open && loadUsers()}>
         <summary className="cursor-pointer select-none rounded px-2 py-0.5 hover:bg-surface hover:text-ink">
           切換成員視角（唯讀）
         </summary>

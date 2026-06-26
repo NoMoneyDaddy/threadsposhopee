@@ -43,15 +43,6 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // 唯讀防護：管理者「以成員視角檢視」期間（帶 view_as cookie）一律擋下狀態變更請求，
-  // 確保只看不動到成員資料。例外：view-as 切換/解除本身與登出，否則無法退出。
-  if (req.method !== "GET" && req.method !== "HEAD" && req.cookies.get("view_as")?.value) {
-    const exempt = url.pathname.startsWith("/api/admin/view-as") || url.pathname.startsWith("/auth/");
-    if (!exempt) {
-      return NextResponse.json({ ok: false, error: "成員視角為唯讀，請先結束檢視再操作" }, { status: 403 });
-    }
-  }
-
   // CSRF 縱深防禦：狀態變更請求若帶 Origin，必須同源（瀏覽器跨站 POST 一定帶 Origin）。
   // 公開端點（cron／Meta 回呼）已在上方放行；server-to-server 無 Origin 不受影響。
   if (req.method !== "GET" && req.method !== "HEAD") {
@@ -96,6 +87,22 @@ export async function middleware(req: NextRequest) {
     redirectUrl.pathname = "/login";
     redirectUrl.searchParams.set("next", url.pathname + url.search);
     return NextResponse.redirect(redirectUrl);
+  }
+
+  // 唯讀防護：管理者「以成員視角檢視」期間（帶 view_as cookie）擋下狀態變更請求，確保只看不動到成員資料。
+  // 須在解析使用者之後判斷：僅平台管理者才套用；一般成員若殘留 cookie（如共用電腦換人登入）則自動清除，
+  // 避免被鎖死（他們看不到結束檢視的工具列）。例外：view-as 切換/解除本身（已在 PUBLIC_PREFIXES 的 /auth 之外）。
+  const viewAs = req.cookies.get("view_as")?.value;
+  if (viewAs) {
+    const isOwner = Boolean(user.email && user.email.toLowerCase() === (process.env.OWNER_EMAIL ?? "").toLowerCase());
+    if (isOwner) {
+      if (req.method !== "GET" && req.method !== "HEAD" && !url.pathname.startsWith("/api/admin/view-as")) {
+        return NextResponse.json({ ok: false, error: "成員視角為唯讀，請先結束檢視再操作" }, { status: 403 });
+      }
+    } else {
+      // 非管理者不該有此 cookie：清除以免誤擋其寫入操作。
+      res.cookies.set("view_as", "", { path: "/", maxAge: 0 });
+    }
   }
 
   return res;

@@ -142,6 +142,7 @@ export {
   hasGeminiKey,
   getUserTelegramChatId,
   setUserTelegramChatId,
+  getOwnerByTelegramChatId,
   getUserDiscordWebhook,
   setUserDiscordWebhook,
   getDefaultAffiliateUrl,

@@ -7,6 +7,7 @@ import { getGeminiKey, getDefaultAffiliateUrl } from "@/lib/credentials";
 import { getAiDomain, defaultFeedsForDomain, googleNewsRss, resolveDomainIds } from "@/lib/ai-domains";
 import { maxSimilarity } from "@/lib/text-similarity";
 import { createDraft } from "@/lib/drafts-store";
+import { notifyDraftPendingForReview } from "@/services/telegram/review";
 import { autoScheduleApproved } from "@/services/publish/auto-schedule";
 import { userOwnsThreadsAccount } from "@/lib/store";
 import { createRedirectLink } from "@/lib/redirect-store";
@@ -152,6 +153,8 @@ export async function runAgentOnce(agent: AiAgent, geminiKey: string): Promise<A
       : null;
     if (!draft) draft = await makeDraft("draft", null);
     await markSeen(agent.id, hash, item.title);
+    // 待審草稿推 Telegram（附核准/駁回按鈕）；未綁/未啟用則內部靜默略過。
+    if (draft.status === "draft") await notifyDraftPendingForReview(agent.owner_id, draft);
     return { ok: true, draftId: draft.id };
   }
   return { ok: false, reason: "無新主題可寫" };

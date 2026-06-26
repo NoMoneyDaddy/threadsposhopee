@@ -9,8 +9,18 @@ const base: EnvLike = {
   aiProvider: "gemini",
   cronSecret: "",
   supabaseUrl: "",
-  supabaseServiceKey: ""
+  supabaseServiceKey: "",
+  telegramBotToken: "",
+  telegramWebhookSecret: ""
 };
+
+test("validateEnv：設了 Telegram bot 卻缺 webhook secret → 警告", () => {
+  // 斷言警告內容（而非只看數量），避免日後新增其他 warning 時這條規則壞了仍誤判通過。
+  const missing = validateEnv({ ...base, telegramBotToken: "x" }, false);
+  assert.equal(missing.some((w) => w.includes("TELEGRAM_WEBHOOK_SECRET")), true);
+  const withSecret = validateEnv({ ...base, telegramBotToken: "x", telegramWebhookSecret: "s" }, false);
+  assert.equal(withSecret.some((w) => w.includes("TELEGRAM_WEBHOOK_SECRET")), false);
+});
 
 test("validateEnv：全空（Demo）非生產 → 無警告", () => {
   assert.deepEqual(validateEnv(base, false), []);

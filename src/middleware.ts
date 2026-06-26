@@ -13,6 +13,7 @@ const PUBLIC_PREFIXES = [
   "/auth",
   "/api/auth/threads/deauthorize",
   "/api/auth/threads/data-deletion",
+  "/api/telegram/webhook", // Telegram 遠端審核 webhook（無 session，靠 secret token 標頭驗證）
   "/privacy",
   "/terms",
   "/data-deletion",

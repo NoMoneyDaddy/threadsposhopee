@@ -37,6 +37,8 @@ yarn-error.log*
 .vscode
 *.tsbuildinfo
 
+# agent-reach / mcporter 本機產生的設定（勿入庫）
+config/mcporter.json
 # 本機 agent 工具（skills CLI / mobbin-search 安裝產物，非專案程式碼，勿入庫）
 /.agents/
 /.claude/skills/mobbin-search

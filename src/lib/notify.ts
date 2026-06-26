@@ -40,6 +40,79 @@ export async function sendAlert(text: string): Promise<void> {
   await sendTelegram(env.telegramBotToken, env.telegramChatId, text);
 }
 
+// 共用底層：發 Telegram 訊息並附 inline 按鈕（遠端審核用）。buttons 為單列按鈕。
+// callback_data 上限 64 bytes（Telegram 限制），呼叫端須自行控制長度。絕不丟錯。
+export async function sendTelegramButtons(
+  botToken: string,
+  chatId: string,
+  text: string,
+  buttons: { text: string; data: string }[]
+): Promise<boolean> {
+  try {
+    const res = await fetchWithTimeout(
+      `https://api.telegram.org/bot${botToken}/sendMessage`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text,
+          disable_web_page_preview: true,
+          reply_markup: { inline_keyboard: [buttons.map((b) => ({ text: b.text, callback_data: b.data }))] }
+        })
+      },
+      8000
+    );
+    if (!res.ok) {
+      log.warn("Telegram sendMessage(buttons) 非 2xx", { status: res.status });
+      return false;
+    }
+    return true;
+  } catch (e) {
+    log.warn("Telegram sendMessage(buttons) 失敗", { err: e instanceof Error ? e.message : e });
+    return false;
+  }
+}
+
+// 回應 callback_query（讓按鈕轉圈停止、可跳提示）。絕不丟錯。
+export async function answerTelegramCallback(botToken: string, callbackQueryId: string, text?: string): Promise<void> {
+  try {
+    await fetchWithTimeout(
+      `https://api.telegram.org/bot${botToken}/answerCallbackQuery`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ callback_query_id: callbackQueryId, text: text?.slice(0, 200) })
+      },
+      8000
+    );
+  } catch (e) {
+    log.warn("Telegram answerCallbackQuery 失敗", { err: e instanceof Error ? e.message : e });
+  }
+}
+
+// 審核後把按鈕訊息文字更新成結果（避免重複點擊）。絕不丟錯。
+export async function editTelegramMessageText(
+  botToken: string,
+  chatId: string | number,
+  messageId: number,
+  text: string
+): Promise<void> {
+  try {
+    await fetchWithTimeout(
+      `https://api.telegram.org/bot${botToken}/editMessageText`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: chatId, message_id: messageId, text, disable_web_page_preview: true })
+      },
+      8000
+    );
+  } catch (e) {
+    log.warn("Telegram editMessageText 失敗", { err: e instanceof Error ? e.message : e });
+  }
+}
+
 // 共用底層：對 Discord webhook 發訊（POST {content}）。URL 來自使用者，先過 SSRF 守衛。
 // 絕不丟錯。回傳是否成功（供「測試」按鈕判斷）。
 export async function sendDiscord(webhookUrl: string, text: string): Promise<boolean> {

@@ -24,6 +24,7 @@ import {
   userOwnsThreadsAccount
 } from "@/lib/store";
 import { getMediaProvider } from "@/services/media/upload";
+import { notifyDraftPendingForReview } from "@/services/telegram/review";
 import { autoScheduleApproved } from "@/services/publish/auto-schedule";
 import { isDemoMode } from "@/lib/env";
 import type { Source } from "@/lib/types";
@@ -150,6 +151,8 @@ export async function runSourcePipeline(source: Source, ownerId: string): Promis
       await markPostProcessed(source.id, post.postId);
       result.created++;
       result.drafts.push({ id: draft.id, productName: material.product_name ?? null });
+      // 待審草稿推 Telegram 遠端審核（每來源至多前 8 則，避免洗版）；未綁/未啟用則靜默略過。
+      if (result.created <= 8 && draft.status === "draft") await notifyDraftPendingForReview(ownerId, draft);
     } catch (e) {
       result.notes.push(`貼文 ${post.postId} 處理失敗：${e instanceof Error ? e.message : String(e)}`);
     }

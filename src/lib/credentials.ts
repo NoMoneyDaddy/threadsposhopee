@@ -196,10 +196,12 @@ export async function getShopeeAffiliateId(ownerId: string): Promise<string | nu
   const explicit = data?.shopee_affiliate_id;
   if (typeof explicit === "string" && explicit.trim()) return explicit.trim();
   // 沒單獨填 → 取已綁蝦皮帳號的 App ID 當 affiliate_id（兩者同一 ID）。
+  // 多帳號時依 created_at 取最早綁定那筆，確保回退值穩定（非任意一筆）。
   const { data: acc, error: accError } = await sb
     .from("shopee_accounts")
     .select("app_id")
     .eq("owner_id", ownerId)
+    .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle();
   if (accError) throw new Error(`讀取 shopee_accounts app_id 失敗：${accError.message}`);

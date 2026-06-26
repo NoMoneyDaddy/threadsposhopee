@@ -10,7 +10,8 @@ import type { Draft } from "@/lib/types";
 export const TG_APPROVE_PREFIX = "apv:";
 export const TG_REJECT_PREFIX = "rej:";
 
-function preview(draft: Draft): string {
+// 草稿審核預覽文字（純函式，可單元測試）：標題（選）＋正文壓成單行、截斷 180 字。
+export function buildReviewPreview(draft: Pick<Draft, "product_name" | "main_text">): string {
   const title = draft.product_name?.trim();
   const body = (draft.main_text ?? "").replace(/\s+/g, " ").trim().slice(0, 180);
   const head = title ? `🛒 ${title}\n` : "";
@@ -27,7 +28,7 @@ export async function notifyDraftPendingForReview(ownerId: string, draft: Draft)
     ]);
     if (!chatId) return;
     if (prefs && prefs.draft_pending === false) return;
-    await sendTelegramButtons(env.telegramBotToken, chatId, preview(draft), [
+    await sendTelegramButtons(env.telegramBotToken, chatId, buildReviewPreview(draft), [
       { text: "✅ 核准", data: `${TG_APPROVE_PREFIX}${draft.id}` },
       { text: "🗑 駁回", data: `${TG_REJECT_PREFIX}${draft.id}` }
     ]);

@@ -28,17 +28,26 @@ export async function POST(req: Request) {
   const update = await req.json().catch(() => null);
   if (!update || typeof update !== "object") return NextResponse.json({ ok: true });
 
+  // callback id 提到外層：例外路徑也要回應 callback，否則 Telegram 客戶端按鈕會一直轉圈。
+  let cbId: string | undefined;
   try {
     // 1) 審核按鈕：callback_query
     const cb = (update as { callback_query?: unknown }).callback_query as
-      | { id: string; data?: string; message?: { message_id: number; chat?: { id: number } } }
+      | { id: string; from?: { id: number }; data?: string; message?: { message_id: number; chat?: { id: number } } }
       | undefined;
     if (cb?.id) {
+      cbId = cb.id;
       const data = typeof cb.data === "string" ? cb.data : "";
       const chatId = cb.message?.chat?.id;
       const messageId = cb.message?.message_id;
       if (chatId == null) {
         await answerTelegramCallback(token, cb.id, "無法辨識來源");
+        return NextResponse.json({ ok: true });
+      }
+      // 防越權：只允許「私聊」遠端審核。群組 chat id 為負、且多人共用＝任一成員都能替 owner 核准；
+      // 私聊時 from.id === chat.id，群組／頻道則不符 → 一律拒絕，避免綁到群組造成跨人核准。
+      if (chatId < 0 || cb.from?.id !== chatId) {
+        await answerTelegramCallback(token, cb.id, "請在與 bot 的私聊中審核（不支援群組）");
         return NextResponse.json({ ok: true });
       }
       const ownerId = await getOwnerByTelegramChatId(String(chatId));
@@ -53,6 +62,11 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: true });
       }
       const draftId = data.slice((isApprove ? TG_APPROVE_PREFIX : TG_REJECT_PREFIX).length);
+      // 信任邊界輸入驗證：draftId 來自不可信的 callback data，須為 UUID 才查 DB（擋畸形 id／濫用請求）。
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(draftId)) {
+        await answerTelegramCallback(token, cb.id, "草稿 id 格式錯誤");
+        return NextResponse.json({ ok: true });
+      }
       const draft = await getDraft(draftId, ownerId); // 以 owner 過濾＝只動得到自己的草稿
       if (!draft) {
         await answerTelegramCallback(token, cb.id, "找不到草稿（可能已刪除）");
@@ -86,6 +100,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   } catch (e) {
     log.error("Telegram webhook 處理失敗", { err: e instanceof Error ? e.message : e });
+    // 若是審核按鈕觸發的例外（如 DB 查詢拋錯），回應 callback 讓按鈕停止轉圈、給使用者可見回饋。
+    if (cbId) await answerTelegramCallback(token, cbId, "處理失敗，請稍後再試").catch(() => {});
     return NextResponse.json({ ok: true }); // 仍回 200，避免 Telegram 重送風暴
   }
 }

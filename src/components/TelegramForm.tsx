@@ -38,8 +38,8 @@ export default function TelegramForm({ bound, botConfigured }: { bound: boolean;
         {bound ? <span className="badge-success">已連結</span> : <span className="badge-neutral">未連結</span>}
       </div>
       <p className="mb-2 text-xs text-ink-2">
-        綁定後，屬於你的重要提醒會即時推到 Telegram；<b>待審草稿還會附「核准／駁回」按鈕，可直接遠端審核</b>。
-        取得 chat_id：在 Telegram 對本系統 bot 按 <code>/start</code> 或傳任意訊息，bot 會直接回覆你的 Chat ID，貼到下方即可。
+        綁定後，屬於你的重要提醒會即時推到 Telegram；<b>待審草稿還會附「核准／駁回」按鈕，可直接遠端審核</b>（僅限與 bot 的私聊，不支援群組）。
+        取得 chat_id：在 Telegram 對本系統 bot 按 <code>/start</code>，bot 會直接回覆你的 Chat ID，貼到下方即可。
       </p>
 
       {!botConfigured && (

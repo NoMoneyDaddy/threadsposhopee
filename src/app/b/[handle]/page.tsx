@@ -1,26 +1,32 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getBioPageByHandle } from "@/lib/redirect-store";
+import { normalizeBioHandle } from "@/lib/credentials";
 
 export const dynamic = "force-dynamic";
 
 // 公開 bio 頁（/b/<handle>）：列出該使用者選入 bio 的短連結，點擊走 go2read 中轉頁（含揭露）。
 // 不建索引（與 /r/* 一致，降低外露面）。
+// 信任邊界：route param 先過 normalizeBioHandle（小寫、[a-z0-9_-]{3,30}），不合法即視為找不到，
+// 並以正規化後的 handle 查詢／顯示（避免 /b/@foo 查不到、或 fallback 標題出現 @@）。
 export async function generateMetadata({ params }: { params: { handle: string } }): Promise<Metadata> {
-  const page = await getBioPageByHandle(params.handle).catch(() => null);
+  const handle = normalizeBioHandle(params.handle);
+  const page = handle ? await getBioPageByHandle(handle).catch(() => null) : null;
   if (!page) return { title: "找不到頁面", robots: { index: false, follow: false } };
-  return { title: page.title ?? `@${params.handle}`, robots: { index: false, follow: false } };
+  return { title: page.title ?? `@${handle}`, robots: { index: false, follow: false } };
 }
 
 export default async function BioPage({ params }: { params: { handle: string } }) {
-  const page = await getBioPageByHandle(params.handle).catch(() => null);
-  if (!page) notFound();
+  const handle = normalizeBioHandle(params.handle);
+  const page = handle ? await getBioPageByHandle(handle).catch(() => null) : null;
+  if (!page || !handle) notFound();
 
-  // 正規化 handle：去除可能的前導 @（避免 @@username 與 monogram 取到 @）。
-  const cleanHandle = params.handle.replace(/^@+/, "");
-  const title = page.title ?? `@${cleanHandle}`;
-  // 頭像缺省用標題/handle 首字做 monogram（避免空頭像；取首個可見字元，支援中英/emoji）。
-  const monogram = [...(page.title?.trim() || cleanHandle)][0]?.toUpperCase() ?? "@";
+  const title = page.title ?? `@${handle}`;
+  // 頭像缺省用標題/handle 首字做 monogram（避免空頭像）。用 Intl.Segmenter 取第一個 grapheme，
+  // 才不會把 emoji／旗幟／結合字元切壞（[...str][0] 會）。
+  const seg = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+  const firstChar = seg.segment(page.title?.trim() || handle)[Symbol.iterator]().next().value?.segment;
+  const monogram = (firstChar || "@").toUpperCase();
 
   return (
     <div className="relative min-h-[100dvh] overflow-hidden">
@@ -34,7 +40,7 @@ export default async function BioPage({ params }: { params: { handle: string } }
           </div>
         </div>
         <h1 className="text-center text-xl font-bold tracking-tight">{title}</h1>
-        {page.title && <p className="mt-0.5 text-sm text-ink-3">@{cleanHandle}</p>}
+        {page.title && <p className="mt-0.5 text-sm text-ink-3">@{handle}</p>}
         <span aria-hidden className="accent-line mb-7 mt-4 block h-1 w-12 rounded-full" />
 
         {page.links.length === 0 ? (

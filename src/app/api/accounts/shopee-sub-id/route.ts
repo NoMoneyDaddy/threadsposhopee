@@ -23,11 +23,11 @@ export async function POST(req: Request) {
     if (typeof raw !== "string") {
       return NextResponse.json({ ok: false, error: "缺少或型別錯誤的 sub_id" }, { status: 400 });
     }
-    // 儲存「範本」原文（含 {date}/{platform}/{account}）；實值在發文建連結時解析。
+    // 儲存「範本」原文（含 {date}/{time}/{platform}/{account}/{item}）；實值在發文建連結時解析。
     const tpl = raw.trim();
     if (tpl && !isValidSubIdTemplate(tpl)) {
       return NextResponse.json(
-        { ok: false, error: "subId 僅能含英數、底線與變數 {date}/{platform}/{account}（上限 50）" },
+        { ok: false, error: "subId 僅能含英數、底線與變數 {date}/{time}/{platform}/{account}/{item}（上限 50）" },
         { status: 400 }
       );
     }

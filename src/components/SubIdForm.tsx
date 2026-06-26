@@ -33,15 +33,29 @@ export default function SubIdForm({ initial }: { initial: string | null }) {
 
   return (
     <div className="card p-4">
-      <div className="mb-1 font-medium">自訂連結來源標記（選填）</div>
+      <div className="mb-1 font-medium">蝦皮分潤連結自訂來源標記 Sub id（選填）</div>
       <p className="mb-2 text-xs text-ink-2">
         會加在你的分潤連結上，出現在蝦皮分潤報表，方便分辨哪個帳號／活動帶來成交。
         留空＝用預設。<b>僅能含英數與底線</b>、長度上限 50（依蝦皮規範）。
-        可用範本變數：<code className="font-mono">{"{date}"}</code>（發文日期）、
-        <code className="font-mono">{"{platform}"}</code>（平台）、<code className="font-mono">{"{account}"}</code>（帳號）。
+        共 5 個變數可自行排列組合：<code className="font-mono">{"{date}"}</code>（發文日期）、
+        <code className="font-mono">{"{time}"}</code>（發文時間）、<code className="font-mono">{"{platform}"}</code>（平台）、
+        <code className="font-mono">{"{account}"}</code>（帳號）、<code className="font-mono">{"{item}"}</code>（商品編號）。
       </p>
+      <div className="mb-1 text-xs text-ink-3">點變數插入游標處，或點下方範本：</div>
       <div className="mb-2 flex flex-wrap gap-1.5 text-xs">
-        {["{platform}_{date}", "{account}_{date}", "{account}", "{date}"].map((tpl) => (
+        {["{date}", "{time}", "{platform}", "{account}", "{item}"].map((tok) => (
+          <button
+            key={tok}
+            type="button"
+            onClick={() => setSubId((s) => (s + tok).slice(0, 50))}
+            className="rounded-lg border border-brand/40 px-2 py-1 font-mono text-brand hover:bg-orange-50"
+          >
+            {tok}
+          </button>
+        ))}
+      </div>
+      <div className="mb-2 flex flex-wrap gap-1.5 text-xs">
+        {["{platform}_{date}", "{account}_{date}", "{account}_{item}", "{date}_{time}"].map((tpl) => (
           <button
             key={tpl}
             type="button"

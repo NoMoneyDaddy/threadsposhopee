@@ -50,11 +50,13 @@ export async function buildMaterialForProduct(
   let productNameRaw: string | null = null;
   let commissionRate: string | null = null; // 目前分潤率（顯示用）；隨時間變動，記查詢時間
 
-  // 自訂 subId 支援範本：{date}（台北 YYYYMMDD）/{platform}/{account}（subIdTag）智能帶入。
+  // 自訂 subId 支援範本：{date}/{time}/{platform}/{account}/{item} 智能帶入。
   const account = input.subIdTag ?? "manual";
-  const dateStr = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Taipei" }).replace(/-/g, "");
+  const subIdNow = new Date();
+  const dateStr = subIdNow.toLocaleDateString("en-CA", { timeZone: "Asia/Taipei" }).replace(/-/g, "");
+  const timeStr = subIdNow.toLocaleTimeString("en-GB", { timeZone: "Asia/Taipei", hour: "2-digit", minute: "2-digit", hour12: false }).replace(":", "");
   const resolvedSubId = input.customSubId
-    ? resolveSubIdTemplate(input.customSubId, { date: dateStr, platform: "threads", account })
+    ? resolveSubIdTemplate(input.customSubId, { date: dateStr, time: timeStr, platform: "threads", account, item: input.itemId ? String(input.itemId) : "" })
     : "";
 
   if (!isDemoMode && shopeeCreds) {

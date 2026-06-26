@@ -147,7 +147,7 @@ export default async function AccountsPage({
         {/* 抓取：綁定自己的 Apify 金鑰即可用；AI 文案每人各綁各的 */}
         {user && (
           <div id="setup-apify" className="scroll-mt-24">
-            <ApifyForm bound={apify.bound} actor={apify.actor} />
+            <ApifyForm bound={apify.bound} />
           </div>
         )}
         {user && (

@@ -8,7 +8,8 @@ export const dynamic = "force-dynamic";
 
 // 爬蟲/連結預覽抓取的 UA（FB/IG/Threads unfurl、各家 bot）。命中就不計入 clicks，
 // 讓 clicks 趨近「真人瀏覽」；真正的導流意圖以「繼續」(continues) 為準。
-const BOT_UA_RE = /bot|crawler|spider|crawl|slurp|facebookexternalhit|facebookcatalog|meta-externalagent|twitterbot|whatsapp|telegrambot|slackbot|discordbot|linkedinbot|embedly|pinterest|googlebot|bingbot|applebot|petalbot|yandex|baiduspider|duckduckbot|preview|headless/i;
+// 通用詞已涵蓋多數爬蟲（bot→*bot、crawl→crawler、spider→*spider），其餘列出不含通用詞的特例。
+const BOT_UA_RE = /bot|crawl|spider|slurp|facebookexternalhit|facebookcatalog|meta-externalagent|whatsapp|embedly|pinterest|yandex|preview|headless/i;
 
 // 中轉頁分享預覽（OG）：用短連結存的 title/image/description。/r/* 不建索引。
 export async function generateMetadata({ params }: { params: { code: string } }): Promise<Metadata> {

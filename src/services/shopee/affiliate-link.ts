@@ -8,12 +8,18 @@ import { log } from "@/lib/logger";
 // 判斷某連結是否「已是分潤連結」（純函式，可測）：
 // - 含 affiliate_id 參數或 an_redir 路徑（自組 an_redir 分潤連結）
 // - 或網域為蝦皮分潤/分享短連結（s.shopee.tw／shope.ee）——這類視為已是最終分潤/分享連結，不再轉換
+// - 或展開後的商品連結已帶蝦皮分潤追蹤標記（mmp_pid=an_xxx／utm_source=an_xxx／utm_medium=affiliates）：
+//   這類多半是「貼上自己（或他人）既有的分潤連結」，不應再被重轉（避免重複包裝、破壞既有歸屬）。
 export function isAffiliateLink(raw: string): boolean {
   try {
     const u = new URL(raw);
     const host = u.hostname.toLowerCase();
     if (u.searchParams.has("affiliate_id") || /an_redir/i.test(u.pathname)) return true;
     if (host === "s.shopee.tw" || host === "shope.ee") return true;
+    const sp = u.searchParams;
+    if (/^an_/i.test(sp.get("mmp_pid") ?? "") || /^an_/i.test(sp.get("utm_source") ?? "") || sp.get("utm_medium") === "affiliates") {
+      return true;
+    }
     return false;
   } catch {
     return false;

@@ -6,16 +6,88 @@ import {
   userOwnsThreadsAccount,
   getPublishPrefs
 } from "@/lib/store";
-import { getMediaProvider, uploadMediaWith } from "@/services/media/upload";
+import { getMediaProvider, uploadMediaWith, type MediaProvider } from "@/services/media/upload";
 import { withNextSlot, nextOpenSlot } from "@/services/publish/slots";
 import { assertSafePublicUrl } from "@/lib/url-guard";
 import { getCurrentUser } from "@/lib/auth";
 import { publishDraftNow } from "@/services/publish/publish-draft";
+import { resolveAffiliateUrl } from "@/services/shopee/affiliate-link";
 import { apiError } from "@/lib/api-error";
 import { isDemoMode } from "@/lib/env";
+import type { DraftMedia } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
+
+const MAX_MEDIA = 20; // Threads 輪播上限
+
+// 驗證＋中轉一組媒體（主文或留言）：逐項過 SSRF 守衛、再中轉到自綁圖床（失敗沿用原 URL，不擋發文）。
+// 無效項（缺 url／型別錯）直接略過；最多取前 20（輪播上限）。
+async function processMediaArray(raw: unknown, provider: MediaProvider | null): Promise<DraftMedia[]> {
+  if (!Array.isArray(raw)) return [];
+  const out: DraftMedia[] = [];
+  for (const m of raw) {
+    if (!m || typeof m !== "object") continue;
+    const url = typeof (m as { url?: unknown }).url === "string" ? (m as { url: string }).url.trim() : "";
+    const t = (m as { type?: unknown }).type;
+    const type = t === "video" ? "video" : t === "image" ? "image" : null;
+    if (!url || !type) continue;
+    let safe: string;
+    try {
+      safe = assertSafePublicUrl(url).href;
+    } catch {
+      throw new Error("媒體網址不合法或非公開可存取");
+    }
+    let cloud = safe;
+    if (provider) {
+      try {
+        cloud = await uploadMediaWith(provider, safe, type);
+      } catch {
+        cloud = safe;
+      }
+    }
+    out.push({ url: cloud, type });
+    if (out.length >= MAX_MEDIA) break;
+  }
+  return out;
+}
+
+// 只改寫真正的蝦皮網域（嚴格比對，非 substring）：擋 shopee.evil.com／notshopee.example 之類
+// 偽冒域名被當成蝦皮而誤包成 an_redir。涵蓋蝦皮各地區站與分享短網域 shope.ee。
+const SHOPEE_HOST_RE = /(^|\.)shopee\.(tw|sg|ph|co\.id|co\.th|com\.my|vn|com\.br)$/;
+function isShopeeUrl(u: string): boolean {
+  try {
+    const h = new URL(u).hostname.toLowerCase();
+    return h === "shope.ee" || SHOPEE_HOST_RE.test(h);
+  } catch {
+    return false;
+  }
+}
+
+const URL_RE = /https?:\/\/[^\s)]+/g;
+
+// 自動偵測：把正文／留言裡的蝦皮商品連結轉成 owner 的分潤連結。
+// resolveAffiliateUrl 對「已是分潤連結（含他人 affiliate_id 或短連結）」會原樣回傳（converted=false），
+// 故已是自己分潤 ID 的連結不會被動到；僅未帶分潤的商品連結會被換成自己的。
+async function autoAffiliateLinks(ownerId: string, text: string): Promise<string> {
+  const targets = Array.from(new Set(text.match(URL_RE) ?? [])).filter(isShopeeUrl);
+  if (targets.length === 0) return text;
+  // 多連結並行轉換（各自 best-effort，失敗保留原連結，不擋發文）。
+  const pairs = await Promise.all(
+    targets.map(async (u): Promise<[string, string] | null> => {
+      try {
+        const r = await resolveAffiliateUrl(ownerId, u);
+        return r.converted && r.url && r.url !== u ? [u, r.url] : null;
+      } catch {
+        return null;
+      }
+    })
+  );
+  const map = new Map(pairs.filter((p): p is [string, string] => p !== null));
+  if (map.size === 0) return text;
+  // 對原文做單次 regex 替換（用完整 URL 當 key），避免逐步 split/join 造成長短網址前綴互相污染。
+  return text.replace(URL_RE, (u) => map.get(u) ?? u);
+}
 
 // 快速發文送出：用素材 + 編輯後文案建草稿，依 action 立即發 / 排程 / 存草稿。
 // 也支援「自寫直推」：不帶 material_id，直接用 main_text/reply_text（可選 media_url）發。
@@ -119,6 +191,28 @@ export async function POST(req: Request) {
       replyDelayOverride = n;
     }
 
+    // 多媒體（主文＋留言）：陣列優先（仿 Threads 多圖/影片輪播）。逐項驗證＋中轉到自綁圖床。
+    // getMediaProvider 放 try 外：DB/伺服器錯誤不應被當成「媒體網址不合法」(400)，應往外層 500。
+    const mediaProvider = isDemoMode ? null : await getMediaProvider(user.id);
+    let mainMediaArr: DraftMedia[];
+    let replyMediaArr: DraftMedia[];
+    try {
+      mainMediaArr = await processMediaArray(body.media, mediaProvider);
+      replyMediaArr = await processMediaArray(body.reply_media, mediaProvider);
+    } catch (e) {
+      return NextResponse.json(
+        { ok: false, error: e instanceof Error ? e.message : "媒體網址不合法或非公開可存取" },
+        { status: 400 }
+      );
+    }
+    const hasMainArr = mainMediaArr.length > 0;
+
+    // 自動偵測：把正文／留言裡的蝦皮商品連結轉成 owner 分潤連結（已是自己分潤的不動）。
+    const baseMain = material ? (typeof body.main_text === "string" ? body.main_text : material.main_text ?? "") : freeMain;
+    const baseReply = typeof body.reply_text === "string" ? body.reply_text : material?.reply_text ?? null;
+    const finalMain = await autoAffiliateLinks(user.id, baseMain);
+    const finalReply = baseReply ? await autoAffiliateLinks(user.id, baseReply) : baseReply;
+
     // draft 待審；其餘（publish/schedule/queue）已核准
     const status = action === "draft" ? "draft" : "approved";
     const make = (scheduled_at: string | null) =>
@@ -131,12 +225,13 @@ export async function POST(req: Request) {
         shopee_short_link: material?.affiliate_short_link ?? null,
         commission_rate: material?.commission_rate ?? null,
         commission_checked_at: material?.commission_checked_at ?? null,
-        media_type: overrideMedia ? selfMediaType : material ? material.media_type : selfMediaType,
-        source_media_url: overrideMedia ? selfMediaUrl : material ? material.source_media_url : selfMediaUrl,
-        cloudinary_media_url: overrideMedia ? selfCloudUrl : material ? material.cloudinary_media_url : selfCloudUrl,
-        media: overrideMedia ? [] : material ? material.media ?? [] : [],
-        main_text: material ? (typeof body.main_text === "string" ? body.main_text : material.main_text) : freeMain,
-        reply_text: typeof body.reply_text === "string" ? body.reply_text : material?.reply_text ?? null,
+        media_type: hasMainArr ? mainMediaArr[0].type : overrideMedia ? selfMediaType : material ? material.media_type : selfMediaType,
+        source_media_url: hasMainArr ? mainMediaArr[0].url : overrideMedia ? selfMediaUrl : material ? material.source_media_url : selfMediaUrl,
+        cloudinary_media_url: hasMainArr ? mainMediaArr[0].url : overrideMedia ? selfCloudUrl : material ? material.cloudinary_media_url : selfCloudUrl,
+        media: hasMainArr ? mainMediaArr : overrideMedia ? [] : material ? material.media ?? [] : [],
+        reply_media: replyMediaArr,
+        main_text: finalMain,
+        reply_text: finalReply,
         reply_delay_minutes: replyDelayOverride,
         ai_raw: material?.ai_raw ?? null,
         post_mode: postMode,

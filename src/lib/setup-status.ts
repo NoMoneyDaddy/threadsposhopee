@@ -37,7 +37,7 @@ export async function getSetupSteps(user: AppUser): Promise<SetupStep[]> {
     {
       key: "threads",
       title: "連結 Threads 發文帳號",
-      desc: "到帳號管理貼上你的 Threads access token 即完成綁定（系統自動每日展期）。",
+      desc: "到帳號管理貼上你的 Threads access token 即完成綁定（系統會在到期前自動嘗試展期；失效則需重新貼上）。",
       done: threads.length > 0,
       required: true,
       href: "/accounts#setup-threads"

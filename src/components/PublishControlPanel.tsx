@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 // 管理頁「發文控制＋排程狀態」面板（owner 限定）：
@@ -21,6 +21,12 @@ export default function PublishControlPanel({
   const [paused, setPaused] = useState(initialPaused);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+
+  // router.refresh() 後 server 會帶入新的 initialPaused，但 useState 不會自動重置；
+  // 同步本地 state 以免顯示與按鈕文案停留在舊值（CodeRabbit 指出）。
+  useEffect(() => {
+    setPaused(initialPaused);
+  }, [initialPaused]);
 
   async function toggle() {
     const next = !paused;

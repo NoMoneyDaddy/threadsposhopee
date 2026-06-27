@@ -39,3 +39,11 @@ test("buildAgentPrompt：domains 為空時退回單一 domain（向後相容）"
   const p = buildAgentPrompt({ ...agent, domain: "food", domains: [] }, { title: "t", description: "d" });
   assert.match(p, /美食/);
 });
+
+test("buildAgentPrompt：tone 指定時原樣帶入；空白/空字串退回自動口吻", () => {
+  const named = buildAgentPrompt(agent, { title: "t", description: "d" });
+  assert.match(named, /風格：愛吐槽/); // 指定口吻原樣帶入
+  const auto = /風格：自動——依這篇內容選最合適、自然的口吻/;
+  assert.match(buildAgentPrompt({ ...agent, tone: "" }, { title: "t", description: "d" }), auto); // 空字串
+  assert.match(buildAgentPrompt({ ...agent, tone: "   " }, { title: "t", description: "d" }), auto); // 純空白（trim）
+});

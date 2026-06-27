@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { AI_DOMAINS } from "@/lib/ai-domains";
 import { FieldHint } from "@/components/FieldHint";
 
+// 口吻/風格預設選項（空字串＝自動，由 AI 依內容選最合適口吻）。
+const TONE_PRESETS = ["理性分析", "幽默吐槽", "溫暖療癒", "專業開箱", "親切閒聊", "熱血推坑", "知性科普"];
+
 interface Agent {
   id: string;
   name: string;
@@ -21,13 +24,14 @@ interface AccountOpt {
   label: string | null;
 }
 
-// AI 小編管理：建立 ＋ 列表（開關/立即跑/刪除）。
+// AI 部落客管理：建立 ＋ 列表（開關/立即跑/刪除）。
 export default function AgentManager({ agents, accounts }: { agents: Agent[]; accounts: AccountOpt[] }) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [domains, setDomains] = useState<string[]>([AI_DOMAINS[0].id]);
   const [searchQuery, setSearchQuery] = useState("");
   const [tone, setTone] = useState("");
+  const [customTone, setCustomTone] = useState(false);
   const [accountId, setAccountId] = useState("");
   const [useRedirect, setUseRedirect] = useState(false);
   const [autoPublish, setAutoPublish] = useState(false);
@@ -60,6 +64,7 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
       if (!r.ok) throw new Error(r.error);
       setName("");
       setTone("");
+      setCustomTone(false); // 一併重置，避免表單卡在「自訂…」模式（下筆送出空 tone）
       setSearchQuery("");
       setAutoPublish(false);
       router.refresh();
@@ -86,10 +91,10 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
   async function toggleAuto(a: Agent) {
     if (!a.auto_publish) {
       if (!a.threads_account_id) {
-        alert("❌ 此小編未指定發文帳號，無法開啟免審直接排程。請重新建立並指定帳號。");
+        alert("❌ 此部落客未指定發文帳號，無法開啟免審直接排程。請重新建立並指定帳號。");
         return;
       }
-      if (!confirm(`開啟「免審直接排程」後，小編「${a.name}」產出的貼文會自動發文、不經人工審核。確定開啟？`)) return;
+      if (!confirm(`開啟「免審直接排程」後，部落客「${a.name}」產出的貼文會自動發文、不經人工審核。確定開啟？`)) return;
     }
     setBusy(a.id);
     try {
@@ -106,12 +111,12 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
     setBusy(a.id);
     setMsg(null);
     const r = await api("/api/agents/run", "POST", { id: a.id }).catch(() => ({ ok: false, error: "失敗" }));
-    setMsg(r.ok ? "✅ 已產生 1 篇（依小編設定進待審草稿或自動排程）。" : `⚠️ ${r.error}`);
+    setMsg(r.ok ? "✅ 已產生 1 篇（依部落客設定進待審草稿或自動排程）。" : `⚠️ ${r.error}`);
     router.refresh();
     setBusy(null);
   }
   async function remove(a: Agent) {
-    if (!confirm(`刪除小編「${a.name}」？`)) return;
+    if (!confirm(`刪除部落客「${a.name}」？`)) return;
     setBusy(a.id);
     await api(`/api/agents/${a.id}`, "DELETE").catch(() => {});
     router.refresh();
@@ -124,7 +129,7 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
   return (
     <div className="space-y-6">
       <form onSubmit={create} className="card-p space-y-3">
-        <h2 className="section-title">新增小編</h2>
+        <h2 className="section-title">新增部落客</h2>
         <div>
           <label className="label" htmlFor="ag-name">名稱</label>
           <input id="ag-name" className="input" required value={name} onChange={(e) => setName(e.target.value)} placeholder="例：科技宅阿哲" />
@@ -147,7 +152,7 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
               );
             })}
           </div>
-          <FieldHint>勾選多個領域＝小編會橫跨這些主題輪流取材。至少選一個。</FieldHint>
+          <FieldHint>勾選多個領域＝部落客會橫跨這些主題輪流取材。至少選一個。</FieldHint>
         </div>
         {domains.includes("custom") && (
           <div>
@@ -156,8 +161,39 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
           </div>
         )}
         <div>
-          <label className="label" htmlFor="ag-tone">口吻/風格（選填）</label>
-          <input id="ag-tone" className="input" value={tone} onChange={(e) => setTone(e.target.value)} placeholder="理性、愛吐槽、用比喻" />
+          <label className="label" htmlFor="ag-tone">口吻/風格</label>
+          <select
+            id="ag-tone"
+            className="input"
+            value={customTone ? "__custom__" : TONE_PRESETS.includes(tone) ? tone : ""}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v === "__custom__") {
+                setCustomTone(true);
+                setTone("");
+              } else {
+                setCustomTone(false);
+                setTone(v); // "" = 自動（依內容選口吻）
+              }
+            }}
+          >
+            <option value="">自動（依內容選最合適口吻）</option>
+            {TONE_PRESETS.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+            <option value="__custom__">自訂…</option>
+          </select>
+          {customTone && (
+            <input
+              className="input mt-2"
+              value={tone}
+              onChange={(e) => setTone(e.target.value)}
+              placeholder="自訂口吻，如：理性、愛吐槽、用比喻"
+              aria-label="自訂口吻"
+            />
+          )}
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
@@ -199,22 +235,22 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
           </label>
           {autoPublish ? (
             <FieldHint tone="warn">
-              小編產出的貼文將不經人工審核，自動排進你的發文時段直接發出。請確認領域/口吻設定無誤，內容違規或失準的風險由你自負。
+              部落客產出的貼文將不經人工審核，自動排進你的發文時段直接發出。請確認領域/口吻設定無誤，內容違規或失準的風險由你自負。
             </FieldHint>
           ) : (
-            <FieldHint>預設關閉：小編產文一律進草稿待你審核，核准後才發布。可隨時於下方清單調整。</FieldHint>
+            <FieldHint>預設關閉：部落客產文一律進草稿待你審核，核准後才發布。可隨時於下方清單調整。</FieldHint>
           )}
         </div>
         <button type="submit" disabled={busy === "create"} className="btn btn-brand">
-          {busy === "create" ? "建立中…" : "建立小編"}
+          {busy === "create" ? "建立中…" : "建立部落客"}
         </button>
         {msg && <p className="text-sm text-ink-2">{msg}</p>}
       </form>
 
       <section className="rounded-2xl border bg-surface p-5">
-        <h2 className="section-title mb-3">我的小編</h2>
+        <h2 className="section-title mb-3">我的部落客</h2>
         {agents.length === 0 ? (
-          <p className="text-sm text-ink-3">還沒有小編。建立後可「立即跑一篇」或開啟每日自動產文（預設進草稿待審）。</p>
+          <p className="text-sm text-ink-3">還沒有部落客。建立後可「立即跑一篇」或開啟每日自動產文（預設進草稿待審）。</p>
         ) : (
           <ul className="divide-y divide-border">
             {agents.map((a) => (

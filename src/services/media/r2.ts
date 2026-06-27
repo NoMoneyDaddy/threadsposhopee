@@ -85,6 +85,30 @@ export function r2ValidationReason(status: number): string {
   return `R2 連線驗證失敗（HTTP ${status}）`;
 }
 
+// 組 HeadBucket 的 SigV4 Authorization（純函式）。HEAD 不簽 content-type，
+// signedHeaders 為 host;x-amz-content-sha256;x-amz-date。便於單測（注入 amzDate）。
+export function buildS3HeadAuth(opts: {
+  accessKeyId: string;
+  secretAccessKey: string;
+  region: string;
+  host: string;
+  canonicalPath: string;
+  amzDate: string;
+}): { authorization: string; signedHeaders: string } {
+  const { accessKeyId, secretAccessKey, region, host, canonicalPath, amzDate } = opts;
+  const service = "s3";
+  const dateStamp = amzDate.slice(0, 8);
+  const signedHeaders = "host;x-amz-content-sha256;x-amz-date";
+  const canonicalHeaders = `host:${host}\n` + `x-amz-content-sha256:${UNSIGNED}\n` + `x-amz-date:${amzDate}\n`;
+  const canonicalRequest = ["HEAD", canonicalPath, "", canonicalHeaders, signedHeaders, UNSIGNED].join("\n");
+  const scope = `${dateStamp}/${region}/${service}/aws4_request`;
+  const stringToSign = ["AWS4-HMAC-SHA256", amzDate, scope, sha256Hex(canonicalRequest)].join("\n");
+  const signingKey = deriveSigningKey(secretAccessKey, dateStamp, region, service);
+  const signature = hmac(signingKey, stringToSign).toString("hex");
+  const authorization = `AWS4-HMAC-SHA256 Credential=${accessKeyId}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
+  return { authorization, signedHeaders };
+}
+
 // 存檔前驗證 R2 憑證是否可用：對 bucket 發已簽章 HEAD（HeadBucket）。
 // 回 {ok:true} 或 {ok:false, reason}。網路/逾時亦回 false（讓使用者知道沒驗成功）。
 export async function validateR2(creds: {
@@ -93,20 +117,17 @@ export async function validateR2(creds: {
   secretAccessKey: string;
   bucket: string;
 }): Promise<{ ok: true } | { ok: false; reason: string }> {
-  const service = "s3";
-  const region = "auto";
   const host = `${creds.accountId}.r2.cloudflarestorage.com`;
   const canonicalPath = `/${encodeURIComponent(creds.bucket)}`;
   const amzDate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, "");
-  const dateStamp = amzDate.slice(0, 8);
-  const signedHeaders = "host;x-amz-content-sha256;x-amz-date";
-  const canonicalHeaders = `host:${host}\n` + `x-amz-content-sha256:${UNSIGNED}\n` + `x-amz-date:${amzDate}\n`;
-  const canonicalRequest = ["HEAD", canonicalPath, "", canonicalHeaders, signedHeaders, UNSIGNED].join("\n");
-  const scope = `${dateStamp}/${region}/${service}/aws4_request`;
-  const stringToSign = ["AWS4-HMAC-SHA256", amzDate, scope, sha256Hex(canonicalRequest)].join("\n");
-  const signingKey = deriveSigningKey(creds.secretAccessKey, dateStamp, region, service);
-  const signature = hmac(signingKey, stringToSign).toString("hex");
-  const authorization = `AWS4-HMAC-SHA256 Credential=${creds.accessKeyId}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
+  const { authorization } = buildS3HeadAuth({
+    accessKeyId: creds.accessKeyId,
+    secretAccessKey: creds.secretAccessKey,
+    region: "auto",
+    host,
+    canonicalPath,
+    amzDate
+  });
   const endpoint = `https://${host}${canonicalPath}`;
   try {
     const res = await fetchWithRetry(

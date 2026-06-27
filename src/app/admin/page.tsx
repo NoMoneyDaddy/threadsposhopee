@@ -1,11 +1,13 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
-import { getAdminStats, getFeatureFlags, listSharedForReview, listTopContributors } from "@/lib/store";
+import { getAdminStats, getFeatureFlags, listSharedForReview, listTopContributors, isPublishPaused, getHeartbeat } from "@/lib/store";
 import { contributionBadge } from "@/lib/roles";
+import { isDemoMode } from "@/lib/env";
 import { cloudinaryThumb } from "@/lib/img";
 import FeatureFlagsForm from "@/components/FeatureFlagsForm";
 import RoleGrantForm from "@/components/RoleGrantForm";
 import ReviewButton from "@/components/ReviewButton";
+import PublishControlPanel from "@/components/PublishControlPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -15,11 +17,13 @@ export default async function AdminPage() {
   if (!user) redirect("/login?next=/admin");
   if (!user.isOwner) redirect("/");
 
-  const [stats, flags, queue, leaders] = await Promise.all([
+  const [stats, flags, queue, leaders, paused, heartbeat] = await Promise.all([
     getAdminStats().catch(() => null),
     getFeatureFlags(),
     listSharedForReview(100).catch(() => []),
-    listTopContributors(10).catch(() => [])
+    listTopContributors(10).catch(() => []),
+    isPublishPaused().catch(() => false),
+    getHeartbeat().catch(() => null)
   ]);
 
   const cards: { label: string; value: number }[] = stats
@@ -49,6 +53,8 @@ export default async function AdminPage() {
         ))}
         {!stats && <div className="col-span-full text-sm text-ink-3">統計暫時無法載入。</div>}
       </div>
+
+      {!isDemoMode && <PublishControlPanel initialPaused={paused} lastCronAt={heartbeat} />}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <FeatureFlagsForm initial={flags} />

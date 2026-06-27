@@ -84,6 +84,8 @@ export default function ViewAsBar({ viewingAsEmail }: { viewingAsEmail: string |
             <div className="px-2 py-1 text-ink-3">載入中…</div>
           ) : err ? (
             <div className="px-2 py-1 text-danger">{err}</div>
+          ) : users && users.length === 0 ? (
+            <div className="px-2 py-1 text-ink-3">目前沒有其他成員可檢視</div>
           ) : (
             <select
               className="w-full rounded-lg border px-2 py-1.5 text-sm text-ink"

@@ -8,11 +8,22 @@ export const dynamic = "force-dynamic";
 // 一鍵設定／查詢平台共用 bot 的 Telegram webhook（owner 專屬）。
 // deeplink 綁定與遠端審核都靠這個 webhook 收訊；未註冊或 secret 不符時 bot 不會有任何回應。
 
-// 取對外網址：反向代理後 req.url 是內部位址，優先用 x-forwarded-* 還原對外網域。
+// 取對外網址（要註冊進 Telegram，屬信任邊界）：
+// 優先用瀏覽器送的 Origin——owner 由設定頁 POST，middleware 已對帶 Origin 的同源請求驗證過，
+// 是最可信的對外來源；偽造的 x-forwarded-host 只在「無 Origin」（非瀏覽器）時才退而採用。
+// 一律強制 https（Telegram webhook 規定），避免反向代理還原成 http 註冊失敗。
 function publicOrigin(req: Request): string {
+  const origin = req.headers.get("origin");
+  if (origin) {
+    try {
+      return new URL(origin).origin.replace(/^http:/, "https:");
+    } catch {
+      // 畸形 Origin → 落後備
+    }
+  }
   const fwdHost = req.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
-  const fwdProto = req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
-  return fwdHost ? `${fwdProto || "https"}://${fwdHost}` : new URL(req.url).origin;
+  const host = fwdHost || req.headers.get("host")?.split(",")[0]?.trim();
+  return host ? `https://${host}` : new URL(req.url).origin.replace(/^http:/, "https:");
 }
 
 // 查詢目前 webhook 狀態（顯示用）。

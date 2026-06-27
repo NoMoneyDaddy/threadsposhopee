@@ -16,9 +16,11 @@ export default function TelegramWebhookSetup() {
     try {
       const res = await fetch("/api/telegram/setup-webhook");
       const json = await res.json();
-      if (mountedRef.current && json.ok) setStatus(json);
-    } catch {
-      // 顯示用，失敗忽略
+      if (!mountedRef.current) return;
+      if (json.ok) setStatus(json);
+      else setMsg(`❌ 讀取 webhook 狀態失敗：${json.error ?? res.status}`);
+    } catch (e) {
+      if (mountedRef.current) setMsg(`❌ 讀取 webhook 狀態失敗：${e instanceof Error ? e.message : String(e)}`);
     }
   }
 

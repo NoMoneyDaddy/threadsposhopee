@@ -67,7 +67,7 @@ export async function POST(req: Request) {
     if (!quota.ok) {
       return NextResponse.json(
         { ok: false, code: "account_limit", error: `已達發文帳號上限（${quota.limit} 個），無法再新增。` },
-        { status: 402 }
+        { status: 403 }
       );
     }
 

@@ -11,7 +11,7 @@ import {
   getUserR2
 } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
-import { MAX_THREADS_ACCOUNTS_PER_USER, GLOBAL_MAX_THREADS_ACCOUNTS } from "@/lib/account-limits";
+import { getThreadsAccountLimit } from "@/lib/account-limits";
 import { isDemoMode } from "@/lib/env";
 import { tokenExpiryState } from "@/lib/token-expiry";
 import ThreadsAccountForm from "@/components/ThreadsAccountForm";
@@ -53,8 +53,8 @@ export default async function AccountsPage() {
     ]);
   // 只把非機密欄位帶回表單初始值（accountId/bucket/publicBase）；金鑰留在 server 不外露。
   const r2Bound = Boolean(r2Settings);
-  // 帳號上限（本站不收費、無方案）：一般使用者固定上限，管理者取較高的全站硬上限。
-  const accountLimit = user?.isOwner ? GLOBAL_MAX_THREADS_ACCOUNTS : MAX_THREADS_ACCOUNTS_PER_USER;
+  // 帳號上限（本站不收費、無方案）：與後端 canAddThreadsAccount 共用同一 helper，避免規則脫鉤。
+  const accountLimit = getThreadsAccountLimit(user?.isOwner);
 
   return (
     <div className="space-y-6">

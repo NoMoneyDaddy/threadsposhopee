@@ -6,7 +6,7 @@ import { isDemoMode } from "./env";
 import { demo } from "./demo-store";
 import { decrypt, encrypt } from "./crypto";
 import { log } from "./logger";
-import { MAX_THREADS_ACCOUNTS_PER_USER, GLOBAL_MAX_THREADS_ACCOUNTS } from "./account-limits";
+import { getThreadsAccountLimit } from "./account-limits";
 import type { ThreadsAccount, ShopeeAccount } from "./types";
 
 export async function listThreadsAccounts(ownerId: string): Promise<ThreadsAccount[]> {
@@ -30,7 +30,7 @@ export async function canAddThreadsAccount(
   ownerId: string,
   opts: { isOwner?: boolean; threadsUserId?: string } = {}
 ): Promise<{ ok: boolean; used: number; limit: number }> {
-  const limit = opts.isOwner ? GLOBAL_MAX_THREADS_ACCOUNTS : MAX_THREADS_ACCOUNTS_PER_USER;
+  const limit = getThreadsAccountLimit(opts.isOwner);
   if (isDemoMode) return { ok: true, used: 0, limit };
   const accounts = await listThreadsAccounts(ownerId);
   const used = accounts.length;

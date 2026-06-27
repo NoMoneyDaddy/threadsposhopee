@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 
 // 響應式回歸：每頁 × 桌機/平板/手機，確保無水平溢出且無 JS 例外。
 // （demo 假資料的外部圖在沙箱會有資源載入錯誤，與版面無關，故只看 pageerror。）
-const PAGES = ["/", "/compose", "/sources", "/materials", "/drafts", "/calendar", "/insights", "/accounts", "/pricing", "/login", "/privacy", "/terms", "/sponsored"];
+const PAGES = ["/", "/compose", "/sources", "/materials", "/drafts", "/calendar", "/insights", "/accounts", "/login", "/privacy", "/terms", "/sponsored"];
 
 const VIEWPORTS = [
   { name: "desktop", width: 1440, height: 900 },

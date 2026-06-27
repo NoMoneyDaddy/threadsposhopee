@@ -93,8 +93,14 @@ export default async function InsightsPage({
           <h2 className="section-title mb-1">最佳發文時段</h2>
           <p className="text-sm text-ink-2">
             這裡會依你貼文的 <b>Threads 互動數據</b>（各時段／星期的平均觀看）算出最佳發文時段。
-            目前可用樣本不足（需至少 3 篇有互動數據的貼文）——多發幾篇、確認帳號已完成 Threads 授權後就會出現。
+            目前可用樣本不足（需至少 3 篇有互動數據的貼文）——多發幾篇就會出現。
           </p>
+          {engagement && engagement.sampled > 0 && engagement.fetched === 0 && (
+            <p className="mt-2 rounded-lg bg-amber-50 px-2 py-1 text-xs text-amber-700">
+              ⚠️ 已有發布貼文卻抓不到任何互動數據，通常是帳號的授權尚未包含「成效數據（insights）」權限。
+              請到「帳號管理」<b>重新授權 Threads</b>（重新綁定）以取得成效權限。
+            </p>
+          )}
         </section>
       )}
 

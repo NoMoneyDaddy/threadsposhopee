@@ -297,6 +297,7 @@ export async function createShopeeAccount(
   // 不再讓使用者自取顯示名稱（一人一組）：固定標籤，欄位 NOT NULL。
   const label = input.label?.trim() || "蝦皮分潤";
   if (isDemoMode) {
+    // demo store 為單租戶（不分 owner，listShopeeAccounts 也回全部）：一人一組＝覆寫第一筆。
     const existing = demo.shopeeAccounts[0];
     if (existing) {
       existing.app_id = input.app_id;
@@ -308,20 +309,15 @@ export async function createShopeeAccount(
     return acc;
   }
   const sb = getServiceClient()!;
-  const values = { label, app_id: input.app_id, secret_enc: encrypt(input.secret), default_sub_id };
-  // 一人一組：有既有帳號就更新該筆，否則新增（owner_id 無唯一約束，故先查再寫）。
-  // 查詢異常勿吞：否則會被誤判為「無既有帳號」而錯誤 insert 出第二筆。
-  const { data: existing, error: selectError } = await sb
+  // 一人一組：owner_id 唯一索引（migration 0047）保證；單句 upsert 原子覆寫，免去先查再寫的 TOCTOU 競態與排序不一致。
+  const { data, error } = await sb
     .from("shopee_accounts")
-    .select("id")
-    .eq("owner_id", ownerId)
-    .limit(1)
-    .maybeSingle();
-  if (selectError) throw selectError;
-  const q = existing
-    ? sb.from("shopee_accounts").update(values).eq("id", existing.id).eq("owner_id", ownerId)
-    : sb.from("shopee_accounts").insert({ owner_id: ownerId, ...values });
-  const { data, error } = await q.select("id,label,app_id,default_sub_id").single();
+    .upsert(
+      { owner_id: ownerId, label, app_id: input.app_id, secret_enc: encrypt(input.secret), default_sub_id },
+      { onConflict: "owner_id" }
+    )
+    .select("id,label,app_id,default_sub_id")
+    .single();
   if (error) throw error;
   return data as ShopeeAccount;
 }

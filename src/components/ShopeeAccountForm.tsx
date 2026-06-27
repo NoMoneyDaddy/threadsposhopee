@@ -28,7 +28,7 @@ export default function ShopeeAccountForm() {
       const json = await res.json();
       if (!json.ok) throw new Error(json.error);
       setForm({ app_id: "", secret: "" });
-      setMsg(json.warning ? `⚠️ ${json.warning}` : "✅ 已新增");
+      setMsg(json.warning ? `⚠️ ${json.warning}` : "✅ 已綁定");
       router.refresh();
     } catch (e: any) {
       setMsg(`❌ ${e.message}`);

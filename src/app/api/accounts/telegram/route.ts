@@ -28,7 +28,10 @@ export async function POST(req: Request) {
 
   const chatId = typeof body.chatId === "string" ? body.chatId.trim() : "";
   if (!isValidChatId(chatId)) {
-    return NextResponse.json({ ok: false, error: "chat_id 格式錯誤（應為整數）" }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, error: "只接受私聊 chat_id（正整數）；不支援群組／頻道（負數）" },
+      { status: 400 }
+    );
   }
   if (!env.telegramBotToken) {
     return NextResponse.json({ ok: false, error: "系統未設定 Telegram bot，請聯絡管理員" }, { status: 400 });

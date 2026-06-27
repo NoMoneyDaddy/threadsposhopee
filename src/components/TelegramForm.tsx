@@ -3,6 +3,21 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+// 平台共用 bot 連結（公開、非機密）：由 NEXT_PUBLIC_TELEGRAM_BOT_URL 決定（例 https://t.me/iwantpo_bot）。
+// 不設預設值：自架者的 bot token 各異，硬塞官方連結會讓使用者 /start 錯的 bot、測試訊息 403。未設則不顯示按鈕。
+// env 為信任邊界：解析並只允許 https:／tg: 協定，避免誤設成 javascript: 等不安全 scheme 進到 href。
+function safeBotUrl(raw: string | undefined): string | undefined {
+  const v = raw?.trim();
+  if (!v) return undefined;
+  try {
+    const u = new URL(v);
+    return u.protocol === "https:" || u.protocol === "tg:" ? v : undefined;
+  } catch {
+    return undefined;
+  }
+}
+const BOT_URL = safeBotUrl(process.env.NEXT_PUBLIC_TELEGRAM_BOT_URL);
+
 // 個人 Telegram 通知：綁自己的 chat_id，接收屬於自己的提醒（如「你的貼文可能已發出待確認」）。
 export default function TelegramForm({ bound, botConfigured }: { bound: boolean; botConfigured: boolean }) {
   const router = useRouter();
@@ -39,8 +54,19 @@ export default function TelegramForm({ bound, botConfigured }: { bound: boolean;
       </div>
       <p className="mb-2 text-xs text-ink-2">
         綁定後，屬於你的重要提醒會即時推到 Telegram；<b>待審草稿還會附「核准／駁回」按鈕，可直接遠端審核</b>（僅限與 bot 的私聊，不支援群組）。
-        取得 chat_id：在 Telegram 對本系統 bot 按 <code>/start</code>，bot 會直接回覆你的 Chat ID，貼到下方即可。
+        取得 chat_id：{botConfigured && BOT_URL ? "開啟下方 bot" : "在 Telegram 對本系統 bot"} 按 <code>/start</code>，bot 會直接回覆你的 Chat ID，貼到下方即可。
       </p>
+
+      {botConfigured && BOT_URL && (
+        <a
+          href={BOT_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mb-2 inline-flex items-center gap-1 rounded-full bg-brand/10 px-3 py-1 text-xs text-brand hover:bg-brand/20"
+        >
+          ✈ 開啟 Telegram bot 並按 /start →
+        </a>
+      )}
 
       {!botConfigured && (
         <p className="mb-2 rounded-lg bg-warn/10 p-2 text-xs text-warn">

@@ -65,6 +65,8 @@ export const env = {
   telegramChatId: process.env.TELEGRAM_CHAT_ID ?? "",
   // Telegram 遠端審核 webhook 驗證密鑰（設了才驗 X-Telegram-Bot-Api-Secret-Token，擋偽造請求）。
   telegramWebhookSecret: process.env.TELEGRAM_WEBHOOK_SECRET ?? "",
+  // 公開 bot 連結（前端按鈕用，須對應同一隻 bot）。client 端由 Next 內聯 NEXT_PUBLIC_*，此處僅為集中宣告。
+  telegramBotUrl: process.env.NEXT_PUBLIC_TELEGRAM_BOT_URL ?? "",
   // Web Push（VAPID）：設了公私鑰才啟用瀏覽器推播。公鑰用 NEXT_PUBLIC 前綴供前端訂閱。
   vapidPublicKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "",
   vapidPrivateKey: process.env.VAPID_PRIVATE_KEY ?? "",

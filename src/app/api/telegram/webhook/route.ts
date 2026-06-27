@@ -117,6 +117,11 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: true });
       }
       // 2b) 純 /start（無綁定碼）：回覆 chat id 作為後備（仍可手動貼到設定頁）。
+      // 僅私聊回覆 id：群組 chat id 為負／type 非 private，回傳會誘導使用者綁群組，導致私人通知洩漏給群成員。
+      if (chatId < 0 || (msg.chat.type && msg.chat.type !== "private")) {
+        await sendTelegram(token, String(chatId), "個人通知僅支援私聊。請在與 bot 的私聊中按 /start，或用網站「一鍵綁定」。");
+        return NextResponse.json({ ok: true });
+      }
       await sendTelegram(
         token,
         String(chatId),

@@ -22,6 +22,7 @@ export default function TelegramForm({ bound, botConfigured }: { bound: boolean;
     };
   }, []);
 
+  // 呼叫 Telegram 綁定 API（手動貼 chat_id 綁定／更新／解除），成功後刷新頁面。
   async function call(payload: Record<string, unknown>, label: string) {
     setBusy(label);
     setMsg(null);
@@ -52,7 +53,13 @@ export default function TelegramForm({ bound, botConfigured }: { bound: boolean;
       const json = await res.json();
       if (!json.ok) throw new Error(json.error);
       if (!mountedRef.current) return;
-      window.open(json.url, "_blank", "noopener,noreferrer");
+      const win = window.open(json.url, "_blank", "noopener,noreferrer");
+      if (!win) {
+        // 被瀏覽器擋下（彈窗封鎖）：給可點連結作後備，不假裝已開啟。
+        setMsg(`⚠️ 瀏覽器擋下了新分頁。請手動開啟：${json.url}`);
+        setBusy(null);
+        return;
+      }
       setMsg("已開啟 Telegram，請在對話中按 START 完成綁定…");
       pollBind(40); // 每 3 秒查一次，最多約 2 分鐘
     } catch (e) {
@@ -62,6 +69,7 @@ export default function TelegramForm({ bound, botConfigured }: { bound: boolean;
     }
   }
 
+  // 輪詢綁定狀態：每 3 秒查一次，最多 left 次；偵測到 bound 即刷新；卸載後停止。
   function pollBind(left: number) {
     if (!mountedRef.current) return;
     if (pollRef.current) clearTimeout(pollRef.current);

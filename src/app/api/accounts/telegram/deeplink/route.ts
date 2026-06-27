@@ -12,6 +12,10 @@ export const dynamic = "force-dynamic";
 export async function POST() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+  // view-as：管理者「以成員視角」瀏覽時 user.id 是被檢視成員的 id，按綁定會把管理者的 Telegram 綁到他人帳號。拒絕。
+  if (user.viewingAsEmail) {
+    return NextResponse.json({ ok: false, error: "請先退出檢視身分，再綁定你自己的 Telegram" }, { status: 403 });
+  }
   if (!env.telegramBotToken) {
     return NextResponse.json({ ok: false, error: "系統未設定 Telegram bot，請聯絡管理員" }, { status: 400 });
   }

@@ -7,8 +7,8 @@ import { env } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 
-// Telegram chat_id 為整數（群組為負）；僅允許可選負號 + 數字，長度上限防濫填。
-const isValidChatId = (s: string) => /^-?\d{1,20}$/.test(s);
+// 個人通知只綁「私聊」chat_id（正整數）；群組／頻道為負數，一律拒絕，避免私人通知洩漏給群成員。
+const isValidChatId = (s: string) => /^\d{1,20}$/.test(s);
 
 // 綁定／解除個人 Telegram 通知。綁定時發一則測試訊息確認可達。
 export async function POST(req: Request) {

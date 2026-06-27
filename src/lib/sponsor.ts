@@ -215,6 +215,30 @@ export interface SponsorRecordEntry {
   rec: SponsorRecord;
 }
 
+// 管理頁用：撈出所有贊助紀錄（不論驗證狀態），分頁避免 1000 列截斷；逐列展開陣列、附 index。
+export async function listAllSponsorRecords(): Promise<SponsorRecordEntry[]> {
+  if (isDemoMode) return [];
+  const sb = getServiceClient()!;
+  const out: SponsorRecordEntry[] = [];
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await sb
+      .from("app_state")
+      .select("key,value")
+      .like("key", "sponsor:rec:%")
+      .range(from, from + PAGE - 1);
+    if (error) throw new Error(`讀取贊助紀錄失敗：${error.message}`);
+    const rows = data ?? [];
+    for (const row of rows) {
+      const m = /^sponsor:rec:(.+):(\d{4}-\d{2}-\d{2})$/.exec(row.key);
+      if (!m) continue;
+      parseRecords(row.value).forEach((rec, index) => out.push({ accountId: m[1], date: m[2], index, rec }));
+    }
+    if (rows.length < PAGE) break;
+  }
+  return out;
+}
+
 // 撈出「尚未驗證、且已發出超過 minAgeMs」的贊助紀錄（給驗證排程用）。逐列展開陣列、附 index。
 export async function listSponsorRecordsToVerify(minAgeMs: number): Promise<SponsorRecordEntry[]> {
   if (isDemoMode) return [];

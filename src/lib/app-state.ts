@@ -91,7 +91,9 @@ export async function clearAccountCircuit(accountId: string): Promise<void> {
 export async function getHeartbeat(): Promise<string | null> {
   if (isDemoMode) return demoHeartbeat;
   const sb = getServiceClient()!;
-  const { data } = await sb.from("app_state").select("value").eq("key", "cron_heartbeat").maybeSingle();
+  // 查詢失敗要拋出，不可吞成 null：否則呼叫端（管理頁狀態面板）會把「讀取失敗」誤判為「從未收到心跳／未開啟」。
+  const { data, error } = await sb.from("app_state").select("value").eq("key", "cron_heartbeat").maybeSingle();
+  if (error) throw new Error(`讀取排程心跳失敗：${error.message}`);
   return data?.value ?? null;
 }
 

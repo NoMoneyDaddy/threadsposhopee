@@ -135,7 +135,7 @@ export default function GuidePage() {
             "權限選 <b>Object Read &amp; Write</b>，並用 <b>Apply to specific buckets only</b> 只勾你這個 bucket（最小權限）。",
             "建立後複製 <b>Access Key ID</b> 與 <b>Secret Access Key</b>（<b>Secret 只顯示這一次</b>，離開就看不到，務必當下存好）。",
             "在同頁 <b>Account Details</b> 找你的 <b>Account ID</b>（S3 端點即 <code>https://&lt;Account_ID&gt;.r2.cloudflarestorage.com</code>，系統自動組、免填）。",
-            "讓 bucket 可公開讀：啟用 <b>r2.dev</b> 受管網址，或（建議）綁<b>自訂網域</b>；把該公開網域當「公開讀網域」。",
+            "讓 bucket 可公開讀：啟用 <b>r2.dev</b> 受管網址，或（建議）綁<b>自訂網域</b>；把該公開網址（<b>需含 <code>https://</code></b>）填入「公開讀網域」。",
             "到帳號管理 R2 欄位填這 5 項：<b>Account ID、bucket、公開讀網域、Access Key ID、Secret Access Key</b>（綁了 R2 會優先於 Cloudinary）。"
           ]}
           note="region 固定 auto（系統自動帶、免填）。Token 限縮到「單一 bucket、Object Read & Write」，外洩也只影響該 bucket。Access Key/Secret 加密存、只在 server 用。注意：目前 R2 存檔只驗欄位格式、不做連線測試，金鑰填錯要到實際上傳才會發現。"

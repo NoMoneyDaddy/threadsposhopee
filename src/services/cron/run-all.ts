@@ -14,7 +14,7 @@ import { runAiAgents } from "@/services/ai/agent-run";
 import { cleanupExpiredBindTokens } from "@/lib/telegram-bind";
 import { getOwnerUserId } from "@/lib/auth";
 import { env } from "@/lib/env";
-import { setHeartbeat, getUserTelegramChatId, getUserDiscordWebhook } from "@/lib/store";
+import { setHeartbeat, getUserTelegramChatId } from "@/lib/store";
 import { isPushConfigured } from "@/lib/push";
 import { listPushSubscriptions } from "@/lib/push-store";
 import { log } from "@/lib/logger";
@@ -95,15 +95,10 @@ export async function runCronAll(now: Date = new Date()): Promise<Record<string,
   // 摘要共用：取 owner 通道，優先個人（依通知偏好開關）、否則全域 ops；無通道則略過。
   const runDigest = async (type: NotifyType, build: () => Promise<string | null>) => {
     const ownerId = await getOwnerUserId();
-    const [personalTg, personalDiscord] = ownerId
-      ? await Promise.all([
-          getUserTelegramChatId(ownerId).catch(() => null),
-          getUserDiscordWebhook(ownerId).catch(() => null)
-        ])
-      : [null, null];
-    // 只開瀏覽器推播（未綁 Telegram/Discord）的使用者也應收到摘要 → 納入推播訂閱狀態。
+    const personalTg = ownerId ? await getUserTelegramChatId(ownerId).catch(() => null) : null;
+    // 只開瀏覽器推播（未綁 Telegram）的使用者也應收到摘要 → 納入推播訂閱狀態。
     const hasPush = ownerId && isPushConfigured() ? (await listPushSubscriptions(ownerId).catch(() => [])).length > 0 : false;
-    const personalSink = Boolean((personalTg && env.telegramBotToken) || personalDiscord || hasPush);
+    const personalSink = Boolean((personalTg && env.telegramBotToken) || hasPush);
     const globalSink = Boolean(env.telegramBotToken && env.telegramChatId);
     if (!personalSink && !globalSink) return { sent: false };
     const msg = await build();

@@ -2,7 +2,7 @@ import { env } from "./env";
 import { fetchWithTimeout } from "./http";
 import { assertSafePublicUrl } from "./url-guard";
 import { log } from "./logger";
-import { getUserTelegramChatId, getUserDiscordWebhook, getNotifyPrefs } from "./store";
+import { getUserTelegramChatId, getNotifyPrefs } from "./store";
 import { sendUserPush, isPushConfigured } from "./push";
 import type { NotifyType } from "./notify-prefs";
 
@@ -140,28 +140,7 @@ export async function editTelegramMessageText(
   }
 }
 
-// 共用底層：對 Discord webhook 發訊（POST {content}）。URL 來自使用者，先過 SSRF 守衛。
-// 絕不丟錯。回傳是否成功（供「測試」按鈕判斷）。
-export async function sendDiscord(webhookUrl: string, text: string): Promise<boolean> {
-  try {
-    const safe = assertSafePublicUrl(webhookUrl).href;
-    const res = await fetchWithTimeout(
-      safe,
-      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: text }) },
-      8000
-    );
-    if (!res.ok) {
-      log.warn("Discord webhook 非 2xx", { status: res.status });
-      return false;
-    }
-    return true;
-  } catch (e) {
-    log.warn("Discord webhook 失敗", { err: e instanceof Error ? e.message : e });
-    return false;
-  }
-}
-
-// 個人通知：發到某使用者自綁的所有通道（Telegram + Discord，各自選配）。
+// 個人通知：發到某使用者自綁的所有通道（Telegram + 瀏覽器推播，各自選配）。
 // 未綁任何通道 → 靜默略過（個人通知為選配，缺了不該報錯）。並行送、互不影響。
 export async function sendUserAlert(
   ownerId: string | null | undefined,
@@ -174,13 +153,9 @@ export async function sendUserAlert(
     const prefs = await getNotifyPrefs(ownerId).catch(() => null);
     if (prefs && prefs[type] === false) return;
   }
-  const [chatId, discordUrl] = await Promise.all([
-    getUserTelegramChatId(ownerId).catch(() => null),
-    getUserDiscordWebhook(ownerId).catch(() => null)
-  ]);
+  const chatId = await getUserTelegramChatId(ownerId).catch(() => null);
   const jobs: Promise<unknown>[] = [];
   if (chatId && env.telegramBotToken) jobs.push(sendTelegram(env.telegramBotToken, chatId, text));
-  if (discordUrl) jobs.push(sendDiscord(discordUrl, text));
   if (isPushConfigured()) jobs.push(sendUserPush(ownerId, text)); // 瀏覽器推播（無訂閱則內部略過）
   await Promise.all(jobs);
 }

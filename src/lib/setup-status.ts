@@ -6,8 +6,7 @@ import {
   getUserCloudinary,
   hasUserR2,
   hasApifyCredentials,
-  getUserTelegramChatId,
-  getUserDiscordWebhook
+  getUserTelegramChatId
 } from "@/lib/store";
 import type { AppUser } from "@/lib/auth";
 
@@ -23,7 +22,7 @@ export interface SetupStep {
 // 計算「目前這位使用者」的設定完成度（引導卡牌用）。一律以 user.id 查 → 各人各自的狀態。
 export async function getSetupSteps(user: AppUser): Promise<SetupStep[]> {
   const id = user.id;
-  const [threads, shopeeAccts, affId, cloud, r2, apify, tg, dc, gem] = await Promise.all([
+  const [threads, shopeeAccts, affId, cloud, r2, apify, tg, gem] = await Promise.all([
     listThreadsAccounts(id),
     listShopeeAccounts(id),
     getShopeeAffiliateId(id),
@@ -31,7 +30,6 @@ export async function getSetupSteps(user: AppUser): Promise<SetupStep[]> {
     hasUserR2(id),
     user.isOwner ? hasApifyCredentials(id) : Promise.resolve({ bound: true, actor: null }),
     getUserTelegramChatId(id),
-    getUserDiscordWebhook(id),
     hasGeminiKey(id)
   ]);
 
@@ -71,8 +69,8 @@ export async function getSetupSteps(user: AppUser): Promise<SetupStep[]> {
     {
       key: "notify",
       title: "設定通知（選填）",
-      desc: "綁 Telegram／Discord，待審與異常即時通知你。",
-      done: Boolean(tg) || Boolean(dc),
+      desc: "綁 Telegram，待審與異常即時通知你。",
+      done: Boolean(tg),
       required: false,
       href: "/settings#setup-notify"
     }

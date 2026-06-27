@@ -142,7 +142,7 @@ export {
   canAddThreadsAccount
 } from "./accounts-store";
 
-// 個人憑證／設定層（profiles 表：Apify/Gemini/Telegram/Discord/ShopeeAffiliateId/Cloudinary）
+// 個人憑證／設定層（profiles 表：Apify/Gemini/Telegram/ShopeeAffiliateId/Cloudinary）
 // 已拆到 ./credentials；此處 re-export 維持既有 `@/lib/store` 匯入點不變（God File 漸進拆分）。
 export {
   getApifyCredentials,
@@ -154,8 +154,6 @@ export {
   getUserTelegramChatId,
   setUserTelegramChatId,
   getOwnerByTelegramChatId,
-  getUserDiscordWebhook,
-  setUserDiscordWebhook,
   getDefaultAffiliateUrl,
   setDefaultAffiliateUrl,
   SUGGESTED_DEFAULT_AFFILIATE_URL,

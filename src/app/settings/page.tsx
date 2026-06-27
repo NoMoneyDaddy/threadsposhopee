@@ -4,7 +4,6 @@ import {
   getNotifyPrefs,
   getRepostLimits,
   getUserTelegramChatId,
-  getUserDiscordWebhook,
   getDefaultAffiliateUrl,
   SUGGESTED_DEFAULT_AFFILIATE_URL
 } from "@/lib/store";
@@ -18,30 +17,27 @@ import RepostLimitsForm from "@/components/RepostLimitsForm";
 import NotifyPrefsForm from "@/components/NotifyPrefsForm";
 import PushToggle from "@/components/PushToggle";
 import TelegramForm from "@/components/TelegramForm";
-import DiscordForm from "@/components/DiscordForm";
 import SponsorConfigForm from "@/components/SponsorConfigForm";
 import DefaultAffiliateForm from "@/components/DefaultAffiliateForm";
 
 export const dynamic = "force-dynamic";
 
-// 設定：行為偏好（發文節奏、重發上限、文案）與通知（Telegram/Discord/推播/事件）。帳號與金鑰綁定在「帳號管理」。
+// 設定：行為偏好（發文節奏、重發上限、文案）與通知（Telegram/推播/事件）。帳號與金鑰綁定在「帳號管理」。
 export default async function SettingsPage() {
   const user = await getCurrentUser();
   if (!user) return <div className="text-center text-sm text-red-500">請先登入。</div>;
 
-  const [copyPrefs, publishPrefs, repostLimits, notifyPrefs, telegramChatId, discordWebhook, defaultAffiliate, sponsor] =
+  const [copyPrefs, publishPrefs, repostLimits, notifyPrefs, telegramChatId, defaultAffiliate, sponsor] =
     await Promise.all([
       getCopyPrefs(user.id),
       getPublishPrefs(user.id),
       getRepostLimits(user.id),
       getNotifyPrefs(user.id),
       getUserTelegramChatId(user.id),
-      getUserDiscordWebhook(user.id),
       getDefaultAffiliateUrl(user.id),
       getSponsorConfig()
     ]);
   const telegramBound = Boolean(telegramChatId);
-  const discordBound = Boolean(discordWebhook);
 
   return (
     <div className="space-y-6">
@@ -50,9 +46,8 @@ export default async function SettingsPage() {
         <p className="text-sm text-ink-2">發文節奏、重發上限、文案風格與各種通知都在這裡。</p>
       </div>
 
-      <div id="setup-notify" className="grid scroll-mt-24 gap-4 md:grid-cols-2">
+      <div id="setup-notify" className="scroll-mt-24">
         <TelegramForm bound={telegramBound} botConfigured={!isDemoMode && Boolean(env.telegramBotToken)} />
-        <DiscordForm bound={discordBound} />
       </div>
 
       {env.vapidPublicKey && <PushToggle vapidPublicKey={env.vapidPublicKey} />}

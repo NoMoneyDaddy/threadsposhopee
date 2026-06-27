@@ -6,12 +6,13 @@ import { useRouter } from "next/navigation";
 // 管理頁「發文控制＋排程狀態」面板（owner 限定）：
 // - 全域發文暫停/恢復（緊急急停所有自動發文；不影響草稿頁手動單篇發）。
 // - 顯示上次排程（cron）心跳，判斷自動駕駛是否運轉。
+// cron 狀態文字在 server 端（admin 頁）算好傳入，避免 client 端 Date.now() 造成 hydration 不一致。
 export default function PublishControlPanel({
   initialPaused,
-  lastCronAt
+  cron
 }: {
   initialPaused: boolean;
-  lastCronAt: string | null;
+  cron: { tone: string; text: string };
 }) {
   const router = useRouter();
   const [paused, setPaused] = useState(initialPaused);
@@ -33,24 +34,11 @@ export default function PublishControlPanel({
       setPaused(json.paused);
       setMsg(json.paused ? "⏸️ 已暫停所有自動發文" : "▶️ 已恢復自動發文");
       router.refresh();
-    } catch (e: any) {
-      setMsg(`❌ ${e.message}`);
+    } catch (e) {
+      setMsg(`❌ ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setBusy(false);
     }
-  }
-
-  // 心跳狀態：30 分鐘內視為運轉中。
-  let cron: { tone: string; text: string };
-  if (!lastCronAt) {
-    cron = { tone: "text-ink-3", text: "尚未偵測到排程執行（自動駕駛未開啟）" };
-  } else {
-    const mins = Math.round((Date.now() - new Date(lastCronAt).getTime()) / 60000);
-    const ago = mins < 1 ? "剛剛" : mins < 60 ? `${mins} 分鐘前` : `${Math.round(mins / 60)} 小時前`;
-    cron =
-      mins > 30
-        ? { tone: "text-amber-600", text: `⚠️ 排程似乎停了（上次執行 ${ago}）` }
-        : { tone: "text-green-600", text: `🚀 自動駕駛運轉中 — 上次執行 ${ago}` };
   }
 
   return (

@@ -11,6 +11,7 @@ import { broadcastWeeklyDigests } from "@/services/digest/weekly-broadcast";
 import type { NotifyType } from "@/lib/notify-prefs";
 import { verifySponsorPosts, ensureSponsorPosts } from "@/services/sponsor/run";
 import { runAiAgents } from "@/services/ai/agent-run";
+import { cleanupExpiredBindTokens } from "@/lib/telegram-bind";
 import { getOwnerUserId } from "@/lib/auth";
 import { env } from "@/lib/env";
 import { setHeartbeat, getUserTelegramChatId, getUserDiscordWebhook } from "@/lib/store";
@@ -71,6 +72,8 @@ export async function runCronAll(now: Date = new Date()): Promise<Record<string,
   // 每天展期一次（03:00–03:14 視窗，避免每 15 分重複）
   if (h === 3 && min < 15) {
     steps.push({ key: "refreshTokens", run: refreshExpiringTokens, warn: (r) => (r?.failed ? `⚠️ Token 展期 ${r.failed} 個失敗` : null) });
+    // 順手清掉過期未消費的 Telegram 綁定碼（10 分鐘 TTL，殘留量極小，每日清即可）。
+    steps.push({ key: "cleanupBindTokens", run: cleanupExpiredBindTokens });
   }
   // 每週一健檢一次（04:00–04:14）
   if (dow === 1 && h === 4 && min < 15) {

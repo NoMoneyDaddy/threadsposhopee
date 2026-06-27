@@ -25,6 +25,12 @@ export function parseStartPayload(text: string | undefined | null): string | nul
 // demo 模式用記憶體；key=綁定碼，value={ownerId, 到期 epoch ms}
 const demoTokens = new Map<string, { ownerId: string; exp: number }>();
 
+// app_state value 格式：`到期 ISO#ownerId`。ISO 為固定寬度、字典序＝時序，
+// 讓清理可用單次 `.lt("value", nowIso)` 刪除過期碼，免全表掃描解析。
+function encodeBindValue(expMs: number, ownerId: string): string {
+  return `${new Date(expMs).toISOString()}#${ownerId}`;
+}
+
 // 產生一次性綁定碼並存起來，回傳綁定碼。
 export async function createBindToken(ownerId: string): Promise<string> {
   const token = randomUUID().replace(/-/g, "");
@@ -35,14 +41,15 @@ export async function createBindToken(ownerId: string): Promise<string> {
   }
   const sb = getServiceClient()!;
   const { error } = await sb.from("app_state").upsert(
-    { key: KEY_PREFIX + token, value: JSON.stringify({ ownerId, exp }), updated_at: new Date().toISOString() },
+    { key: KEY_PREFIX + token, value: encodeBindValue(exp, ownerId), updated_at: new Date().toISOString() },
     { onConflict: "key" }
   );
   if (error) throw new Error(`建立 Telegram 綁定碼失敗：${error.message}`);
   return token;
 }
 
-// 消費綁定碼（一次性）：有效則刪除並回 ownerId；格式錯、不存在或已過期回 null。
+// 消費綁定碼（一次性）：有效則回 ownerId；格式錯、不存在或已過期回 null。
+// 用原子 DELETE…RETURNING：只有真正刪到該列的呼叫者拿得到 value，沒有「先查再刪」的 TOCTOU 視窗，徹底防重放。
 export async function consumeBindToken(token: string): Promise<string | null> {
   if (!isValidBindToken(token)) return null;
   if (isDemoMode) {
@@ -51,17 +58,39 @@ export async function consumeBindToken(token: string): Promise<string | null> {
     return rec && rec.exp > Date.now() ? rec.ownerId : null;
   }
   const sb = getServiceClient()!;
-  const key = KEY_PREFIX + token;
-  const { data, error } = await sb.from("app_state").select("value").eq("key", key).maybeSingle();
-  if (error) throw new Error(`讀取 Telegram 綁定碼失敗：${error.message}`);
-  // 先刪除（一次性），再判斷有效性，避免重放。
-  await sb.from("app_state").delete().eq("key", key);
-  if (!data?.value) return null;
-  try {
-    const rec = JSON.parse(data.value) as { ownerId?: string; exp?: number };
-    if (typeof rec.ownerId !== "string" || typeof rec.exp !== "number" || rec.exp <= Date.now()) return null;
-    return rec.ownerId;
-  } catch {
-    return null;
+  const { data, error } = await sb.from("app_state").delete().eq("key", KEY_PREFIX + token).select("value");
+  if (error) throw new Error(`消費 Telegram 綁定碼失敗：${error.message}`);
+  const value = data?.[0]?.value;
+  if (typeof value !== "string") return null; // 不存在或已被其他請求消費
+  const sep = value.indexOf("#");
+  if (sep < 0) return null;
+  const expMs = Date.parse(value.slice(0, sep));
+  const ownerId = value.slice(sep + 1);
+  if (!ownerId || !Number.isFinite(expMs) || expMs <= Date.now()) return null;
+  return ownerId;
+}
+
+// 清理過期、未被消費的綁定碼（cron 用，每日一次足矣）。value 以固定寬度 ISO 起頭＝字典序時序，單次刪除。
+export async function cleanupExpiredBindTokens(): Promise<{ deleted: number }> {
+  if (isDemoMode) {
+    const now = Date.now();
+    let deleted = 0;
+    for (const [t, rec] of demoTokens) {
+      if (rec.exp <= now) {
+        demoTokens.delete(t);
+        deleted++;
+      }
+    }
+    return { deleted };
   }
+  const sb = getServiceClient();
+  if (!sb) return { deleted: 0 };
+  const { data, error } = await sb
+    .from("app_state")
+    .delete()
+    .like("key", `${KEY_PREFIX}%`)
+    .lt("value", new Date().toISOString())
+    .select("key");
+  if (error) throw new Error(`清理過期 Telegram 綁定碼失敗：${error.message}`);
+  return { deleted: data?.length ?? 0 };
 }

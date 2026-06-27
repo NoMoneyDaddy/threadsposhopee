@@ -11,10 +11,15 @@ export default function TelegramForm({ bound, botConfigured }: { bound: boolean;
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mountedRef = useRef(true);
 
-  // 卸載時停止輪詢，避免對已卸載元件 setState。
-  useEffect(() => () => {
-    if (pollRef.current) clearTimeout(pollRef.current);
+  // 卸載時停止輪詢並標記，避免非同步回呼對已卸載元件 setState。
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (pollRef.current) clearTimeout(pollRef.current);
+    };
   }, []);
 
   async function call(payload: Record<string, unknown>, label: string) {
@@ -46,16 +51,19 @@ export default function TelegramForm({ bound, botConfigured }: { bound: boolean;
       const res = await fetch("/api/accounts/telegram/deeplink", { method: "POST" });
       const json = await res.json();
       if (!json.ok) throw new Error(json.error);
+      if (!mountedRef.current) return;
       window.open(json.url, "_blank", "noopener,noreferrer");
       setMsg("已開啟 Telegram，請在對話中按 START 完成綁定…");
       pollBind(40); // 每 3 秒查一次，最多約 2 分鐘
     } catch (e) {
+      if (!mountedRef.current) return;
       setMsg(`❌ ${e instanceof Error ? e.message : String(e)}`);
       setBusy(null);
     }
   }
 
   function pollBind(left: number) {
+    if (!mountedRef.current) return;
     if (pollRef.current) clearTimeout(pollRef.current);
     if (left <= 0) {
       setMsg("尚未偵測到綁定。按 START 後若仍未更新，可重新整理本頁或改用手動輸入。");
@@ -66,6 +74,7 @@ export default function TelegramForm({ bound, botConfigured }: { bound: boolean;
       try {
         const res = await fetch("/api/accounts/telegram");
         const json = await res.json();
+        if (!mountedRef.current) return;
         if (json.ok && json.bound) {
           setMsg("✅ 已完成綁定");
           setBusy(null);
@@ -75,7 +84,7 @@ export default function TelegramForm({ bound, botConfigured }: { bound: boolean;
       } catch {
         // 忽略單次失敗，繼續輪詢
       }
-      pollBind(left - 1);
+      if (mountedRef.current) pollBind(left - 1);
     }, 3000);
   }
 

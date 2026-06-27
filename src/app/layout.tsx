@@ -9,6 +9,7 @@ const display = Space_Grotesk({ subsets: ["latin"], weight: ["500", "700"], vari
 import { getCurrentUser } from "@/lib/auth";
 import SiteHeader from "@/components/SiteHeader";
 import AppChrome from "@/components/AppChrome";
+import ViewAsBar from "@/components/ViewAsBar";
 import PwaRegister from "@/components/PwaRegister";
 
 // Google AdSense（選用）：設了 NEXT_PUBLIC_ADSENSE_CLIENT（ca-pub-…）才啟用。
@@ -55,6 +56,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             {...(ANALYTICS_ID ? { "data-website-id": ANALYTICS_ID } : {})}
           />
         )}
+        {user?.isPlatformOwner && <ViewAsBar viewingAsEmail={user.viewingAsEmail ?? null} />}
         <AppChrome header={<SiteHeader user={user ? { email: user.email, isOwner: user.isOwner } : null} isDemo={isDemoMode} />}>
           {children}
         </AppChrome>

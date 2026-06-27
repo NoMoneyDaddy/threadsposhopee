@@ -1,16 +1,25 @@
+import { cookies } from "next/headers";
 import { getSessionClient } from "@/lib/supabase/clients";
 import { log } from "@/lib/logger";
 import { getServiceClient } from "@/lib/supabase/server";
 import { env, isDemoMode } from "@/lib/env";
 import type { User } from "@supabase/supabase-js";
 
+// 管理者「以成員視角檢視」用的 cookie（只存被檢視成員的 user id）。
+// 安全：僅當「真實登入者是平台管理者」時才被 getCurrentUser 認可（見下），非管理者一律忽略。
+export const VIEW_AS_COOKIE = "view_as";
+
 export interface AppUser {
   id: string;
   email: string | null;
   isOwner: boolean;
+  // 真實登入者是否為平台管理者（不受 view-as 影響；用來顯示切換器/管理入口）。
+  isPlatformOwner: boolean;
+  // 正在以哪位成員視角檢視（email；null=沒有切換）。
+  viewingAsEmail?: string | null;
 }
 
-function toAppUser(user: User): AppUser {
+function baseUser(user: User): { id: string; email: string | null; isOwner: boolean } {
   const email = user.email ?? null;
   return {
     id: user.id,
@@ -19,16 +28,53 @@ function toAppUser(user: User): AppUser {
   };
 }
 
-// 取得目前登入者（未登入回 null）。Demo 模式視為 owner（本機開發）。
-export async function getCurrentUser(): Promise<AppUser | null> {
+// 真實登入者（忽略 view-as 切換）。設定/解除 view-as cookie 等需以「真實身分」驗證時用。
+export async function getRealUser(): Promise<AppUser | null> {
   if (isDemoMode) {
-    return { id: "demo-user", email: env.ownerEmail || "demo@local", isOwner: true };
+    return { id: "demo-user", email: env.ownerEmail || "demo@local", isOwner: true, isPlatformOwner: true, viewingAsEmail: null };
   }
   const sb = getSessionClient();
   const {
     data: { user }
   } = await sb.auth.getUser();
-  return user ? toAppUser(user) : null;
+  if (!user) return null;
+  const b = baseUser(user);
+  return { ...b, isPlatformOwner: b.isOwner, viewingAsEmail: null };
+}
+
+// 取得目前作用中的使用者（未登入回 null）。Demo 模式視為 owner（本機開發）。
+// 管理者若設了 view-as cookie，會以「該成員身分」回傳（id/email 換成成員的），
+// 使資料層（皆以 user.id 當 owner_id 過濾）自動切到該成員視角（唯讀由 middleware 把關寫入）。
+export async function getCurrentUser(): Promise<AppUser | null> {
+  const real = await getRealUser();
+  if (!real) return null;
+  // 非平台管理者：一律忽略 view-as cookie（防偽造 cookie 越權看他人資料）。
+  if (!real.isPlatformOwner) return real;
+  const viewAsId = cookies().get(VIEW_AS_COOKIE)?.value?.trim();
+  if (!viewAsId || viewAsId === real.id) return real;
+  // 以成員身分檢視：查 email 供顯示；資料以此 id 過濾。
+  let email: string | null = null;
+  const admin = getServiceClient();
+  if (admin) {
+    const { data } = await admin.auth.admin.getUserById(viewAsId).catch(() => ({ data: null }) as { data: null });
+    email = data?.user?.email ?? null;
+  }
+  return { id: viewAsId, email, isOwner: false, isPlatformOwner: true, viewingAsEmail: email ?? viewAsId };
+}
+
+// 列出所有平台使用者（管理者「切換成員視角」下拉用）。僅供 owner-only 路由呼叫。
+export async function listAllUsers(): Promise<{ id: string; email: string | null }[]> {
+  if (isDemoMode) return [];
+  const sb = getServiceClient();
+  if (!sb) throw new Error("無法取得服務端連線"); // 不靜默回 []（會被誤當成「沒有使用者」）
+  const out: { id: string; email: string | null }[] = [];
+  for (let page = 1; page <= 20; page++) {
+    const { data, error } = await sb.auth.admin.listUsers({ page, perPage: 200 });
+    if (error) throw new Error(`列出使用者失敗：${error.message}`); // 中途失敗即拋，避免回傳部分清單看似成功
+    for (const u of data.users) out.push({ id: u.id, email: u.email ?? null });
+    if (data.users.length < 200) break;
+  }
+  return out;
 }
 
 // 解析 owner 的 user id（給背景排程/pipeline 標記 owner_id 用）。

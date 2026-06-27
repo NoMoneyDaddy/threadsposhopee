@@ -89,6 +89,22 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(redirectUrl);
   }
 
+  // 唯讀防護：管理者「以成員視角檢視」期間（帶 view_as cookie）擋下狀態變更請求，確保只看不動到成員資料。
+  // 須在解析使用者之後判斷：僅平台管理者才套用；一般成員若殘留 cookie（如共用電腦換人登入）則自動清除，
+  // 避免被鎖死（他們看不到結束檢視的工具列）。例外：view-as 切換/解除本身（已在 PUBLIC_PREFIXES 的 /auth 之外）。
+  const viewAs = req.cookies.get("view_as")?.value;
+  if (viewAs) {
+    const isOwner = Boolean(user.email && user.email.toLowerCase() === (process.env.OWNER_EMAIL ?? "").toLowerCase());
+    if (!isOwner || viewAs === user.id) {
+      // 非管理者殘留 cookie（共用電腦換人登入），或管理者自選自己（＝沒在檢視別人）：
+      // 兩者都不是有效的成員檢視，清除 cookie 以免誤擋寫入又無工具列可解除。
+      res.cookies.set("view_as", "", { path: "/", maxAge: 0 });
+    } else if (req.method !== "GET" && req.method !== "HEAD" && !url.pathname.startsWith("/api/admin/view-as")) {
+      // 管理者正以「其他成員」視角檢視：唯讀，擋下狀態變更（例外：view-as 切換/解除）。
+      return NextResponse.json({ ok: false, error: "成員視角為唯讀，請先結束檢視再操作" }, { status: 403 });
+    }
+  }
+
   return res;
 }
 

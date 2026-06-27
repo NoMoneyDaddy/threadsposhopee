@@ -21,7 +21,9 @@ test("planLimits：查表得限額，未知退 free 額度", () => {
   assert.equal(planLimits("???").maxThreadsAccounts, PLANS.free.maxThreadsAccounts);
 });
 
-test("方案級距遞增（free < pro < business）", () => {
-  assert.ok(PLANS.free.maxThreadsAccounts < PLANS.pro.maxThreadsAccounts);
-  assert.ok(PLANS.pro.maxThreadsAccounts < PLANS.business.maxThreadsAccounts);
+test("方案級距非遞減（free ≤ pro ≤ business）", () => {
+  // 本專案不收費：free 與 pro 同為 10（人人皆得 10），business 保留較高級距。
+  assert.ok(PLANS.free.maxThreadsAccounts <= PLANS.pro.maxThreadsAccounts);
+  assert.ok(PLANS.pro.maxThreadsAccounts <= PLANS.business.maxThreadsAccounts);
+  assert.equal(PLANS.free.maxThreadsAccounts, 10);
 });

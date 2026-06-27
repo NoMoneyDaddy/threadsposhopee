@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { env } from "@/lib/env";
-import { getOwnerByTelegramChatId, getDraft, updateDraftStatus } from "@/lib/store";
+import { getOwnerByTelegramChatId, getDraft, updateDraftStatus, setUserTelegramChatId } from "@/lib/store";
 import { answerTelegramCallback, editTelegramMessageText, sendTelegram } from "@/lib/notify";
+import { parseStartPayload, consumeBindToken } from "@/lib/telegram-bind";
 import { TG_APPROVE_PREFIX, TG_REJECT_PREFIX } from "@/services/telegram/review";
 import { log } from "@/lib/logger";
 
@@ -86,15 +87,40 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true });
     }
 
-    // 2) 僅 /start 指令才回覆 chat id（避免被加進群組後對每則訊息/貼圖/服務訊息洗版、觸發 rate limit）。
+    // 2) 僅 /start 指令才回覆（避免被加進群組後對每則訊息/貼圖/服務訊息洗版、觸發 rate limit）。
     const msg = (update as { message?: unknown }).message as
-      | { chat?: { id: number }; text?: string }
+      | { chat?: { id: number; type?: string }; text?: string }
       | undefined;
     if (msg?.chat?.id != null && typeof msg.text === "string" && msg.text.startsWith("/start")) {
+      const chatId = msg.chat.id;
+      const payload = parseStartPayload(msg.text);
+      // 2a) 帶綁定碼的 deeplink（/start <token>）：以綁定碼反查使用者，自動寫入其 chat_id。
+      if (payload) {
+        // 僅私聊可綁定：群組 chat id 為負，多人共用會讓他人收到你的草稿並可代為核准。
+        if (chatId < 0 || (msg.chat.type && msg.chat.type !== "private")) {
+          await sendTelegram(token, String(chatId), "請在與 bot 的「私聊」中綁定（不支援群組）。");
+          return NextResponse.json({ ok: true });
+        }
+        const ownerId = await consumeBindToken(payload);
+        if (!ownerId) {
+          await sendTelegram(token, String(chatId), "綁定連結已失效或不正確，請回網站重新產生「一鍵綁定」連結。");
+          return NextResponse.json({ ok: true });
+        }
+        try {
+          await setUserTelegramChatId(ownerId, String(chatId));
+          await sendTelegram(token, String(chatId), "✅ 已完成綁定，之後待審草稿與重要提醒會直接推到這裡，可一鍵核准／駁回。");
+        } catch (e) {
+          // telegram_chat_id 唯一索引：此 chat 已綁其他帳號時會衝突。
+          log.warn("Telegram deeplink 綁定寫入失敗", { err: e instanceof Error ? e.message : e });
+          await sendTelegram(token, String(chatId), "綁定失敗：此 Telegram 可能已綁定其他帳號。請先在原帳號解除，或改用其他 Telegram。");
+        }
+        return NextResponse.json({ ok: true });
+      }
+      // 2b) 純 /start（無綁定碼）：回覆 chat id 作為後備（仍可手動貼到設定頁）。
       await sendTelegram(
         token,
-        String(msg.chat.id),
-        `你的 Chat ID 是：${msg.chat.id}\n請到網站「設定 → Telegram 通知」貼上此 ID 完成綁定，之後待審草稿會直接推到這裡，可一鍵核准／駁回。`
+        String(chatId),
+        `你的 Chat ID 是：${chatId}\n建議改用網站「設定 → Telegram 通知 → 一鍵綁定」更方便；或將此 ID 貼回設定頁完成綁定。`
       );
     }
     return NextResponse.json({ ok: true });

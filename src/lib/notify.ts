@@ -30,6 +30,30 @@ export async function sendTelegram(botToken: string, chatId: string, text: strin
   }
 }
 
+// 取 bot 的 @username（組 deeplink 用）：呼叫 getMe，記憶體緩存（username 幾乎不變）。
+// 取不到回 null（呼叫端據此不提供一鍵綁定）。絕不丟錯。
+let cachedBotUsername: string | null = null;
+export async function getTelegramBotUsername(botToken: string): Promise<string | null> {
+  if (cachedBotUsername) return cachedBotUsername;
+  try {
+    const res = await fetchWithTimeout(`https://api.telegram.org/bot${botToken}/getMe`, {}, 8000);
+    if (!res.ok) {
+      log.warn("Telegram getMe 非 2xx", { status: res.status });
+      return null;
+    }
+    const json = (await res.json()) as { ok?: boolean; result?: { username?: string } };
+    const username = json?.result?.username;
+    if (typeof username === "string" && username) {
+      cachedBotUsername = username;
+      return username;
+    }
+    return null;
+  } catch (e) {
+    log.warn("Telegram getMe 失敗", { err: e instanceof Error ? e.message : e });
+    return null;
+  }
+}
+
 // 運維告警（全域）：設了 TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID 才送，用於 cron 失敗等。
 // 未設通道時不靜默：改落結構化 error log，確保告警內容在 log 層仍留痕（運維可見）。
 export async function sendAlert(text: string): Promise<void> {

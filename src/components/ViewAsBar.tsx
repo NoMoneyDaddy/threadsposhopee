@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { usePathname } from "next/navigation";
+import { VIEW_AS_MEMBER_PREVIEW } from "@/lib/view-as";
 
 type UserRow = { id: string; email: string | null };
 
@@ -80,10 +81,21 @@ export default function ViewAsBar({ viewingAsEmail }: { viewingAsEmail: string |
           切換成員視角（唯讀）
         </summary>
         <div className="absolute right-4 z-50 mt-1 w-72 rounded-xl border bg-surface p-2 shadow-[var(--shadow-card)]">
+          {/* 一般成員視角預覽：用自己的帳號以非管理者身分呈現，沒有其他成員也能看成員視角（唯讀）。 */}
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => switchTo(VIEW_AS_MEMBER_PREVIEW)}
+            className="mb-2 block w-full rounded-lg border px-2 py-1.5 text-left text-sm text-ink hover:bg-surface-2 disabled:opacity-50"
+          >
+            👤 預覽一般成員視角（用我的帳號）
+          </button>
           {busy && !users ? (
             <div className="px-2 py-1 text-ink-3">載入中…</div>
           ) : err ? (
             <div className="px-2 py-1 text-danger">{err}</div>
+          ) : users?.length === 0 ? (
+            <div className="px-2 py-1 text-ink-3">目前沒有其他成員，可用上方預覽一般成員視角</div>
           ) : (
             <select
               className="w-full rounded-lg border px-2 py-1.5 text-sm text-ink"

@@ -3,11 +3,12 @@ import { getSessionClient } from "@/lib/supabase/clients";
 import { log } from "@/lib/logger";
 import { getServiceClient } from "@/lib/supabase/server";
 import { env, isDemoMode } from "@/lib/env";
+import { VIEW_AS_COOKIE, VIEW_AS_MEMBER_PREVIEW } from "@/lib/view-as";
 import type { User } from "@supabase/supabase-js";
 
-// 管理者「以成員視角檢視」用的 cookie（只存被檢視成員的 user id）。
-// 安全：僅當「真實登入者是平台管理者」時才被 getCurrentUser 認可（見下），非管理者一律忽略。
-export const VIEW_AS_COOKIE = "view_as";
+// view-as 共用常量集中於 @/lib/view-as（純值、client/server 共用，避免前後端字串漂移）；re-export 維持既有匯入。
+// 安全：view_as cookie 僅當「真實登入者是平台管理者」時才被 getCurrentUser 認可（見下），非管理者一律忽略。
+export { VIEW_AS_COOKIE, VIEW_AS_MEMBER_PREVIEW };
 
 export interface AppUser {
   id: string;
@@ -53,6 +54,10 @@ export async function getCurrentUser(): Promise<AppUser | null> {
   try {
     const viewAsId = cookies().get(VIEW_AS_COOKIE)?.value?.trim();
     if (!viewAsId || viewAsId === real.id) return real;
+    // 「一般成員視角」預覽：用管理者自己的帳號/資料，但以非管理者身分呈現（看選單/權限差異），唯讀。
+    if (viewAsId === VIEW_AS_MEMBER_PREVIEW) {
+      return { id: real.id, email: real.email, isOwner: false, isPlatformOwner: true, viewingAsEmail: "一般成員視角（你的帳號）" };
+    }
     // 先確認該成員確實存在再切換：查無使用者或無法驗證（缺 service client／查詢失敗）一律退回真實身分，
     // 不把未驗證的 view_as id 當成有效身分拿去過濾資料。
     const admin = getServiceClient();

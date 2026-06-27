@@ -9,7 +9,8 @@ export async function GET() {
   try {
     const real = await getRealUser();
     if (!real?.isPlatformOwner) return NextResponse.json({ ok: false, error: "僅限管理者" }, { status: 403 });
-    const users = await listAllUsers();
+    // 排除管理者自己：無法「以自己視角檢視」，下拉只列其他成員。
+    const users = (await listAllUsers()).filter((u) => u.id !== real.id);
     return NextResponse.json({ ok: true, users });
   } catch (e) {
     return apiError("列出使用者失敗", e);

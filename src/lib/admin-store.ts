@@ -4,6 +4,7 @@ import { getServiceClient } from "./supabase/server";
 import { isDemoMode } from "./env";
 import { getRealUser, listAllUsers } from "./auth";
 import { listActiveCircuits } from "./app-state";
+import { listAllSponsorRecords } from "./sponsor";
 import { sanitizeRoles, type ManualRole } from "./roles";
 
 // ── 身份組 ────────────────────────────────────────────────
@@ -121,6 +122,56 @@ export async function listThreadsAccountsStatus(): Promise<ThreadsAccountStatusR
       circuitUntil: circuitTime ? new Date(circuitTime).toISOString() : null
     };
   });
+}
+
+// 管理頁贊助文紀錄總覽（owner-only）：近期各帳號的贊助文發布紀錄與驗證狀態。
+export interface SponsorRecordView {
+  accountId: string;
+  ownerEmail: string | null;
+  postId: string;
+  link: string;
+  atText: string; // 已格式化為台北時間的發布時刻（server 端算好，避免 client TZ/hydration 差異）
+  atMs: number; // 排序用
+  statusLabel: string;
+  statusTone: string;
+}
+export async function listRecentSponsorRecords(limit = 50): Promise<SponsorRecordView[]> {
+  if (isDemoMode) return [];
+  const actor = await getRealUser();
+  if (!actor?.isPlatformOwner) throw new Error("forbidden: 僅限管理者");
+  const [users, entries] = await Promise.all([listAllUsers(), listAllSponsorRecords()]);
+  const emailById = new Map<string, string | null>();
+  for (const u of users) emailById.set(u.id, u.email);
+  const fmt = new Intl.DateTimeFormat("zh-TW", {
+    timeZone: "Asia/Taipei",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+  return entries
+    .map((e) => {
+      const atMs = Date.parse(e.rec.at);
+      const status = e.rec.ownLink
+        ? { statusLabel: "自有連結", statusTone: "text-ink-3" }
+        : e.rec.violated
+          ? { statusLabel: "違規", statusTone: "text-red-600" }
+          : e.rec.verified
+            ? { statusLabel: "已驗證", statusTone: "text-green-600" }
+            : { statusLabel: "待驗證", statusTone: "text-amber-600" };
+      return {
+        accountId: e.accountId,
+        ownerEmail: e.rec.ownerId ? emailById.get(e.rec.ownerId) ?? null : null,
+        postId: e.rec.postId,
+        link: e.rec.link,
+        atText: Number.isFinite(atMs) ? fmt.format(atMs) : e.rec.at,
+        atMs: Number.isFinite(atMs) ? atMs : 0,
+        ...status
+      };
+    })
+    .sort((a, b) => b.atMs - a.atMs)
+    .slice(0, limit);
 }
 
 // 依 email 找使用者 id（管理員賦予身份組用；分頁掃描）。

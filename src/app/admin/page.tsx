@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
-import { getAdminStats, getFeatureFlags, listSharedForReview, listTopContributors, isPublishPaused, getHeartbeat, listUsersOverview, listThreadsAccountsStatus, type ThreadsAccountStatusRow } from "@/lib/store";
+import { getAdminStats, getFeatureFlags, listSharedForReview, listTopContributors, isPublishPaused, getHeartbeat, listUsersOverview, listThreadsAccountsStatus, listRecentSponsorRecords, type ThreadsAccountStatusRow } from "@/lib/store";
 import { contributionBadge } from "@/lib/roles";
 import { isDemoMode } from "@/lib/env";
 import { cronHeartbeatStatus } from "@/lib/cron-status";
@@ -13,6 +13,7 @@ import ReviewButton from "@/components/ReviewButton";
 import PublishControlPanel from "@/components/PublishControlPanel";
 import AdminUsersPanel from "@/components/AdminUsersPanel";
 import AdminAccountsPanel, { type AccountStatusView } from "@/components/AdminAccountsPanel";
+import AdminSponsorPanel from "@/components/AdminSponsorPanel";
 
 // server 端把帳號狀態列轉成顯示資料（token 到期文案、斷路器剩餘），避免 client 端 Date.now() 造成 hydration 不一致。
 function toAccountStatusView(row: ThreadsAccountStatusRow, nowMs: number): AccountStatusView {
@@ -49,13 +50,14 @@ export default async function AdminPage() {
   if (!user) redirect("/login?next=/admin");
   if (!user.isOwner) redirect("/");
 
-  const [stats, flags, queue, leaders, users, accountStatus] = await Promise.all([
+  const [stats, flags, queue, leaders, users, accountStatus, sponsorRecords] = await Promise.all([
     getAdminStats().catch(() => null),
     getFeatureFlags(),
     listSharedForReview(100).catch(() => []),
     listTopContributors(10).catch(() => []),
     listUsersOverview().catch(() => null),
-    listThreadsAccountsStatus().catch(() => null)
+    listThreadsAccountsStatus().catch(() => null),
+    listRecentSponsorRecords(50).catch(() => null)
   ]);
   const accountViews = accountStatus ? accountStatus.map((r) => toAccountStatusView(r, Date.now())) : null;
 
@@ -126,6 +128,13 @@ export default async function AdminPage() {
           <AdminAccountsPanel accounts={accountViews} />
         ) : (
           <div className="card p-4 text-sm text-amber-600">⚠️ 帳號狀態讀取失敗，請稍後重整。</div>
+        ))}
+
+      {!isDemoMode &&
+        (sponsorRecords ? (
+          <AdminSponsorPanel records={sponsorRecords} />
+        ) : (
+          <div className="card p-4 text-sm text-amber-600">⚠️ 贊助文紀錄讀取失敗，請稍後重整。</div>
         ))}
 
       <div className="card p-4">

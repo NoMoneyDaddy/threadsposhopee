@@ -2,6 +2,7 @@
 // 權限把關在 API/頁面層（owner email = 管理員；reviewer 由管理員賦予）。
 import { getServiceClient } from "./supabase/server";
 import { isDemoMode } from "./env";
+import { getRealUser, listAllUsers } from "./auth";
 import { sanitizeRoles, type ManualRole } from "./roles";
 
 // ── 身份組 ────────────────────────────────────────────────
@@ -10,6 +11,73 @@ export async function getRoles(ownerId: string): Promise<ManualRole[]> {
   const sb = getServiceClient()!;
   const { data } = await sb.from("profiles").select("roles").eq("id", ownerId).maybeSingle();
   return sanitizeRoles(data?.roles);
+}
+
+// 管理頁使用者總覽（owner-only）：每位使用者的身份組與綁定帳號數。
+// 以「整表各一次查詢」彙總（避免每使用者 N 次查詢）；service-role 讀全表，僅供管理頁使用。
+export interface UserOverviewRow {
+  id: string;
+  email: string | null;
+  roles: ManualRole[];
+  threadsCount: number;
+  shopeeBound: boolean;
+}
+// 整表分頁讀取（避開 Supabase 預設 1000 列上限的靜默截斷；查詢失敗即拋）。
+async function selectAllRows<T>(table: string, columns: string): Promise<T[]> {
+  const sb = getServiceClient()!;
+  const PAGE = 1000;
+  const out: T[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await sb.from(table).select(columns).range(from, from + PAGE - 1);
+    if (error) throw new Error(`讀取 ${table} 失敗：${error.message}`);
+    const rows = (data ?? []) as T[];
+    out.push(...rows);
+    if (rows.length < PAGE) break;
+  }
+  return out;
+}
+
+export async function listUsersOverview(): Promise<UserOverviewRow[]> {
+  if (isDemoMode) return [];
+  // 防禦式 owner 守門（除頁面層外再驗一次）：本函式以 service-role 讀全站使用者資料，
+  // 若日後被其他 server action/route 誤匯入，避免跨租戶外洩。以「真實登入身分」驗證（非 view-as）。
+  const actor = await getRealUser();
+  if (!actor?.isPlatformOwner) throw new Error("forbidden: 僅限管理者");
+  const users = await listAllUsers();
+  // 各表分頁全撈，於記憶體彙總（避免每使用者 N 次查詢；分頁避免 1000 列截斷）。
+  const [profiles, threads, shopee] = await Promise.all([
+    selectAllRows<{ id: string; roles?: unknown }>("profiles", "id, roles"),
+    selectAllRows<{ owner_id: string | null }>("threads_accounts", "owner_id"),
+    selectAllRows<{ owner_id: string | null }>("shopee_accounts", "owner_id")
+  ]);
+
+  return buildUsersOverview(users, profiles, threads, shopee);
+}
+
+// 純彙總（易測）：把使用者清單與各表列彙總成總覽列。owner_id 為 null 的孤兒列略過。
+export function buildUsersOverview(
+  users: { id: string; email: string | null }[],
+  profiles: { id: string; roles?: unknown }[],
+  threads: { owner_id: string | null }[],
+  shopee: { owner_id: string | null }[]
+): UserOverviewRow[] {
+  const rolesById = new Map<string, ManualRole[]>();
+  for (const r of profiles) rolesById.set(r.id, sanitizeRoles(r.roles));
+  const threadsByOwner = new Map<string, number>();
+  for (const a of threads) {
+    if (a.owner_id) threadsByOwner.set(a.owner_id, (threadsByOwner.get(a.owner_id) ?? 0) + 1);
+  }
+  const shopeeOwners = new Set<string>();
+  for (const a of shopee) {
+    if (a.owner_id) shopeeOwners.add(a.owner_id);
+  }
+  return users.map((u) => ({
+    id: u.id,
+    email: u.email,
+    roles: rolesById.get(u.id) ?? [],
+    threadsCount: threadsByOwner.get(u.id) ?? 0,
+    shopeeBound: shopeeOwners.has(u.id)
+  }));
 }
 
 // 依 email 找使用者 id（管理員賦予身份組用；分頁掃描）。

@@ -65,10 +65,12 @@ export {
   getAdminStats,
   listTopContributors,
   listOwnersWithNotify,
+  listUsersOverview,
   DEFAULT_FLAGS,
   type FeatureFlags,
   type AdminStats,
-  type Contributor
+  type Contributor,
+  type UserOverviewRow
 } from "./admin-store";
 
 // 草稿資料層（CRUD/排程時段/發文佇列/延遲留言生命週期）已拆到 ./drafts-store；

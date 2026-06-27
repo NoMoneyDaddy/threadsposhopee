@@ -310,7 +310,14 @@ export async function createShopeeAccount(
   const sb = getServiceClient()!;
   const values = { label, app_id: input.app_id, secret_enc: encrypt(input.secret), default_sub_id };
   // 一人一組：有既有帳號就更新該筆，否則新增（owner_id 無唯一約束，故先查再寫）。
-  const { data: existing } = await sb.from("shopee_accounts").select("id").eq("owner_id", ownerId).limit(1).maybeSingle();
+  // 查詢異常勿吞：否則會被誤判為「無既有帳號」而錯誤 insert 出第二筆。
+  const { data: existing, error: selectError } = await sb
+    .from("shopee_accounts")
+    .select("id")
+    .eq("owner_id", ownerId)
+    .limit(1)
+    .maybeSingle();
+  if (selectError) throw selectError;
   const q = existing
     ? sb.from("shopee_accounts").update(values).eq("id", existing.id).eq("owner_id", ownerId)
     : sb.from("shopee_accounts").insert({ owner_id: ownerId, ...values });

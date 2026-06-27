@@ -77,6 +77,40 @@ export async function tripAccountCircuit(accountId: string, cooldownMinutes: num
     .upsert({ key: `circuit:${accountId}`, value: until, updated_at: new Date().toISOString() }, { onConflict: "key" });
 }
 
+// 管理頁用：一次讀出所有「仍在冷卻中」的帳號斷路器（key=circuit:<accountId>），回傳 accountId→到期 epoch ms。
+// 已過期者略過。僅供 owner-only 管理頁；分頁避免 1000 列截斷。
+export async function listActiveCircuits(): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  if (isDemoMode) {
+    const now = Date.now();
+    for (const [id, iso] of Object.entries(demoCircuit)) {
+      const until = Date.parse(iso);
+      if (Number.isFinite(until) && until > now) out.set(id, until);
+    }
+    return out;
+  }
+  const sb = getServiceClient();
+  if (!sb) return out;
+  const now = Date.now();
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await sb
+      .from("app_state")
+      .select("key, value")
+      .like("key", "circuit:%")
+      .range(from, from + PAGE - 1);
+    if (error) throw new Error(`讀取斷路器狀態失敗：${error.message}`);
+    const rows = data ?? [];
+    for (const r of rows) {
+      const until = Date.parse((r as { value: string }).value);
+      const accountId = (r as { key: string }).key.slice("circuit:".length);
+      if (accountId && Number.isFinite(until) && until > now) out.set(accountId, until);
+    }
+    if (rows.length < PAGE) break;
+  }
+  return out;
+}
+
 // 解除冷卻（帳號恢復正常發文時呼叫）。
 export async function clearAccountCircuit(accountId: string): Promise<void> {
   if (isDemoMode) {

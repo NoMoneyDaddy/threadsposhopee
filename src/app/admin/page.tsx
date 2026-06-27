@@ -1,9 +1,10 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
-import { getAdminStats, getFeatureFlags, listSharedForReview, listTopContributors, isPublishPaused, getHeartbeat, listUsersOverview } from "@/lib/store";
+import { getAdminStats, getFeatureFlags, listSharedForReview, listTopContributors, isPublishPaused, getHeartbeat, listUsersOverview, listThreadsAccountsStatus, type ThreadsAccountStatusRow } from "@/lib/store";
 import { contributionBadge } from "@/lib/roles";
 import { isDemoMode } from "@/lib/env";
 import { cronHeartbeatStatus } from "@/lib/cron-status";
+import { tokenExpiryState } from "@/lib/token-expiry";
 import { cloudinaryThumb } from "@/lib/img";
 import { log } from "@/lib/logger";
 import FeatureFlagsForm from "@/components/FeatureFlagsForm";
@@ -11,6 +12,34 @@ import RoleGrantForm from "@/components/RoleGrantForm";
 import ReviewButton from "@/components/ReviewButton";
 import PublishControlPanel from "@/components/PublishControlPanel";
 import AdminUsersPanel from "@/components/AdminUsersPanel";
+import AdminAccountsPanel, { type AccountStatusView } from "@/components/AdminAccountsPanel";
+
+// server 端把帳號狀態列轉成顯示資料（token 到期文案、斷路器剩餘），避免 client 端 Date.now() 造成 hydration 不一致。
+function toAccountStatusView(row: ThreadsAccountStatusRow, nowMs: number): AccountStatusView {
+  const exp = tokenExpiryState(row.tokenExpiresAt, 7, nowMs);
+  const token =
+    exp.level === "unknown"
+      ? { tone: "text-ink-3", text: "未知" }
+      : exp.level === "expired"
+        ? { tone: "text-red-600", text: "已過期" }
+        : exp.level === "soon"
+          ? { tone: "text-amber-600", text: `${exp.daysLeft} 天後到期` }
+          : { tone: "text-ink-2", text: `${exp.daysLeft} 天後到期` };
+  let circuitText: string | null = null;
+  if (row.circuitUntil) {
+    const mins = Math.max(0, Math.round((Date.parse(row.circuitUntil) - nowMs) / 60000));
+    circuitText = `冷卻中（約 ${mins} 分鐘）`;
+  }
+  return {
+    id: row.id,
+    label: row.label,
+    ownerEmail: row.ownerEmail,
+    threadsUserId: row.threadsUserId,
+    status: row.status,
+    token,
+    circuitText
+  };
+}
 
 export const dynamic = "force-dynamic";
 
@@ -20,13 +49,15 @@ export default async function AdminPage() {
   if (!user) redirect("/login?next=/admin");
   if (!user.isOwner) redirect("/");
 
-  const [stats, flags, queue, leaders, users] = await Promise.all([
+  const [stats, flags, queue, leaders, users, accountStatus] = await Promise.all([
     getAdminStats().catch(() => null),
     getFeatureFlags(),
     listSharedForReview(100).catch(() => []),
     listTopContributors(10).catch(() => []),
-    listUsersOverview().catch(() => null)
+    listUsersOverview().catch(() => null),
+    listThreadsAccountsStatus().catch(() => null)
   ]);
+  const accountViews = accountStatus ? accountStatus.map((r) => toAccountStatusView(r, Date.now())) : null;
 
   // 發文急停／心跳是 owner 控制台的關鍵狀態：讀取失敗不可偽裝成「未暫停／未啟用」，
   // 改以 null 表「未知（讀取失敗）」並在面板明確標示，避免誤判系統真實狀態。
@@ -88,6 +119,13 @@ export default async function AdminPage() {
           <AdminUsersPanel users={users} />
         ) : (
           <div className="card p-4 text-sm text-amber-600">⚠️ 使用者清單讀取失敗，請稍後重整。</div>
+        ))}
+
+      {!isDemoMode &&
+        (accountViews ? (
+          <AdminAccountsPanel accounts={accountViews} />
+        ) : (
+          <div className="card p-4 text-sm text-amber-600">⚠️ 帳號狀態讀取失敗，請稍後重整。</div>
         ))}
 
       <div className="card p-4">

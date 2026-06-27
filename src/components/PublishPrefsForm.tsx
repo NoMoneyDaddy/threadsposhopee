@@ -90,7 +90,7 @@ export default function PublishPrefsForm({
         </label>
         <p className="mb-1.5 text-xs text-ink-3">每天會在這些時刻附近發文（台北時間）。點時間格子加入/移除，或用快捷；特殊分鐘（如 12:30）可用最下方輸入框。</p>
         {/* 整點時段多選格子：點選即加入/移除，免手打 */}
-        <div className="mb-2 grid grid-cols-6 gap-1 sm:grid-cols-9">
+        <div className="mb-2 grid grid-cols-6 gap-1 sm:grid-cols-8">
           {GRID_TIMES.map((t) => {
             const on = slotSet.has(t);
             return (

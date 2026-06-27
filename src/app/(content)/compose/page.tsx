@@ -22,7 +22,7 @@ export default async function ComposePage() {
         <div>
           <h1 className="text-2xl font-bold">發文</h1>
           <p className="text-sm text-ink-2">
-            像 Threads 一樣：直接打字、上傳多張照片／影片，右側即時預覽所見即所得；貼文中的蝦皮連結會自動轉成你的分潤連結。
+            像 Threads 一樣：直接打字、上傳多張照片／影片，右側即時預覽所見即所得。
           </p>
         </div>
         <a href="/materials" className="shrink-0 rounded-xl border px-3 py-2 text-sm hover:bg-surface-2">

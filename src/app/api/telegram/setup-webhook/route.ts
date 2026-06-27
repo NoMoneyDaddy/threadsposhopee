@@ -38,7 +38,8 @@ export async function POST(req: Request) {
       { status: 400 }
     );
   }
-  const webhookUrl = `${publicOrigin(req)}/api/telegram/webhook`;
+  // Telegram 規定 webhook 必須 https；反向代理還原若得到 http 一律改為 https，避免註冊失敗。
+  const webhookUrl = `${publicOrigin(req)}/api/telegram/webhook`.replace(/^http:/, "https:");
   const r = await setTelegramWebhook(env.telegramBotToken, webhookUrl, env.telegramWebhookSecret);
   if (!r.ok) {
     return NextResponse.json({ ok: false, error: r.description || "Telegram setWebhook 失敗", webhookUrl }, { status: 502 });

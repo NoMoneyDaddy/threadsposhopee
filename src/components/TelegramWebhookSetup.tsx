@@ -78,10 +78,10 @@ export default function TelegramWebhookSetup() {
 
       <button
         onClick={setup}
-        disabled={busy || (status ? !status.secretSet : false)}
+        disabled={!status || busy || !status.secretSet}
         className="btn btn-brand shrink-0"
       >
-        {busy ? "註冊中…" : registered ? "重新註冊 webhook" : "設定 webhook"}
+        {!status ? "載入中…" : busy ? "註冊中…" : registered ? "重新註冊 webhook" : "設定 webhook"}
       </button>
 
       {msg && <p className="mt-2 break-all text-xs text-ink-2">{msg}</p>}

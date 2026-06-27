@@ -2,6 +2,7 @@
 // 權限把關在 API/頁面層（owner email = 管理員；reviewer 由管理員賦予）。
 import { getServiceClient } from "./supabase/server";
 import { isDemoMode } from "./env";
+import { listAllUsers } from "./auth";
 import { sanitizeRoles, type ManualRole } from "./roles";
 
 // ── 身份組 ────────────────────────────────────────────────
@@ -10,6 +11,51 @@ export async function getRoles(ownerId: string): Promise<ManualRole[]> {
   const sb = getServiceClient()!;
   const { data } = await sb.from("profiles").select("roles").eq("id", ownerId).maybeSingle();
   return sanitizeRoles(data?.roles);
+}
+
+// 管理頁使用者總覽（owner-only）：每位使用者的身份組與綁定帳號數。
+// 以「整表各一次查詢」彙總（避免每使用者 N 次查詢）；service-role 讀全表，僅供管理頁使用。
+export interface UserOverviewRow {
+  id: string;
+  email: string | null;
+  roles: ManualRole[];
+  threadsCount: number;
+  shopeeBound: boolean;
+}
+export async function listUsersOverview(): Promise<UserOverviewRow[]> {
+  if (isDemoMode) return [];
+  const sb = getServiceClient()!;
+  const users = await listAllUsers();
+  // 一次撈各表，於記憶體彙總（查詢失敗即拋，不靜默回空而誤顯示成「無資料」）。
+  const [rolesRes, threadsRes, shopeeRes] = await Promise.all([
+    sb.from("profiles").select("id, roles"),
+    sb.from("threads_accounts").select("owner_id"),
+    sb.from("shopee_accounts").select("owner_id")
+  ]);
+  if (rolesRes.error) throw new Error(`讀取身份組失敗：${rolesRes.error.message}`);
+  if (threadsRes.error) throw new Error(`讀取 Threads 帳號失敗：${threadsRes.error.message}`);
+  if (shopeeRes.error) throw new Error(`讀取 Shopee 帳號失敗：${shopeeRes.error.message}`);
+
+  const rolesById = new Map<string, ManualRole[]>();
+  for (const r of rolesRes.data ?? []) rolesById.set(r.id as string, sanitizeRoles((r as { roles?: unknown }).roles));
+  const threadsByOwner = new Map<string, number>();
+  for (const a of threadsRes.data ?? []) {
+    const o = (a as { owner_id: string | null }).owner_id;
+    if (o) threadsByOwner.set(o, (threadsByOwner.get(o) ?? 0) + 1);
+  }
+  const shopeeOwners = new Set<string>();
+  for (const a of shopeeRes.data ?? []) {
+    const o = (a as { owner_id: string | null }).owner_id;
+    if (o) shopeeOwners.add(o);
+  }
+
+  return users.map((u) => ({
+    id: u.id,
+    email: u.email,
+    roles: rolesById.get(u.id) ?? [],
+    threadsCount: threadsByOwner.get(u.id) ?? 0,
+    shopeeBound: shopeeOwners.has(u.id)
+  }));
 }
 
 // 依 email 找使用者 id（管理員賦予身份組用；分頁掃描）。

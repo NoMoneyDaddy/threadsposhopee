@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
-import { getAdminStats, getFeatureFlags, listSharedForReview, listTopContributors, isPublishPaused, getHeartbeat } from "@/lib/store";
+import { getAdminStats, getFeatureFlags, listSharedForReview, listTopContributors, isPublishPaused, getHeartbeat, listUsersOverview } from "@/lib/store";
 import { contributionBadge } from "@/lib/roles";
 import { isDemoMode } from "@/lib/env";
 import { cronHeartbeatStatus } from "@/lib/cron-status";
@@ -10,6 +10,7 @@ import FeatureFlagsForm from "@/components/FeatureFlagsForm";
 import RoleGrantForm from "@/components/RoleGrantForm";
 import ReviewButton from "@/components/ReviewButton";
 import PublishControlPanel from "@/components/PublishControlPanel";
+import AdminUsersPanel from "@/components/AdminUsersPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -19,11 +20,12 @@ export default async function AdminPage() {
   if (!user) redirect("/login?next=/admin");
   if (!user.isOwner) redirect("/");
 
-  const [stats, flags, queue, leaders] = await Promise.all([
+  const [stats, flags, queue, leaders, users] = await Promise.all([
     getAdminStats().catch(() => null),
     getFeatureFlags(),
     listSharedForReview(100).catch(() => []),
-    listTopContributors(10).catch(() => [])
+    listTopContributors(10).catch(() => []),
+    listUsersOverview().catch(() => null)
   ]);
 
   // 發文急停／心跳是 owner 控制台的關鍵狀態：讀取失敗不可偽裝成「未暫停／未啟用」，
@@ -80,6 +82,13 @@ export default async function AdminPage() {
         <FeatureFlagsForm initial={flags} />
         <RoleGrantForm />
       </div>
+
+      {!isDemoMode &&
+        (users ? (
+          <AdminUsersPanel users={users} />
+        ) : (
+          <div className="card p-4 text-sm text-amber-600">⚠️ 使用者清單讀取失敗，請稍後重整。</div>
+        ))}
 
       <div className="card p-4">
         <h2 className="mb-1 text-lg font-semibold">貢獻排行榜</h2>

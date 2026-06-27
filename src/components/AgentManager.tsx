@@ -64,6 +64,7 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
       if (!r.ok) throw new Error(r.error);
       setName("");
       setTone("");
+      setCustomTone(false); // 一併重置，避免表單卡在「自訂…」模式（下筆送出空 tone）
       setSearchQuery("");
       setAutoPublish(false);
       router.refresh();

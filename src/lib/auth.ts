@@ -61,8 +61,9 @@ export async function getCurrentUser(): Promise<AppUser | null> {
       email = data?.user?.email ?? null;
     }
     return { id: viewAsId, email, isOwner: false, isPlatformOwner: true, viewingAsEmail: email ?? viewAsId };
-  } catch {
-    // view-as 解析任何環節失敗（cookie/service client/admin API）一律退回真實身分，不讓它 500 整頁。
+  } catch (err) {
+    // view-as 解析任何環節失敗（cookie/service client/admin API）一律退回真實身分，不讓它 500 整頁；記錄以利排查。
+    log.error("getCurrentUser view-as 解析失敗", { err: err instanceof Error ? err.message : String(err) });
     return real;
   }
 }

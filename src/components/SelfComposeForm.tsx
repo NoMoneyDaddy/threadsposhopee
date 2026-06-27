@@ -225,7 +225,7 @@ export default function SelfComposeForm({
           rows={3}
           value={mainText}
           onChange={(e) => setMainText(e.target.value)}
-          placeholder="有什麼新鮮事？直接打字分享…（貼文中的蝦皮連結會自動轉成你的分潤連結）"
+          placeholder="有什麼新鮮事？直接打字分享…"
         />
         <div className="mt-1 flex justify-end">
           <CharCount text={mainText} limit={THREADS_LIMIT} />

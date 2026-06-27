@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { log } from "@/lib/logger";
 import { getCurrentUser } from "@/lib/auth";
 import { env } from "@/lib/env";
-import { createBindToken } from "@/lib/telegram-bind";
+import { createBindToken } from "@/lib/store";
 import { getTelegramBotUsername } from "@/lib/notify";
 
 export const dynamic = "force-dynamic";

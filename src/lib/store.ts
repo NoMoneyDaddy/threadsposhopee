@@ -26,6 +26,10 @@ export {
   releasePublishLock
 } from "./app-state";
 
+// Telegram deeplink 綁定碼（app_state 一次性 token）已拆到 ./telegram-bind；
+// 此處 re-export，維持「資料存取集中於 store」的匯入點慣例（與 app-state 同模式）。
+export { createBindToken, consumeBindToken, cleanupExpiredBindTokens } from "./telegram-bind";
+
 // 素材庫資料層已拆到 ./materials-store；此處 re-export 維持 `@/lib/store` 匯入點不變。
 export {
   findMaterial,

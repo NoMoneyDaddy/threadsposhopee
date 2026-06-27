@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { env } from "@/lib/env";
-import { getOwnerByTelegramChatId, getDraft, updateDraftStatus, setUserTelegramChatId } from "@/lib/store";
+import { getOwnerByTelegramChatId, getDraft, updateDraftStatus, setUserTelegramChatId, consumeBindToken } from "@/lib/store";
 import { answerTelegramCallback, editTelegramMessageText, sendTelegram } from "@/lib/notify";
-import { parseStartPayload, consumeBindToken } from "@/lib/telegram-bind";
+import { parseStartPayload } from "@/lib/telegram-bind";
 import { TG_APPROVE_PREFIX, TG_REJECT_PREFIX } from "@/services/telegram/review";
 import { log } from "@/lib/logger";
 

@@ -1,7 +1,8 @@
 import { getPublishInsights, getShopeeCredentials } from "@/lib/store";
 import { listThreadsAccounts } from "@/lib/accounts-store";
 import { getAffiliateRevenue, type AffiliateRevenue } from "@/services/shopee/report";
-import { getEngagementCached, bestPostingTimes, type EngagementSummary } from "@/services/threads/engagement";
+import { getEngagementCached, bestPostingTimes, insightsHintKind, type EngagementSummary } from "@/services/threads/engagement";
+import { threadsScopeEnabled } from "@/services/threads/oauth";
 import { detectReachDrop } from "@/services/threads/reach";
 import { getCurrentUser } from "@/lib/auth";
 import { isDemoMode } from "@/lib/env";
@@ -93,8 +94,27 @@ export default async function InsightsPage({
           <h2 className="section-title mb-1">最佳發文時段</h2>
           <p className="text-sm text-ink-2">
             這裡會依你貼文的 <b>Threads 互動數據</b>（各時段／星期的平均觀看）算出最佳發文時段。
-            目前可用樣本不足（需至少 3 篇有互動數據的貼文）——多發幾篇、確認帳號已完成 Threads 授權後就會出現。
+            目前可用樣本不足（需至少 3 篇有互動數據的貼文）——多發幾篇就會出現。
           </p>
+          {(() => {
+            // 抓不到任何互動數據的提示：依目前實際請求的 scope 決定文案（避免在已關閉 insights 的部署叫人白做工）。
+            const hint = insightsHintKind(engagement, threadsScopeEnabled("threads_manage_insights"));
+            if (hint === "reauth")
+              return (
+                <p className="mt-2 rounded-lg bg-amber-50 px-2 py-1 text-xs text-amber-700">
+                  ⚠️ 已有發布貼文卻抓不到任何互動數據，通常是帳號的授權尚未包含「成效數據（insights）」權限。
+                  請到「帳號管理」<b>重新授權 Threads</b>（重新綁定）以取得成效權限。
+                </p>
+              );
+            if (hint === "enable_scope")
+              return (
+                <p className="mt-2 rounded-lg bg-amber-50 px-2 py-1 text-xs text-amber-700">
+                  ⚠️ 已有發布貼文卻抓不到任何互動數據，且目前部署的 <code>THREADS_SCOPES</code> 未包含成效權限。
+                  請先在環境設定加入 <code>threads_manage_insights</code> 再重新授權 Threads。
+                </p>
+              );
+            return null;
+          })()}
         </section>
       )}
 

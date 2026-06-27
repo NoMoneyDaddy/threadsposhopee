@@ -6,7 +6,33 @@ import { assertSafePublicUrl } from "@/lib/url-guard";
 
 const GRAPH = "https://graph.threads.net";
 const AUTHORIZE = "https://threads.net/oauth/authorize";
-const SCOPES = "threads_basic,threads_content_publish";
+// 授權範圍：發文（基本＋發佈）＋成效數據（insights）＋讀/管理留言（互動）＋關鍵字搜尋（選題）。
+// 一次請求即讓新連帳號解鎖成效頁、留言管理與 AI 部落客關鍵字取材；既有帳號需重新授權才會帶到新範圍。
+//
+// 重要（Meta App Review）：App 切到 Live 後，向「非管理者/開發者/測試者」的一般使用者請求
+// 「尚未通過審查」的進階範圍，會讓整個 OAuth 被擋——連最基本的發文授權都失敗。
+// 故開放以 THREADS_SCOPES 環境變數覆寫：審查未過前可先設成 "threads_basic,threads_content_publish"
+// 維持發文可用，待進階範圍過審或在開發/測試環境再用預設完整清單。
+const DEFAULT_SCOPES = [
+  "threads_basic",
+  "threads_content_publish",
+  "threads_manage_insights",
+  "threads_read_replies",
+  "threads_manage_replies",
+  "threads_keyword_search"
+].join(",");
+// 逐項去空白並濾掉空值再 join（避免誤設帶內部空白如 "a, b" 被原樣編碼進 scope 致 OAuth 被拒）。
+const SCOPES =
+  process.env.THREADS_SCOPES?.split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .join(",") || DEFAULT_SCOPES;
+
+// 目前實際請求的授權範圍（受 THREADS_SCOPES 影響）是否包含某 scope。
+// 供 UI 判斷「重新授權能否拿到該權限」（部署若關閉進階範圍，重新授權也拿不到）。
+export function threadsScopeEnabled(scope: string): boolean {
+  return SCOPES.split(",").includes(scope);
+}
 
 // 組授權連結（導使用者去 Threads 同意頁）。state 用來防 CSRF / 帶回 next。
 export function buildAuthorizeUrl(clientId: string, redirectUri: string, state: string): string {

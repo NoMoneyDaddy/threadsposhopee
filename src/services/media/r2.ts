@@ -5,7 +5,7 @@
 // 簽章：AWS Signature V4（service=s3、region=auto）。用 x-amz-content-sha256: UNSIGNED-PAYLOAD
 // （R2 走 HTTPS 允許），免緩衝整檔做雜湊。簽章組裝為純函式，便於單測（注入 amzDate）。
 import { createHash, createHmac } from "node:crypto";
-import { fetchWithRetry } from "@/lib/http";
+import { fetchWithRetry, fetchWithTimeout } from "@/lib/http";
 import { assertSafePublicUrl } from "@/lib/url-guard";
 import { log } from "@/lib/logger";
 
@@ -76,6 +76,73 @@ function encodeKeyPath(key: string): string {
     .split("/")
     .map((seg) => encodeURIComponent(seg))
     .join("/");
+}
+
+// R2 連線驗證的 HTTP 狀態 → 使用者訊息（純函式可測）。200 視為通過故不在此。
+export function r2ValidationReason(status: number): string {
+  if (status === 401 || status === 403) return "金鑰無效或無此 bucket 權限（請確認 Access Key/Secret 與 bucket 範圍）";
+  if (status === 404) return "找不到 bucket（請確認 bucket 名稱與 Account ID）";
+  return `R2 連線驗證失敗（HTTP ${status}）`;
+}
+
+// 組 HeadBucket 的 SigV4 Authorization（純函式）。HEAD 不簽 content-type，
+// signedHeaders 為 host;x-amz-content-sha256;x-amz-date。便於單測（注入 amzDate）。
+export function buildS3HeadAuth(opts: {
+  accessKeyId: string;
+  secretAccessKey: string;
+  region: string;
+  host: string;
+  canonicalPath: string;
+  amzDate: string;
+}): { authorization: string; signedHeaders: string } {
+  const { accessKeyId, secretAccessKey, region, host, canonicalPath, amzDate } = opts;
+  const service = "s3";
+  const dateStamp = amzDate.slice(0, 8);
+  const signedHeaders = "host;x-amz-content-sha256;x-amz-date";
+  const canonicalHeaders = `host:${host}\n` + `x-amz-content-sha256:${UNSIGNED}\n` + `x-amz-date:${amzDate}\n`;
+  const canonicalRequest = ["HEAD", canonicalPath, "", canonicalHeaders, signedHeaders, UNSIGNED].join("\n");
+  const scope = `${dateStamp}/${region}/${service}/aws4_request`;
+  const stringToSign = ["AWS4-HMAC-SHA256", amzDate, scope, sha256Hex(canonicalRequest)].join("\n");
+  const signingKey = deriveSigningKey(secretAccessKey, dateStamp, region, service);
+  const signature = hmac(signingKey, stringToSign).toString("hex");
+  const authorization = `AWS4-HMAC-SHA256 Credential=${accessKeyId}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
+  return { authorization, signedHeaders };
+}
+
+// 存檔前驗證 R2 憑證是否可用：對 bucket 發已簽章 HEAD（HeadBucket）。
+// 回 {ok:true} 或 {ok:false, reason}。網路/逾時亦回 false（讓使用者知道沒驗成功）。
+export async function validateR2(creds: {
+  accountId: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+  bucket: string;
+}): Promise<{ ok: true } | { ok: false; reason: string }> {
+  // 嚴格限制 accountId（英數，與設定頁 ACCOUNT_RE 一致）：防 `/`、`@` 等 authority 字元竄改 host，
+  // 把帶簽章的 HEAD 送到非預期主機（SSRF）。assertSafePublicUrl 只擋非公開目標，故這層額外把關。
+  if (!/^[a-zA-Z0-9]{16,64}$/.test(creds.accountId)) return { ok: false, reason: "Cloudflare Account ID 格式不正確" };
+  const host = `${creds.accountId}.r2.cloudflarestorage.com`;
+  const canonicalPath = `/${encodeURIComponent(creds.bucket)}`;
+  const amzDate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, "");
+  const { authorization } = buildS3HeadAuth({
+    accessKeyId: creds.accessKeyId,
+    secretAccessKey: creds.secretAccessKey,
+    region: "auto",
+    host,
+    canonicalPath,
+    amzDate
+  });
+  const endpoint = `https://${host}${canonicalPath}`;
+  try {
+    // 外部請求一律走 fetchWithTimeout（專案規範）；驗證單發即可，不重試。
+    const res = await fetchWithTimeout(
+      assertSafePublicUrl(endpoint).href,
+      { method: "HEAD", headers: { Authorization: authorization, "x-amz-date": amzDate, "x-amz-content-sha256": UNSIGNED } },
+      8000
+    );
+    return res.ok ? { ok: true } : { ok: false, reason: r2ValidationReason(res.status) };
+  } catch (e) {
+    return { ok: false, reason: `R2 連線驗證失敗：${e instanceof Error ? e.message : String(e)}` };
+  }
 }
 
 // 中轉一個媒體到 R2，回傳公開讀網址。失敗則拋錯（呼叫端 fallback 用原 URL）。

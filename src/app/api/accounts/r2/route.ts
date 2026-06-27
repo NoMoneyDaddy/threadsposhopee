@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { log } from "@/lib/logger";
-import { setUserR2, hasUserR2 } from "@/lib/store";
+import { setUserR2, hasUserR2, getUserR2 } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
 import { parseR2Input } from "@/services/media/r2-config";
+import { validateR2 } from "@/services/media/r2";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +40,21 @@ export async function POST(req: Request) {
       // 已綁定時：留空＝沿用既有；但只填其一視為誤填。
       if (alreadyBound && Boolean(accessKeyId) !== Boolean(secretAccessKey)) {
         return NextResponse.json({ ok: false, error: "Access Key ID 與 Secret 需一起填寫" }, { status: 400 });
+      }
+      // 連線測試（HeadBucket）：新填金鑰優先，否則沿用既有金鑰——確保只改 bucket/accountId 也會被驗，
+      // 不會把改壞的 bucket/accountId 持久化。取不到金鑰才略過（無從驗）。
+      let vKey = accessKeyId;
+      let vSecret = secretAccessKey;
+      if ((!vKey || !vSecret) && alreadyBound) {
+        const existing = await getUserR2(user.id);
+        if (existing) {
+          vKey = existing.accessKeyId;
+          vSecret = existing.secretAccessKey;
+        }
+      }
+      if (parsed.bucket && vKey && vSecret) {
+        const check = await validateR2({ accountId: parsed.accountId, bucket: parsed.bucket, accessKeyId: vKey, secretAccessKey: vSecret });
+        if (!check.ok) return NextResponse.json({ ok: false, error: check.reason }, { status: 400 });
       }
     }
 

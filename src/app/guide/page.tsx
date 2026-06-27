@@ -131,13 +131,14 @@ export default function GuidePage() {
         <Guide
           steps={[
             "到 Cloudflare 後台 <b>R2 物件儲存</b>，<b>Create bucket</b> 建一個 bucket（需先開通 R2，可能要綁付款）。",
-            "<b>R2 → Overview → Manage（API Tokens）→ Create API Token</b>，權限選 <b>Object Read &amp; Write</b>，並 <b>Apply to specific buckets only</b> 只勾你這個 bucket。",
-            "複製 <b>Access Key ID</b> 與 <b>Secret Access Key</b>（Secret 只顯示一次，務必當下存好）。",
-            "找出你的 <b>Account ID</b>（R2 Overview / S3 端點 <code>https://&lt;Account_ID&gt;.r2.cloudflarestorage.com</code> 內）。",
-            "讓 bucket 可公開讀：啟用 <b>r2.dev</b> 受管網址，或（建議）綁<b>自訂網域</b>；把該公開網域填到「公開讀網域」。",
-            "把 Account ID、bucket、公開讀網域、Access Key ID、Secret 填到帳號管理的 R2 欄位。綁了 R2 會優先於 Cloudinary。"
+            "在 R2 總覽頁 <b>Account Details</b> 區，點 <b>API Tokens</b> 旁的 <b>Manage</b> → <b>Create API token</b>（帳號層級或個人 User token 皆可）。",
+            "權限選 <b>Object Read &amp; Write</b>，並用 <b>Apply to specific buckets only</b> 只勾你這個 bucket（最小權限）。",
+            "建立後複製 <b>Access Key ID</b> 與 <b>Secret Access Key</b>（<b>Secret 只顯示這一次</b>，離開就看不到，務必當下存好）。",
+            "在同頁 <b>Account Details</b> 找你的 <b>Account ID</b>（S3 端點即 <code>https://&lt;Account_ID&gt;.r2.cloudflarestorage.com</code>，系統自動組、免填）。",
+            "讓 bucket 可公開讀：啟用 <b>r2.dev</b> 受管網址，或（建議）綁<b>自訂網域</b>；把該公開網址（<b>需含 <code>https://</code></b>）填入「公開讀網域」。",
+            "到帳號管理 R2 欄位填這 5 項：<b>Account ID、bucket、公開讀網域、Access Key ID、Secret Access Key</b>（綁了 R2 會優先於 Cloudinary）。"
           ]}
-          note="Token 權限限縮到「單一 bucket、Object Read & Write」，把外洩風險限制在這一個 bucket。region 用 auto。Access Key/Secret 加密存、只在 server 用。"
+          note="region 固定 auto（系統自動帶、免填）。Token 限縮到「單一 bucket、Object Read & Write」，外洩也只影響該 bucket。Access Key/Secret 加密存、只在 server 用。儲存時會對 bucket 做連線測試（HeadBucket），金鑰或 bucket 填錯會當下擋下。"
           docs={[
             { label: "R2 API Tokens", href: "https://developers.cloudflare.com/r2/api/tokens/" },
             { label: "R2 S3 相容 API", href: "https://developers.cloudflare.com/r2/api/s3/api/" },

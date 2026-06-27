@@ -17,6 +17,7 @@ import RepostLimitsForm from "@/components/RepostLimitsForm";
 import NotifyPrefsForm from "@/components/NotifyPrefsForm";
 import PushToggle from "@/components/PushToggle";
 import TelegramForm from "@/components/TelegramForm";
+import TelegramWebhookSetup from "@/components/TelegramWebhookSetup";
 import SponsorConfigForm from "@/components/SponsorConfigForm";
 import DefaultAffiliateForm from "@/components/DefaultAffiliateForm";
 
@@ -46,8 +47,9 @@ export default async function SettingsPage() {
         <p className="text-sm text-ink-2">發文節奏、重發上限、文案風格與各種通知都在這裡。</p>
       </div>
 
-      <div id="setup-notify" className="scroll-mt-24">
+      <div id="setup-notify" className="scroll-mt-24 space-y-4">
         <TelegramForm bound={telegramBound} botConfigured={!isDemoMode && Boolean(env.telegramBotToken)} />
+        {user.isPlatformOwner && !isDemoMode && Boolean(env.telegramBotToken) && <TelegramWebhookSetup />}
       </div>
 
       {env.vapidPublicKey && <PushToggle vapidPublicKey={env.vapidPublicKey} />}

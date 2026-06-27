@@ -76,10 +76,13 @@ export async function POST(req: Request) {
       {
         label,
         threads_user_id: profile.id,
-        display_name: profile.name ?? profile.username,
+        // 顯示名稱回退到 label，避免 name/username 皆空時把既有顯示名稱覆寫成空字串。
+        display_name: profile.name || profile.username || label,
         avatar_url: profile.avatarUrl,
         access_token: token,
-        token_expires_at: expiresAt ?? expiryFrom()
+        // 換/展長效成功才有確切到期日；都失敗＝到期日未知 → 存 null，讓展期 worker 立即接手
+        // （短效 token 會儘快被嘗試展期、失敗則標記，不再假裝 60 天而延誤）。
+        token_expires_at: expiresAt
       },
       user.id
     );

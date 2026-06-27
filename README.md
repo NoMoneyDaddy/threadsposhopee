@@ -50,7 +50,7 @@ npm run pipeline:demo
 ## 上線設定
 
 1. 建 Supabase 專案，**依序**跑 `supabase/migrations/` 下所有 SQL（`0001_init.sql` → `0019_profile_discord.sql`）
-2. 填環境變數（Supabase、`APP_ENCRYPTION_KEY`、`OWNER_EMAIL`、Apify、Shopee、Gemini、Cloudinary、`CRON_SECRET`，以及 Threads OAuth 的 `THREADS_APP_ID/SECRET/REDIRECT_URI`）
+2. 填環境變數（Supabase、`APP_ENCRYPTION_KEY`、`OWNER_EMAIL`、Apify、Shopee、Gemini、Cloudinary、`CRON_SECRET`；Threads 選填 `THREADS_APP_SECRET`／`THREADS_SCOPES`，用於把手動貼的短效 token 自動換長效）
 3. 部署（擇一）：
 
 ### A. Vercel
@@ -66,10 +66,11 @@ npm run pipeline:demo
    - `CRON_SECRET` 呼叫端與伺服器端要一致；生產環境若沒設，端點會回 500 擋掉（安全保護）。
    - 進階：仍保留 `/api/cron`、`/api/cron/publish`、`/api/cron/refresh-tokens`、`/api/cron/check-links` 可各自獨立排程。
 
-### 連 Threads 發文帳號（OAuth，免手貼 token）
-1. 在 [Meta 開發者後台](https://developers.facebook.com/) 建立含 **Threads API** 的 App，取得 App ID / Secret。
-2. 把 `https://<你的網域>/api/auth/threads/callback` 設為 **Valid OAuth Redirect URI**，並填好 `THREADS_APP_ID/SECRET/REDIRECT_URI`。
-3. 登入網站 → 帳號管理 → 「用 Threads 連結帳號」一鍵授權；系統自動換 60 天長期 token 並由上面的展期 cron 自動續期。
+### 連 Threads 發文帳號（手動貼 token）
+> OAuth 一鍵流程已移除：對外開放需通過 Meta App Review／商業驗證。現以手動貼 access token 綁定。
+1. 在 [Meta 開發者後台](https://developers.facebook.com/) 建立含 **Threads API** 的 App，加入 Threads 使用案例並勾權限。
+2. 在 **Threads 使用案例 → 設定**，把要發文的帳號加進去，按 **產生存取權杖** 取得 token（後台產生的本即 60 天長效）。
+3. 登入網站 → 帳號管理 → 手動新增，貼上 token。長效權杖由展期 cron 自動續期；若貼 1 小時短效權杖，另填 App 密鑰（`THREADS_APP_SECRET`）讓系統換成長效。
 
 ### 兩條流程的分工
 - **爬取** `/api/cron` → `runAllSources()`：爬來源 → 換分潤連結 → AI 文案 → 存草稿（一律待人工核准）。**絕不發文**。
@@ -106,7 +107,7 @@ src/
     ai/gemini.ts         Gemini 多模態呼叫
     media/cloudinary.ts  媒體中轉（自綁優先、內建 SSRF 防護）
     threads/publish.ts   發文（容器→發布→留言/串文 2/2）
-    threads/oauth.ts     OAuth 一鍵連帳號
+    threads/oauth.ts     手動貼 token 用：scope 判斷＋帳號 profile 查詢（OAuth 一鍵已移除）
     threads/token.ts     長期 token 展期
     threads/refresh.ts   到期 token 自動展期 worker
     publish/queue.ts     發文佇列（防封節奏 + 分布式鎖 + 帳號分片並行 + 延遲補留言）
@@ -127,7 +128,7 @@ supabase/migrations/   資料庫 schema（0001–0019）
 
 - [x] Supabase Auth 登入（Google OAuth）+ 全站保護 + 多租戶資料隔離（owner／member）
 - [x] 前端 CRUD：帳號／來源／素材／草稿的新增、編輯、刪除、停用
-- [x] Threads OAuth 一鍵連帳號（免手貼 token）+ 長期 token 每日自動展期
+- [x] Threads 帳號連結（手動貼 access token）+ 長期 token 每日自動展期
 - [x] 真實發布（解密 token → Cloudinary 中轉 → `publishToThreads`，連結放留言）
 - [x] 爬取／發文兩條獨立排程 + 防封節奏（間隔／每日上限／批次）
 - [x] 審核佇列：草稿審核、AI 重寫、排程、卡住可重試

@@ -1,18 +1,13 @@
-// Threads OAuth：一鍵連發文帳號，取代手貼 access token。
-// 流程：authorize → 拿 code → 換短期 token（含 user_id）→ 換 60 天長期 token → 取 username。
-import { exchangeForLongLivedToken } from "./token";
+// Threads 帳號連結：OAuth 一鍵流程已移除（需 Meta App Review/商業驗證才能對外開放，無法達成）。
+// 現以「手動貼 access token」綁定（見 /api/accounts/threads）。本檔僅保留：
+// - threadsScopeEnabled：成效頁判斷目前請求的授權範圍是否含某 scope。
+// - getThreadsProfile：手動貼 token 時用來取回帳號 id/暱稱/頭像並驗證 token。
 import { fetchWithTimeout } from "@/lib/http";
 import { assertSafePublicUrl } from "@/lib/url-guard";
 
 const GRAPH = "https://graph.threads.net";
-const AUTHORIZE = "https://threads.net/oauth/authorize";
-// 授權範圍：發文（基本＋發佈）＋成效數據（insights）＋讀/管理留言（互動）＋關鍵字搜尋（選題）。
-// 一次請求即讓新連帳號解鎖成效頁、留言管理與 AI 部落客關鍵字取材；既有帳號需重新授權才會帶到新範圍。
-//
-// 重要（Meta App Review）：App 切到 Live 後，向「非管理者/開發者/測試者」的一般使用者請求
-// 「尚未通過審查」的進階範圍，會讓整個 OAuth 被擋——連最基本的發文授權都失敗。
-// 故開放以 THREADS_SCOPES 環境變數覆寫：審查未過前可先設成 "threads_basic,threads_content_publish"
-// 維持發文可用，待進階範圍過審或在開發/測試環境再用預設完整清單。
+// 期望的授權範圍（建立 Threads App 時於後台勾選）。可用 THREADS_SCOPES 覆寫；
+// 逐項去空白並濾掉空值（避免誤設帶內部空白被原樣帶入）。
 const DEFAULT_SCOPES = [
   "threads_basic",
   "threads_content_publish",
@@ -21,53 +16,15 @@ const DEFAULT_SCOPES = [
   "threads_manage_replies",
   "threads_keyword_search"
 ].join(",");
-// 逐項去空白並濾掉空值再 join（避免誤設帶內部空白如 "a, b" 被原樣編碼進 scope 致 OAuth 被拒）。
 const SCOPES =
   process.env.THREADS_SCOPES?.split(",")
     .map((s) => s.trim())
     .filter(Boolean)
     .join(",") || DEFAULT_SCOPES;
 
-// 目前實際請求的授權範圍（受 THREADS_SCOPES 影響）是否包含某 scope。
-// 供 UI 判斷「重新授權能否拿到該權限」（部署若關閉進階範圍，重新授權也拿不到）。
+// 目前實際期望的授權範圍是否包含某 scope（成效頁據此判斷「重新授權能否拿到該權限」）。
 export function threadsScopeEnabled(scope: string): boolean {
   return SCOPES.split(",").includes(scope);
-}
-
-// 組授權連結（導使用者去 Threads 同意頁）。state 用來防 CSRF / 帶回 next。
-export function buildAuthorizeUrl(clientId: string, redirectUri: string, state: string): string {
-  const params = new URLSearchParams({
-    client_id: clientId,
-    redirect_uri: redirectUri,
-    scope: SCOPES,
-    response_type: "code",
-    state
-  });
-  return `${AUTHORIZE}?${params.toString()}`;
-}
-
-// 用 code 換短期 token（回傳 access_token + user_id）。
-export async function exchangeCodeForToken(input: {
-  clientId: string;
-  clientSecret: string;
-  redirectUri: string;
-  code: string;
-}): Promise<{ accessToken: string; userId: string }> {
-  const body = new URLSearchParams({
-    client_id: input.clientId,
-    client_secret: input.clientSecret,
-    grant_type: "authorization_code",
-    redirect_uri: input.redirectUri,
-    code: input.code
-  });
-  const res = await fetchWithTimeout(`${GRAPH}/oauth/access_token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body
-  });
-  if (!res.ok) throw new Error(`換 token 失敗 ${res.status}: ${await res.text()}`);
-  const json = await res.json();
-  return { accessToken: json.access_token, userId: String(json.user_id) };
 }
 
 export interface ThreadsProfile {
@@ -77,8 +34,8 @@ export interface ThreadsProfile {
   avatarUrl?: string; // 個人頭像 URL（缺失時為 undefined）
 }
 
-// 取得 Threads 個人檔案（id / username / 顯示名稱 / 頭像）。顯示用。
-// 缺失欄位回 undefined（不要正規化成空字串）——否則重新授權時會用空值覆寫既有真實資料。
+// 取得 Threads 個人檔案（id / username / 顯示名稱 / 頭像）。手動貼 token 時用來驗證並帶出帳號資料。
+// 缺失欄位回 undefined（不要正規化成空字串）——否則重新綁定時會用空值覆寫既有真實資料。
 export async function getThreadsProfile(accessToken: string): Promise<ThreadsProfile> {
   const url = `${GRAPH}/v1.0/me?fields=id,username,name,threads_profile_picture_url&access_token=${encodeURIComponent(accessToken)}`;
   // 固定 Graph 主機，仍依專案規範過 SSRF 守衛再 fetch。
@@ -91,30 +48,5 @@ export async function getThreadsProfile(accessToken: string): Promise<ThreadsPro
     username: json.username ?? "",
     name: str(json.name),
     avatarUrl: str(json.threads_profile_picture_url)
-  };
-}
-
-// 完整連帳號：code → 長期 token + user_id + 個人檔案（username/名稱/頭像）+ 到期日。
-export async function connectThreadsAccount(input: {
-  clientId: string;
-  clientSecret: string;
-  redirectUri: string;
-  code: string;
-}): Promise<{ userId: string; username: string; name?: string; avatarUrl?: string; accessToken: string; expiresAt: string }> {
-  const { accessToken: shortToken, userId } = await exchangeCodeForToken(input);
-  const { accessToken, expiresInSec } = await exchangeForLongLivedToken(shortToken, input.clientSecret);
-  // 個人檔案抓取失敗不阻斷連結（頭像/名稱屬選配，可日後重新授權補上）。
-  // 失敗時回 null → name/avatarUrl 維持 undefined，重新授權時才不會以空字串覆寫既有的真實資料。
-  const profile = await getThreadsProfile(accessToken).catch(() => null);
-  // 防禦：API 若回傳缺失/非數值的 expires_in，避免 new Date(NaN).toISOString() 拋 RangeError；預設 60 天
-  const seconds = typeof expiresInSec === "number" && !Number.isNaN(expiresInSec) ? expiresInSec : 60 * 24 * 60 * 60;
-  const expiresAt = new Date(Date.now() + seconds * 1000).toISOString();
-  return {
-    userId,
-    username: profile?.username || `threads_${userId}`,
-    name: profile?.name,
-    avatarUrl: profile?.avatarUrl,
-    accessToken,
-    expiresAt
   };
 }

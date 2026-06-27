@@ -19,6 +19,7 @@ export {
   getAccountCircuitUntil,
   tripAccountCircuit,
   clearAccountCircuit,
+  listActiveCircuits,
   getCachedJson,
   setCachedJson,
   acquirePublishLock,

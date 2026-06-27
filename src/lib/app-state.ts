@@ -114,15 +114,17 @@ export async function listActiveCircuits(): Promise<Map<string, number>> {
   return out;
 }
 
-// 解除冷卻（帳號恢復正常發文時呼叫）。
+// 解除冷卻（帳號恢復正常發文時呼叫，或管理頁手動解除）。
+// fail-fast：連線取不到／delete 失敗即拋，避免「回報成功但實際未清除」（發文路徑呼叫端以 .catch 視為 best-effort）。
 export async function clearAccountCircuit(accountId: string): Promise<void> {
   if (isDemoMode) {
     delete demoCircuit[accountId];
     return;
   }
   const sb = getServiceClient();
-  if (!sb) return;
-  await sb.from("app_state").delete().eq("key", `circuit:${accountId}`);
+  if (!sb) throw new Error("無法取得服務端連線");
+  const { error } = await sb.from("app_state").delete().eq("key", `circuit:${accountId}`);
+  if (error) throw new Error(`解除斷路器失敗：${error.message}`);
 }
 
 export async function getHeartbeat(): Promise<string | null> {

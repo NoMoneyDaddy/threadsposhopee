@@ -52,16 +52,16 @@ export default function GuidePage() {
         </p>
       </div>
 
-      <Section id="threads" title="Threads 發文帳號（OAuth）" badge="必要">
+      <Section id="threads" title="Threads 發文帳號（手動貼 token）" badge="必要">
         <Guide
           steps={[
             "到 <b>developers.facebook.com</b> 建立 App，建立時選用途「<b>Access the Threads API</b>」。",
-            "在 App 設定加入權限：<code>threads_basic</code>、<code>threads_content_publish</code>（發文）＋ <code>threads_manage_insights</code>、<code>threads_read_replies</code>、<code>threads_manage_replies</code>、<code>threads_keyword_search</code>（成效/留言/選題）。OAuth <b>預設一次請求全部</b>，故 App 端這些權限都要開；若只想用發文、暫不上進階功能，部署端設環境變數 <code>THREADS_SCOPES=threads_basic,threads_content_publish</code> 即可只請求基本權限。",
-            "App 設定 → 基本，取得 <b>Threads App ID</b> 與 <b>App Secret</b>（部署端環境變數，由管理者設定）。",
-            "在 Threads 用途的 OAuth 設定填入 <b>Redirect URI</b>：<code>https://你的網域/auth/callback</code>（要與實際一致，否則被拒）。",
-            "一般使用者不需自建 App：直接在「帳號管理」按 <b>用 Threads 登入綁定</b> 走 OAuth 授權即可。"
+            "在 App 加入 <b>Threads</b> 使用案例，權限勾 <code>threads_basic</code>、<code>threads_content_publish</code>（發文）；要成效/留言/選題再加 <code>threads_manage_insights</code>、<code>threads_read_replies</code>、<code>threads_manage_replies</code>、<code>threads_keyword_search</code>。",
+            "在 <b>Threads 使用案例 → 設定</b>，把要發文的 Threads 帳號加進去，按 <b>產生存取權杖（Generate access token）</b>，複製 token。",
+            "（選填）App 設定 → 基本，取得 <b>App Secret</b>；填在手動新增表單的「App 密鑰」欄，系統會把短效 token 自動換 60 天長效並每日展期。",
+            "到「帳號管理 → 手動新增」<b>貼上 access token</b>（與選填的 App 密鑰）即完成綁定。"
           ]}
-          note="存取權杖短效 1 小時，本服務自動換成 60 天長效並每日展期；權杖加密存。正式發佈權限需通過 Meta App Review。"
+          note="本服務以「手動貼 token」綁定（OAuth 一鍵流程已移除——對外開放需 Meta App Review／商業驗證）。權杖加密存、只在 server 用；有填 App 密鑰則自動展期。"
           docs={[
             { label: "Threads 取得權杖官方文件", href: "https://developers.facebook.com/docs/threads/get-started/get-access-tokens-and-permissions/" },
             { label: "Threads API 總覽", href: "https://developers.facebook.com/docs/threads" }

@@ -13,7 +13,7 @@ import {
 } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
 import { PLAN_LABELS, planLimits, GLOBAL_MAX_THREADS_ACCOUNTS } from "@/lib/plans";
-import { env, isDemoMode } from "@/lib/env";
+import { isDemoMode } from "@/lib/env";
 import { tokenExpiryState } from "@/lib/token-expiry";
 import ThreadsAccountForm from "@/components/ThreadsAccountForm";
 import ShopeeAccountForm from "@/components/ShopeeAccountForm";
@@ -33,11 +33,7 @@ import { DeleteButton, ToggleButton } from "@/components/RowActions";
 export const dynamic = "force-dynamic";
 
 // 帳號管理：只放「帳號連接＋金鑰／憑證綁定」。行為偏好與通知設定在「設定」頁。
-export default async function AccountsPage({
-  searchParams
-}: {
-  searchParams: { threads?: string; note?: string };
-}) {
+export default async function AccountsPage() {
   const user = await getCurrentUser();
   // 未登入（且非 demo）不可用 demo-user 當後備查資料（service-role 僅以 owner_id 過濾，後備 id 會變存取金鑰）。
   if (!user && !isDemoMode) {
@@ -45,7 +41,6 @@ export default async function AccountsPage({
   }
   const ownerId = user?.id ?? "demo-user";
   const [threads, shopee] = await Promise.all([listThreadsAccounts(ownerId), listShopeeAccounts(ownerId)]);
-  const oauthReady = !isDemoMode && Boolean(env.threadsAppId && env.threadsRedirectUri);
   const [apify, geminiBound, affiliateId, customSubId, autoRevive, cloudinary, cloudinaryFull, r2Settings, plan] =
     await Promise.all([
       user ? hasApifyCredentials(ownerId) : Promise.resolve({ bound: false, actor: null }),
@@ -70,41 +65,13 @@ export default async function AccountsPage({
         <p className="text-sm text-ink-2">連接你的發文帳號、綁定各服務金鑰。發文節奏、通知等偏好請到「設定」。</p>
       </div>
 
-      {searchParams.threads && (
-        <div
-          className={`rounded-2xl border p-3 text-sm ${
-            searchParams.threads === "ok"
-              ? "border-green-200 bg-green-50 text-green-700"
-              : "border-red-200 bg-red-50 text-red-700"
-          }`}
-        >
-          {searchParams.threads === "ok" ? "✅ " : "❌ "}
-          {searchParams.note ?? (searchParams.threads === "ok" ? "已連結 Threads 帳號" : "連結失敗")}
-        </div>
-      )}
-
       <div id="setup-threads" className="scroll-mt-24 rounded-2xl border bg-surface p-4">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <div className="font-medium">用 Threads 一鍵連結發文帳號</div>
-            <p className="text-sm text-ink-2">免手動貼授權碼；連結後系統自動維持有效、到期前自動更新。</p>
-          </div>
-          {oauthReady ? (
-            <a
-              href="/api/auth/threads/start"
-              className="shrink-0 rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-            >
-              用 Threads 連結帳號
-            </a>
-          ) : (
-            <span className="shrink-0 rounded-xl bg-surface-2 px-3 py-2 text-xs text-ink-2">
-              尚未設定 Threads App
-            </span>
-          )}
-        </div>
+        <div className="font-medium">連結 Threads 發文帳號</div>
+        <p className="mt-1 text-sm text-ink-2">
+          在下方「手動新增」貼上你的 Threads <b>access token</b> 即可綁定。系統會自動換成長效權杖、到期前自動展期。
+        </p>
         <p className="mt-2 text-xs text-ink-3">
-          📱 <b>手機請改用下方「手動新增」貼 access token</b>（最穩定）：手機點一鍵連結會被系統導去 Threads App，
-          授權後常落在另一個瀏覽器而無法返回完成綁定。OAuth 一鍵連結建議用<b>電腦瀏覽器</b>。
+          token 取得：到 <b>developers.facebook.com</b> 你的 Threads App → Threads 使用案例 → 為你的帳號產生 access token，貼到下方。
           <a href="#manual-threads" className="ml-1 text-brand underline">前往手動新增 ↓</a>
         </p>
       </div>

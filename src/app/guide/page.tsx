@@ -58,10 +58,10 @@ export default function GuidePage() {
             "到 <b>developers.facebook.com</b> 建立 App，建立時選用途「<b>Access the Threads API</b>」。",
             "在 App 加入 <b>Threads</b> 使用案例，權限勾 <code>threads_basic</code>、<code>threads_content_publish</code>（發文）；要成效/留言/選題再加 <code>threads_manage_insights</code>、<code>threads_read_replies</code>、<code>threads_manage_replies</code>、<code>threads_keyword_search</code>。",
             "在 <b>Threads 使用案例 → 設定</b>，把要發文的 Threads 帳號加進去，按 <b>產生存取權杖（Generate access token）</b>，複製 token。",
-            "（選填）App 設定 → 基本，取得 <b>App Secret</b>；填在手動新增表單的「App 密鑰」欄，系統會把短效 token 自動換 60 天長效並每日展期。",
-            "到「帳號管理 → 手動新增」<b>貼上 access token</b>（與選填的 App 密鑰）即完成綁定。"
+            "（選填）若你用的是 1 小時短效權杖，可至 App 設定 → 基本取得 <b>App Secret</b>（填在手動新增的「App 密鑰」欄）讓系統換成 60 天長效；直接用後台產生的長效權杖則免填。",
+            "到「帳號管理 → 手動新增」<b>貼上 access token</b>（短效權杖再附 App 密鑰）即完成綁定。"
           ]}
-          note="本服務以「手動貼 token」綁定（OAuth 一鍵流程已移除——對外開放需 Meta App Review／商業驗證）。權杖加密存、只在 server 用；有填 App 密鑰則自動展期。"
+          note="本服務以「手動貼 token」綁定（OAuth 一鍵流程已移除——對外開放需 Meta App Review／商業驗證）。權杖加密存、只在 server 用；系統會自動每日展期（不需 App 密鑰）。"
           docs={[
             { label: "Threads 取得權杖官方文件", href: "https://developers.facebook.com/docs/threads/get-started/get-access-tokens-and-permissions/" },
             { label: "Threads API 總覽", href: "https://developers.facebook.com/docs/threads" }

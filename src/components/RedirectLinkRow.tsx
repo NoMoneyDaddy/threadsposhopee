@@ -141,7 +141,7 @@ export default function RedirectLinkRow({ link }: { link: RedirectLinkView }) {
           {msg && <p className="text-xs text-red-500">❌ {msg}</p>}
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <span className="text-xs text-ink-2 tabular-nums" title="👁 中轉頁瀏覽 · ▶ 實際前往（繼續）">
+          <span className="text-xs text-ink-2 tabular-nums" title="👁 中轉頁瀏覽（已排除爬蟲/連結預覽） · ▶ 實際前往（繼續）">
             👁 {link.clicks} · ▶ {link.continues}
             {conversion !== null && <span className="ml-1 text-ink-3" title="轉換率＝繼續/瀏覽">（{conversion}%）</span>}
           </span>

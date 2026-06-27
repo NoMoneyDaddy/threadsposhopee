@@ -1,9 +1,14 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { getRedirectLinkByCode, bumpRedirectClick } from "@/lib/redirect-store";
 import ContinueButton from "./ContinueButton";
 
 export const dynamic = "force-dynamic";
+
+// 爬蟲/連結預覽抓取的 UA（FB/IG/Threads unfurl、各家 bot）。命中就不計入 clicks，
+// 讓 clicks 趨近「真人瀏覽」；真正的導流意圖以「繼續」(continues) 為準。
+const BOT_UA_RE = /bot|crawler|spider|crawl|slurp|facebookexternalhit|facebookcatalog|meta-externalagent|twitterbot|whatsapp|telegrambot|slackbot|discordbot|linkedinbot|embedly|pinterest|googlebot|bingbot|applebot|petalbot|yandex|baiduspider|duckduckbot|preview|headless/i;
 
 // 中轉頁分享預覽（OG）：用短連結存的 title/image/description。/r/* 不建索引。
 export async function generateMetadata({ params }: { params: { code: string } }): Promise<Metadata> {
@@ -25,7 +30,9 @@ export async function generateMetadata({ params }: { params: { code: string } })
 export default async function RedirectPage({ params }: { params: { code: string } }) {
   const link = await getRedirectLinkByCode(params.code).catch(() => null);
   if (!link) notFound();
-  await bumpRedirectClick(params.code).catch(() => {}); // best-effort 計數，不擋頁
+  // 只計真人瀏覽：爬蟲/預覽抓取的 UA（FB/Threads unfurl、各家 bot）跳過，避免灌水。
+  const ua = headers().get("user-agent") ?? "";
+  if (!BOT_UA_RE.test(ua)) await bumpRedirectClick(params.code).catch(() => {}); // best-effort 計數，不擋頁
 
   // 來源網域（縮圖佔位用）＋來源網址縮略（顯示「即將前往哪裡」，增加信任感）。
   let sourceHost = "";

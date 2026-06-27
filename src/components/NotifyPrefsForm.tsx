@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { NOTIFY_TYPES, type NotifyPrefs } from "@/lib/notify-prefs";
 
-// 每種通知個別開關（預設全開）。需先綁 Telegram／Discord 才會實際收到。
+// 每種通知個別開關（預設全開）。需先綁 Telegram 才會實際收到。
 export default function NotifyPrefsForm({ initial }: { initial: NotifyPrefs }) {
   const router = useRouter();
   const [prefs, setPrefs] = useState<NotifyPrefs>(initial);
@@ -34,7 +34,7 @@ export default function NotifyPrefsForm({ initial }: { initial: NotifyPrefs }) {
   return (
     <div className="card p-4">
       <div className="mb-1 font-medium">通知開關</div>
-      <p className="mb-2 text-xs text-ink-2">選擇要收到哪些通知（需先綁 Telegram／Discord）。</p>
+      <p className="mb-2 text-xs text-ink-2">選擇要收到哪些通知（需先綁 Telegram）。</p>
       <div className="grid gap-1.5 sm:grid-cols-2">
         {NOTIFY_TYPES.map((t) => (
           <label key={t.key} className="flex items-center gap-2 text-sm">

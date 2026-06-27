@@ -25,7 +25,7 @@ export default function PrivacyPage() {
       <Section title="我們蒐集的資料">
         <ul className="list-disc space-y-1 pl-5">
           <li>帳號識別：你以 Google 登入時取得的 email（用於識別你的帳號）。</li>
-          <li>你自行綁定的服務憑證：Threads 存取權杖、Shopee／Gemini／Apify 金鑰、Cloudinary 設定、通知用 Telegram chat_id／Discord webhook。</li>
+          <li>你自行綁定的服務憑證：Threads 存取權杖、Shopee／Gemini／Apify 金鑰、Cloudinary 設定、通知用 Telegram chat_id。</li>
           <li>你建立的內容：素材、AI 文案草稿、排程與發布紀錄。</li>
         </ul>
       </Section>

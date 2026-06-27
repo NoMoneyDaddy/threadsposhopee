@@ -156,29 +156,16 @@ export default function GuidePage() {
         </p>
       </Section>
 
-      <div className="grid gap-5 sm:grid-cols-2">
-        <Section id="telegram" title="Telegram 通知（選填）">
-          <Guide
-            steps={[
-              "在 Telegram 找 <b>@BotFather</b>，<code>/newbot</code> 建立機器人取得 Bot Token（部署端設定）。",
-              "對你的機器人傳一句話，再用 <code>@userinfobot</code> 或 getUpdates 取得你的 <b>chat id</b>。",
-              "把 chat id 填到設定頁的 Telegram 欄位，待審／異常即時通知你。"
-            ]}
-            docs={[{ label: "Telegram Bot API", href: "https://core.telegram.org/bots/api" }]}
-          />
-        </Section>
-
-        <Section id="discord" title="Discord 通知（選填）">
-          <Guide
-            steps={[
-              "在你的 Discord 伺服器：<b>伺服器設定 → 整合 → Webhook → 新增 Webhook</b>。",
-              "選頻道後 <b>複製 Webhook URL</b>。",
-              "把 URL 填到設定頁的 Discord 欄位即可。"
-            ]}
-            docs={[{ label: "Discord Webhooks 教學", href: "https://support.discord.com/hc/en-us/articles/228383668" }]}
-          />
-        </Section>
-      </div>
+      <Section id="telegram" title="Telegram 通知（選填）">
+        <Guide
+          steps={[
+            "到設定頁「個人 Telegram 通知」按 <b>一鍵綁定</b>，開啟 bot 後按 <code>START</code> 即自動完成（免手動複製 chat id）。",
+            "綁定後，待審草稿與異常會即時推到你的 Telegram；待審草稿還可一鍵核准／駁回（僅限私聊）。",
+            "（後備）也可手動：對 bot 按 <code>/start</code> 取得 Chat ID，貼到設定頁的手動欄位。"
+          ]}
+          docs={[{ label: "Telegram Bot API", href: "https://core.telegram.org/bots/api" }]}
+        />
+      </Section>
     </div>
   );
 }

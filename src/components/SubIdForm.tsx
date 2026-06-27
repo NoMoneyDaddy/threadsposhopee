@@ -119,7 +119,7 @@ export default function SubIdForm({ initial }: { initial: string | null }) {
               ))}
             </div>
             {slot.trim() && !isValidSubIdTemplate(slot) && (
-              <p className="mt-1 text-[11px] text-amber-700">⚠️ 僅能用英數、底線與上方變數（如 {"{date}"}）；大括號需成對。</p>
+              <p className="mt-1 text-[11px] text-amber-700">⚠️ 僅能用英數、底線與上方變數（如 {VARS[0]}）；大括號需成對。</p>
             )}
           </div>
         ))}

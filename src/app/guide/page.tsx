@@ -55,7 +55,7 @@ export default function GuidePage() {
       <Section id="threads" title="Threads 發文帳號（手動貼 token）" badge="必要">
         <Guide
           steps={[
-            "到 <a href=\"https://developers.facebook.com/apps\" target=\"_blank\" rel=\"noopener\" class=\"text-brand underline\">developers.facebook.com</a> 建立 App，建立時選用途「<b>Access the Threads API</b>」。",
+            "到 <a href=\"https://developers.facebook.com/apps\" target=\"_blank\" rel=\"noopener noreferrer\" class=\"text-brand underline\">developers.facebook.com</a> 建立 App，建立時選用途「<b>Access the Threads API</b>」。",
             "在 App 加入 <b>Threads</b> 使用案例，權限勾 <code>threads_basic</code>、<code>threads_content_publish</code>（發文）；要成效/留言/選題再加 <code>threads_manage_insights</code>、<code>threads_read_replies</code>、<code>threads_manage_replies</code>、<code>threads_keyword_search</code>。",
             "在 <b>Threads 使用案例 → 設定</b>，把要發文的 Threads 帳號加進去，按 <b>產生存取權杖（Generate access token）</b>，複製 token。",
             "（選填）若你用的是 1 小時短效權杖，可至 App 設定 → 基本取得 <b>App Secret</b>（填在手動新增的「App 密鑰」欄）讓系統換成 60 天長效；直接用後台產生的長效權杖則免填。",
@@ -72,7 +72,7 @@ export default function GuidePage() {
       <Section id="gemini" title="AI 文案金鑰（Google Gemini）" badge="必要">
         <Guide
           steps={[
-            "到 <a href=\"https://aistudio.google.com/app/apikey\" target=\"_blank\" rel=\"noopener\" class=\"text-brand underline\">aistudio.google.com/app/apikey</a>，用 Google 帳號登入。",
+            "到 <a href=\"https://aistudio.google.com/app/apikey\" target=\"_blank\" rel=\"noopener noreferrer\" class=\"text-brand underline\">aistudio.google.com/app/apikey</a>，用 Google 帳號登入。",
             "左側點 <b>Get API key</b> → <b>Create API key</b>，選新建或既有 Google Cloud 專案。",
             "複製以 <code>AIza…</code> 開頭的金鑰，貼到帳號管理的 Gemini 欄位。免費額度不需信用卡。"
           ]}
@@ -103,7 +103,7 @@ export default function GuidePage() {
       <Section id="apify" title="自動抓文（Apify）" badge="管理者">
         <Guide
           steps={[
-            "到 <a href=\"https://console.apify.com\" target=\"_blank\" rel=\"noopener\" class=\"text-brand underline\">console.apify.com</a> 註冊／登入。",
+            "到 <a href=\"https://console.apify.com\" target=\"_blank\" rel=\"noopener noreferrer\" class=\"text-brand underline\">console.apify.com</a> 註冊／登入。",
             "<b>Settings → API &amp; Integrations</b>，複製 <b>Personal API token</b>。",
             "（選填）指定要用的 Actor id；填到帳號管理的 Apify 欄位即可監看來源。"
           ]}
@@ -115,7 +115,7 @@ export default function GuidePage() {
       <Section id="cloudinary" title="圖片／影片存放：Cloudinary" badge="圖床·選用">
         <Guide
           steps={[
-            "到 <a href=\"https://cloudinary.com\" target=\"_blank\" rel=\"noopener\" class=\"text-brand underline\">cloudinary.com</a> 註冊，Dashboard 取得 <b>Cloud name</b>。",
+            "到 <a href=\"https://cloudinary.com\" target=\"_blank\" rel=\"noopener noreferrer\" class=\"text-brand underline\">cloudinary.com</a> 註冊，Dashboard 取得 <b>Cloud name</b>。",
             "<b>Settings → Upload → Upload presets</b> 新增一個 <b>Unsigned</b> preset，記下名稱。",
             "把 Cloud name 與 preset <b>兩者都填</b>到帳號管理；（選填）填 API Key／Secret 可在儀表板看用量。"
           ]}

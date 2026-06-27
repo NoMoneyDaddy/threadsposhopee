@@ -9,6 +9,12 @@ test("parseSlots: 只留合法 HH:MM、去重保序", () => {
   assert.deepEqual(parseSlots(null), []);
 });
 
+test("parseSlots: 單位數小時補零正規化，避免與整點格子比對失敗或語意重複", () => {
+  assert.deepEqual(parseSlots("9:00"), ["09:00"]); // 補零
+  assert.deepEqual(parseSlots("9:00,09:00"), ["09:00"]); // 9:00 與 09:00 視為同一時段去重
+  assert.deepEqual(parseSlots("6:00,9:00,12:30"), ["06:00", "09:00", "12:30"]); // 補零後字典序＝時間序
+});
+
 test("normalizePublishPrefsInput: 驗證界線", () => {
   const ok = normalizePublishPrefsInput({ slots: "09:00,20:00", minGapMinutes: "240", maxPerDay: "5" });
   assert.equal(ok.ok, true);

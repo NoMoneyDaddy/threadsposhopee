@@ -12,10 +12,14 @@ const HHMM = /^([01]?\d|2[0-3]):[0-5]\d$/;
 
 export function parseSlots(raw: string | null | undefined): string[] {
   if (!raw) return [];
-  // 去重、保序、只留合法 HH:MM
+  // 去重、保序、只留合法 HH:MM；小時統一補零正規化（"9:00"→"09:00"），
+  // 避免與整點格子（補零 HH:MM）比對失敗、產生語意重複（9:00 vs 09:00）或字典序排序錯亂。
   const out: string[] = [];
   for (const s of raw.split(",").map((x) => x.trim())) {
-    if (HHMM.test(s) && !out.includes(s)) out.push(s);
+    if (!HHMM.test(s)) continue;
+    const [h, m] = s.split(":");
+    const norm = `${h.padStart(2, "0")}:${m}`;
+    if (!out.includes(norm)) out.push(norm);
   }
   return out;
 }

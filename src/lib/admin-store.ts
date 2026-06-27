@@ -3,6 +3,7 @@
 import { getServiceClient } from "./supabase/server";
 import { isDemoMode } from "./env";
 import { getRealUser, listAllUsers } from "./auth";
+import { listActiveCircuits } from "./app-state";
 import { sanitizeRoles, type ManualRole } from "./roles";
 
 // ── 身份組 ────────────────────────────────────────────────
@@ -78,6 +79,48 @@ export function buildUsersOverview(
     threadsCount: threadsByOwner.get(u.id) ?? 0,
     shopeeBound: shopeeOwners.has(u.id)
   }));
+}
+
+// 管理頁 Threads 帳號狀態總表（owner-only）：每個發文帳號的擁有者、token 到期、狀態、斷路器冷卻。
+export interface ThreadsAccountStatusRow {
+  id: string;
+  label: string;
+  ownerEmail: string | null;
+  threadsUserId: string;
+  tokenExpiresAt: string | null;
+  status: string;
+  circuitUntil: string | null; // 仍在斷路器冷卻中的到期 ISO；未冷卻為 null
+}
+export async function listThreadsAccountsStatus(): Promise<ThreadsAccountStatusRow[]> {
+  if (isDemoMode) return [];
+  const actor = await getRealUser();
+  if (!actor?.isPlatformOwner) throw new Error("forbidden: 僅限管理者");
+  const [users, accounts, circuits] = await Promise.all([
+    listAllUsers(),
+    selectAllRows<{
+      id: string;
+      label: string;
+      owner_id: string | null;
+      threads_user_id: string;
+      token_expires_at: string | null;
+      status: string;
+    }>("threads_accounts", "id, label, owner_id, threads_user_id, token_expires_at, status"),
+    listActiveCircuits()
+  ]);
+  const emailById = new Map<string, string | null>();
+  for (const u of users) emailById.set(u.id, u.email);
+  return accounts.map((a) => {
+    const circuitTime = circuits.get(a.id);
+    return {
+      id: a.id,
+      label: a.label,
+      ownerEmail: a.owner_id ? emailById.get(a.owner_id) ?? null : null,
+      threadsUserId: a.threads_user_id,
+      tokenExpiresAt: a.token_expires_at,
+      status: a.status,
+      circuitUntil: circuitTime ? new Date(circuitTime).toISOString() : null
+    };
+  });
 }
 
 // 依 email 找使用者 id（管理員賦予身份組用；分頁掃描）。

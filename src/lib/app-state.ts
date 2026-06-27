@@ -77,15 +77,54 @@ export async function tripAccountCircuit(accountId: string, cooldownMinutes: num
     .upsert({ key: `circuit:${accountId}`, value: until, updated_at: new Date().toISOString() }, { onConflict: "key" });
 }
 
-// 解除冷卻（帳號恢復正常發文時呼叫）。
+// 管理頁用：一次讀出所有「仍在冷卻中」的帳號斷路器（key=circuit:<accountId>），回傳 accountId→到期 epoch ms。
+// 已過期者略過。僅供 owner-only 管理頁；分頁避免 1000 列截斷。
+export async function listActiveCircuits(): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  if (isDemoMode) {
+    const now = Date.now();
+    for (const [id, iso] of Object.entries(demoCircuit)) {
+      const until = Date.parse(iso);
+      if (Number.isFinite(until) && until > now) out.set(id, until);
+    }
+    return out;
+  }
+  const sb = getServiceClient();
+  if (!sb) return out;
+  const now = Date.now();
+  const nowIso = new Date(now).toISOString();
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    // 直接在 DB 過濾掉已過期冷卻（value 為固定寬度 ISO UTC，字典序＝時序），避免過期紀錄累積拖慢查詢。
+    const { data, error } = await sb
+      .from("app_state")
+      .select("key, value")
+      .like("key", "circuit:%")
+      .gt("value", nowIso)
+      .range(from, from + PAGE - 1);
+    if (error) throw new Error(`讀取斷路器狀態失敗：${error.message}`);
+    const rows = (data as { key: string; value: string }[] | null) ?? [];
+    for (const r of rows) {
+      const until = Date.parse(r.value);
+      const accountId = r.key.slice("circuit:".length);
+      if (accountId && Number.isFinite(until) && until > now) out.set(accountId, until);
+    }
+    if (rows.length < PAGE) break;
+  }
+  return out;
+}
+
+// 解除冷卻（帳號恢復正常發文時呼叫，或管理頁手動解除）。
+// fail-fast：連線取不到／delete 失敗即拋，避免「回報成功但實際未清除」（發文路徑呼叫端以 .catch 視為 best-effort）。
 export async function clearAccountCircuit(accountId: string): Promise<void> {
   if (isDemoMode) {
     delete demoCircuit[accountId];
     return;
   }
   const sb = getServiceClient();
-  if (!sb) return;
-  await sb.from("app_state").delete().eq("key", `circuit:${accountId}`);
+  if (!sb) throw new Error("無法取得服務端連線");
+  const { error } = await sb.from("app_state").delete().eq("key", `circuit:${accountId}`);
+  if (error) throw new Error(`解除斷路器失敗：${error.message}`);
 }
 
 export async function getHeartbeat(): Promise<string | null> {

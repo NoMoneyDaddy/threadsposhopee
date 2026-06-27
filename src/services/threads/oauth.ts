@@ -21,7 +21,12 @@ const DEFAULT_SCOPES = [
   "threads_manage_replies",
   "threads_keyword_search"
 ].join(",");
-const SCOPES = process.env.THREADS_SCOPES?.trim() || DEFAULT_SCOPES;
+// 逐項去空白並濾掉空值再 join（避免誤設帶內部空白如 "a, b" 被原樣編碼進 scope 致 OAuth 被拒）。
+const SCOPES =
+  process.env.THREADS_SCOPES?.split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .join(",") || DEFAULT_SCOPES;
 
 // 組授權連結（導使用者去 Threads 同意頁）。state 用來防 CSRF / 帶回 next。
 export function buildAuthorizeUrl(clientId: string, redirectUri: string, state: string): string {

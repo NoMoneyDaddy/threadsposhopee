@@ -12,5 +12,13 @@ export function publicOrigin(req: Request): string {
   }
   const fwdHost = req.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
   const host = fwdHost || req.headers.get("host")?.split(",")[0]?.trim();
-  return host ? `https://${host}` : new URL(req.url).origin.replace(/^http:/, "https:");
+  // 用 new URL 正規化（host 可能含路徑/埠等雜訊），與 Origin 分支一致取乾淨 origin。
+  if (host) {
+    try {
+      return new URL(`https://${host}`).origin;
+    } catch {
+      // 畸形 host → 落到 req.url
+    }
+  }
+  return new URL(req.url).origin.replace(/^http:/, "https:");
 }

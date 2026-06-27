@@ -29,3 +29,8 @@ test("publicOrigin 畸形 Origin 落到後備 host", () => {
   const req = reqWith({ origin: "not a url", host: "iwantpo.example.app" });
   assert.equal(publicOrigin(req), "https://iwantpo.example.app");
 });
+
+test("publicOrigin 無任何相關 header 時退回 req.url origin，仍強制 https", () => {
+  const req = reqWith({}, "http://internal.local/api/telegram/setup-webhook");
+  assert.equal(publicOrigin(req), "https://internal.local");
+});

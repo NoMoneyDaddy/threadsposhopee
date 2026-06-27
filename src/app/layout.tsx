@@ -28,6 +28,9 @@ export const metadata: Metadata = {
   manifest: "/manifest.webmanifest",
   icons: { icon: "/icon.svg", apple: "/icon.svg" },
   appleWebApp: { capable: true, statusBarStyle: "default", title: "IwantPo" },
+  // 關閉行動裝置（iOS/Android）對 email／電話／地址／日期的自動偵測，
+  // 否則畫面上的 email（header、view-as 列、管理面板）等會被加上可點的虛線框。
+  formatDetection: { telephone: false, date: false, address: false, email: false },
   ...(ADSENSE_CLIENT ? { other: { "google-adsense-account": ADSENSE_CLIENT } } : {})
 };
 

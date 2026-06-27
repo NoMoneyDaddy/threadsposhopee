@@ -109,15 +109,18 @@ export async function listThreadsAccountsStatus(): Promise<ThreadsAccountStatusR
   ]);
   const emailById = new Map<string, string | null>();
   for (const u of users) emailById.set(u.id, u.email);
-  return accounts.map((a) => ({
-    id: a.id,
-    label: a.label,
-    ownerEmail: a.owner_id ? emailById.get(a.owner_id) ?? null : null,
-    threadsUserId: a.threads_user_id,
-    tokenExpiresAt: a.token_expires_at,
-    status: a.status,
-    circuitUntil: circuits.has(a.id) ? new Date(circuits.get(a.id)!).toISOString() : null
-  }));
+  return accounts.map((a) => {
+    const circuitTime = circuits.get(a.id);
+    return {
+      id: a.id,
+      label: a.label,
+      ownerEmail: a.owner_id ? emailById.get(a.owner_id) ?? null : null,
+      threadsUserId: a.threads_user_id,
+      tokenExpiresAt: a.token_expires_at,
+      status: a.status,
+      circuitUntil: circuitTime ? new Date(circuitTime).toISOString() : null
+    };
+  });
 }
 
 // 依 email 找使用者 id（管理員賦予身份組用；分頁掃描）。

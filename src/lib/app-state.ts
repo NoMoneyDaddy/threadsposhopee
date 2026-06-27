@@ -92,18 +92,21 @@ export async function listActiveCircuits(): Promise<Map<string, number>> {
   const sb = getServiceClient();
   if (!sb) return out;
   const now = Date.now();
+  const nowIso = new Date(now).toISOString();
   const PAGE = 1000;
   for (let from = 0; ; from += PAGE) {
+    // 直接在 DB 過濾掉已過期冷卻（value 為固定寬度 ISO UTC，字典序＝時序），避免過期紀錄累積拖慢查詢。
     const { data, error } = await sb
       .from("app_state")
       .select("key, value")
       .like("key", "circuit:%")
+      .gt("value", nowIso)
       .range(from, from + PAGE - 1);
     if (error) throw new Error(`讀取斷路器狀態失敗：${error.message}`);
-    const rows = data ?? [];
+    const rows = (data as { key: string; value: string }[] | null) ?? [];
     for (const r of rows) {
-      const until = Date.parse((r as { value: string }).value);
-      const accountId = (r as { key: string }).key.slice("circuit:".length);
+      const until = Date.parse(r.value);
+      const accountId = r.key.slice("circuit:".length);
       if (accountId && Number.isFinite(until) && until > now) out.set(accountId, until);
     }
     if (rows.length < PAGE) break;

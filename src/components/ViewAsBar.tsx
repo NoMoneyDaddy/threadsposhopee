@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { usePathname } from "next/navigation";
+import { VIEW_AS_MEMBER_PREVIEW } from "@/lib/view-as";
 
 type UserRow = { id: string; email: string | null };
 
@@ -84,7 +85,7 @@ export default function ViewAsBar({ viewingAsEmail }: { viewingAsEmail: string |
           <button
             type="button"
             disabled={busy}
-            onClick={() => switchTo("__member_preview__")}
+            onClick={() => switchTo(VIEW_AS_MEMBER_PREVIEW)}
             className="mb-2 block w-full rounded-lg border px-2 py-1.5 text-left text-sm text-ink hover:bg-surface-2 disabled:opacity-50"
           >
             👤 預覽一般成員視角（用我的帳號）

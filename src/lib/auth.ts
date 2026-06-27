@@ -3,14 +3,12 @@ import { getSessionClient } from "@/lib/supabase/clients";
 import { log } from "@/lib/logger";
 import { getServiceClient } from "@/lib/supabase/server";
 import { env, isDemoMode } from "@/lib/env";
+import { VIEW_AS_COOKIE, VIEW_AS_MEMBER_PREVIEW } from "@/lib/view-as";
 import type { User } from "@supabase/supabase-js";
 
-// 管理者「以成員視角檢視」用的 cookie（只存被檢視成員的 user id）。
-// 安全：僅當「真實登入者是平台管理者」時才被 getCurrentUser 認可（見下），非管理者一律忽略。
-export const VIEW_AS_COOKIE = "view_as";
-// 特殊值：用管理者自己的帳號/資料，但以「一般成員」身分呈現（預覽非管理者的選單與權限），唯讀。
-// 讓平台沒有其他成員時，管理者仍能預覽成員視角。前端 ViewAsBar 需同步此字串。
-export const VIEW_AS_MEMBER_PREVIEW = "__member_preview__";
+// view-as 共用常量集中於 @/lib/view-as（純值、client/server 共用，避免前後端字串漂移）；re-export 維持既有匯入。
+// 安全：view_as cookie 僅當「真實登入者是平台管理者」時才被 getCurrentUser 認可（見下），非管理者一律忽略。
+export { VIEW_AS_COOKIE, VIEW_AS_MEMBER_PREVIEW };
 
 export interface AppUser {
   id: string;

@@ -28,6 +28,12 @@ const SCOPES =
     .filter(Boolean)
     .join(",") || DEFAULT_SCOPES;
 
+// 目前實際請求的授權範圍（受 THREADS_SCOPES 影響）是否包含某 scope。
+// 供 UI 判斷「重新授權能否拿到該權限」（部署若關閉進階範圍，重新授權也拿不到）。
+export function threadsScopeEnabled(scope: string): boolean {
+  return SCOPES.split(",").includes(scope);
+}
+
 // 組授權連結（導使用者去 Threads 同意頁）。state 用來防 CSRF / 帶回 next。
 export function buildAuthorizeUrl(clientId: string, redirectUri: string, state: string): string {
   const params = new URLSearchParams({

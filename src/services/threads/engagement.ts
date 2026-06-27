@@ -67,6 +67,19 @@ export function bestPostingTimes(posts: { publishedAt: string | null; views: num
   };
 }
 
+// 成效頁「抓不到任何互動數據」時要顯示哪種提示。純函式可測。
+// - 有已發布貼文(sampled>0)卻完全抓不到數據(fetched===0) 才提示；否則 null（正常的樣本不足）。
+// - insights 範圍「目前有請求」→ 提示重新授權即可拿到；「被 THREADS_SCOPES 關閉」→ 重新授權也沒用，
+//   改提示需先在部署環境啟用 insights 範圍。
+export type InsightsHint = "reauth" | "enable_scope" | null;
+export function insightsHintKind(
+  e: { sampled: number; fetched: number } | null | undefined,
+  insightsScopeEnabled: boolean
+): InsightsHint {
+  if (!e || e.sampled <= 0 || e.fetched > 0) return null;
+  return insightsScopeEnabled ? "reauth" : "enable_scope";
+}
+
 export async function getEngagement(ownerId: string, limit = 15): Promise<EngagementSummary> {
   const [posts, tokens] = await Promise.all([
     listRecentPublishedPosts(ownerId, limit),

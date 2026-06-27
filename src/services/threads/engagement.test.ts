@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { bestPostingTimes } from "./engagement";
+import { bestPostingTimes, insightsHintKind } from "./engagement";
 
 // 2024-01-01 是週一。UTC 01:00 = Asia/Taipei 09:00（+8）。
 test("bestPostingTimes：依台北時段分桶並算平均、由高到低排序", () => {
@@ -34,4 +34,12 @@ test("bestPostingTimes：忽略缺時間/壞時間，空輸入回空桶", () => 
     { publishedAt: "not-a-date", views: 9 }
   ]);
   assert.deepEqual(r, { byHour: [], byWeekday: [] });
+});
+
+test("insightsHintKind：有發布卻抓不到數據時依 scope 決定提示", () => {
+  assert.equal(insightsHintKind({ sampled: 5, fetched: 0 }, true), "reauth");
+  assert.equal(insightsHintKind({ sampled: 5, fetched: 0 }, false), "enable_scope");
+  assert.equal(insightsHintKind({ sampled: 5, fetched: 2 }, true), null);
+  assert.equal(insightsHintKind({ sampled: 0, fetched: 0 }, true), null);
+  assert.equal(insightsHintKind(null, true), null);
 });

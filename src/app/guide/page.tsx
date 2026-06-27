@@ -24,7 +24,7 @@ function Section({ id, title, badge, children }: { id: string; title: string; ba
 function Guide({ steps, note, docs }: Step) {
   return (
     <>
-      <ol className="list-decimal space-y-1.5 pl-5 text-sm text-ink">
+      <ol className="list-decimal space-y-1.5 pl-5 text-sm text-ink [overflow-wrap:anywhere]">
         {steps.map((s, i) => (
           <li key={i} dangerouslySetInnerHTML={{ __html: s }} />
         ))}

@@ -3,6 +3,7 @@ import { log } from "@/lib/logger";
 import { setUserR2, hasUserR2 } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
 import { parseR2Input } from "@/services/media/r2-config";
+import { validateR2 } from "@/services/media/r2";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +40,11 @@ export async function POST(req: Request) {
       // 已綁定時：留空＝沿用既有；但只填其一視為誤填。
       if (alreadyBound && Boolean(accessKeyId) !== Boolean(secretAccessKey)) {
         return NextResponse.json({ ok: false, error: "Access Key ID 與 Secret 需一起填寫" }, { status: 400 });
+      }
+      // 有填完整金鑰時做實連測試（HeadBucket），存檔即驗、填錯當下就擋；留空沿用既有則略過（無金鑰可驗）。
+      if (parsed.bucket && accessKeyId && secretAccessKey) {
+        const check = await validateR2({ accountId: parsed.accountId, bucket: parsed.bucket, accessKeyId, secretAccessKey });
+        if (!check.ok) return NextResponse.json({ ok: false, error: check.reason }, { status: 400 });
       }
     }
 

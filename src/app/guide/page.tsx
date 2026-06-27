@@ -138,7 +138,7 @@ export default function GuidePage() {
             "讓 bucket 可公開讀：啟用 <b>r2.dev</b> 受管網址，或（建議）綁<b>自訂網域</b>；把該公開網址（<b>需含 <code>https://</code></b>）填入「公開讀網域」。",
             "到帳號管理 R2 欄位填這 5 項：<b>Account ID、bucket、公開讀網域、Access Key ID、Secret Access Key</b>（綁了 R2 會優先於 Cloudinary）。"
           ]}
-          note="region 固定 auto（系統自動帶、免填）。Token 限縮到「單一 bucket、Object Read & Write」，外洩也只影響該 bucket。Access Key/Secret 加密存、只在 server 用。注意：目前 R2 存檔只驗欄位格式、不做連線測試，金鑰填錯要到實際上傳才會發現。"
+          note="region 固定 auto（系統自動帶、免填）。Token 限縮到「單一 bucket、Object Read & Write」，外洩也只影響該 bucket。Access Key/Secret 加密存、只在 server 用。儲存時會對 bucket 做連線測試（HeadBucket），金鑰或 bucket 填錯會當下擋下。"
           docs={[
             { label: "R2 API Tokens", href: "https://developers.cloudflare.com/r2/api/tokens/" },
             { label: "R2 S3 相容 API", href: "https://developers.cloudflare.com/r2/api/s3/api/" },

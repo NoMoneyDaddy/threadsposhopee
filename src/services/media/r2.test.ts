@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { deriveSigningKey, buildS3PutAuth } from "./r2";
+import { deriveSigningKey, buildS3PutAuth, r2ValidationReason } from "./r2";
 
 // AWS 官方文件「Examples of how to derive a signing key for Signature Version 4」測試向量：
 // secret=wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY, date=20120215, region=us-east-1, service=iam
@@ -36,4 +36,11 @@ test("buildS3PutAuth：相同輸入 → 相同簽章（決定性）", () => {
     contentType: "image/jpeg"
   };
   assert.equal(buildS3PutAuth(args).authorization, buildS3PutAuth(args).authorization);
+});
+
+test("r2ValidationReason：依狀態碼給對應訊息", () => {
+  assert.match(r2ValidationReason(403), /金鑰無效或無此 bucket 權限/);
+  assert.match(r2ValidationReason(401), /金鑰無效或無此 bucket 權限/);
+  assert.match(r2ValidationReason(404), /找不到 bucket/);
+  assert.match(r2ValidationReason(500), /HTTP 500/);
 });

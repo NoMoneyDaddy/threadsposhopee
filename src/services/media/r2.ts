@@ -78,6 +78,48 @@ function encodeKeyPath(key: string): string {
     .join("/");
 }
 
+// R2 連線驗證的 HTTP 狀態 → 使用者訊息（純函式可測）。200 視為通過故不在此。
+export function r2ValidationReason(status: number): string {
+  if (status === 401 || status === 403) return "金鑰無效或無此 bucket 權限（請確認 Access Key/Secret 與 bucket 範圍）";
+  if (status === 404) return "找不到 bucket（請確認 bucket 名稱與 Account ID）";
+  return `R2 連線驗證失敗（HTTP ${status}）`;
+}
+
+// 存檔前驗證 R2 憑證是否可用：對 bucket 發已簽章 HEAD（HeadBucket）。
+// 回 {ok:true} 或 {ok:false, reason}。網路/逾時亦回 false（讓使用者知道沒驗成功）。
+export async function validateR2(creds: {
+  accountId: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+  bucket: string;
+}): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const service = "s3";
+  const region = "auto";
+  const host = `${creds.accountId}.r2.cloudflarestorage.com`;
+  const canonicalPath = `/${encodeURIComponent(creds.bucket)}`;
+  const amzDate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, "");
+  const dateStamp = amzDate.slice(0, 8);
+  const signedHeaders = "host;x-amz-content-sha256;x-amz-date";
+  const canonicalHeaders = `host:${host}\n` + `x-amz-content-sha256:${UNSIGNED}\n` + `x-amz-date:${amzDate}\n`;
+  const canonicalRequest = ["HEAD", canonicalPath, "", canonicalHeaders, signedHeaders, UNSIGNED].join("\n");
+  const scope = `${dateStamp}/${region}/${service}/aws4_request`;
+  const stringToSign = ["AWS4-HMAC-SHA256", amzDate, scope, sha256Hex(canonicalRequest)].join("\n");
+  const signingKey = deriveSigningKey(creds.secretAccessKey, dateStamp, region, service);
+  const signature = hmac(signingKey, stringToSign).toString("hex");
+  const authorization = `AWS4-HMAC-SHA256 Credential=${creds.accessKeyId}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
+  const endpoint = `https://${host}${canonicalPath}`;
+  try {
+    const res = await fetchWithRetry(
+      assertSafePublicUrl(endpoint).href,
+      { method: "HEAD", headers: { Authorization: authorization, "x-amz-date": amzDate, "x-amz-content-sha256": UNSIGNED } },
+      8000
+    );
+    return res.ok ? { ok: true } : { ok: false, reason: r2ValidationReason(res.status) };
+  } catch (e) {
+    return { ok: false, reason: `R2 連線驗證失敗：${e instanceof Error ? e.message : String(e)}` };
+  }
+}
+
 // 中轉一個媒體到 R2，回傳公開讀網址。失敗則拋錯（呼叫端 fallback 用原 URL）。
 // 物件 key 命名：以商品分組（keyHint=<shopId>_<itemId>），檔名取來源媒體 id（同檔多尺寸/重複上傳會落同一 key，
 // 可回溯、好清理）；無法取得來源 id 時退回 URL 雜湊；keyHint 缺時退回舊的 type 分類資料夾。

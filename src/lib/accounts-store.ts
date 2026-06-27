@@ -287,22 +287,35 @@ export async function getShopeeCredentials(
   return { appId: data.app_id, secret: decrypt(data.secret_enc), subId: data.default_sub_id };
 }
 
-// 新增 Shopee 分潤帳號（secret 加密後存放）
+// 綁定 Shopee 分潤帳號（secret 加密後存放）。每位使用者僅一組：已存在則覆寫既有那筆。
 export async function createShopeeAccount(
-  input: { label: string; app_id: string; secret: string; default_sub_id?: string },
+  input: { label?: string; app_id: string; secret: string; default_sub_id?: string },
   ownerId: string
 ): Promise<ShopeeAccount> {
   // 不再注入預設 "threadspo"：未填則存空字串（欄位 NOT NULL，空字串即「無預設來源標記」）。
   const default_sub_id = input.default_sub_id?.trim() || "";
+  // 不再讓使用者自取顯示名稱（一人一組）：固定標籤，欄位 NOT NULL。
+  const label = input.label?.trim() || "蝦皮分潤";
   if (isDemoMode) {
-    const acc: ShopeeAccount = { id: randomUUID(), label: input.label, app_id: input.app_id, default_sub_id };
+    // demo store 為單租戶（不分 owner，listShopeeAccounts 也回全部）：一人一組＝覆寫第一筆。
+    const existing = demo.shopeeAccounts[0];
+    if (existing) {
+      existing.app_id = input.app_id;
+      existing.default_sub_id = default_sub_id;
+      return existing;
+    }
+    const acc: ShopeeAccount = { id: randomUUID(), label, app_id: input.app_id, default_sub_id };
     demo.shopeeAccounts.unshift(acc);
     return acc;
   }
   const sb = getServiceClient()!;
+  // 一人一組：owner_id 唯一索引（migration 0047）保證；單句 upsert 原子覆寫，免去先查再寫的 TOCTOU 競態與排序不一致。
   const { data, error } = await sb
     .from("shopee_accounts")
-    .insert({ owner_id: ownerId, label: input.label, app_id: input.app_id, secret_enc: encrypt(input.secret), default_sub_id })
+    .upsert(
+      { owner_id: ownerId, label, app_id: input.app_id, secret_enc: encrypt(input.secret), default_sub_id },
+      { onConflict: "owner_id" }
+    )
     .select("id,label,app_id,default_sub_id")
     .single();
   if (error) throw error;

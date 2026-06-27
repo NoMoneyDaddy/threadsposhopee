@@ -31,6 +31,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "自訂主題請填搜尋關鍵字" }, { status: 400 });
     }
 
+    // 取材來源：threads_search＝用 owner Threads token 搜公開貼文；其餘＝RSS（Google News）。
+    const sourceMode = body.source_mode === "threads_search" ? "threads_search" : "rss";
+
     // 免審直接排程需指定發文帳號，否則產出的貼文無帳號可發、會卡住。
     const threadsAccountId = typeof body.threads_account_id === "string" ? body.threads_account_id : null;
     if (body.auto_publish === true && !threadsAccountId) {
@@ -51,6 +54,7 @@ export async function POST(req: Request) {
       emoji_level: emoji,
       hashtag_pool: tags,
       length: Number.isInteger(length) && length >= 50 && length <= 500 ? length : 200,
+      source_mode: sourceMode,
       search_query: searchQuery,
       threads_account_id: threadsAccountId,
       use_redirect: body.use_redirect === true,

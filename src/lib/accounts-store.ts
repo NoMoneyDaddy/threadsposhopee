@@ -6,8 +6,7 @@ import { isDemoMode } from "./env";
 import { demo } from "./demo-store";
 import { decrypt, encrypt } from "./crypto";
 import { log } from "./logger";
-import { planLimits, GLOBAL_MAX_THREADS_ACCOUNTS } from "./plans";
-import { getUserPlan } from "./credentials";
+import { getThreadsAccountLimit } from "./account-limits";
 import type { ThreadsAccount, ShopeeAccount } from "./types";
 
 export async function listThreadsAccounts(ownerId: string): Promise<ThreadsAccount[]> {
@@ -22,27 +21,24 @@ export async function listThreadsAccounts(ownerId: string): Promise<ThreadsAccou
   return (data ?? []) as ThreadsAccount[];
 }
 
-// 方案配額：該使用者是否還能再「連結一個新的」Threads 發文帳號。
-// - owner 是部署擁有者，不受方案限制。
+// 帳號配額：該使用者是否還能再「連結一個新的」Threads 發文帳號。
+// - 本站不收費、無方案分層：一般使用者固定上限，管理者取較高的全站硬上限。
 // - 既有同一 threads_user_id（重新授權／更新）不占新名額。
 // - demo 模式不限制。
-// 回傳含 plan/used/limit 供 UI 顯示與 402 訊息使用。
+// 回傳 used/limit 供 UI 顯示與 402 訊息使用。
 export async function canAddThreadsAccount(
   ownerId: string,
   opts: { isOwner?: boolean; threadsUserId?: string } = {}
-): Promise<{ ok: boolean; plan: string; used: number; limit: number }> {
-  if (isDemoMode) return { ok: true, plan: "free", used: 0, limit: planLimits("free").maxThreadsAccounts };
-  const [plan, accounts] = await Promise.all([getUserPlan(ownerId), listThreadsAccounts(ownerId)]);
-  // 全站硬上限 20（含管理者）：管理者取硬上限，一般使用者取方案與硬上限的較小值。
-  const limit = opts.isOwner
-    ? GLOBAL_MAX_THREADS_ACCOUNTS
-    : Math.min(planLimits(plan).maxThreadsAccounts, GLOBAL_MAX_THREADS_ACCOUNTS);
+): Promise<{ ok: boolean; used: number; limit: number }> {
+  const limit = getThreadsAccountLimit(opts.isOwner);
+  if (isDemoMode) return { ok: true, used: 0, limit };
+  const accounts = await listThreadsAccounts(ownerId);
   const used = accounts.length;
-  // 重新授權既有帳號（同 threads_user_id）不算新增（仍受硬上限保護，因未增加數量）。
+  // 重新授權既有帳號（同 threads_user_id）不算新增（仍受上限保護，因未增加數量）。
   if (opts.threadsUserId && accounts.some((a) => a.threads_user_id === opts.threadsUserId)) {
-    return { ok: true, plan, used, limit };
+    return { ok: true, used, limit };
   }
-  return { ok: used < limit, plan, used, limit };
+  return { ok: used < limit, used, limit };
 }
 
 // 取出 Threads 帳號的發文憑證（解密後）。僅伺服器端使用，Demo 模式回 null。

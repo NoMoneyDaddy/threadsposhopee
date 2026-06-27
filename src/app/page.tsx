@@ -6,12 +6,20 @@ import { getCurrentUser } from "@/lib/auth";
 import { getSetupSteps } from "@/lib/setup-status";
 import { getPublishInsights, getFeatureFlags, listHotProducts, getContributionScore, listPublishedDates, countPublished, type SharedMaterial } from "@/lib/store";
 import { computeStreak, taipeiDateStr, achievementsFor } from "@/lib/streak";
+import { log } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const user = await getCurrentUser();
-  const steps = user ? await getSetupSteps(user) : [];
+  // 設定引導卡：任一狀態查詢失敗也不該 500 整個首頁（與下方其他查詢一致用 catch 降級）。
+  const steps = user
+    ? await getSetupSteps(user).catch((err) => {
+        // 記錄真正失敗的相依（哪個狀態查詢拋錯），以便排查；UI 降級為不顯示設定卡。
+        log.error("getSetupSteps 失敗", { err: err instanceof Error ? err.message : String(err) });
+        return [];
+      })
+    : [];
   // 本週概覽（近 7 天，每人自己的發布資料）；失敗則略過不擋頁。
   const weekly = user
     ? await getPublishInsights(user.id, { startMs: Date.now() - 7 * 86400_000, endMs: Date.now() }).catch(() => null)

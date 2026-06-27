@@ -50,16 +50,22 @@ export async function getCurrentUser(): Promise<AppUser | null> {
   if (!real) return null;
   // 非平台管理者：一律忽略 view-as cookie（防偽造 cookie 越權看他人資料）。
   if (!real.isPlatformOwner) return real;
-  const viewAsId = cookies().get(VIEW_AS_COOKIE)?.value?.trim();
-  if (!viewAsId || viewAsId === real.id) return real;
-  // 以成員身分檢視：查 email 供顯示；資料以此 id 過濾。
-  let email: string | null = null;
-  const admin = getServiceClient();
-  if (admin) {
+  try {
+    const viewAsId = cookies().get(VIEW_AS_COOKIE)?.value?.trim();
+    if (!viewAsId || viewAsId === real.id) return real;
+    // 先確認該成員確實存在再切換：查無使用者或無法驗證（缺 service client／查詢失敗）一律退回真實身分，
+    // 不把未驗證的 view_as id 當成有效身分拿去過濾資料。
+    const admin = getServiceClient();
+    if (!admin) return real;
     const { data } = await admin.auth.admin.getUserById(viewAsId).catch(() => ({ data: null }) as { data: null });
-    email = data?.user?.email ?? null;
+    const member = data?.user;
+    if (!member) return real;
+    return { id: member.id, email: member.email ?? null, isOwner: false, isPlatformOwner: true, viewingAsEmail: member.email ?? member.id };
+  } catch (err) {
+    // view-as 解析任何環節失敗（cookie/service client/admin API）一律退回真實身分，不讓它 500 整頁；記錄以利排查。
+    log.error("getCurrentUser view-as 解析失敗", { err: err instanceof Error ? err.message : String(err) });
+    return real;
   }
-  return { id: viewAsId, email, isOwner: false, isPlatformOwner: true, viewingAsEmail: email ?? viewAsId };
 }
 
 // 列出所有平台使用者（管理者「切換成員視角」下拉用）。僅供 owner-only 路由呼叫。

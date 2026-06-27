@@ -83,10 +83,14 @@ export async function middleware(req: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    // 相對 Location 轉址：瀏覽器以實際對外網址為基準解析，避免反向代理後 url.host 變內部位址
-    // （localhost:port）而把未登入者導去 localhost。保留 next 以便登入後返回原頁。
-    const next = encodeURIComponent(url.pathname + url.search);
-    const redirect = new NextResponse(null, { status: 307, headers: { Location: `/login?next=${next}` } });
+    // middleware 的轉址必須是絕對 URL：Next 會對 Location 做 new URL()，相對字串無 base 會丟
+    // 「Invalid URL」造成 500。用 nextUrl.clone() 產生同源絕對網址（Next 依請求填入正確 host），
+    // 既不會 500、也不會跳到內部 localhost。保留 next 以便登入後返回原頁。
+    const redirectUrl = url.clone();
+    redirectUrl.pathname = "/login";
+    redirectUrl.search = "";
+    redirectUrl.searchParams.set("next", url.pathname + url.search);
+    const redirect = NextResponse.redirect(redirectUrl);
     // 保留 supabase 在 getUser() 期間寫入 res 的 cookie（如清除失效 session），避免回傳全新 response 遺失。
     res.cookies.getAll().forEach((c) => redirect.cookies.set(c));
     return redirect;

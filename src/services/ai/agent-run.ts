@@ -71,30 +71,42 @@ export function searchQueriesForAgent(agent: AiAgent): string[] {
   return labels.length ? labels : [getAiDomain(agent.domain)?.label ?? agent.domain].filter(Boolean);
 }
 
-// 解析此代理人可用的 Threads token：優先指定發文帳號，否則取 owner 任一啟用帳號。
-async function resolveAgentThreadsToken(agent: AiAgent): Promise<string | null> {
+// 候選 Threads token（依序）：優先指定發文帳號，再補 owner 其他啟用帳號（去重）。
+// 多帳號時若第一個未授權 keyword_search，可換下一個重試。錯誤記錄而非靜默吞，避免遮蔽 DB/權限問題。
+const MAX_SEARCH_TOKENS = 3;
+async function resolveAgentThreadsTokens(agent: AiAgent): Promise<string[]> {
+  const out: string[] = [];
   if (agent.threads_account_id) {
-    const cred = await getThreadsCredentials(agent.threads_account_id, agent.owner_id).catch(() => null);
-    if (cred?.accessToken) return cred.accessToken;
+    const cred = await getThreadsCredentials(agent.threads_account_id, agent.owner_id).catch((err) => {
+      log.warn("取代理人指定帳號 token 失敗", { agentId: agent.id, threadsAccountId: agent.threads_account_id, err: err instanceof Error ? err.message : String(err) });
+      return null;
+    });
+    if (cred?.accessToken) out.push(cred.accessToken);
   }
-  const tokens = await listThreadsAccountTokens(agent.owner_id).catch(() => []);
-  return tokens[0]?.accessToken ?? null;
+  const tokens = await listThreadsAccountTokens(agent.owner_id).catch((err) => {
+    log.warn("列出代理人 owner Threads token 失敗", { agentId: agent.id, err: err instanceof Error ? err.message : String(err) });
+    return [] as { id: string; accessToken: string }[];
+  });
+  for (const t of tokens) if (t.accessToken && !out.includes(t.accessToken)) out.push(t.accessToken);
+  return out.slice(0, MAX_SEARCH_TOKENS);
 }
 
 // Threads 關鍵字搜尋取材：用 owner token 搜熱門公開貼文，回正規化 RssItem。
-// 無 token（未連帳號/未授權 keyword_search）回 []，呼叫端據此回報「來源無項目」。
+// 多查詢詞並行（避免逐一逾時拉長 cron）；多 token 時逐一嘗試直到取到項目（容忍部分帳號未授權）。
+// 無 token / 全部取不到回 []，呼叫端據此回報「來源無項目」。
 async function fetchThreadsSearchItems(agent: AiAgent): Promise<RssItem[]> {
-  const token = await resolveAgentThreadsToken(agent);
-  if (!token) {
+  const tokens = await resolveAgentThreadsTokens(agent);
+  if (!tokens.length) {
     log.warn("代理人 Threads 關鍵字取材無可用 token", { agentId: agent.id });
     return [];
   }
-  const all: RssItem[] = [];
-  for (const q of searchQueriesForAgent(agent)) {
-    all.push(...(await keywordSearch(q, token)));
-    if (all.length >= 30) break;
+  const queries = searchQueriesForAgent(agent);
+  for (const token of tokens) {
+    const results = await Promise.all(queries.map((q) => keywordSearch(q, token)));
+    const items = results.flat().slice(0, 30);
+    if (items.length) return items; // 此 token 有結果即用；否則換下一個（可能未授權/額度）
   }
-  return all;
+  return [];
 }
 
 // 抓來源項目。source_mode="threads_search"＝Threads 關鍵字搜尋；其餘＝RSS（空 feeds 用領域預設 Google News RSS）。

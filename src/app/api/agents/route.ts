@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { createAiAgent } from "@/lib/agents-store";
+import { userOwnsThreadsAccount } from "@/lib/store";
 import { getAiDomain } from "@/lib/ai-domains";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +14,7 @@ export async function POST(req: Request) {
     const user = await getCurrentUser();
     if (!user) return NextResponse.json({ ok: false, error: "請先登入" }, { status: 401 });
 
-    const body = await req.json().catch(() => ({}));
+    const body = (await req.json().catch(() => ({}))) || {}; // 防 JSON 字面 null 致 body.* 拋錯
     const name = typeof body.name === "string" ? body.name.trim() : "";
     if (!name) return NextResponse.json({ ok: false, error: "請填小編名稱" }, { status: 400 });
 
@@ -35,9 +36,14 @@ export async function POST(req: Request) {
     const sourceMode = body.source_mode === "threads_search" ? "threads_search" : "rss";
 
     // 免審直接排程需指定發文帳號，否則產出的貼文無帳號可發、會卡住。
-    const threadsAccountId = typeof body.threads_account_id === "string" ? body.threads_account_id : null;
+    const threadsAccountId =
+      typeof body.threads_account_id === "string" && body.threads_account_id.trim() ? body.threads_account_id.trim() : null;
     if (body.auto_publish === true && !threadsAccountId) {
       return NextResponse.json({ ok: false, error: "開啟免審直接排程時，必須指定發文帳號" }, { status: 400 });
+    }
+    // 多租戶：建立時即驗證發文帳號歸屬，不把跨租戶/不存在的 id 落庫（避免執行期才失敗）。
+    if (threadsAccountId && !(await userOwnsThreadsAccount(threadsAccountId, user.id))) {
+      return NextResponse.json({ ok: false, error: "發文帳號不存在或不屬於你" }, { status: 403 });
     }
 
     const emoji = EMOJI.includes(body.emoji_level) ? body.emoji_level : "light";

@@ -2,6 +2,7 @@
 // 供 AI 部落客「Threads 關鍵字」取材模式選題（趨勢偵測）。回傳正規化成 RssItem，與 RSS 來源同型別、共用後續去重/改寫。
 import { fetchWithTimeout } from "@/lib/http";
 import { assertSafePublicUrl } from "@/lib/url-guard";
+import { log } from "@/lib/logger";
 import type { RssItem } from "@/services/ai/rss";
 
 const GRAPH = "https://graph.threads.net/v1.0";
@@ -49,9 +50,15 @@ export async function keywordSearch(
       `${GRAPH}/keyword_search?q=${encodeURIComponent(q)}&search_type=${searchType}` +
       `&fields=${FIELDS}&access_token=${encodeURIComponent(token)}`;
     const res = await fetchWithTimeout(assertSafePublicUrl(url).href, { cache: "no-store" }, 8000);
-    if (!res.ok) return [];
+    // 非 OK 仍回 [] 不阻斷流程，但記下狀態以利排查（403/401＝權限、429＝額度）。不記 URL/token。
+    if (!res.ok) {
+      log.warn("Threads 關鍵字搜尋回應非 OK", { status: res.status, searchType });
+      return [];
+    }
     return parseKeywordSearch(await res.json());
-  } catch {
+  } catch (err) {
+    // 逾時/網路/解析錯誤：回 [] 讓代理人換來源，但記錄錯誤訊息（不含 token）。
+    log.warn("Threads 關鍵字搜尋失敗", { searchType, err: err instanceof Error ? err.message : String(err) });
     return [];
   }
 }

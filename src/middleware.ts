@@ -83,10 +83,10 @@ export async function middleware(req: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    const redirectUrl = url.clone();
-    redirectUrl.pathname = "/login";
-    redirectUrl.searchParams.set("next", url.pathname + url.search);
-    return NextResponse.redirect(redirectUrl);
+    // 相對 Location 轉址：瀏覽器以實際對外網址為基準解析，避免反向代理後 url.host 變內部位址
+    // （localhost:port）而把未登入者導去 localhost。保留 next 以便登入後返回原頁。
+    const next = encodeURIComponent(url.pathname + url.search);
+    return new NextResponse(null, { status: 307, headers: { Location: `/login?next=${next}` } });
   }
 
   // 唯讀防護：管理者「以成員視角檢視」期間（帶 view_as cookie）擋下狀態變更請求，確保只看不動到成員資料。

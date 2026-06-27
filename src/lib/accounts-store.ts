@@ -287,24 +287,34 @@ export async function getShopeeCredentials(
   return { appId: data.app_id, secret: decrypt(data.secret_enc), subId: data.default_sub_id };
 }
 
-// 新增 Shopee 分潤帳號（secret 加密後存放）
+// 綁定 Shopee 分潤帳號（secret 加密後存放）。每位使用者僅一組：已存在則覆寫既有那筆。
 export async function createShopeeAccount(
-  input: { label: string; app_id: string; secret: string; default_sub_id?: string },
+  input: { label?: string; app_id: string; secret: string; default_sub_id?: string },
   ownerId: string
 ): Promise<ShopeeAccount> {
   // 不再注入預設 "threadspo"：未填則存空字串（欄位 NOT NULL，空字串即「無預設來源標記」）。
   const default_sub_id = input.default_sub_id?.trim() || "";
+  // 不再讓使用者自取顯示名稱（一人一組）：固定標籤，欄位 NOT NULL。
+  const label = input.label?.trim() || "蝦皮分潤";
   if (isDemoMode) {
-    const acc: ShopeeAccount = { id: randomUUID(), label: input.label, app_id: input.app_id, default_sub_id };
+    const existing = demo.shopeeAccounts[0];
+    if (existing) {
+      existing.app_id = input.app_id;
+      existing.default_sub_id = default_sub_id;
+      return existing;
+    }
+    const acc: ShopeeAccount = { id: randomUUID(), label, app_id: input.app_id, default_sub_id };
     demo.shopeeAccounts.unshift(acc);
     return acc;
   }
   const sb = getServiceClient()!;
-  const { data, error } = await sb
-    .from("shopee_accounts")
-    .insert({ owner_id: ownerId, label: input.label, app_id: input.app_id, secret_enc: encrypt(input.secret), default_sub_id })
-    .select("id,label,app_id,default_sub_id")
-    .single();
+  const values = { label, app_id: input.app_id, secret_enc: encrypt(input.secret), default_sub_id };
+  // 一人一組：有既有帳號就更新該筆，否則新增（owner_id 無唯一約束，故先查再寫）。
+  const { data: existing } = await sb.from("shopee_accounts").select("id").eq("owner_id", ownerId).limit(1).maybeSingle();
+  const q = existing
+    ? sb.from("shopee_accounts").update(values).eq("id", existing.id).eq("owner_id", ownerId)
+    : sb.from("shopee_accounts").insert({ owner_id: ownerId, ...values });
+  const { data, error } = await q.select("id,label,app_id,default_sub_id").single();
   if (error) throw error;
   return data as ShopeeAccount;
 }

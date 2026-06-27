@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation";
 import { isValidSubIdTemplate } from "@/services/shopee/subid";
 
 // 蝦皮分潤連結自訂來源標記 Sub id：對齊蝦皮後台的 5 格（sub_id1..5），可增刪。
-// 每格支援範本變數 {date}/{time}/{platform}/{account}/{item}，發文建連結時自動代換。
+// 每格支援範本變數 {platform}/{account}/{item}，發文建連結時自動代換。
+// 註：已移除 {date}/{time}——其值是「建連結當下」非實際發文時間，易誤解；後端 resolver 仍保留代換以相容舊資料。
 // 儲存：以逗號分隔成單一字串。留空＝不帶來源標記（無預設）。
-const VARS = ["{date}", "{time}", "{platform}", "{account}", "{item}"];
+const VARS = ["{platform}", "{account}", "{item}"];
 
 // 官方規範：sub_id 僅能含英數與底線（值不可含「-」，那是 5 格的分隔符）。
 // 輸入時即過濾：只留英數、底線與變數所需的大括號，讓「所見＝所存」、不再默默被清掉。
@@ -118,7 +119,7 @@ export default function SubIdForm({ initial }: { initial: string | null }) {
               ))}
             </div>
             {slot.trim() && !isValidSubIdTemplate(slot) && (
-              <p className="mt-1 text-[11px] text-amber-700">⚠️ 僅能用英數、底線與上方變數（如 {"{date}"}）；大括號需成對。</p>
+              <p className="mt-1 text-[11px] text-amber-700">⚠️ 僅能用英數、底線與上方變數（如 {VARS[0]}）；大括號需成對。</p>
             )}
           </div>
         ))}

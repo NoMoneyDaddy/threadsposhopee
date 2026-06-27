@@ -8,8 +8,10 @@ export interface PlanLimits {
   maxThreadsAccounts: number;
 }
 
+// 本專案不收費（營收來自廣告／贊助文系統），實質上人人皆 free：預設方案即給每人 10 個發文帳號。
+// pro/business 級距暫保留（不影響現況），日後若分層再用。
 export const PLANS: Record<PlanId, PlanLimits> = {
-  free: { maxThreadsAccounts: 1 },
+  free: { maxThreadsAccounts: 10 },
   pro: { maxThreadsAccounts: 10 },
   business: { maxThreadsAccounts: 50 }
 };

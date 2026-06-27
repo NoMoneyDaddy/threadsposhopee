@@ -2,7 +2,7 @@
 // 用於 AI 代理人預設分潤連結等場景，讓使用者貼一般商品/商城連結也能自動帶分潤。
 import { getShopeeCredentials, getShopeeAffiliateId, getShopeeSubId } from "@/lib/store";
 import { generateAffiliateLink, buildAffiliateRedirectLink } from "./affiliate";
-import { parseSubIdSlots, resolveSubIdTemplate, normalizeSubIds } from "./subid";
+import { parseSubIdSlots, resolveSubIdTemplate, normalizeSubIds, normalizeSubId, subIdDateTimeParts } from "./subid";
 import { log } from "@/lib/logger";
 
 // 判斷某連結是否「已是分潤連結」（純函式，可測）：
@@ -34,16 +34,24 @@ export interface ResolvedAffiliate {
 
 // 把連結轉成該使用者的分潤連結：已是分潤連結→原樣；否則用 Open API（優先）或 affiliate_id 自組 an_redir；
 // 都沒綁→原樣回傳並附說明（不擋）。
-export async function resolveAffiliateUrl(ownerId: string, url: string): Promise<ResolvedAffiliate> {
+// opts：可覆寫 subId 範本情境（發文當下重算 date/time 時用）與來源標記；預設 date/time＝「現在」（台北）、
+// 來源標記＝ "agent"。修正先前 date/time 傳空字串導致 {date}/{time} 變空白的問題。
+export async function resolveAffiliateUrl(
+  ownerId: string,
+  url: string,
+  opts: { now?: Date; account?: string; item?: string; sourceTag?: string } = {}
+): Promise<ResolvedAffiliate> {
   const clean = url.trim();
   if (!clean) return { url: clean, converted: false };
   if (isAffiliateLink(clean)) return { url: clean, converted: false };
 
-  // 多格自訂 subId（逗號分隔）逐格代換後＋來源標記 "agent"，正規化取前 5。
+  // 多格自訂 subId（逗號分隔）逐格代換後＋來源標記，正規化取前 5。
   const stored = await getShopeeSubId(ownerId).catch(() => null);
-  const ctx = { date: "", time: "", platform: "threads", account: "agent", item: "" };
+  const { date, time } = subIdDateTimeParts(opts.now ?? new Date());
+  const sourceTag = normalizeSubId(opts.sourceTag) || "agent";
+  const ctx = { date, time, platform: "threads", account: normalizeSubId(opts.account) || sourceTag, item: opts.item ?? "" };
   const resolvedSlots = parseSubIdSlots(stored).map((s) => resolveSubIdTemplate(s, ctx));
-  const subIds = normalizeSubIds([...resolvedSlots, "agent"]);
+  const subIds = normalizeSubIds([...resolvedSlots, sourceTag]);
   const creds = await getShopeeCredentials(ownerId).catch(() => null);
   if (creds) {
     try {

@@ -2,11 +2,18 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { isValidSubIdTemplate } from "@/services/shopee/subid";
 
 // 蝦皮分潤連結自訂來源標記 Sub id：對齊蝦皮後台的 5 格（sub_id1..5），可增刪。
 // 每格支援範本變數 {date}/{time}/{platform}/{account}/{item}，發文建連結時自動代換。
 // 儲存：以逗號分隔成單一字串。留空＝不帶來源標記（無預設）。
 const VARS = ["{date}", "{time}", "{platform}", "{account}", "{item}"];
+
+// 官方規範：sub_id 僅能含英數與底線（值不可含「-」，那是 5 格的分隔符）。
+// 輸入時即過濾：只留英數、底線與變數所需的大括號，讓「所見＝所存」、不再默默被清掉。
+function sanitizeSubIdInput(v: string): string {
+  return v.replace(/[^A-Za-z0-9_{}]/g, "").slice(0, 50);
+}
 
 export default function SubIdForm({ initial }: { initial: string | null }) {
   const router = useRouter();
@@ -24,7 +31,7 @@ export default function SubIdForm({ initial }: { initial: string | null }) {
   const [msg, setMsg] = useState<string | null>(null);
 
   function setSlot(i: number, v: string) {
-    setSlots((prev) => prev.map((s, idx) => (idx === i ? v.slice(0, 50) : s)));
+    setSlots((prev) => prev.map((s, idx) => (idx === i ? sanitizeSubIdInput(v) : s)));
   }
   function removeSlot(i: number) {
     setSlots((prev) => (prev.length <= 1 ? [""] : prev.filter((_, idx) => idx !== i)));
@@ -110,6 +117,9 @@ export default function SubIdForm({ initial }: { initial: string | null }) {
                 </button>
               ))}
             </div>
+            {slot.trim() && !isValidSubIdTemplate(slot) && (
+              <p className="mt-1 text-[11px] text-amber-700">⚠️ 僅能用英數、底線與上方變數（如 {"{date}"}）；大括號需成對。</p>
+            )}
           </div>
         ))}
       </div>

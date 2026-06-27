@@ -1,6 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { normalizeSubId, normalizeSubIds, resolveSubIdTemplate, isValidSubIdTemplate, parseSubIdSlots } from "./subid";
+import { normalizeSubId, normalizeSubIds, resolveSubIdTemplate, isValidSubIdTemplate, parseSubIdSlots, subIdDateTimeParts } from "./subid";
+
+test("subIdDateTimeParts: 台北時區 YYYYMMDD / HHmm（UTC+8 跨日）", () => {
+  // UTC 2026-01-01 17:30 = 台北 2026-01-02 01:30
+  const p = subIdDateTimeParts(new Date("2026-01-01T17:30:00Z"));
+  assert.equal(p.date, "20260102");
+  assert.equal(p.time, "0130");
+});
 
 test("parseSubIdSlots: 逗號分隔、去空、最多 5 格", () => {
   assert.deepEqual(parseSubIdSlots("a, b ,,c"), ["a", "b", "c"]);

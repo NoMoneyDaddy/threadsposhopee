@@ -9,9 +9,12 @@ import { useRouter } from "next/navigation";
 // cron 狀態文字在 server 端（admin 頁）算好傳入，避免 client 端 Date.now() 造成 hydration 不一致。
 export default function PublishControlPanel({
   initialPaused,
+  pausedUnknown = false,
   cron
 }: {
   initialPaused: boolean;
+  // 讀取暫停狀態失敗時為 true：不偽裝成「運行中」，明確標示未知並提示操作可強制設定。
+  pausedUnknown?: boolean;
   cron: { tone: string; text: string };
 }) {
   const router = useRouter();
@@ -48,9 +51,20 @@ export default function PublishControlPanel({
       <div className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-surface-2 p-3">
         <div className="min-w-0">
           <div className="text-sm font-medium text-ink">
-            全域自動發文：{paused ? <span className="text-red-600">已暫停</span> : <span className="text-green-600">運行中</span>}
+            全域自動發文：
+            {pausedUnknown ? (
+              <span className="text-amber-600">狀態未知（讀取失敗）</span>
+            ) : paused ? (
+              <span className="text-red-600">已暫停</span>
+            ) : (
+              <span className="text-green-600">運行中</span>
+            )}
           </div>
-          <div className="text-xs text-ink-3">暫停會讓 cron 與「立即跑一輪」整批跳過；草稿頁手動單篇發布不受影響。</div>
+          <div className="text-xs text-ink-3">
+            {pausedUnknown
+              ? "無法確認目前狀態，可按右側按鈕強制設定。暫停會讓 cron 與「立即跑一輪」整批跳過；草稿頁手動單篇發布不受影響。"
+              : "暫停會讓 cron 與「立即跑一輪」整批跳過；草稿頁手動單篇發布不受影響。"}
+          </div>
         </div>
         <button
           onClick={toggle}

@@ -3,7 +3,9 @@ import { getCurrentUser } from "@/lib/auth";
 import { getAdminStats, getFeatureFlags, listSharedForReview, listTopContributors, isPublishPaused, getHeartbeat } from "@/lib/store";
 import { contributionBadge } from "@/lib/roles";
 import { isDemoMode } from "@/lib/env";
+import { cronHeartbeatStatus } from "@/lib/cron-status";
 import { cloudinaryThumb } from "@/lib/img";
+import { log } from "@/lib/logger";
 import FeatureFlagsForm from "@/components/FeatureFlagsForm";
 import RoleGrantForm from "@/components/RoleGrantForm";
 import ReviewButton from "@/components/ReviewButton";
@@ -11,30 +13,38 @@ import PublishControlPanel from "@/components/PublishControlPanel";
 
 export const dynamic = "force-dynamic";
 
-// 在 server 端（force-dynamic，每次請求重算）算好排程心跳狀態文字，避免 client 端 Date.now() 造成 hydration 不一致。
-function cronStatus(lastCronAt: string | null): { tone: string; text: string } {
-  if (!lastCronAt) return { tone: "text-ink-3", text: "尚未偵測到排程執行（自動駕駛未開啟）" };
-  const mins = Math.round((Date.now() - new Date(lastCronAt).getTime()) / 60000);
-  const ago = mins < 1 ? "剛剛" : mins < 60 ? `${mins} 分鐘前` : `${Math.round(mins / 60)} 小時前`;
-  return mins > 30
-    ? { tone: "text-amber-600", text: `⚠️ 排程似乎停了（上次執行 ${ago}）` }
-    : { tone: "text-green-600", text: `🚀 自動駕駛運轉中 — 上次執行 ${ago}` };
-}
-
 // 管理員專屬：站台統計、功能開關、身份組賦予、共享素材審核。對非管理員隱藏（導覽列入口也只有 owner 可見）。
 export default async function AdminPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login?next=/admin");
   if (!user.isOwner) redirect("/");
 
-  const [stats, flags, queue, leaders, paused, heartbeat] = await Promise.all([
+  const [stats, flags, queue, leaders] = await Promise.all([
     getAdminStats().catch(() => null),
     getFeatureFlags(),
     listSharedForReview(100).catch(() => []),
-    listTopContributors(10).catch(() => []),
-    isPublishPaused().catch(() => false),
-    getHeartbeat().catch(() => null)
+    listTopContributors(10).catch(() => [])
   ]);
+
+  // 發文急停／心跳是 owner 控制台的關鍵狀態：讀取失敗不可偽裝成「未暫停／未啟用」，
+  // 改以 null 表「未知（讀取失敗）」並在面板明確標示，避免誤判系統真實狀態。
+  let paused: boolean | null = null;
+  try {
+    paused = await isPublishPaused();
+  } catch (e) {
+    log.error("管理頁讀取發文暫停狀態失敗", { err: e });
+  }
+  let heartbeat: string | null = null;
+  let heartbeatError = false;
+  try {
+    heartbeat = await getHeartbeat();
+  } catch (e) {
+    heartbeatError = true;
+    log.error("管理頁讀取排程心跳失敗", { err: e });
+  }
+  const cron = heartbeatError
+    ? { tone: "text-amber-600", text: "⚠️ 排程心跳讀取失敗" }
+    : cronHeartbeatStatus(heartbeat, Date.now());
 
   const cards: { label: string; value: number }[] = stats
     ? [
@@ -64,7 +74,7 @@ export default async function AdminPage() {
         {!stats && <div className="col-span-full text-sm text-ink-3">統計暫時無法載入。</div>}
       </div>
 
-      {!isDemoMode && <PublishControlPanel initialPaused={paused} cron={cronStatus(heartbeat)} />}
+      {!isDemoMode && <PublishControlPanel initialPaused={paused ?? false} pausedUnknown={paused === null} cron={cron} />}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <FeatureFlagsForm initial={flags} />

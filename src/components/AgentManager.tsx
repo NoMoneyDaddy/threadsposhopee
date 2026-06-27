@@ -29,6 +29,7 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
   const router = useRouter();
   const [name, setName] = useState("");
   const [domains, setDomains] = useState<string[]>([AI_DOMAINS[0].id]);
+  const [sourceMode, setSourceMode] = useState<"rss" | "threads_search">("rss");
   const [searchQuery, setSearchQuery] = useState("");
   const [tone, setTone] = useState("");
   const [customTone, setCustomTone] = useState(false);
@@ -55,6 +56,7 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
       const r = await api("/api/agents", "POST", {
         name,
         domains,
+        source_mode: sourceMode,
         search_query: searchQuery,
         tone,
         threads_account_id: accountId || null,
@@ -66,6 +68,7 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
       setTone("");
       setCustomTone(false); // 一併重置，避免表單卡在「自訂…」模式（下筆送出空 tone）
       setSearchQuery("");
+      setSourceMode("rss");
       setAutoPublish(false);
       router.refresh();
     } catch (e) {
@@ -154,10 +157,36 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
           </div>
           <FieldHint>勾選多個領域＝部落客會橫跨這些主題輪流取材。至少選一個。</FieldHint>
         </div>
-        {domains.includes("custom") && (
+        <div>
+          <label className="label" htmlFor="ag-source">取材來源</label>
+          <select
+            id="ag-source"
+            className="input"
+            value={sourceMode}
+            onChange={(e) => setSourceMode(e.target.value === "threads_search" ? "threads_search" : "rss")}
+          >
+            <option value="rss">Google News（依領域/關鍵字抓新聞）</option>
+            <option value="threads_search">Threads 關鍵字搜尋（抓熱門公開貼文選題）</option>
+          </select>
+          <FieldHint>
+            {sourceMode === "threads_search"
+              ? "用你綁定的 Threads 帳號搜尋熱門公開貼文當素材（需該帳號已授權關鍵字搜尋權限）。查詢詞用下方關鍵字，留空則用領域名稱。"
+              : "從 Google News 依領域或自訂關鍵字抓新聞當素材。"}
+          </FieldHint>
+        </div>
+        {(domains.includes("custom") || sourceMode === "threads_search") && (
           <div>
-            <label className="label" htmlFor="ag-q">自訂主題關鍵字（必填）</label>
-            <input id="ag-q" className="input" required value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="例：露營 裝備、植物 園藝" />
+            <label className="label" htmlFor="ag-q">
+              {domains.includes("custom") ? "自訂主題關鍵字（必填）" : "搜尋關鍵字（選填，留空用領域名稱）"}
+            </label>
+            <input
+              id="ag-q"
+              className="input"
+              required={domains.includes("custom")}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="例：露營 裝備、植物 園藝"
+            />
           </div>
         )}
         <div>

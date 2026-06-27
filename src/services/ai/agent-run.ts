@@ -9,7 +9,8 @@ import { maxSimilarity } from "@/lib/text-similarity";
 import { createDraft } from "@/lib/drafts-store";
 import { notifyDraftPendingForReview } from "@/services/telegram/review";
 import { autoScheduleApproved } from "@/services/publish/auto-schedule";
-import { userOwnsThreadsAccount } from "@/lib/store";
+import { userOwnsThreadsAccount, getThreadsCredentials, listThreadsAccountTokens } from "@/lib/store";
+import { keywordSearch } from "@/services/threads/search";
 import { createRedirectLink } from "@/lib/redirect-store";
 import {
   listEnabledAiAgentsAll,
@@ -51,7 +52,7 @@ export function buildAgentPrompt(agent: AiAgent, item: { title: string; descript
     : "";
   return [
     `你是社群寫手「${agent.name}」。風格：${agent.tone?.trim() || "自動——依這篇內容選最合適、自然的口吻"}。領域：${label}。`,
-    `根據以下新聞素材，寫一篇繁體中文 Threads 貼文，約 ${agent.length} 字，口吻一致、像真人分享，不要像新聞稿、不要逐字照抄。`,
+    `根據以下素材，寫一篇繁體中文 Threads 貼文，約 ${agent.length} 字，口吻一致、像真人分享，不要像新聞稿、不要逐字照抄。`,
     `${emoji}${tags}${sensitive}`,
     `只輸出貼文正文，不要前言、不要 markdown、不要加「來源」。`,
     ``,
@@ -60,8 +61,57 @@ export function buildAgentPrompt(agent: AiAgent, item: { title: string; descript
   ].join("\n");
 }
 
-// 抓來源項目（目前支援 rss；空 feeds 用領域預設 Google News RSS）。橫跨多領域時彙整各領域來源。
+// Threads 關鍵字搜尋取材的查詢詞：優先用自訂關鍵字，否則用各領域標籤。純函式可測。
+export function searchQueriesForAgent(agent: AiAgent): string[] {
+  const custom = agent.search_query.trim();
+  if (custom) return [custom];
+  const labels = resolveDomainIds(agent)
+    .map((id) => getAiDomain(id)?.label)
+    .filter((l): l is string => Boolean(l));
+  return labels.length ? labels : [getAiDomain(agent.domain)?.label ?? agent.domain].filter(Boolean);
+}
+
+// 候選 Threads token（依序）：優先指定發文帳號，再補 owner 其他啟用帳號（去重）。
+// 多帳號時若第一個未授權 keyword_search，可換下一個重試。錯誤記錄而非靜默吞，避免遮蔽 DB/權限問題。
+const MAX_SEARCH_TOKENS = 3;
+async function resolveAgentThreadsTokens(agent: AiAgent): Promise<string[]> {
+  const out: string[] = [];
+  if (agent.threads_account_id) {
+    const cred = await getThreadsCredentials(agent.threads_account_id, agent.owner_id).catch((err) => {
+      log.warn("取代理人指定帳號 token 失敗", { agentId: agent.id, threadsAccountId: agent.threads_account_id, err: err instanceof Error ? err.message : String(err) });
+      return null;
+    });
+    if (cred?.accessToken) out.push(cred.accessToken);
+  }
+  const tokens = await listThreadsAccountTokens(agent.owner_id).catch((err) => {
+    log.warn("列出代理人 owner Threads token 失敗", { agentId: agent.id, err: err instanceof Error ? err.message : String(err) });
+    return [] as { id: string; accessToken: string }[];
+  });
+  for (const t of tokens) if (t.accessToken && !out.includes(t.accessToken)) out.push(t.accessToken);
+  return out.slice(0, MAX_SEARCH_TOKENS);
+}
+
+// Threads 關鍵字搜尋取材：用 owner token 搜熱門公開貼文，回正規化 RssItem。
+// 多查詢詞並行（避免逐一逾時拉長 cron）；多 token 時逐一嘗試直到取到項目（容忍部分帳號未授權）。
+// 無 token / 全部取不到回 []，呼叫端據此回報「來源無項目」。
+async function fetchThreadsSearchItems(agent: AiAgent): Promise<RssItem[]> {
+  const tokens = await resolveAgentThreadsTokens(agent);
+  if (!tokens.length) {
+    log.warn("代理人 Threads 關鍵字取材無可用 token", { agentId: agent.id });
+    return [];
+  }
+  const queries = searchQueriesForAgent(agent);
+  for (const token of tokens) {
+    const results = await Promise.all(queries.map((q) => keywordSearch(q, token)));
+    const items = results.flat().slice(0, 30);
+    if (items.length) return items; // 此 token 有結果即用；否則換下一個（可能未授權/額度）
+  }
+  return [];
+}
+
+// 抓來源項目。source_mode="threads_search"＝Threads 關鍵字搜尋；其餘＝RSS（空 feeds 用領域預設 Google News RSS）。
 async function fetchItems(agent: AiAgent): Promise<RssItem[]> {
+  if (agent.source_mode === "threads_search") return fetchThreadsSearchItems(agent);
   let feeds: string[] = [];
   if (agent.rss_feeds.length) {
     feeds = agent.rss_feeds;

@@ -5,7 +5,7 @@
 // 簽章：AWS Signature V4（service=s3、region=auto）。用 x-amz-content-sha256: UNSIGNED-PAYLOAD
 // （R2 走 HTTPS 允許），免緩衝整檔做雜湊。簽章組裝為純函式，便於單測（注入 amzDate）。
 import { createHash, createHmac } from "node:crypto";
-import { fetchWithRetry } from "@/lib/http";
+import { fetchWithRetry, fetchWithTimeout } from "@/lib/http";
 import { assertSafePublicUrl } from "@/lib/url-guard";
 import { log } from "@/lib/logger";
 
@@ -117,6 +117,9 @@ export async function validateR2(creds: {
   secretAccessKey: string;
   bucket: string;
 }): Promise<{ ok: true } | { ok: false; reason: string }> {
+  // 嚴格限制 accountId（英數，與設定頁 ACCOUNT_RE 一致）：防 `/`、`@` 等 authority 字元竄改 host，
+  // 把帶簽章的 HEAD 送到非預期主機（SSRF）。assertSafePublicUrl 只擋非公開目標，故這層額外把關。
+  if (!/^[a-zA-Z0-9]{16,64}$/.test(creds.accountId)) return { ok: false, reason: "Cloudflare Account ID 格式不正確" };
   const host = `${creds.accountId}.r2.cloudflarestorage.com`;
   const canonicalPath = `/${encodeURIComponent(creds.bucket)}`;
   const amzDate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, "");
@@ -130,7 +133,8 @@ export async function validateR2(creds: {
   });
   const endpoint = `https://${host}${canonicalPath}`;
   try {
-    const res = await fetchWithRetry(
+    // 外部請求一律走 fetchWithTimeout（專案規範）；驗證單發即可，不重試。
+    const res = await fetchWithTimeout(
       assertSafePublicUrl(endpoint).href,
       { method: "HEAD", headers: { Authorization: authorization, "x-amz-date": amzDate, "x-amz-content-sha256": UNSIGNED } },
       8000

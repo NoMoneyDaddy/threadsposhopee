@@ -27,7 +27,7 @@ export default function TermsPage() {
 
       <Section title="你的帳號與授權">
         <p>
-          你透過官方 OAuth 自行授權綁定 Threads 帳號與各服務金鑰；你需確保有權使用這些帳號與金鑰，並為以本服務發布的所有內容負責。
+          你自行貼上 Threads access token 並綁定各服務金鑰；你需確保有權使用這些帳號與金鑰，並為以本服務發布的所有內容負責。
         </p>
       </Section>
 

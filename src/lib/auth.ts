@@ -78,14 +78,17 @@ export async function listAllUsers(): Promise<{ id: string; email: string | null
   if (isDemoMode) return [];
   const sb = getServiceClient();
   if (!sb) throw new Error("無法取得服務端連線"); // 不靜默回 []（會被誤當成「沒有使用者」）
+  const PER_PAGE = 200;
+  const MAX_PAGES = 50; // 安全上限（1 萬人）；達上限仍滿頁＝可能截斷，明確拋出而非靜默漏列
   const out: { id: string; email: string | null }[] = [];
-  for (let page = 1; page <= 20; page++) {
-    const { data, error } = await sb.auth.admin.listUsers({ page, perPage: 200 });
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const { data, error } = await sb.auth.admin.listUsers({ page, perPage: PER_PAGE });
     if (error) throw new Error(`列出使用者失敗：${error.message}`); // 中途失敗即拋，避免回傳部分清單看似成功
     for (const u of data.users) out.push({ id: u.id, email: u.email ?? null });
-    if (data.users.length < 200) break;
+    if (data.users.length < PER_PAGE) return out; // 最後一頁
   }
-  return out;
+  // 跑到上限仍是滿頁：寧可報錯也不靜默截斷（避免管理頁誤以為名單完整）。
+  throw new Error(`使用者數量超過載入上限（${MAX_PAGES * PER_PAGE}），請調整分頁上限`);
 }
 
 // 解析 owner 的 user id（給背景排程/pipeline 標記 owner_id 用）。

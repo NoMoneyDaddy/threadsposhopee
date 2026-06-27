@@ -2,7 +2,7 @@
 // 權限把關在 API/頁面層（owner email = 管理員；reviewer 由管理員賦予）。
 import { getServiceClient } from "./supabase/server";
 import { isDemoMode } from "./env";
-import { listAllUsers } from "./auth";
+import { getRealUser, listAllUsers } from "./auth";
 import { sanitizeRoles, type ManualRole } from "./roles";
 
 // ── 身份組 ────────────────────────────────────────────────
@@ -39,6 +39,10 @@ async function selectAllRows<T>(table: string, columns: string): Promise<T[]> {
 
 export async function listUsersOverview(): Promise<UserOverviewRow[]> {
   if (isDemoMode) return [];
+  // 防禦式 owner 守門（除頁面層外再驗一次）：本函式以 service-role 讀全站使用者資料，
+  // 若日後被其他 server action/route 誤匯入，避免跨租戶外洩。以「真實登入身分」驗證（非 view-as）。
+  const actor = await getRealUser();
+  if (!actor?.isPlatformOwner) throw new Error("forbidden: 僅限管理者");
   const users = await listAllUsers();
   // 各表分頁全撈，於記憶體彙總（避免每使用者 N 次查詢；分頁避免 1000 列截斷）。
   const [profiles, threads, shopee] = await Promise.all([
@@ -47,6 +51,16 @@ export async function listUsersOverview(): Promise<UserOverviewRow[]> {
     selectAllRows<{ owner_id: string | null }>("shopee_accounts", "owner_id")
   ]);
 
+  return buildUsersOverview(users, profiles, threads, shopee);
+}
+
+// 純彙總（易測）：把使用者清單與各表列彙總成總覽列。owner_id 為 null 的孤兒列略過。
+export function buildUsersOverview(
+  users: { id: string; email: string | null }[],
+  profiles: { id: string; roles?: unknown }[],
+  threads: { owner_id: string | null }[],
+  shopee: { owner_id: string | null }[]
+): UserOverviewRow[] {
   const rolesById = new Map<string, ManualRole[]>();
   for (const r of profiles) rolesById.set(r.id, sanitizeRoles(r.roles));
   const threadsByOwner = new Map<string, number>();
@@ -57,7 +71,6 @@ export async function listUsersOverview(): Promise<UserOverviewRow[]> {
   for (const a of shopee) {
     if (a.owner_id) shopeeOwners.add(a.owner_id);
   }
-
   return users.map((u) => ({
     id: u.id,
     email: u.email,

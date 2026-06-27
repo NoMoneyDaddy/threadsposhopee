@@ -18,8 +18,14 @@ export default function AdminUsersPanel({ users }: { users: UserOverviewRow[] })
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_id: id })
       });
-      const json = await res.json();
-      if (!json.ok) throw new Error(json.error);
+      // 防禦式解析：非 JSON 回應（代理/框架錯誤頁）不要拋出難懂的解析錯誤。
+      let json: { ok?: boolean; error?: string } | null = null;
+      try {
+        json = await res.json();
+      } catch {
+        /* 非 JSON 回應 */
+      }
+      if (!res.ok || !json?.ok) throw new Error(json?.error ?? `切換失敗（HTTP ${res.status}）`);
       window.location.href = "/"; // 以新身分重載（view-as cookie 為 httpOnly，需 server 重渲染）
     } catch (e) {
       setErr(e instanceof Error ? e.message : "切換失敗");

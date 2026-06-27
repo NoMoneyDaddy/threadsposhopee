@@ -8,11 +8,10 @@ import {
   getAutoReviveLinks,
   getUserCloudinary,
   getUserCloudinaryFull,
-  getUserR2,
-  getUserPlan
+  getUserR2
 } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
-import { PLAN_LABELS, planLimits, GLOBAL_MAX_THREADS_ACCOUNTS } from "@/lib/plans";
+import { MAX_THREADS_ACCOUNTS_PER_USER, GLOBAL_MAX_THREADS_ACCOUNTS } from "@/lib/account-limits";
 import { isDemoMode } from "@/lib/env";
 import { tokenExpiryState } from "@/lib/token-expiry";
 import ThreadsAccountForm from "@/components/ThreadsAccountForm";
@@ -41,7 +40,7 @@ export default async function AccountsPage() {
   }
   const ownerId = user?.id ?? "demo-user";
   const [threads, shopee] = await Promise.all([listThreadsAccounts(ownerId), listShopeeAccounts(ownerId)]);
-  const [apify, geminiBound, affiliateId, customSubId, autoRevive, cloudinary, cloudinaryFull, r2Settings, plan] =
+  const [apify, geminiBound, affiliateId, customSubId, autoRevive, cloudinary, cloudinaryFull, r2Settings] =
     await Promise.all([
       user ? hasApifyCredentials(ownerId) : Promise.resolve({ bound: false, actor: null }),
       user ? hasGeminiKey(user.id) : Promise.resolve(false),
@@ -50,13 +49,12 @@ export default async function AccountsPage() {
       user ? getAutoReviveLinks(ownerId) : Promise.resolve(false),
       user ? getUserCloudinary(ownerId) : Promise.resolve(null),
       user ? getUserCloudinaryFull(ownerId) : Promise.resolve(null),
-      user ? getUserR2(ownerId) : Promise.resolve(null),
-      user ? getUserPlan(user.id) : Promise.resolve("free" as const)
+      user ? getUserR2(ownerId) : Promise.resolve(null)
     ]);
   // 只把非機密欄位帶回表單初始值（accountId/bucket/publicBase）；金鑰留在 server 不外露。
   const r2Bound = Boolean(r2Settings);
-  // 方案配額（owner 不受限，顯示「無上限」）
-  const accountLimit = Math.min(planLimits(plan).maxThreadsAccounts, GLOBAL_MAX_THREADS_ACCOUNTS);
+  // 帳號上限（本站不收費、無方案）：一般使用者固定上限，管理者取較高的全站硬上限。
+  const accountLimit = user?.isOwner ? GLOBAL_MAX_THREADS_ACCOUNTS : MAX_THREADS_ACCOUNTS_PER_USER;
 
   return (
     <div className="space-y-6">
@@ -119,16 +117,11 @@ export default async function AccountsPage() {
       <section>
         <div className="mb-2 flex items-center justify-between gap-2">
           <h2 className="font-semibold">Threads 發文帳號</h2>
-          <a
-            href="/pricing"
-            className="rounded-full bg-brand/10 px-3 py-1 text-xs text-brand hover:bg-brand/20"
-            title="查看方案與升級（可連結的發文帳號數依方案而定）"
-          >
-            {PLAN_LABELS[plan]}方案 ·{" "}
+          <span className="rounded-full bg-surface-2 px-3 py-1 text-xs text-ink-2">
             {user?.isOwner
-              ? `${threads.length} / ${GLOBAL_MAX_THREADS_ACCOUNTS} 個（管理者）`
+              ? `${threads.length} / ${accountLimit} 個（管理者）`
               : `${threads.length} / ${accountLimit} 個發文帳號`}
-          </a>
+          </span>
         </div>
         <div className="grid gap-3 md:grid-cols-2">
           {threads.map((a) => (

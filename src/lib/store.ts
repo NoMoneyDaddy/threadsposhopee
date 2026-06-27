@@ -172,9 +172,7 @@ export {
   normalizeBioHandle,
   getSponsorRewardMode,
   setSponsorRewardMode,
-  type SponsorRewardMode,
-  getUserPlan,
-  setUserPlan
+  type SponsorRewardMode
 } from "./credentials";
 
 // AI 文案客製化偏好（非機密，明文 jsonb）。讀取一律經 normalizeCopyPrefs 夾成合法值。

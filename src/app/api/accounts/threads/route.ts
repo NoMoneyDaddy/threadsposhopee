@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { upsertThreadsAccountFromOAuth, canAddThreadsAccount } from "@/lib/store";
-import { PLAN_LABELS, type PlanId } from "@/lib/plans";
 import { getCurrentUser } from "@/lib/auth";
 import { exchangeForLongLivedToken, refreshLongLivedToken } from "@/services/threads/token";
 import { getThreadsProfile } from "@/services/threads/oauth";
@@ -63,11 +62,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "無法用此 token 取得帳號資訊，請確認 access token 是否正確且仍有效" }, { status: 400 });
     }
 
-    // 方案配額：超過上限擋下（owner 不受限；既有同帳號更新不占名額）
+    // 帳號配額：超過上限擋下（owner 取較高上限；既有同帳號更新不占名額）
     const quota = await canAddThreadsAccount(user.id, { isOwner: user.isOwner, threadsUserId: profile.id });
     if (!quota.ok) {
       return NextResponse.json(
-        { ok: false, code: "plan_limit", error: `已達${PLAN_LABELS[quota.plan as PlanId]}上限（${quota.limit} 個發文帳號），請升級方案後再新增。` },
+        { ok: false, code: "account_limit", error: `已達發文帳號上限（${quota.limit} 個），無法再新增。` },
         { status: 402 }
       );
     }

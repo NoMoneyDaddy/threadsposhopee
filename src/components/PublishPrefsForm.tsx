@@ -12,6 +12,9 @@ const PRESETS: { label: string; value: string }[] = [
   { label: "整點 4 篇", value: "09:00,13:00,18:00,21:00" }
 ];
 
+// 可點選的整點時段格子（06:00–23:00）：點一下加入/移除，免手打；特殊分鐘（如 12:30）仍可用下方輸入框。
+const GRID_TIMES = Array.from({ length: 18 }, (_, i) => `${String(i + 6).padStart(2, "0")}:00`);
+
 // 每位使用者自訂發文節奏（防封排程）：發文時段、同帳號最小間隔、每帳號每日上限。留空沿用系統預設。
 export default function PublishPrefsForm({
   initial
@@ -59,6 +62,15 @@ export default function PublishPrefsForm({
     }
   }
 
+  // 整點格子：點一下加入/移除該時段（依時間排序輸出，與顯示一致；HH:MM 字典序＝時間序）。
+  const slotSet = new Set(parsedSlots);
+  const toggleSlot = (t: string) => {
+    const next = new Set(parsedSlots);
+    if (next.has(t)) next.delete(t);
+    else next.add(t);
+    setSlots(Array.from(next).sort().join(","));
+  };
+
   return (
     <div className="card p-4">
       <div className="mb-1 font-medium">發文節奏（防封排程）</div>
@@ -76,7 +88,27 @@ export default function PublishPrefsForm({
         <label htmlFor="pp-slots" className="block text-sm font-medium text-ink">
           ① 發文時段
         </label>
-        <p className="mb-1.5 text-xs text-ink-3">每天會在這些時刻附近發文（台北時間）。點下方快捷帶入，或自己輸入 HH:MM、用逗號分隔。</p>
+        <p className="mb-1.5 text-xs text-ink-3">每天會在這些時刻附近發文（台北時間）。點時間格子加入/移除，或用快捷；特殊分鐘（如 12:30）可用最下方輸入框。</p>
+        {/* 整點時段多選格子：點選即加入/移除，免手打 */}
+        <div className="mb-2 grid grid-cols-6 gap-1 sm:grid-cols-9">
+          {GRID_TIMES.map((t) => {
+            const on = slotSet.has(t);
+            return (
+              <button
+                key={t}
+                type="button"
+                onClick={() => toggleSlot(t)}
+                aria-pressed={on}
+                className={
+                  "rounded-md border px-1 py-1 text-xs tabular-nums " +
+                  (on ? "border-brand bg-brand text-white" : "text-ink-2 hover:bg-surface-2")
+                }
+              >
+                {t}
+              </button>
+            );
+          })}
+        </div>
         <div className="mb-2 flex flex-wrap gap-1.5">
           {PRESETS.map((p) => (
             <button

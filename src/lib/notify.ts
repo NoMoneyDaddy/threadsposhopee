@@ -57,6 +57,46 @@ export async function getTelegramBotUsername(botToken: string): Promise<string |
   }
 }
 
+// owner 一鍵設定 Telegram webhook（平台共用 bot）：把對外網址註冊到 Telegram，secret_token 用 TELEGRAM_WEBHOOK_SECRET。
+// 只允許 message（/start 綁定）與 callback_query（遠端核准/駁回）兩種更新。絕不丟錯，回傳結果供 UI 顯示。
+export async function setTelegramWebhook(
+  botToken: string,
+  webhookUrl: string,
+  secretToken: string
+): Promise<{ ok: boolean; description?: string }> {
+  try {
+    const api = assertSafePublicUrl(`https://api.telegram.org/bot${botToken}/setWebhook`).toString();
+    const res = await fetchWithTimeout(
+      api,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: webhookUrl, secret_token: secretToken, allowed_updates: ["message", "callback_query"] })
+      },
+      8000
+    );
+    const json = (await res.json().catch(() => null)) as { ok?: boolean; description?: string } | null;
+    return { ok: Boolean(json?.ok), description: json?.description };
+  } catch (e) {
+    return { ok: false, description: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+// 查詢目前 webhook 設定（給 owner 面板顯示是否已註冊、最近錯誤）。取不到回 null。絕不丟錯。
+export async function getTelegramWebhookInfo(botToken: string): Promise<{ url: string; lastError?: string } | null> {
+  try {
+    const api = assertSafePublicUrl(`https://api.telegram.org/bot${botToken}/getWebhookInfo`).toString();
+    const res = await fetchWithTimeout(api, {}, 8000);
+    const json = (await res.json().catch(() => null)) as
+      | { ok?: boolean; result?: { url?: string; last_error_message?: string } }
+      | null;
+    if (!json?.ok || !json.result) return null;
+    return { url: json.result.url ?? "", lastError: json.result.last_error_message };
+  } catch {
+    return null;
+  }
+}
+
 // 運維告警（全域）：設了 TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID 才送，用於 cron 失敗等。
 // 未設通道時不靜默：改落結構化 error log，確保告警內容在 log 層仍留痕（運維可見）。
 export async function sendAlert(text: string): Promise<void> {

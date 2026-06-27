@@ -4,7 +4,13 @@ import { useEffect, useRef, useState } from "react";
 
 // owner 專屬：一鍵把 Telegram webhook 註冊到目前網域。
 // deeplink 綁定與遠端審核都靠這個 webhook 收訊；沒註冊（或 secret 未設）時 bot 不會有任何回應。
-type Status = { botConfigured: boolean; secretSet?: boolean; info?: { url: string; lastError?: string } | null };
+// infoOk 區分「查得到 webhook 狀態」與「查詢失敗」：避免把暫時錯誤（超時／token 錯）誤標成「未註冊」。
+type Status = {
+  botConfigured: boolean;
+  secretSet?: boolean;
+  infoOk?: boolean;
+  info?: { url: string; lastError?: string } | null;
+};
 
 export default function TelegramWebhookSetup() {
   const [status, setStatus] = useState<Status | null>(null);
@@ -52,13 +58,20 @@ export default function TelegramWebhookSetup() {
   if (status && !status.botConfigured) return null; // 沒設 bot token 就不顯示
 
   const registered = Boolean(status?.info?.url);
+  const lookupFailed = Boolean(status && status.infoOk === false); // 查詢失敗 ≠ 未註冊
 
   return (
     <div className="card p-4">
       <div className="mb-2 flex items-center justify-between">
         <span className="font-medium">Telegram Webhook（管理者）</span>
         {status &&
-          (registered ? <span className="badge-success">已註冊</span> : <span className="badge-neutral">未註冊</span>)}
+          (lookupFailed ? (
+            <span className="badge-neutral">狀態查詢失敗</span>
+          ) : registered ? (
+            <span className="badge-success">已註冊</span>
+          ) : (
+            <span className="badge-neutral">未註冊</span>
+          ))}
       </div>
       <p className="mb-2 text-xs text-ink-2">
         deeplink 一鍵綁定與遠端核准都靠 webhook 收訊。<b>若 bot 對 /start 完全沒回應，多半是 webhook 沒註冊</b>。

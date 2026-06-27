@@ -49,7 +49,7 @@ export default async function SettingsPage() {
 
       <div id="setup-notify" className="scroll-mt-24 space-y-4">
         <TelegramForm bound={telegramBound} botConfigured={!isDemoMode && Boolean(env.telegramBotToken)} />
-        {user.isOwner && !isDemoMode && Boolean(env.telegramBotToken) && <TelegramWebhookSetup />}
+        {user.isPlatformOwner && !isDemoMode && Boolean(env.telegramBotToken) && <TelegramWebhookSetup />}
       </div>
 
       {env.vapidPublicKey && <PushToggle vapidPublicKey={env.vapidPublicKey} />}

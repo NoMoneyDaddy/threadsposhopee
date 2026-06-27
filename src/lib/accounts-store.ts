@@ -162,7 +162,7 @@ export async function upsertThreadsAccountFromOAuth(
     display_name?: string | null;
     avatar_url?: string | null;
     access_token: string;
-    token_expires_at: string;
+    token_expires_at: string | null; // null＝到期日未知（無法換/展長效）→ 由展期 worker 立即接手或標記
   },
   ownerId: string
 ): Promise<ThreadsAccount> {
@@ -193,7 +193,7 @@ export async function upsertThreadsAccountFromOAuth(
   // 抓檔失敗時為 undefined，條件式略過以免清空既有真實資料。
   const profile: {
     access_token_enc: string;
-    token_expires_at: string;
+    token_expires_at: string | null;
     status: "active";
     display_name?: string | null;
     avatar_url?: string | null;

@@ -68,7 +68,8 @@ export default async function AccountsPage() {
       <div id="setup-threads" className="scroll-mt-24 rounded-2xl border bg-surface p-4">
         <div className="font-medium">連結 Threads 發文帳號</div>
         <p className="mt-1 text-sm text-ink-2">
-          在下方「手動新增」貼上你的 Threads <b>access token</b> 即可綁定。系統會自動換成長效權杖、到期前自動展期。
+          在下方「手動新增」貼上你的 Threads <b>access token</b> 即可綁定。若貼短效權杖並附 App 密鑰，系統會換成 60 天長效；
+          長效權杖則會在到期前自動展期。
         </p>
         <p className="mt-2 text-xs text-ink-3">
           token 取得：到 <b>developers.facebook.com</b> 你的 Threads App → Threads 使用案例 → 為你的帳號產生 access token，貼到下方。

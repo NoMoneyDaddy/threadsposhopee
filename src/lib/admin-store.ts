@@ -22,31 +22,40 @@ export interface UserOverviewRow {
   threadsCount: number;
   shopeeBound: boolean;
 }
+// 整表分頁讀取（避開 Supabase 預設 1000 列上限的靜默截斷；查詢失敗即拋）。
+async function selectAllRows<T>(table: string, columns: string): Promise<T[]> {
+  const sb = getServiceClient()!;
+  const PAGE = 1000;
+  const out: T[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await sb.from(table).select(columns).range(from, from + PAGE - 1);
+    if (error) throw new Error(`讀取 ${table} 失敗：${error.message}`);
+    const rows = (data ?? []) as T[];
+    out.push(...rows);
+    if (rows.length < PAGE) break;
+  }
+  return out;
+}
+
 export async function listUsersOverview(): Promise<UserOverviewRow[]> {
   if (isDemoMode) return [];
-  const sb = getServiceClient()!;
   const users = await listAllUsers();
-  // 一次撈各表，於記憶體彙總（查詢失敗即拋，不靜默回空而誤顯示成「無資料」）。
-  const [rolesRes, threadsRes, shopeeRes] = await Promise.all([
-    sb.from("profiles").select("id, roles"),
-    sb.from("threads_accounts").select("owner_id"),
-    sb.from("shopee_accounts").select("owner_id")
+  // 各表分頁全撈，於記憶體彙總（避免每使用者 N 次查詢；分頁避免 1000 列截斷）。
+  const [profiles, threads, shopee] = await Promise.all([
+    selectAllRows<{ id: string; roles?: unknown }>("profiles", "id, roles"),
+    selectAllRows<{ owner_id: string | null }>("threads_accounts", "owner_id"),
+    selectAllRows<{ owner_id: string | null }>("shopee_accounts", "owner_id")
   ]);
-  if (rolesRes.error) throw new Error(`讀取身份組失敗：${rolesRes.error.message}`);
-  if (threadsRes.error) throw new Error(`讀取 Threads 帳號失敗：${threadsRes.error.message}`);
-  if (shopeeRes.error) throw new Error(`讀取 Shopee 帳號失敗：${shopeeRes.error.message}`);
 
   const rolesById = new Map<string, ManualRole[]>();
-  for (const r of rolesRes.data ?? []) rolesById.set(r.id as string, sanitizeRoles((r as { roles?: unknown }).roles));
+  for (const r of profiles) rolesById.set(r.id, sanitizeRoles(r.roles));
   const threadsByOwner = new Map<string, number>();
-  for (const a of threadsRes.data ?? []) {
-    const o = (a as { owner_id: string | null }).owner_id;
-    if (o) threadsByOwner.set(o, (threadsByOwner.get(o) ?? 0) + 1);
+  for (const a of threads) {
+    if (a.owner_id) threadsByOwner.set(a.owner_id, (threadsByOwner.get(a.owner_id) ?? 0) + 1);
   }
   const shopeeOwners = new Set<string>();
-  for (const a of shopeeRes.data ?? []) {
-    const o = (a as { owner_id: string | null }).owner_id;
-    if (o) shopeeOwners.add(o);
+  for (const a of shopee) {
+    if (a.owner_id) shopeeOwners.add(a.owner_id);
   }
 
   return users.map((u) => ({

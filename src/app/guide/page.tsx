@@ -56,7 +56,7 @@ export default function GuidePage() {
         <Guide
           steps={[
             "到 <b>developers.facebook.com</b> 建立 App，建立時選用途「<b>Access the Threads API</b>」。",
-            "在 App 設定加入權限 <code>threads_basic</code>、<code>threads_content_publish</code>（發文）；如需成效數據、留言管理、關鍵字選題，再加 <code>threads_manage_insights</code>、<code>threads_read_replies</code>、<code>threads_manage_replies</code>、<code>threads_keyword_search</code>。",
+            "在 App 設定加入權限：<code>threads_basic</code>、<code>threads_content_publish</code>（發文）＋ <code>threads_manage_insights</code>、<code>threads_read_replies</code>、<code>threads_manage_replies</code>、<code>threads_keyword_search</code>（成效/留言/選題）。OAuth <b>預設一次請求全部</b>，故 App 端這些權限都要開；若只想用發文、暫不上進階功能，部署端設環境變數 <code>THREADS_SCOPES=threads_basic,threads_content_publish</code> 即可只請求基本權限。",
             "App 設定 → 基本，取得 <b>Threads App ID</b> 與 <b>App Secret</b>（部署端環境變數，由管理者設定）。",
             "在 Threads 用途的 OAuth 設定填入 <b>Redirect URI</b>：<code>https://你的網域/auth/callback</code>（要與實際一致，否則被拒）。",
             "一般使用者不需自建 App：直接在「帳號管理」按 <b>用 Threads 登入綁定</b> 走 OAuth 授權即可。"

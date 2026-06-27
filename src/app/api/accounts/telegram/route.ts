@@ -7,8 +7,8 @@ import { env } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 
-// Telegram chat_id 為整數（群組為負）；僅允許可選負號 + 數字，長度上限防濫填。
-const isValidChatId = (s: string) => /^-?\d{1,20}$/.test(s);
+// 個人通知只綁「私聊」chat_id（正整數）；群組／頻道為負數，一律拒絕，避免私人通知洩漏給群成員。
+const isValidChatId = (s: string) => /^\d{1,20}$/.test(s);
 
 // 綁定／解除個人 Telegram 通知。綁定時發一則測試訊息確認可達。
 export async function POST(req: Request) {
@@ -28,7 +28,10 @@ export async function POST(req: Request) {
 
   const chatId = typeof body.chatId === "string" ? body.chatId.trim() : "";
   if (!isValidChatId(chatId)) {
-    return NextResponse.json({ ok: false, error: "chat_id 格式錯誤（應為整數）" }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, error: "只接受私聊 chat_id（正整數）；不支援群組／頻道（負數）" },
+      { status: 400 }
+    );
   }
   if (!env.telegramBotToken) {
     return NextResponse.json({ ok: false, error: "系統未設定 Telegram bot，請聯絡管理員" }, { status: 400 });

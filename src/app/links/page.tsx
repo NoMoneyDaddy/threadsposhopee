@@ -11,7 +11,9 @@ export const dynamic = "force-dynamic";
 export default async function LinksPage() {
   const user = await getCurrentUser();
   if (!user) return <div className="text-center text-sm text-red-500">請先登入。</div>;
-  const links = await listRedirectLinks(user.id).catch(() => []);
+  // 不吞錯：listRedirectLinks 已刻意在查詢失敗時拋錯（見 redirect-store），
+  // 故不可降級成空列表，否則 DB/網路故障會被誤呈現為「還沒有短連結」。
+  const links = await listRedirectLinks(user.id);
 
   return (
     <div className="space-y-6">

@@ -31,7 +31,12 @@ export const metadata: Metadata = {
   // 關閉行動裝置（iOS/Android）對 email／電話／地址／日期的自動偵測，
   // 否則畫面上的 email（header、view-as 列、管理面板）等會被加上可點的虛線框。
   formatDetection: { telephone: false, date: false, address: false, email: false },
-  ...(ADSENSE_CLIENT ? { other: { "google-adsense-account": ADSENSE_CLIENT } } : {})
+  // 本站為繁中專用：請瀏覽器（Chrome/Google 翻譯）不要提供「翻譯此頁」。
+  // 否則翻譯啟用後會在每段文字（含連結、email）加上「已翻譯」虛線底線，看起來像壞掉的超連結。
+  other: {
+    google: "notranslate",
+    ...(ADSENSE_CLIENT ? { "google-adsense-account": ADSENSE_CLIENT } : {})
+  }
 };
 
 export const viewport: Viewport = {
@@ -41,7 +46,7 @@ export const viewport: Viewport = {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
   return (
-    <html lang="zh-Hant" className={display.variable}>
+    <html lang="zh-Hant" translate="no" className={display.variable}>
       <body>
         {ADSENSE_CLIENT && (
           <Script

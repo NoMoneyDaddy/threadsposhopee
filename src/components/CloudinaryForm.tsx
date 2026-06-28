@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { fetchWithTimeout } from "@/lib/http";
+import BoundKeyHint from "@/components/BoundKeyHint";
 
 // 各人自綁 Cloudinary：素材（圖片/影片）中轉進你自己的雲端，而非共用 owner 的額度。
 // 只需 cloud name 與一個「unsigned」upload preset（preset 本就設計給前端公開使用，非機密）。
@@ -81,8 +82,8 @@ export default function CloudinaryForm({
       <p className="mb-1 mt-3 text-xs text-ink-2">
         （選填）想在儀表板看「用量」就再填 Cloudinary 後台的 <b>API Key</b> 與 <b>API Secret</b>
         （Dashboard → Account Details）。不填也能正常上傳，只是看不到用量。
-        {hasApiKey && <span className="ml-1 text-green-700">目前已綁定，留空＝不變更。</span>}
       </p>
+      {hasApiKey && <BoundKeyHint label="目前已綁定 API Key／Secret" />}
       <div className="flex flex-wrap gap-2">
         <input
           className="input min-w-0 flex-1"

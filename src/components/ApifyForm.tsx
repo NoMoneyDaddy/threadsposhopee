@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import BoundKeyHint from "@/components/BoundKeyHint";
 
 // 抓取子系統：綁定自己的 Apify API token（任何使用者皆可綁自己的）。token 不回傳明文。
 // actor 固定為系統內建（threads-search-scraper），不開放自訂。
@@ -55,6 +56,7 @@ export default function ApifyForm({ bound }: { bound: boolean }) {
         （threads-search-scraper），計費約 US$5 / 每 1,000 筆結果起（實際以 Apify 商店頁為準）。
         建議把來源的「每次抓取篇數」設小一點省額度。
       </p>
+      {bound && <BoundKeyHint label="目前已綁定 Apify token" />}
       <div className="space-y-2">
         <input
           className={input}

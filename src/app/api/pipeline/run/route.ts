@@ -11,6 +11,7 @@ export async function POST() {
   try {
     const user = await getCurrentUser();
     if (!user) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+    if (!user.isOwner) return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
     // 不吞 I/O 錯：失敗落外層 catch 回 500，不誤判成「未綁定」。
     const apify = await hasApifyCredentials(user.id);
     if (!apify.bound) {

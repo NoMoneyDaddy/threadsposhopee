@@ -42,7 +42,7 @@ export default async function AccountsPage() {
   const [threads, shopee] = await Promise.all([listThreadsAccounts(ownerId), listShopeeAccounts(ownerId)]);
   const [apify, geminiBound, affiliateId, customSubId, autoRevive, cloudinary, cloudinaryFull, r2Settings] =
     await Promise.all([
-      user ? hasApifyCredentials(ownerId) : Promise.resolve({ bound: false, actor: null }),
+      user?.isOwner ? hasApifyCredentials(ownerId) : Promise.resolve({ bound: false, actor: null }),
       user ? hasGeminiKey(user.id) : Promise.resolve(false),
       getShopeeAffiliateId(ownerId),
       user ? getShopeeSubId(ownerId) : Promise.resolve(null),
@@ -101,8 +101,8 @@ export default async function AccountsPage() {
       )}
 
       <div className="grid gap-4 md:grid-cols-2">
-        {/* 抓取：綁定自己的 Apify 金鑰即可用；AI 文案每人各綁各的 */}
-        {user && (
+        {/* 抓取（Apify）：僅平台管理員可綁定使用；AI 文案每人各綁各的 */}
+        {user?.isOwner && (
           <div id="setup-apify" className="scroll-mt-24">
             <ApifyForm bound={apify.bound} />
           </div>

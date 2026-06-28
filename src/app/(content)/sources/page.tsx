@@ -12,6 +12,10 @@ export default async function SourcesPage() {
   if (!user && !isDemoMode) {
     return <div className="rounded-2xl border border-dashed p-10 text-center text-ink-2">請先登入。</div>;
   }
+  // 自動抓文（Apify）為平台管理員專屬功能；一般成員不開放。
+  if (user && !user.isOwner && !isDemoMode) {
+    return <div className="rounded-2xl border border-dashed p-10 text-center text-ink-2">此功能僅平台管理員可使用。</div>;
+  }
   const ownerId = user?.id ?? "demo-user";
 
   // 抓取：綁定自己的 Apify 金鑰即可使用（計費算在自己帳上）。未綁先引導去綁。

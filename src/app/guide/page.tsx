@@ -107,7 +107,7 @@ export default function GuidePage() {
             "<b>Settings → API &amp; Integrations</b>，複製 <b>Personal API token</b>。",
             "（選填）指定要用的 Actor id；填到帳號管理的 Apify 欄位即可監看來源。"
           ]}
-          note="Token 為機密，加密存、只在 server 用。任何使用者都可綁自己的 Apify 金鑰使用自動抓文（計費算在自己帳上）；不綁也能手動建素材。"
+          note="Token 為機密，加密存、只在 server 用。自動抓文為平台管理員專屬功能（計費算在管理員的 Apify 帳上）；一般成員可手動建素材。"
           docs={[{ label: "Apify API token 文件", href: "https://docs.apify.com/platform/integrations/api" }]}
         />
       </Section>

@@ -13,9 +13,10 @@ import { log } from "./logger";
 // 純函式可單測：判斷某次 insert 失敗是否因為指定欄位尚不存在。
 export function isMissingColumnError(error: { code?: string; message?: string } | null, column: string): boolean {
   if (!error) return false;
-  if (error.code === "PGRST204") return true;
+  // 一律要求錯誤訊息提到「目標欄位名」，避免把其他欄位/無關的 schema 錯誤誤判為「safety 缺失」而走降級。
   const msg = (error.message ?? "").toLowerCase();
-  return msg.includes("schema cache") && msg.includes(`'${column.toLowerCase()}'`);
+  const mentionsColumn = msg.includes(`'${column.toLowerCase()}'`);
+  return mentionsColumn && (error.code === "PGRST204" || msg.includes("schema cache"));
 }
 
 export interface RedirectLinkInput {

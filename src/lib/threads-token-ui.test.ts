@@ -10,6 +10,9 @@ test("threadsTokenBadge：無到期日 → short（短期權杖）", () => {
     const b = threadsTokenBadge(v as string | null | undefined, now);
     assert.equal(b.kind, "short");
     assert.equal(b.label, "短期權杖");
+    // 短期提示要同時含「附 App 密鑰換長期」與「系統仍會嘗試自動展期」。
+    assert.ok(b.title.includes("App 密鑰"));
+    assert.ok(b.title.includes("自動展期"));
   }
 });
 

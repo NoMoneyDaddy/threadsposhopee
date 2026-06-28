@@ -15,7 +15,7 @@ export interface ThreadsTokenBadge {
 
 export function threadsTokenBadge(expiresAt: string | null | undefined, now = Date.now()): ThreadsTokenBadge {
   if (!expiresAt) {
-    return { kind: "short", label: "短期權杖", title: "尚未換成長期權杖；新增時附上 App 密鑰即可自動換 60 天長期" };
+    return { kind: "short", label: "短期權杖", title: "尚未換成長期權杖；新增時附上 App 密鑰即可自動換 60 天長期，系統仍會嘗試自動展期" };
   }
   const exp = tokenExpiryState(expiresAt, 7, now);
   if (exp.level === "unknown") {

@@ -3,10 +3,10 @@
 create table if not exists feedback (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid not null references auth.users(id) on delete cascade, -- 送出者
-  kind text not null default 'feature',   -- 'bug' | 'feature'
+  kind text not null default 'feature' check (kind in ('bug', 'feature')),
   title text not null,
   message text not null,
-  status text not null default 'open',     -- 'open' | 'in_progress' | 'resolved' | 'closed'
+  status text not null default 'open' check (status in ('open', 'in_progress', 'resolved', 'closed')),
   admin_reply text,                        -- 管理員前端回覆（明文）
   replied_at timestamptz,
   created_at timestamptz not null default now(),

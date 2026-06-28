@@ -1,4 +1,4 @@
-import { getCurrentUser, listAllUsers } from "@/lib/auth";
+import { getCurrentUser, getUserEmailsByIds } from "@/lib/auth";
 import { isDemoMode } from "@/lib/env";
 import { listFeedbackForOwner, listAllFeedback } from "@/lib/feedback-store";
 import FeedbackForm from "@/components/FeedbackForm";
@@ -33,11 +33,10 @@ export default async function FeedbackPage() {
   const isOwner = Boolean(user?.isOwner);
   const items = isOwner ? await listAllFeedback() : await listFeedbackForOwner(user?.id ?? "demo-user");
 
-  // 管理員視角：附上送出者 email 方便辨識（一般成員看不到他人工單，不需要）。
+  // 管理員視角：只查「本頁工單送出者」的 email（不拉全量使用者，避免量大時的效能/記憶體負擔）。
   let emailOf: Record<string, string> = {};
   if (isOwner && !isDemoMode) {
-    const users = await listAllUsers().catch(() => []);
-    emailOf = Object.fromEntries(users.map((u) => [u.id, u.email ?? u.id]));
+    emailOf = await getUserEmailsByIds(items.map((f) => f.owner_id)).catch(() => ({}));
   }
 
   return (

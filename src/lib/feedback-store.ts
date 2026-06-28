@@ -23,12 +23,13 @@ export async function listFeedbackForOwner(ownerId: string): Promise<Feedback[]>
     return demo.feedback.filter((f) => f.owner_id === ownerId).sort((a, b) => b.created_at.localeCompare(a.created_at));
   }
   const sb = getServiceClient()!;
-  const { data } = await sb
+  const { data, error } = await sb
     .from("feedback")
     .select("*")
     .eq("owner_id", ownerId)
     .order("created_at", { ascending: false })
     .limit(200);
+  if (error) throw error; // 不靜默回 []（會被前端誤顯示成「沒有工單」，掩蓋 DB 故障）
   return (data ?? []) as Feedback[];
 }
 
@@ -38,7 +39,8 @@ export async function listAllFeedback(): Promise<Feedback[]> {
     return [...demo.feedback].sort((a, b) => b.created_at.localeCompare(a.created_at));
   }
   const sb = getServiceClient()!;
-  const { data } = await sb.from("feedback").select("*").order("created_at", { ascending: false }).limit(500);
+  const { data, error } = await sb.from("feedback").select("*").order("created_at", { ascending: false }).limit(500);
+  if (error) throw error; // 同上：DB 故障要拋，不偽裝成「沒有工單」
   return (data ?? []) as Feedback[];
 }
 

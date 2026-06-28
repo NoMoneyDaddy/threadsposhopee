@@ -91,6 +91,23 @@ export async function listAllUsers(): Promise<{ id: string; email: string | null
   throw new Error(`使用者數量超過載入上限（${MAX_PAGES * PER_PAGE}），請調整分頁上限`);
 }
 
+// 依 id 批次取 email（id→email 對照）。只查所需的 id（用 getUserById），避免為了標幾筆而拉全量使用者。
+// 單筆查詢失敗只略過該筆（不中斷整頁）；上限保護避免一次打太多。
+export async function getUserEmailsByIds(ids: string[]): Promise<Record<string, string>> {
+  if (isDemoMode || ids.length === 0) return {};
+  const sb = getServiceClient();
+  if (!sb) return {};
+  const unique = Array.from(new Set(ids)).slice(0, 200);
+  const out: Record<string, string> = {};
+  await Promise.all(
+    unique.map(async (id) => {
+      const { data, error } = await sb.auth.admin.getUserById(id);
+      if (!error && data?.user?.email) out[id] = data.user.email;
+    })
+  );
+  return out;
+}
+
 // 解析 owner 的 user id（給背景排程/pipeline 標記 owner_id 用）。
 let cachedOwnerId: string | null = null;
 export async function getOwnerUserId(): Promise<string | null> {

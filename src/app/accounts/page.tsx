@@ -170,8 +170,8 @@ export default async function AccountsPage() {
       </section>
 
       <p className="text-sm text-ink-3">
-        🔒 你綁定的所有金鑰／權杖（Threads／Shopee／Gemini／Apify／Cloudinary／R2）皆以 AES-256-GCM 加密、僅在伺服器使用，
-        只用於你自己的帳號、永不分享或外露給其他使用者；前端不會回傳明文。
+        🔒 你綁定的所有金鑰／權杖（Threads／Shopee／Gemini／Cloudinary／R2）皆以 AES-256-GCM 加密、僅在伺服器使用，
+        只用於你自己的帳號、永不分享或外露給其他使用者；Apify 自動抓文僅平台管理員可綁定使用。前端不會回傳明文。
       </p>
 
       {user && !isDemoMode && (

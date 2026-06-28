@@ -47,7 +47,7 @@ export default function GuidePage() {
       <div>
         <h1 className="text-2xl font-bold">金鑰取得教學</h1>
         <p className="text-sm text-ink-2">
-          每項服務都綁<b>你自己的</b>金鑰；機密類一律 AES-256 加密存、不入庫、不外露。到{" "}
+          除平台管理員專屬的 Apify 自動抓文外，每項服務都綁<b>你自己的</b>金鑰；機密類一律 AES-256 加密存、不入庫、不外露。到{" "}
           <Link href="/accounts" className="text-brand underline">帳號管理</Link> 填入。
         </p>
       </div>
@@ -105,7 +105,7 @@ export default function GuidePage() {
           steps={[
             "到 <a href=\"https://console.apify.com\" target=\"_blank\" rel=\"noopener noreferrer\" class=\"text-brand underline\">console.apify.com</a> 註冊／登入。",
             "<b>Settings → API &amp; Integrations</b>，複製 <b>Personal API token</b>。",
-            "（選填）指定要用的 Actor id；填到帳號管理的 Apify 欄位即可監看來源。"
+            "（平台管理員）可選填 Actor id；到帳號管理的 Apify 欄位填入後即可監看來源。一般成員不會顯示此欄位。"
           ]}
           note="Token 為機密，加密存、只在 server 用。自動抓文為平台管理員專屬功能（計費算在管理員的 Apify 帳上）；一般成員可手動建素材。"
           docs={[{ label: "Apify API token 文件", href: "https://docs.apify.com/platform/integrations/api" }]}

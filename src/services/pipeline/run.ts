@@ -206,26 +206,28 @@ export async function runSourcesForOwner(
   return results;
 }
 
-// 所有租戶：一次撈全部啟用來源、記憶體依 owner 分組（免 N+1），只跑「有綁自己 Apify 金鑰」的使用者。
-// 公平性：owner 順序隨機打亂，避免排前面的長時間來源每輪吃光預算、導致後面的人永遠輪不到（飢餓）。
+// 自動抓文為平台管理員專屬：背景排程只跑平台管理員名下的啟用來源。
+// 一次撈全部啟用來源、記憶體依 owner 分組（免 N+1），但只處理平台管理員（其餘為舊版殘留的孤兒來源，
+// 政策改動後使用者已無法自行停用/刪除，故在此一律不跑，避免持續產生草稿/外部成本）。
 // 時間預算守 cron maxDuration，傳入 runSourcesForOwner 連單一 owner 內也會中途停手。
 export async function runAllSources(): Promise<PipelineResult[]> {
   if (isDemoMode) return runSourcesForOwner((await getOwnerUserId()) ?? "demo-user");
+  const platformOwnerId = await getOwnerUserId();
+  if (!platformOwnerId) return []; // 無法解析平台管理員 → 不跑任何來源（不誤跑孤兒來源）
   const start = Date.now();
   const deadline = start + 50000;
-  // 記憶體分組：owner_id -> 其啟用來源
+  // 記憶體分組：owner_id -> 其啟用來源（只保留平台管理員，孤兒來源略過）
   const byOwner = new Map<string, Source[]>();
   for (const s of await listAllEnabledSources()) {
-    if (!s.owner_id) continue;
+    if (s.owner_id !== platformOwnerId) continue;
     const arr = byOwner.get(s.owner_id) ?? [];
     arr.push(s);
     byOwner.set(s.owner_id, arr);
   }
-  const owners = Array.from(byOwner.keys()).sort(() => Math.random() - 0.5); // 公平隨機
   const results: PipelineResult[] = [];
-  for (const ownerId of owners) {
-    if (Date.now() > deadline) break; // 守 maxDuration，剩餘 owner 下輪再跑
-    if (!(await getApifyCredentials(ownerId))) continue; // 沒綁自己 Apify 金鑰的使用者略過
+  for (const ownerId of byOwner.keys()) {
+    if (Date.now() > deadline) break; // 守 maxDuration
+    if (!(await getApifyCredentials(ownerId))) continue; // 未綁 Apify 金鑰略過
     results.push(...(await runSourcesForOwner(ownerId, { sources: byOwner.get(ownerId), deadline })));
   }
   return results;

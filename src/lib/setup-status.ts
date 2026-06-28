@@ -28,7 +28,8 @@ export async function getSetupSteps(user: AppUser): Promise<SetupStep[]> {
     getShopeeAffiliateId(id),
     getUserCloudinary(id),
     hasUserR2(id),
-    hasApifyCredentials(id),
+    // Apify 為平台管理員專屬：非管理員不顯示此步驟，也不必查（避免無謂 I/O 與失敗耦合）。
+    user.isOwner ? hasApifyCredentials(id) : Promise.resolve({ bound: false, actor: null }),
     getUserTelegramChatId(id),
     hasGeminiKey(id)
   ]);

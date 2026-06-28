@@ -86,9 +86,20 @@ export interface ScrapeQuery {
   sort?: "top" | "recent";
 }
 
+// actor 的 from 僅允許這組字元（schema：^[a-zA-Z0-9._]*$）。
+const THREADS_USERNAME_RE = /^[a-zA-Z0-9._]+$/;
+
+// 把 posts_limit 正規化成正整數（非有限值／≤0 → 預設 20）。request（maxPosts）與 response（slice）共用，
+// 避免兩邊 fallback 規則分岐（如 NaN 時 slice 出空陣列）。純函式可測。
+export function normalizePostsLimit(postsLimit: number): number {
+  const n = Number.isFinite(postsLimit) ? Math.floor(postsLimit) : 20;
+  return n > 0 ? n : 20;
+}
+
 // 依 Threads Search Scraper 的 input schema 與限制組 actor input（純函式可測）：
 // - searchQuery 必填（只監看帳號時預設 "shope"，精準篩含蝦皮連結的貼文）。
-// - from 僅允許 ^[a-zA-Z0-9._]*$：去掉開頭 @ 與不合法字元，避免 actor 輸入驗證失敗。
+// - from 僅允許 ^[a-zA-Z0-9._]*$：去掉開頭 @；若仍含不合法字元就明確報錯（fail fast），
+//   不靜默刪字元——否則可能把無效帳號改成「另一個真實帳號」而誤爬。
 // - maxPosts 夾 20–200：actor 每次 run 上限約 20 頁 × 每頁約 10 篇 ≈ 200 篇（schema 名目上限 1000，
 //   但實際取不到那麼多，夾到 200 避免誤期待並少燒額度）。
 // - sort 僅 top / recent（非法值退回 recent）。
@@ -100,11 +111,13 @@ export interface ThreadsScraperInput {
 }
 
 export function buildScraperInput(spec: ScrapeQuery, postsLimit: number): ThreadsScraperInput {
-  const from = (spec.username ?? "").trim().replace(/^@/, "").replace(/[^a-zA-Z0-9._]/g, "");
+  const from = (spec.username ?? "").trim().replace(/^@+/, "");
+  if (from && !THREADS_USERNAME_RE.test(from)) {
+    throw new Error(`無效的 Threads 帳號名稱「${from}」：僅能包含英數字、底線與點（a-z A-Z 0-9 . _）`);
+  }
   const searchQuery = spec.searchQuery?.trim() || "shope";
   const sort: "top" | "recent" = spec.sort === "top" ? "top" : "recent";
-  const limit = Number.isFinite(postsLimit) ? Math.floor(postsLimit) : 20;
-  const maxPosts = Math.min(200, Math.max(20, limit > 0 ? limit : 20));
+  const maxPosts = Math.min(200, Math.max(20, normalizePostsLimit(postsLimit)));
   const input: ThreadsScraperInput = { searchQuery, sort, maxPosts };
   if (from) input.from = from;
   return input;
@@ -129,7 +142,9 @@ export async function scrapeLatestPosts(
 
   const spec: ScrapeQuery = typeof query === "string" ? { username: query } : query;
   // input 欄位與限制集中在 buildScraperInput（依 actor schema：searchQuery 必填、from 字元限制、maxPosts 上限約 200）。
-  const body = buildScraperInput(spec, postsLimit);
+  // safePostsLimit 與 buildScraperInput 共用同一正規化，request 與 response（slice）的 NaN/0 fallback 一致。
+  const safePostsLimit = normalizePostsLimit(postsLimit);
+  const body = buildScraperInput(spec, safePostsLimit);
 
   // run-sync 端點注意事項（docs.apify.com/api/v2/act-run-sync-get-dataset-items-post）：
   // - timeout：綁定本次 run 上限秒數（端點硬上限 300s，逾時回 408）；本爬蟲 maxPosts≤200 通常數秒，設 60s 防卡住燒額度。
@@ -157,5 +172,5 @@ export async function scrapeLatestPosts(
   // Apify 回傳是 dataset items 陣列（每筆即一則貼文）。actor 的 maxPosts 下限 20，
   // 但使用者的 posts_limit 可能更小 → 解析後再夾到設定值，避免處理過多、燒 AI/Shopee 額度。
   const posts = parseSearchPosts(Array.isArray(dataset) ? dataset : [dataset]);
-  return posts.slice(0, Math.max(1, postsLimit));
+  return posts.slice(0, safePostsLimit);
 }

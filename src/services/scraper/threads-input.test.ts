@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildScraperInput } from "./threads";
+import { buildScraperInput, normalizePostsLimit } from "./threads";
 
 test("buildScraperInput：只監看帳號時 searchQuery 預設 shope，from 帶入", () => {
   const i = buildScraperInput({ username: "@shop.owner_1" }, 20);
@@ -9,9 +9,16 @@ test("buildScraperInput：只監看帳號時 searchQuery 預設 shope，from 帶
   assert.equal(i.sort, "recent");
 });
 
-test("buildScraperInput：from 過濾不合法字元（^[a-zA-Z0-9._]*$）", () => {
-  const i = buildScraperInput({ username: "@user name!#中文.x" }, 20);
-  assert.equal(i.from, "username.x"); // 空白/符號/中文皆移除
+test("buildScraperInput：from 含不合法字元時報錯（不靜默改成別的帳號）", () => {
+  assert.throws(() => buildScraperInput({ username: "@user name!#中文.x" }, 20), /無效的 Threads 帳號名稱/);
+});
+
+test("normalizePostsLimit：非有限值／≤0 → 20，正數取整", () => {
+  assert.equal(normalizePostsLimit(5), 5);
+  assert.equal(normalizePostsLimit(7.9), 7);
+  assert.equal(normalizePostsLimit(0), 20);
+  assert.equal(normalizePostsLimit(-3), 20);
+  assert.equal(normalizePostsLimit(Number.NaN), 20);
 });
 
 test("buildScraperInput：無帳號時不帶 from", () => {

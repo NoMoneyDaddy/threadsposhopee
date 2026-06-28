@@ -10,10 +10,11 @@ test("shortHostOf：從完整網址取 host，壞值/空回空字串", () => {
   assert.equal(shortHostOf("not a url"), "");
 });
 
-test("isAllowedOnShortHost：只放行 /r/* 與 hit beacon", () => {
+test("isAllowedOnShortHost：放行服務首頁 /r、中轉頁 /r/* 與 hit beacon", () => {
+  assert.equal(isAllowedOnShortHost("/r"), true); // go2read 服務首頁
   assert.equal(isAllowedOnShortHost("/r/abc"), true);
   assert.equal(isAllowedOnShortHost("/api/redirect/hit"), true);
-  assert.equal(isAllowedOnShortHost("/"), false);
+  assert.equal(isAllowedOnShortHost("/"), false); // 根目錄由 middleware rewrite 到 /r，非此處放行
   assert.equal(isAllowedOnShortHost("/login"), false);
   assert.equal(isAllowedOnShortHost("/drafts"), false);
   assert.equal(isAllowedOnShortHost("/api/redirect"), false); // 建立短連結只在主站

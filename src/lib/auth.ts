@@ -91,13 +91,18 @@ export async function listAllUsers(): Promise<{ id: string; email: string | null
   throw new Error(`使用者數量超過載入上限（${MAX_PAGES * PER_PAGE}），請調整分頁上限`);
 }
 
+// 去重＋上限裁切（純函式可測）：避免重複 id 重複查、單次查詢數量無上限。
+export function dedupeCapIds(ids: string[], cap = 200): string[] {
+  return Array.from(new Set(ids)).slice(0, Math.max(0, cap));
+}
+
 // 依 id 批次取 email（id→email 對照）。只查所需的 id（用 getUserById），避免為了標幾筆而拉全量使用者。
 // 單筆查詢失敗只略過該筆（不中斷整頁）；上限保護避免一次打太多。
 export async function getUserEmailsByIds(ids: string[]): Promise<Record<string, string>> {
   if (isDemoMode || ids.length === 0) return {};
   const sb = getServiceClient();
   if (!sb) return {};
-  const unique = Array.from(new Set(ids)).slice(0, 200);
+  const unique = dedupeCapIds(ids, 200);
   const out: Record<string, string> = {};
   await Promise.all(
     unique.map(async (id) => {

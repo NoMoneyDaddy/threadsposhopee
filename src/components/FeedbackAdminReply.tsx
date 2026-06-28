@@ -20,13 +20,22 @@ export default function FeedbackAdminReply({ item }: { item: Feedback }) {
   const [msg, setMsg] = useState<string | null>(null);
 
   async function save() {
+    // 只送「有變更」的欄位：admin_reply 一旦帶上後端會重設 replied_at，故純改狀態時不應一併送 reply。
+    const trimmedReply = reply.trim();
+    const payload: { admin_reply?: string; status?: FeedbackStatus } = {};
+    if (trimmedReply !== (item.admin_reply ?? "")) payload.admin_reply = trimmedReply;
+    if (status !== item.status) payload.status = status;
+    if (payload.admin_reply === undefined && payload.status === undefined) {
+      setMsg("沒有變更");
+      return;
+    }
     setBusy(true);
     setMsg(null);
     try {
       const res = await fetch(`/api/feedback/${item.id}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ admin_reply: reply.trim(), status })
+        body: JSON.stringify(payload)
       });
       const json = await res.json().catch(() => null);
       if (!res.ok || !json?.ok) {

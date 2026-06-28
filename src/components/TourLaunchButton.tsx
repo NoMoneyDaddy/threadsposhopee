@@ -9,12 +9,12 @@ export default function TourLaunchButton({ className, children }: { className?: 
     <button
       type="button"
       onClick={() => window.dispatchEvent(new Event(TOUR_OPEN_EVENT))}
-      className={className ?? "inline-flex items-center gap-1.5 rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90"}
+      className={className ?? "inline-flex cursor-pointer items-center gap-1.5 rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90"}
     >
       {children ?? (
         <>
           {/* 羅盤圖示（導覽意象），SVG 取代原本的 emoji */}
-          <svg aria-hidden width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="10" />
             <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88" />
           </svg>

@@ -35,7 +35,7 @@ export default function AppChrome({
           <p>本服務為自有的第三方發文工具，與 Shopee、Meta／Threads 無任何官方關係或授權。</p>
           <nav className="flex items-center gap-4" aria-label="頁尾">
             {/* 全站頁尾入口：任何頁面都能一鍵重開互動導覽 */}
-            <TourLaunchButton className="hover:text-ink">開始導覽</TourLaunchButton>
+            <TourLaunchButton className="cursor-pointer hover:text-ink">開始導覽</TourLaunchButton>
             <a href="/how-it-works" className="hover:text-ink">使用說明</a>
             <a href="/guide" className="hover:text-ink">金鑰教學</a>
             <a href="/privacy" className="hover:text-ink">隱私權政策</a>

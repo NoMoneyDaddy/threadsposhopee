@@ -71,7 +71,8 @@ export default function ShopeeAccountForm({ bound = null }: { bound?: ShopeeAcco
         <a href="https://affiliate.shopee.tw/open_api" target="_blank" rel="noopener" className="text-brand underline">
           蝦皮分潤平台 → Open API
         </a>{" "}
-        申請後即可看到 App ID 與 Secret Key。重複綁定會覆寫既有金鑰。
+        申請後即可看到 App ID 與 Secret Key。重複綁定會覆寫既有金鑰。{" "}
+        <a href="/guide#shopee" className="text-brand underline">完整圖文教學 →</a>
       </p>
       <input className={input} placeholder="App ID" value={form.app_id} onChange={(e) => set("app_id", e.target.value)} required />
       <input className={input} type="password" placeholder="Secret（會加密儲存）" value={form.secret} onChange={(e) => set("secret", e.target.value)} required />

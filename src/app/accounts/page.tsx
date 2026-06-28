@@ -31,6 +31,7 @@ import R2Form from "@/components/R2Form";
 import MediaHostCompare from "@/components/MediaHostCompare";
 import RenameAccountButton from "@/components/RenameAccountButton";
 import { DeleteButton, ToggleButton } from "@/components/RowActions";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
@@ -73,6 +74,11 @@ export default async function AccountsPage() {
       <div>
         <h1 className="text-2xl font-bold">帳號管理</h1>
         <p className="text-sm text-ink-2">連接你的發文帳號、綁定各服務金鑰。發文節奏、通知等偏好請到「設定」。</p>
+        <p className="mt-1 text-sm text-ink-2">
+          不知道各服務的金鑰／API key 怎麼拿？看{" "}
+          <Link href="/guide" className="text-brand underline">金鑰取得教學</Link>
+          （含 Threads、Gemini、蝦皮、Apify、圖床的逐步圖文）。
+        </p>
       </div>
 
       {/* Threads 發文帳號：已綁定列表 ＋ 新增表單 合併同一區塊（列表在上、新增在下）。 */}

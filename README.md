@@ -49,7 +49,7 @@ npm run pipeline:demo
 
 ## 上線設定
 
-1. 建 Supabase 專案，**依序**跑 `supabase/migrations/` 下所有 SQL（`0001_init.sql` → `0019_profile_discord.sql`）
+1. 建 Supabase 專案，**依序**跑 `supabase/migrations/` 下所有 SQL（`0001_init.sql` → `0052_material_intake.sql`，依檔名數字順序全跑）
 2. 填環境變數（Supabase、`APP_ENCRYPTION_KEY`、`OWNER_EMAIL`、Apify、Shopee、Gemini、Cloudinary、`CRON_SECRET`；Threads 選填 `THREADS_APP_SECRET`／`THREADS_SCOPES`，用於把手動貼的短效 token 自動換長效）
 3. 部署（擇一）：
 
@@ -115,7 +115,7 @@ src/
     publish/reply-timing.ts  留言延遲（保底 + 抖動 + 逐則覆寫）
     pipeline/run.ts      端到端編排
   lib/                 env / 加密 / 資料層 / cron 驗證 / SSRF 防護 / 型別
-supabase/migrations/   資料庫 schema（0001–0019）
+supabase/migrations/   資料庫 schema（0001–0052）
 ```
 
 ## ⚠️ 安全

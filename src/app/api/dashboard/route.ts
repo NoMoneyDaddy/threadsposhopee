@@ -11,6 +11,7 @@ import {
   getShopeeCredentials,
   getUserCloudinary,
   getUserCloudinaryFull,
+  getUserR2,
   getPublishPlan,
   isPublishPaused
 } from "@/lib/store";
@@ -32,14 +33,15 @@ export async function GET() {
 
   // 各服務「自綁」狀態（驅動儀表板狀態標籤）：一律看每位使用者自己的綁定，不再用環境變數。
   // Apify／Shopee 僅 owner 需要 → member 視為 OK（true），不嘮叨。
-  const [apifyBound, geminiBound, shopeeBound, cloudBound, cloudFull] = isDemoMode
-    ? ([true, true, true, true, null] as const)
+  const [apifyBound, geminiBound, shopeeBound, cloudBound, cloudFull, r2Bound] = isDemoMode
+    ? ([true, true, true, true, null, false] as const)
     : await Promise.all([
         isOwner ? hasApifyCredentials(ownerId).then((r) => r.bound).catch(() => false) : Promise.resolve(true),
         hasGeminiKey(ownerId).catch(() => false),
         isOwner ? getShopeeCredentials(ownerId).then((c) => Boolean(c)).catch(() => false) : Promise.resolve(true),
         getUserCloudinary(ownerId).then((c) => Boolean(c)).catch(() => false),
-        getUserCloudinaryFull(ownerId).catch(() => null)
+        getUserCloudinaryFull(ownerId).catch(() => null),
+        getUserR2(ownerId).then((c) => Boolean(c)).catch(() => false)
       ]);
 
   const services = {
@@ -47,7 +49,8 @@ export async function GET() {
     gemini: geminiBound || isDemoMode,
     apify: apifyBound,
     shopee: shopeeBound,
-    cloudinary: cloudBound || isDemoMode,
+    // 圖片影片空間：綁 R2 或 Cloudinary 任一即視為已連線（R2 優先，二擇一）。
+    cloudinary: cloudBound || r2Bound || isDemoMode,
     ai_provider: env.aiProvider
   };
 

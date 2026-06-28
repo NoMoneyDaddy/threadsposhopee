@@ -158,8 +158,8 @@ function RankCard({ title, rows, empty }: { title: string; rows: { name: string;
           {rows.map((r) => (
             <li key={r.name} className="text-sm">
               <div className="mb-0.5 flex justify-between">
-                <span className="truncate pr-2">{r.name}</span>
-                <span className="shrink-0 text-ink-2">{r.count}</span>
+                <span className="min-w-0 flex-1 truncate pr-2">{r.name}</span>
+                <span className="shrink-0 text-ink-2 tabular-nums">{r.count}</span>
               </div>
               <div className="h-1.5 w-full overflow-hidden rounded bg-surface-2">
                 <div className="h-full bg-brand/70" style={{ width: `${(r.count / max) * 100}%` }} />
@@ -224,7 +224,7 @@ function EngagementSection({ e }: { e: EngagementSummary }) {
         {e.posts.map((p) => (
           <li key={p.id} className="text-sm">
             <div className="mb-0.5 flex justify-between gap-2">
-              <span className="truncate pr-2">{p.productName ?? "（未命名貼文）"}</span>
+              <span className="min-w-0 flex-1 truncate pr-2">{p.productName ?? "（未命名貼文）"}</span>
               <span className="shrink-0 text-xs text-ink-2 tabular-nums">
                 👁 {num(p.views)} · ♥ {num(p.likes)} · 💬 {num(p.replies)}
               </span>
@@ -340,8 +340,8 @@ function RevenueRank({ title, rows }: { title: string; rows: { name: string; val
           {rows.map((r) => (
             <li key={r.name} className="text-sm">
               <div className="mb-0.5 flex justify-between gap-2">
-                <span className="truncate">{r.name}</span>
-                <span className="shrink-0 text-ink-2">{money(r.value)} · {r.sub}</span>
+                <span className="min-w-0 flex-1 truncate">{r.name}</span>
+                <span className="shrink-0 text-ink-2 tabular-nums">{money(r.value)} · {r.sub}</span>
               </div>
               <div className="h-1.5 w-full overflow-hidden rounded bg-surface-2">
                 <div className="h-full bg-green-500/70" style={{ width: `${(r.value / max) * 100}%` }} />

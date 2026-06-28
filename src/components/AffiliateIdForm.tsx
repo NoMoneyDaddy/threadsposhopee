@@ -35,7 +35,8 @@ export default function AffiliateIdForm({ initial }: { initial: string | null })
       <div className="mb-1 font-medium">分潤 ID（免 API）</div>
       <p className="mb-2 text-xs text-ink-2">
         分潤 ID 與上方蝦皮 Open API 的 <b>App ID 是同一組數字</b>：<b>若已綁 API，這裡會自動帶入你的 App ID，不用再填</b>。
-        沒有 API 的人才需手動填，系統會用 an_redir 自組追蹤連結並加上來源標記，方便在蝦皮報表分辨成效。
+        沒有 API 的人才需手動填，系統會用 an_redir 自組追蹤連結並加上來源標記，方便在蝦皮報表分辨成效。{" "}
+        <a href="/guide#shopee" className="text-brand underline">哪裡找？看金鑰教學 →</a>
       </p>
       <div className="flex flex-wrap gap-2">
         <input

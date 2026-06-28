@@ -98,13 +98,21 @@ function PublishPlan({ rows }: { rows: DashboardData["publishPlan"] }) {
 }
 
 // 自動駕駛心跳：依上次排程執行時間判斷是否運轉中（demo 模式不顯示）。
-function Autopilot({ lastCronAt, demo }: { lastCronAt?: string | null; demo: boolean }) {
+function Autopilot({ lastCronAt, demo, isOwner }: { lastCronAt?: string | null; demo: boolean; isOwner: boolean }) {
   if (demo) return null;
   if (!lastCronAt) {
+    // 排程設定是平台管理員的部署層工作（單一 cron 打 /api/cron/all）。
+    // 管理員看設定教學；一般成員看不到部署細節，只提示「尚未啟用、由管理員開啟」。
     return (
       <div className="rounded-2xl border border-border bg-surface-2 p-3 text-sm text-ink-2">
-        ⏸️ 自動排程還沒開 — 開了之後系統才會<b>自動抓文、自動發文</b>。開啟方式：到部署平台
-        Zeabur 新增一個「定時任務（Cron Job）」，每 15 分鐘呼叫一次網址 <code>/api/cron/all</code>。
+        {isOwner ? (
+          <>
+            ⏸️ 自動排程還沒開 — 開了之後系統才會<b>自動抓文、自動發文</b>。開啟方式：到部署平台
+            Zeabur 新增一個「定時任務（Cron Job）」，每 15 分鐘呼叫一次網址 <code>/api/cron/all</code>。
+          </>
+        ) : (
+          <>⏸️ 自動排程尚未啟用 — 啟用後系統才會<b>自動發文</b>（由平台管理員設定）。在此之前，你仍可手動發送已核准的草稿。</>
+        )}
       </div>
     );
   }
@@ -288,7 +296,7 @@ export default function LiveDashboard() {
     issues.error > 0 || d.drafts.failed > 0 || issues.paused > 0 || tokenExpiring > 0 || invalidMaterials > 0 || needsVerification > 0;
   return (
     <div className="space-y-6">
-      <Autopilot lastCronAt={data.lastCronAt} demo={data.demo} />
+      <Autopilot lastCronAt={data.lastCronAt} demo={data.demo} isOwner={data.isOwner} />
       {data.publishPaused && (
         <div className="flex items-center gap-2 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
           <span className="h-2 w-2 rounded-full bg-red-500" />

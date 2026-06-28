@@ -28,10 +28,19 @@ export function hasThreadChain(d: Pick<Draft, "thread_chain">): boolean {
   return raw.some((seg) => Boolean(seg?.text && seg.text.trim()) || filterMedia(seg?.media).length > 0);
 }
 
+// 媒體有效性與發布層（threads/publish 的 isValidMedia）對齊：url 須為非空字串、type 須為 image/video。
+// 否則 url='' 之類無效項會讓段落被誤判「有內容」而保留，補發時卻被發布層濾成空段落而失敗（行為不一致）。
 function filterMedia(media: unknown): DraftMedia[] {
   if (!Array.isArray(media)) return [];
   return media.filter(
-    (m): m is DraftMedia => Boolean(m && typeof m === "object" && typeof (m as DraftMedia).url === "string" && ((m as DraftMedia).type === "image" || (m as DraftMedia).type === "video"))
+    (m): m is DraftMedia =>
+      Boolean(
+        m &&
+          typeof m === "object" &&
+          typeof (m as DraftMedia).url === "string" &&
+          (m as DraftMedia).url.trim().length > 0 &&
+          ((m as DraftMedia).type === "image" || (m as DraftMedia).type === "video")
+      )
   );
 }
 

@@ -243,12 +243,13 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
-    // 非草稿：串文段落同受 Threads 500 字上限（前端已擋，伺服端再驗，避免繞過）
-    if (action !== "draft" && extraSegments.some((s) => [...(s.text ?? "")].length > 500)) {
-      return NextResponse.json({ ok: false, error: "串文段落超過 500 字上限" }, { status: 400 });
-    }
     const threadChain: ThreadSegment[] =
       extraSegments.length > 0 ? [{ text: finalReply ?? null, media: replyMediaArr }, ...extraSegments] : [];
+    // 非草稿：整條串文鏈每段都受 Threads 500 字上限（含第 0 段＝留言 finalReply，避免超長 reply_text
+    // 繞過驗證後卡在 worker 補發失敗）。前端已擋，伺服端再驗。
+    if (action !== "draft" && threadChain.some((s) => [...(s.text ?? "")].length > 500)) {
+      return NextResponse.json({ ok: false, error: "串文段落超過 500 字上限" }, { status: 400 });
+    }
 
     // draft 待審；其餘（publish/schedule/queue）已核准
     const status = action === "draft" ? "draft" : "approved";

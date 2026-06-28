@@ -43,3 +43,14 @@ test("hasThreadChain：有內容段落才算明確多段串文", () => {
   assert.equal(hasThreadChain({ thread_chain: [{ text: "第三段" }] }), true);
   assert.equal(hasThreadChain({ thread_chain: [{ text: null, media: [{ url: "https://x/y.jpg", type: "image" }] }] }), true);
 });
+
+test("空白 url 的媒體視為無效（與發布層一致）：純空媒體段落被濾掉", () => {
+  // 段落只有 url='' 的無效媒體、無文字 → 視為空段落濾掉（避免 worker 補發空段落失敗）。
+  const chain = effectiveChain({
+    thread_chain: [{ text: null, media: [{ url: "   ", type: "image" } as never] }, { text: "有效段" }],
+    reply_text: null,
+    reply_media: []
+  });
+  assert.deepEqual(chain.map((s) => s.text), ["有效段"]);
+  assert.equal(hasThreadChain({ thread_chain: [{ text: null, media: [{ url: "", type: "image" } as never] }] }), false);
+});

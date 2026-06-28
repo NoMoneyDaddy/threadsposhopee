@@ -73,6 +73,7 @@ export default function CloudinaryUpload({
         if (!mounted.current) break;
         try {
           const r = await uploadOne(f);
+          if (!mounted.current) break;
           onUploaded(r.url, r.type);
         } catch (e) {
           errors.push(e instanceof Error ? e.message : "上傳失敗");

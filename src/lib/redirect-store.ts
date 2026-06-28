@@ -6,6 +6,17 @@ import { assertSafePublicUrl } from "./url-guard";
 import { randomShortCode } from "./shortcode";
 import { fetchLinkPreview } from "@/services/og/preview";
 import { checkUrlSafety, type SafetyVerdict } from "@/services/safety/safe-browsing";
+import { log } from "./logger";
+
+// PostgREST 在欄位不存在（含 migration 尚未套用、或 schema cache 未刷新）時，回 code PGRST204
+// 且訊息形如 "Could not find the 'safety' column of 'redirect_links' in the schema cache"。
+// 純函式可單測：判斷某次 insert 失敗是否因為指定欄位尚不存在。
+export function isMissingColumnError(error: { code?: string; message?: string } | null, column: string): boolean {
+  if (!error) return false;
+  if (error.code === "PGRST204") return true;
+  const msg = (error.message ?? "").toLowerCase();
+  return msg.includes("schema cache") && msg.includes(`'${column.toLowerCase()}'`);
+}
 
 export interface RedirectLinkInput {
   sourceUrl: string;
@@ -79,22 +90,35 @@ export async function createRedirectLink(
   // unknown（未設金鑰/查詢失敗）存 null＝中轉頁降級為「基本安全檢查」；只有明確 safe/unsafe 才落值。
   const safetyValue: "safe" | "unsafe" | null = safety === "safe" || safety === "unsafe" ? safety : null;
   const sb = getServiceClient()!;
-  for (let attempt = 0; attempt < 5; attempt++) {
+  // 安全欄位（migration 0049）若尚未套用到正式 DB，insert 帶 safety 會整批失敗。
+  // safety 只是 best-effort 信任標章，不該卡死核心「建立短連結」：偵測到欄位缺失就降級為不帶 safety 重試。
+  let includeSafety = true;
+  for (let attempt = 0; attempt < 6; attempt++) {
     const code = randomShortCode();
-    const { error } = await sb.from("redirect_links").insert({
+    const row: Record<string, unknown> = {
       owner_id: ownerId,
       code,
       source_url: input.sourceUrl,
       affiliate_url: input.affiliateUrl ?? null,
       title: meta.title,
       image_url: meta.imageUrl,
-      description: meta.description,
-      safety: safetyValue,
-      safety_checked_at: safetyValue ? new Date().toISOString() : null
-    });
+      description: meta.description
+    };
+    if (includeSafety) {
+      row.safety = safetyValue;
+      row.safety_checked_at = safetyValue ? new Date().toISOString() : null;
+    }
+    const { error } = await sb.from("redirect_links").insert(row);
     if (!error) return code;
-    // 唯一鍵衝突（code 重複）→ 換一個重試；其餘錯誤直接拋出。
-    if (error.code !== "23505") throw new Error(`建立短連結失敗：${error.message}`);
+    // 唯一鍵衝突（code 重複）→ 換一個重試。
+    if (error.code === "23505") continue;
+    // safety/safety_checked_at 欄位尚未遷移 → 降級為不帶 safety 重試（標章退回「基本安全檢查」）。
+    if (includeSafety && (isMissingColumnError(error, "safety") || isMissingColumnError(error, "safety_checked_at"))) {
+      log.warn("redirect_links.safety 欄位不存在（migration 0049 未套用？），改用無安全欄位建立短連結", { code: error.code });
+      includeSafety = false;
+      continue;
+    }
+    throw new Error(`建立短連結失敗：${error.message}`);
   }
   throw new Error("短碼產生衝突過多，請重試");
 }

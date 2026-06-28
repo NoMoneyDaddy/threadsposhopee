@@ -131,9 +131,18 @@ export async function scrapeLatestPosts(
   // input 欄位與限制集中在 buildScraperInput（依 actor schema：searchQuery 必填、from 字元限制、maxPosts 上限約 200）。
   const body = buildScraperInput(spec, postsLimit);
 
-  const url = `https://api.apify.com/v2/acts/${actor.replace("/", "~")}/run-sync-get-dataset-items?token=${token}`;
-  // 只對 429（rate limited、run 尚未啟動）退避重試，避免 5xx 後重試重複觸發爬蟲 run；
-  // run-sync 會等爬蟲跑完，放寬逾時 45s。
+  // run-sync 端點注意事項（docs.apify.com/api/v2/act-run-sync-get-dataset-items-post）：
+  // - timeout：綁定本次 run 上限秒數（端點硬上限 300s，逾時回 408）；本爬蟲 maxPosts≤200 通常數秒，設 60s 防卡住燒額度。
+  // - maxItems：限制計費／回傳筆數，與 input 的 maxPosts 對齊當雙重保險。
+  const RUN_TIMEOUT_SEC = 60;
+  const params = new URLSearchParams({
+    token,
+    timeout: String(RUN_TIMEOUT_SEC),
+    maxItems: String(body.maxPosts)
+  });
+  const url = `https://api.apify.com/v2/acts/${actor.replace("/", "~")}/run-sync-get-dataset-items?${params.toString()}`;
+  // 只對 429（rate limited、run 尚未啟動）退避重試；408（run 逾時）與 4xx/5xx 皆為終態，
+  // 不重試以免重複觸發爬蟲 run 重複計費。client 逾時略大於 run timeout，讓伺服器端先回 408/結果。
   const res = await fetchWithRetry(
     url,
     {
@@ -141,7 +150,7 @@ export async function scrapeLatestPosts(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body)
     },
-    45000
+    (RUN_TIMEOUT_SEC + 5) * 1000
   );
   if (!res.ok) throw new Error(`Apify 失敗: ${res.status} ${await res.text()}`);
   const dataset = await res.json();

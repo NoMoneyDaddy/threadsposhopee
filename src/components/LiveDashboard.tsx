@@ -301,6 +301,19 @@ export default function LiveDashboard() {
           <PauseToggle paused={Boolean(data.publishPaused)} onDone={load} />
         </div>
       )}
+      {d.drafts.draft > 0 && (
+        <Link
+          href="/drafts"
+          className="flex items-center gap-3 rounded-2xl border-l-4 border-brand bg-orange-50 p-4 transition-colors hover:bg-orange-100"
+        >
+          <span className="text-xl" aria-hidden="true">📝</span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-ink">你有 {d.drafts.draft} 篇待審草稿</p>
+            <p className="text-xs text-ink-2">核准後才會依防封節奏發布——前往審核、編輯或核准。</p>
+          </div>
+          <span className="shrink-0 text-sm font-medium text-brand">前往審核 →</span>
+        </Link>
+      )}
       <AccountsHealth rows={data.accountsHealth} />
       <PublishPlan rows={data.publishPlan} />
       {needsAttention && (
@@ -351,20 +364,6 @@ export default function LiveDashboard() {
           </button>
         </span>
       </div>
-
-      {d.drafts.draft > 0 && (
-        <Link
-          href="/drafts"
-          className="flex items-center gap-3 rounded-2xl border-l-4 border-brand bg-orange-50 p-4 transition-colors hover:bg-orange-100"
-        >
-          <span className="text-xl" aria-hidden>📝</span>
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-ink">你有 {d.drafts.draft} 篇待審草稿</p>
-            <p className="text-xs text-ink-2">核准後才會依防封節奏發布——前往審核、編輯或核准。</p>
-          </div>
-          <span className="shrink-0 text-sm font-medium text-brand">前往審核 →</span>
-        </Link>
-      )}
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
         <Stat label="Threads 帳號" value={d.threadsAccounts} />

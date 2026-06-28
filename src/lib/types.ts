@@ -127,3 +127,19 @@ export interface Draft {
   reply_delay_minutes?: number | null; // 逐則覆寫；null = 用全域預設
   created_at: string;
 }
+
+// 意見回饋／工單（對應 0051_feedback.sql）：使用者送 bug/功能建議，管理員前端回覆。
+export type FeedbackKind = "bug" | "feature";
+export type FeedbackStatus = "open" | "in_progress" | "resolved" | "closed";
+export interface Feedback {
+  id: string;
+  owner_id: string;
+  kind: FeedbackKind;
+  title: string;
+  message: string;
+  status: FeedbackStatus;
+  admin_reply?: string | null;
+  replied_at?: string | null;
+  created_at: string;
+  updated_at?: string | null;
+}

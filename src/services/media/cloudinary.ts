@@ -43,13 +43,20 @@ export async function uploadBytesToCloudinary(
   body: Buffer,
   contentType: string,
   type: "image" | "video",
-  creds: { cloud: string; preset: string }
+  creds: { cloud: string; preset: string },
+  keyHint?: string
 ): Promise<string> {
   const endpoint = `https://api.cloudinary.com/v1_1/${creds.cloud}/${type}/upload`;
   const form = new FormData();
-  form.append("file", new Blob([new Uint8Array(body)], { type: contentType }));
+  // 零拷貝：以原 Buffer 的底層 ArrayBuffer 視窗建 Blob，避免再複製一份整檔到記憶體。
+  form.append(
+    "file",
+    new Blob([new Uint8Array(body.buffer as ArrayBuffer, body.byteOffset, body.byteLength)], { type: contentType })
+  );
   form.append("upload_preset", creds.preset);
-  form.append("folder", "threads/uploads");
+  // 與 uploadToCloudinary 一致：有 keyHint（如 <shopId>_<itemId>）就分到對應商品資料夾，否則落 uploads。
+  const folder = keyHint ? `threads/${keyHint.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64)}` : "threads/uploads";
+  form.append("folder", folder);
   const res = await fetchWithRetry(assertSafePublicUrl(endpoint).href, { method: "POST", body: form }, 20000);
   if (!res.ok) {
     log.error("Cloudinary 上傳失敗", { status: res.status, body: (await res.text()).slice(0, 500) });

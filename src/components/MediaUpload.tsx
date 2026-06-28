@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { checkUploadFile } from "@/lib/media-mime";
 
 // 本機選圖/影片上傳，相容所有圖床：
 // - 有綁 Cloudinary（cloud+preset）→ 直接從瀏覽器上傳到 Cloudinary（unsigned，不耗自家流量）。
@@ -36,20 +37,23 @@ export default function MediaUpload({
   const clientCloudinary = Boolean(cloud && preset);
 
   async function uploadOne(file: File): Promise<{ url: string; type: "image" | "video" }> {
-    const isVideo = file.type.startsWith("video");
-    const maxMB = isVideo ? 200 : 20;
-    if (file.size > maxMB * 1024 * 1024) {
-      throw new Error(`「${file.name}」過大（上限 ${maxMB}MB）`);
-    }
+    // 型別白名單＋大小上限（與後端 /api/media/upload 共用 helper）：非圖片/影片直接拒絕、不臆測。
+    const checked = checkUploadFile(file.type, file.size, file.name);
+    if ("error" in checked) throw new Error(checked.error);
     if (clientCloudinary) {
       // 瀏覽器直傳 Cloudinary（unsigned preset）：檔案不經自家伺服器。
+      // cloud 來自使用者自綁設定、非任意輸入，先 encodeURIComponent 防 path 注入。
       const fd = new FormData();
       fd.append("file", file);
       fd.append("upload_preset", preset!);
-      const res = await fetch(`https://api.cloudinary.com/v1_1/${cloud}/auto/upload`, { method: "POST", body: fd });
+      const res = await fetch(`https://api.cloudinary.com/v1_1/${encodeURIComponent(cloud!)}/auto/upload`, {
+        method: "POST",
+        body: fd
+      });
       const json = await res.json().catch(() => null);
-      if (!res.ok || !json?.secure_url) throw new Error(json?.error?.message || "上傳失敗");
-      return { url: json.secure_url as string, type: json.resource_type === "video" ? "video" : "image" };
+      if (!res.ok || !json?.secure_url) throw new Error(json?.error?.message || `上傳失敗（HTTP ${res.status}）`);
+      if (json.resource_type !== "image" && json.resource_type !== "video") throw new Error("僅支援圖片或影片檔案");
+      return { url: json.secure_url as string, type: json.resource_type };
     }
     // 走 server：用使用者綁的圖床（R2 或 Cloudinary）中轉。
     const fd = new FormData();
@@ -67,9 +71,14 @@ export default function MediaUpload({
     setErr(null);
     const limit = multiple ? Math.max(0, remaining) : 1;
     const allowed = files.slice(0, limit);
-    if (allowed.length === 0) return;
     const errors: string[] = [];
     if (allowed.length < files.length) errors.push(`已達上限，僅上傳前 ${allowed.length} 個檔案`);
+    // 名額用盡：仍要提示並清空 input（否則同一檔案無法再次觸發 change），不靜默返回。
+    if (allowed.length === 0) {
+      setErr(errors.length ? errors.join("；") : "已達媒體數量上限，未上傳檔案");
+      if (ref.current) ref.current.value = "";
+      return;
+    }
     setBusy(true);
     try {
       for (const f of allowed) {

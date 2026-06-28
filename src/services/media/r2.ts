@@ -70,6 +70,10 @@ export function buildS3PutAuth(opts: {
   return { authorization, amzDate };
 }
 
+// accountId 格式守衛（英數 16–64，與設定頁 ACCOUNT_RE 一致）：防 `/`、`@` 等 authority 字元竄改 host，
+// 把帶簽章請求送到非預期主機（SSRF）。assertSafePublicUrl 只擋非公開目標，故簽章前先過這層。
+const R2_ACCOUNT_RE = /^[a-zA-Z0-9]{16,64}$/;
+
 // 物件 key 的路徑分段編碼（保留 "/"，其餘 RFC3986 編碼）。
 function encodeKeyPath(key: string): string {
   return key
@@ -119,7 +123,7 @@ export async function validateR2(creds: {
 }): Promise<{ ok: true } | { ok: false; reason: string }> {
   // 嚴格限制 accountId（英數，與設定頁 ACCOUNT_RE 一致）：防 `/`、`@` 等 authority 字元竄改 host，
   // 把帶簽章的 HEAD 送到非預期主機（SSRF）。assertSafePublicUrl 只擋非公開目標，故這層額外把關。
-  if (!/^[a-zA-Z0-9]{16,64}$/.test(creds.accountId)) return { ok: false, reason: "Cloudflare Account ID 格式不正確" };
+  if (!R2_ACCOUNT_RE.test(creds.accountId)) return { ok: false, reason: "Cloudflare Account ID 格式不正確" };
   const host = `${creds.accountId}.r2.cloudflarestorage.com`;
   const canonicalPath = `/${encodeURIComponent(creds.bucket)}`;
   const amzDate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, "");
@@ -162,6 +166,8 @@ function extFromContentType(contentType: string, type: "image" | "video"): strin
 
 // 共用：把 bytes 以 SigV4 簽章 PUT 到 R2 的指定 key，回傳公開讀網址。失敗拋錯。
 async function putObjectToR2(body: Buffer, contentType: string, key: string, creds: R2Creds): Promise<string> {
+  // 簽章前重驗 accountId（舊資料/髒資料可能繞過綁定時的 validateR2），確保只把簽章 PUT 送到合法 R2 主機。
+  if (!R2_ACCOUNT_RE.test(creds.accountId)) throw new Error("Cloudflare Account ID 格式不正確");
   const host = `${creds.accountId}.r2.cloudflarestorage.com`;
   const canonicalPath = `/${encodeURIComponent(creds.bucket)}/${encodeKeyPath(key)}`;
   const amzDate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, "");
@@ -185,8 +191,8 @@ async function putObjectToR2(body: Buffer, contentType: string, key: string, cre
         "x-amz-content-sha256": UNSIGNED,
         "content-type": contentType
       },
-      // 轉 Uint8Array 餵 fetch body（避免 Buffer<ArrayBufferLike> 與 BodyInit 型別不相容）。
-      body: new Uint8Array(body)
+      // 零拷貝：以原 Buffer 底層 ArrayBuffer 視窗餵 fetch body（避免 Buffer<ArrayBufferLike> 型別不相容＋免再複製整檔）。
+      body: new Uint8Array(body.buffer as ArrayBuffer, body.byteOffset, body.byteLength)
     },
     20000
   );

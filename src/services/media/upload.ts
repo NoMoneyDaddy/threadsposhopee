@@ -40,6 +40,6 @@ export async function uploadBytesWith(
   keyHint?: string
 ): Promise<string> {
   if (provider.kind === "r2") return uploadBytesToR2(body, contentType, type, provider.creds, keyHint);
-  if (provider.kind === "cloudinary") return uploadBytesToCloudinary(body, contentType, type, provider.creds);
+  if (provider.kind === "cloudinary") return uploadBytesToCloudinary(body, contentType, type, provider.creds, keyHint);
   throw new Error("尚未綁定圖床");
 }

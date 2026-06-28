@@ -2,7 +2,8 @@ import MaterialCreateForm from "@/components/MaterialCreateForm";
 import CheckLinksButton from "@/components/CheckLinksButton";
 import BulkRepostButton from "@/components/BulkRepostButton";
 import MaterialsExplorer from "@/components/MaterialsExplorer";
-import { listMaterials, listThreadsAccounts, getUserCloudinary } from "@/lib/store";
+import PendingMaterialsReview from "@/components/PendingMaterialsReview";
+import { listMaterials, listPendingMaterials, listThreadsAccounts, getUserCloudinary } from "@/lib/store";
 import { getItemRevenueMap, type ItemRevenue } from "@/services/shopee/report";
 import { getCurrentUser } from "@/lib/auth";
 import { isDemoMode } from "@/lib/env";
@@ -12,8 +13,9 @@ export const dynamic = "force-dynamic";
 export default async function MaterialsPage() {
   const user = await getCurrentUser();
   const ownerId = user?.id ?? "demo-user";
-  const [materialsRaw, accounts, ownCloud] = await Promise.all([
+  const [materialsRaw, pending, accounts, ownCloud] = await Promise.all([
     listMaterials(ownerId),
+    listPendingMaterials(ownerId),
     listThreadsAccounts(ownerId),
     user ? getUserCloudinary(ownerId) : Promise.resolve(null)
   ]);
@@ -41,6 +43,8 @@ export default async function MaterialsPage() {
       <p className="text-sm text-ink-2">
         每個素材 = 一個商品的分潤連結＋AI 文案＋媒體。可重複「再排一篇」而不重燒 token；連結失效才會重產。
       </p>
+
+      <PendingMaterialsReview items={pending} />
 
       <MaterialCreateForm cloud={cc?.cloud ?? null} preset={cc?.preset ?? null} />
 

@@ -18,19 +18,18 @@ export interface PipelineRunSummary {
   message: string;
 }
 
-// 手動抓取結果摘要：彙總各來源「入庫素材／重用／失敗」數，組成顯示訊息。
+// 手動抓取結果摘要：彙總各來源「待審素材／重用／失敗」數，組成顯示訊息。
 // 對非陣列／缺欄位輸入容錯（API 異常時不崩潰）。
-// 註：createMaterial 為 upsert（依 owner_id,shop_id,item_id），既有素材會被更新而非新增，
-// 故用中性「入庫」而非「新增」，避免把更新誤報成新增。
+// 註：爬蟲產出一律進「待審」由人工逐筆核准才入庫；created 計的是本輪新產生（待審）的素材數。
 export function summarizePipelineRun(results: unknown): PipelineRunSummary {
   const rows = (Array.isArray(results) ? results : []) as Array<{ created?: unknown; reusedMaterial?: unknown; error?: unknown }>;
   const num = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : 0);
   const created = rows.reduce((n, r) => n + num(r?.created), 0);
   const reused = rows.reduce((n, r) => n + num(r?.reusedMaterial), 0);
   const failed = rows.filter((r) => r?.error).length;
-  const parts = [`入庫 ${created} 則素材`];
+  const parts = [`待審 ${created} 則素材`];
   if (reused) parts.push(`重用 ${reused}`);
   if (failed) parts.push(`${failed} 個來源失敗`);
-  const message = `${parts.join("、")}${created ? "，到「素材」頁即可一鍵轉貼文" : ""}`;
+  const message = `${parts.join("、")}${created ? "，到「素材」頁逐筆確認入庫" : ""}`;
   return { created, reused, failed, message };
 }

@@ -131,7 +131,9 @@ export async function runSourcePipeline(
         await markPostProcessed(source.id, post.postId);
         continue;
       }
-      // 未命中／素材失效 → 產生（或更新）素材入庫；止於此，不建草稿、不排程、不發文。
+      // 未命中／素材失效 → 產生（或更新）素材，進「待審」由人工逐筆核准才入庫；不建草稿、不排程、不發文。
+      // 已核准過的素材若連結失效需重產，保留 approved（不無故退回待審）；其餘（新建/原本待審）一律 pending。
+      const intakeStatus = existing?.intake_status === "approved" ? "approved" : "pending";
       const material = await buildMaterialForProduct(
         {
           shopId: expanded.shopId,
@@ -142,7 +144,8 @@ export async function runSourcePipeline(
           sourceText: post.text,
           // 關鍵字模式 source_username 可能為空，改用貼文作者當 subId 追蹤標籤
           subIdTag: post.username || source.source_username || "search",
-          withCopy: true
+          withCopy: true,
+          intakeStatus
         },
         ownerId,
         shopeeCreds,
@@ -202,11 +205,11 @@ export async function runSourcesForOwner(
       });
     }
   }
-  // 個人通知：本輪新入庫的素材 → 提醒 owner 去素材頁挑選轉草稿／發文。
+  // 個人通知：本輪新產生的素材待審 → 提醒 owner 去素材頁逐筆核准入庫。
   const newMaterials = results.reduce((n, r) => n + r.materials.length, 0);
   if (newMaterials > 0) {
-    // 不沿用 draft_pending 類型（避免被「草稿待審」偏好關閉而誤靜音）；素材入庫提醒一律送出。
-    await sendUserAlert(ownerId, `🧱 已入庫 ${newMaterials} 則素材（含更新既有），到「素材」頁挑選即可一鍵轉貼文。`).catch(() => {});
+    // 不沿用 draft_pending 類型（避免被「草稿待審」偏好關閉而誤靜音）；素材待審提醒一律送出。
+    await sendUserAlert(ownerId, `🔎 抓到 ${newMaterials} 則新素材待審，到「素材」頁逐筆確認入庫。`).catch(() => {});
   }
   return results;
 }

@@ -22,6 +22,8 @@ interface BuildMaterialInput {
   subIdTag?: string; // 追蹤用：來源帳號或 "manual"
   customSubId?: string | null; // 使用者自訂 subId（套用兩種連結）；空＝用預設
   withCopy?: boolean; // 是否生成 AI 文案（手動建立可先不生成，之後再補）
+  // 入庫審核狀態：爬蟲流程傳 'pending'（待人工核准）；手動/匯入不傳＝預設 'approved'。
+  intakeStatus?: "pending" | "approved";
 }
 
 export async function buildMaterialForProduct(
@@ -146,6 +148,7 @@ export async function buildMaterialForProduct(
     main_text: mainText,
     reply_text: replyText,
     ai_raw: aiRaw,
-    ai_generated_at: aiAt
+    ai_generated_at: aiAt,
+    intake_status: input.intakeStatus ?? "approved"
   }, ownerId);
 }

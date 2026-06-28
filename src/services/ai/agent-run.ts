@@ -64,7 +64,8 @@ export function buildAgentPrompt(agent: AiAgent, item: { title: string; descript
     ``,
     `你是社群寫手「${agent.name}」。風格：${agent.tone?.trim() || "自動：依這篇內容選最合適、自然的口吻"}。領域：${label}。`,
     `根據以下素材，寫一篇繁體中文 Threads 貼文，約 ${agent.length} 字，口吻一致、像真人分享，不要逐字照抄。`,
-    `${emoji}${tags}${sensitive}`,
+    // emoji／hashtag／敏感規則各自獨立，分行帶入（避免擠在同一行降低模型解析）。空值不帶。
+    ...[emoji, tags, sensitive].filter(Boolean),
     `只輸出貼文正文，不要前言、不要 markdown、不要加「來源」。`,
     ``,
     `素材標題：${item.title}`,

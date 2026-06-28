@@ -28,9 +28,11 @@ test("buildCopyPromptPreview：管理員預覽用範例情境組出完整 prompt
   assert.match(p, /留言區：/);
 });
 
-test("去 AI 腔規則自洽：禁破折號，prompt 範例不得出現「——」", () => {
-  // 規則禁止破折號（—），prompt 內的範例/fallback 也不能用，否則自相矛盾、誘導模型照抄。
-  assert.ok(!buildCopyPromptPreview().includes("——"));
+test("去 AI 腔規則自洽：規則區塊外的 prompt 內容不得出現破折號（單/雙）", () => {
+  // 規則本身會引用「—」當禁則範例，故先移除規則區塊，再檢查剩餘 prompt（範例/fallback/格式）
+  // 是否殘留破折號，否則自相矛盾、誘導模型照抄。
+  const outsideRules = buildCopyPromptPreview().replace(ANTI_AI_SLOP_RULES, "");
+  assert.ok(!/[—]{1,2}/.test(outsideRules));
 });
 
 test("splitCopy：正文／留言區 標記正確切分並去前綴", () => {

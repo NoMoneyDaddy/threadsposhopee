@@ -2,6 +2,7 @@ import { getThreadsCredentials, updateDraftStatus } from "@/lib/store";
 import { publishToThreads } from "@/services/threads/publish";
 import { normalizeDraftMedia, normalizeReplyMedia } from "@/lib/media";
 import { replyDelayMinutes } from "@/services/publish/reply-timing";
+import { effectiveChain, hasThreadChain } from "@/services/publish/thread-chain";
 import { env } from "@/lib/env";
 import type { Draft } from "@/lib/types";
 
@@ -17,13 +18,15 @@ export async function publishDraftNow(draft: Draft, ownerId: string): Promise<{ 
     if (!creds) throw new Error("找不到 Threads 帳號憑證");
     // all_in_main：留言文案併入主文、不另發留言（不走延遲留言流程）
     const allInMain = draft.post_mode === "all_in_main";
-    // 有留言文字「或」留言媒體都算要發第 2 則串文（純媒體留言也要發出，不靜默丟棄）。
-    const hasReply = (Boolean(draft.reply_text) || normalizeReplyMedia(draft).length > 0) && !allInMain;
+    // 主文之後要補發的段落（多段串文 thread_chain，或向後相容的單則 reply_*）。
+    const chain = allInMain ? [] : effectiveChain(draft);
+    const hasReply = chain.length > 0;
     // 留言延遲：>0 表示主文先發、留言之後由 cron 補（防「秒留言」固定行為）
     const replyDelay = hasReply
       ? replyDelayMinutes(draft.id, env.replyDelayFloorMinutes, env.replyDelayJitterMinutes, draft.reply_delay_minutes)
       : 0;
-    const deferReply = hasReply && replyDelay > 0;
+    // 多段串文一律交給 worker 依序補（避免一次爆發＋需要游標進度）；單則沿用「delay 0 即時補」捷徑。
+    const deferReply = hasReply && (hasThreadChain(draft) || replyDelay > 0);
     const { postId, replyFailed } = await publishToThreads({
       threadsUserId: creds.threadsUserId,
       accessToken: creds.accessToken,
@@ -36,7 +39,7 @@ export async function publishDraftNow(draft: Draft, ownerId: string): Promise<{ 
     });
     const nowMs = Date.now();
     const replyPatch = deferReply
-      ? { reply_status: "pending" as const, reply_due_at: new Date(nowMs + replyDelay * 60000).toISOString() }
+      ? { reply_status: "pending" as const, reply_due_at: new Date(nowMs + replyDelay * 60000).toISOString(), thread_cursor: 0 }
       : hasReply
         ? { reply_status: replyFailed ? ("failed" as const) : ("published" as const) }
         : {};

@@ -77,6 +77,12 @@ export interface DraftMedia {
   type: "image" | "video";
 }
 
+// 串文段落（主文之後依序補發的一則）：文字＋可選媒體。
+export interface ThreadSegment {
+  text: string | null;
+  media?: DraftMedia[];
+}
+
 export interface Draft {
   id: string;
   owner_id?: string | null;
@@ -98,6 +104,11 @@ export interface Draft {
   media?: DraftMedia[];
   // 留言（串文 2/2）要帶的媒體（通常 1 張圖）。空陣列＝純文字留言。
   reply_media?: DraftMedia[];
+  // 多段串文（3 則以上）：主文之後要依序補發的段落鏈。空＝沿用上面單則 reply_*（向後相容）。
+  thread_chain?: ThreadSegment[];
+  // 下一個要補發的段落索引（0-based）；上一段成功發出的貼文 id（下一段 reply_to 對象）。
+  thread_cursor?: number | null;
+  thread_last_post_id?: string | null;
   // 發布版面：'split'（預設，null 同）＝主文媒體＋留言（含分潤連結＋reply_media）；
   // 'all_in_main'＝影片＋圖＋連結全發主文，不另發留言。
   post_mode?: "split" | "all_in_main" | null;

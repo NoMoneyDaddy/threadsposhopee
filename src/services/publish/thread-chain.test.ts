@@ -1,0 +1,45 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { effectiveChain, chainStepAt, hasThreadChain } from "./thread-chain";
+
+test("優先採用 thread_chain，過濾空段落", () => {
+  const chain = effectiveChain({
+    thread_chain: [
+      { text: "第一段", media: [] },
+      { text: "  ", media: [] }, // 空白＋無媒體 → 濾掉
+      { text: null, media: [{ url: "https://x/y.jpg", type: "image" }] }, // 純媒體 → 保留
+      { text: "第三段" }
+    ],
+    reply_text: "舊留言",
+    reply_media: []
+  });
+  assert.deepEqual(
+    chain.map((s) => s.text),
+    ["第一段", null, "第三段"]
+  );
+});
+
+test("thread_chain 為空時退回單則 reply（向後相容）", () => {
+  const chain = effectiveChain({ thread_chain: [], reply_text: "分潤連結 https://s.shopee.tw/x", reply_media: [] });
+  assert.equal(chain.length, 1);
+  assert.equal(chain[0].text, "分潤連結 https://s.shopee.tw/x");
+});
+
+test("無 chain 也無 reply → 空鏈", () => {
+  assert.deepEqual(effectiveChain({ thread_chain: [], reply_text: null, reply_media: [] }), []);
+});
+
+test("chainStepAt：游標進度與 isLast", () => {
+  const chain = [{ text: "a" }, { text: "b" }, { text: "c" }];
+  assert.deepEqual(chainStepAt(chain, 0), { segment: { text: "a" }, isLast: false, nextCursor: 1 });
+  assert.deepEqual(chainStepAt(chain, 2), { segment: { text: "c" }, isLast: true, nextCursor: 3 });
+  assert.equal(chainStepAt(chain, 3), null); // 已補完
+  assert.equal(chainStepAt(chain, -1), null);
+});
+
+test("hasThreadChain：有內容段落才算明確多段串文", () => {
+  assert.equal(hasThreadChain({ thread_chain: [] }), false);
+  assert.equal(hasThreadChain({ thread_chain: [{ text: "  ", media: [] }] }), false); // 空白無媒體
+  assert.equal(hasThreadChain({ thread_chain: [{ text: "第三段" }] }), true);
+  assert.equal(hasThreadChain({ thread_chain: [{ text: null, media: [{ url: "https://x/y.jpg", type: "image" }] }] }), true);
+});

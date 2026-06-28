@@ -284,7 +284,15 @@ export async function reclaimStalePublishing(staleMinutes = 15): Promise<number>
 // 只回傳補留言會用到的欄位（型別誠實標示，避免誤用其他 Draft 欄位拿到 undefined）
 export type ReplyDueDraft = Pick<
   Draft,
-  "id" | "owner_id" | "threads_account_id" | "published_post_id" | "reply_text" | "reply_media"
+  | "id"
+  | "owner_id"
+  | "threads_account_id"
+  | "published_post_id"
+  | "reply_text"
+  | "reply_media"
+  | "thread_chain"
+  | "thread_cursor"
+  | "thread_last_post_id"
 >;
 export async function listRepliesDue(limit = 20): Promise<ReplyDueDraft[]> {
   const nowIso = new Date().toISOString();
@@ -296,7 +304,9 @@ export async function listRepliesDue(limit = 20): Promise<ReplyDueDraft[]> {
   const sb = getServiceClient()!;
   const { data, error } = await sb
     .from("drafts")
-    .select("id, owner_id, threads_account_id, published_post_id, reply_text, reply_media")
+    .select(
+      "id, owner_id, threads_account_id, published_post_id, reply_text, reply_media, thread_chain, thread_cursor, thread_last_post_id"
+    )
     .eq("reply_status", "pending")
     .not("reply_due_at", "is", null)
     .lte("reply_due_at", nowIso)
@@ -359,6 +369,37 @@ export async function markReplyPublished(id: string, ownerId: string, replyPostI
     .eq("id", id)
     .eq("owner_id", ownerId);
   if (error) throw new Error(`標記留言已發失敗：${error.message}`);
+}
+
+// 多段串文：補完一段後推進游標。done＝整條鏈補完（標 published）；否則回到 pending 等下一輪 cron 補下一段。
+// 兩者都更新 thread_cursor（下一段索引）與 thread_last_post_id（剛發出的貼文 id＝下一段 reply_to 對象）。
+// 與單則 reply 同走 publishing-reply→(published|pending) 的原子認領，確保中斷不雙貼。
+export async function advanceThreadSegment(
+  id: string,
+  ownerId: string,
+  opts: { lastPostId: string; nextCursor: number; done: boolean; nextDueAt?: string | null }
+): Promise<void> {
+  const patch = opts.done
+    ? {
+        reply_status: "published" as const,
+        reply_post_id: opts.lastPostId,
+        thread_cursor: opts.nextCursor,
+        thread_last_post_id: opts.lastPostId
+      }
+    : {
+        reply_status: "pending" as const,
+        reply_due_at: opts.nextDueAt ?? new Date().toISOString(),
+        thread_cursor: opts.nextCursor,
+        thread_last_post_id: opts.lastPostId
+      };
+  if (isDemoMode) {
+    const d = demo.drafts.find((x) => x.id === id);
+    if (d) Object.assign(d, patch);
+    return;
+  }
+  const sb = getServiceClient()!;
+  const { error } = await sb.from("drafts").update(patch).eq("id", id).eq("owner_id", ownerId);
+  if (error) throw new Error(`推進串文段落失敗：${error.message}`);
 }
 
 export async function markReplyFailed(id: string, ownerId: string, err: string): Promise<void> {

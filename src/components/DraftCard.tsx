@@ -334,6 +334,7 @@ function DraftCard({
           mediaType={draft.media_type}
           media={normalizeDraftMedia(draft)}
           replyMedia={normalizeReplyMedia(draft)}
+          extraSegments={Array.isArray(draft.thread_chain) ? draft.thread_chain.slice(1) : undefined}
         />
       )}
 

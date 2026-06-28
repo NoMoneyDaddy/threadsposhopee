@@ -219,6 +219,17 @@ export {
   listProcessedPostIds
 } from "./sources-store";
 
+// 意見回饋／工單層（feedback 表）已拆到 ./feedback-store；此處 re-export 維持
+// 「資料存取集中於 @/lib/store」的匯入點慣例（與 accounts/sources/materials 等 sub-store 同模式）。
+export {
+  listFeedbackForOwner,
+  listAllFeedback,
+  createFeedback,
+  replyFeedbackAsAdmin,
+  isFeedbackKind,
+  isFeedbackStatus
+} from "./feedback-store";
+
 // 成效統計：指定時間窗內已發布貼文，依日期/商品/來源/帳號彙總（從自家發布資料，不需外部報表 API）。
 export interface InsightsRange {
   startMs: number;

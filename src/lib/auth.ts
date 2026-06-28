@@ -91,6 +91,34 @@ export async function listAllUsers(): Promise<{ id: string; email: string | null
   throw new Error(`使用者數量超過載入上限（${MAX_PAGES * PER_PAGE}），請調整分頁上限`);
 }
 
+// 去重＋上限裁切（純函式可測）：避免重複 id 重複查、單次查詢數量無上限。
+export function dedupeCapIds(ids: string[], cap = 200): string[] {
+  return Array.from(new Set(ids)).slice(0, Math.max(0, cap));
+}
+
+// 依 id 批次取 email（id→email 對照）。只查所需的 id（用 getUserById），避免為了標幾筆而拉全量使用者。
+// 單筆查詢失敗只略過該筆（不中斷整頁）；上限保護避免一次打太多。
+export async function getUserEmailsByIds(ids: string[]): Promise<Record<string, string>> {
+  if (isDemoMode || ids.length === 0) return {};
+  const sb = getServiceClient();
+  if (!sb) return {};
+  const unique = dedupeCapIds(ids, 200);
+  const out: Record<string, string> = {};
+  await Promise.all(
+    unique.map(async (id) => {
+      // best-effort：email 只是顯示用，單筆查詢失敗（含拋錯）只記警告並略過，不中斷整頁。
+      try {
+        const { data, error } = await sb.auth.admin.getUserById(id);
+        if (!error && data?.user?.email) out[id] = data.user.email;
+        else if (error) log.warn("getUserEmailsByIds 單筆查詢失敗", { id, err: error.message });
+      } catch (e) {
+        log.warn("getUserEmailsByIds 單筆查詢例外", { id, err: e instanceof Error ? e.message : String(e) });
+      }
+    })
+  );
+  return out;
+}
+
 // 解析 owner 的 user id（給背景排程/pipeline 標記 owner_id 用）。
 let cachedOwnerId: string | null = null;
 export async function getOwnerUserId(): Promise<string | null> {

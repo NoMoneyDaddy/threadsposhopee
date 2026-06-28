@@ -21,6 +21,7 @@ export default function AppChrome({ header, children }: { header: ReactNode; chi
             <a href="/privacy" className="hover:text-ink">隱私權政策</a>
             <a href="/terms" className="hover:text-ink">服務條款</a>
             <a href="/sponsored" className="hover:text-ink">贊助文規則</a>
+            <a href="/feedback" className="hover:text-ink">意見回饋</a>
           </nav>
         </div>
       </footer>

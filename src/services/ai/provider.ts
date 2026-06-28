@@ -49,8 +49,14 @@ export async function generateVariations(text: string, apiKey?: string | null, n
 原文：
 ${clean}`;
   const raw = await geminiText(prompt, apiKey, 0.9, 800);
+  return parseVariations(raw, n);
+}
+
+// 解析 Gemini 回傳：只把「獨立一行的 ===」當分隔符（避免正文內含 === 被誤切），
+// 去空白、濾空、取前 n 條。純函式、可單測。
+export function parseVariations(raw: string, n: number): string[] {
   return raw
-    .split(/\n?={3,}\n?/)
+    .split(/^\s*={3,}\s*$/m)
     .map((s) => s.trim())
     .filter(Boolean)
     .slice(0, n);

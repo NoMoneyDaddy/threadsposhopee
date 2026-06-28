@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ThreadsAccount, DraftMedia } from "@/lib/types";
 import ThreadsPreview, { CharCount } from "@/components/ThreadsPreview";
@@ -34,6 +34,10 @@ export default function SelfComposeForm({
   // 「換個說法」：AI 改寫出多個版本供挑選。
   const [variations, setVariations] = useState<string[]>([]);
   const [rewriting, setRewriting] = useState(false);
+  // 正文一變動（編輯／套用／送出後清空）即讓舊的改寫版本失效，避免點到過期內容。
+  useEffect(() => {
+    setVariations([]);
+  }, [mainText]);
 
   async function rewrite() {
     if (!mainText.trim()) {
@@ -49,9 +53,10 @@ export default function SelfComposeForm({
         { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: mainText }) },
         30000
       );
-      const json = await res.json();
-      if (!json.ok) throw new Error(json.error);
-      setVariations(json.variations as string[]);
+      // 回應不保證是 JSON（如 gateway 502 HTML）：安全解析，失敗則用狀態碼當訊息。
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.ok) throw new Error(json?.error || `換句話說失敗（${res.status}）`);
+      setVariations((json.variations as string[]) ?? []);
     } catch (e) {
       setMsg(`❌ ${e instanceof Error ? e.message : String(e)}`);
     } finally {

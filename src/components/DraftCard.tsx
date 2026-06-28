@@ -454,7 +454,7 @@ function DraftCard({
           <button
             disabled={!!busy}
             onClick={() => {
-              if (confirm("確定刪除這則草稿？")) call("delete");
+              if (confirm("確定刪除這則草稿？此動作無法復原。")) call("delete");
             }}
             className="rounded border border-red-200 px-3 py-1 text-xs text-red-500 hover:bg-red-50"
           >

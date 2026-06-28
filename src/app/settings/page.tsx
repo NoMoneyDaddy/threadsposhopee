@@ -10,6 +10,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { getSponsorConfig } from "@/lib/sponsor";
 import { env, isDemoMode } from "@/lib/env";
 import CopyPrefsForm from "@/components/CopyPrefsForm";
+import { buildCopyPromptPreview } from "@/services/ai/humanizer";
 import PublishPrefsForm from "@/components/PublishPrefsForm";
 import RepostLimitsForm from "@/components/RepostLimitsForm";
 import NotifyPrefsForm from "@/components/NotifyPrefsForm";
@@ -57,6 +58,18 @@ export default async function SettingsPage() {
       {repostLimits && <RepostLimitsForm initial={repostLimits} />}
 
       <CopyPrefsForm initial={copyPrefs} />
+
+      {user.isOwner && (
+        <details className="card p-5">
+          <summary className="cursor-pointer font-semibold">預覽 AI 文案 prompt（管理員）</summary>
+          <p className="mt-2 text-xs text-ink-3">
+            用你目前儲存的文案偏好組出、實際送進模型的系統 prompt（範例商品）。改偏好並儲存後重新整理即更新。
+          </p>
+          <pre className="mt-2 overflow-x-auto whitespace-pre-wrap rounded-lg bg-surface-2 p-3 text-xs text-ink-2" translate="no">
+            {buildCopyPromptPreview(copyPrefs)}
+          </pre>
+        </details>
+      )}
 
       {user.isOwner && <SponsorConfigForm initial={sponsor} />}
 

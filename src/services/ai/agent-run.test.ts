@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { sourceHash, buildAgentPrompt, buildShortSourceUrl } from "./agent-run";
+import { ANTI_AI_SLOP_RULES } from "./humanizer";
 import type { AiAgent } from "@/lib/agents-store";
 
 test("sourceHash：穩定、忽略前後空白、不同連結不同", () => {
@@ -25,6 +26,11 @@ const agent: AiAgent = {
   emoji_level: "none", hashtag_pool: ["#科技"], length: 200, source_mode: "rss",
   rss_feeds: [], search_query: "", threads_account_id: null, use_redirect: false, auto_publish: false, enabled: true, last_run_at: null
 };
+
+test("buildAgentPrompt：套用共用去 AI 腔規則（與文案流程一致）", () => {
+  const p = buildAgentPrompt(agent, { title: "新晶片發表", description: "摘要內容" });
+  assert.ok(p.includes(ANTI_AI_SLOP_RULES));
+});
 
 test("buildAgentPrompt：含名稱/領域/素材，emoji=none 指示不用 emoji", () => {
   const p = buildAgentPrompt(agent, { title: "新晶片發表", description: "摘要內容" });
@@ -54,7 +60,7 @@ test("buildAgentPrompt：domains 為空時退回單一 domain（向後相容）"
 test("buildAgentPrompt：tone 指定時原樣帶入；空白/空字串退回自動口吻", () => {
   const named = buildAgentPrompt(agent, { title: "t", description: "d" });
   assert.match(named, /風格：愛吐槽/); // 指定口吻原樣帶入
-  const auto = /風格：自動——依這篇內容選最合適、自然的口吻/;
+  const auto = /風格：自動：依這篇內容選最合適、自然的口吻/;
   assert.match(buildAgentPrompt({ ...agent, tone: "" }, { title: "t", description: "d" }), auto); // 空字串
   assert.match(buildAgentPrompt({ ...agent, tone: "   " }, { title: "t", description: "d" }), auto); // 純空白（trim）
 });

@@ -1,5 +1,6 @@
 import SelfComposeForm from "@/components/SelfComposeForm";
-import { listThreadsAccounts, getUserCloudinary } from "@/lib/store";
+import { listThreadsAccounts } from "@/lib/store";
+import { getMediaProvider } from "@/services/media/upload";
 import { getCurrentUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -12,9 +13,10 @@ export default async function ComposePage() {
     );
   }
   const accounts = await listThreadsAccounts(user.id);
-  // 本機上傳用的 Cloudinary：一律用「使用者自綁的」，無系統 fallback；沒綁則隱藏上傳鈕並導去綁定。
-  const ownCloud = await getUserCloudinary(user.id);
-  const cc = ownCloud?.cloud && ownCloud?.preset ? ownCloud : null;
+  // 本機上傳的圖床選擇與 server 端 getMediaProvider 一致（R2 優先）：
+  // 只有 Cloudinary 為實際生效圖床時才給 cloud/preset 走瀏覽器直傳；綁了 R2 則留空 → 走 /api/media/upload。
+  const provider = await getMediaProvider(user.id);
+  const cc = provider.kind === "cloudinary" ? provider.creds : null;
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">

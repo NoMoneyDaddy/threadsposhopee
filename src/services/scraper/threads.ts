@@ -86,6 +86,30 @@ export interface ScrapeQuery {
   sort?: "top" | "recent";
 }
 
+// 依 Threads Search Scraper 的 input schema 與限制組 actor input（純函式可測）：
+// - searchQuery 必填（只監看帳號時預設 "shope"，精準篩含蝦皮連結的貼文）。
+// - from 僅允許 ^[a-zA-Z0-9._]*$：去掉開頭 @ 與不合法字元，避免 actor 輸入驗證失敗。
+// - maxPosts 夾 20–200：actor 每次 run 上限約 20 頁 × 每頁約 10 篇 ≈ 200 篇（schema 名目上限 1000，
+//   但實際取不到那麼多，夾到 200 避免誤期待並少燒額度）。
+// - sort 僅 top / recent（非法值退回 recent）。
+export interface ThreadsScraperInput {
+  searchQuery: string;
+  sort: "top" | "recent";
+  maxPosts: number;
+  from?: string;
+}
+
+export function buildScraperInput(spec: ScrapeQuery, postsLimit: number): ThreadsScraperInput {
+  const from = (spec.username ?? "").trim().replace(/^@/, "").replace(/[^a-zA-Z0-9._]/g, "");
+  const searchQuery = spec.searchQuery?.trim() || "shope";
+  const sort: "top" | "recent" = spec.sort === "top" ? "top" : "recent";
+  const limit = Number.isFinite(postsLimit) ? Math.floor(postsLimit) : 20;
+  const maxPosts = Math.min(200, Math.max(20, limit > 0 ? limit : 20));
+  const input: ThreadsScraperInput = { searchQuery, sort, maxPosts };
+  if (from) input.from = from;
+  return input;
+}
+
 // 呼叫 Apify Threads Search Scraper 取得貼文。Demo 模式直接回 fixture。
 // creds：使用者自己綁的 Apify token/actor（一律自綁，不再用全域 env）。
 export async function scrapeLatestPosts(
@@ -104,18 +128,8 @@ export async function scrapeLatestPosts(
   }
 
   const spec: ScrapeQuery = typeof query === "string" ? { username: query } : query;
-  const username = spec.username?.trim().replace(/^@/, "") || "";
-  // actor 的 searchQuery 為必填，空字串可能觸發 Apify 驗證錯誤。本專案目標貼文必含蝦皮連結
-  // （s.shopee.tw／shope.ee／shopee.tw 皆含子字串 "shope"），故只監看帳號時預設帶 "shope"，
-  // 既滿足必填又精準篩出含分潤連結的貼文。
-  const searchQuery = spec.searchQuery?.trim() || "shope";
-  const body: Record<string, unknown> = {
-    searchQuery,
-    sort: spec.sort ?? "recent",
-    // maxPosts 下限 20、上限 1000；pipeline 的 posts_limit 常為個位數，故夾到合法範圍。
-    maxPosts: Math.min(1000, Math.max(20, postsLimit))
-  };
-  if (username) body.from = username;
+  // input 欄位與限制集中在 buildScraperInput（依 actor schema：searchQuery 必填、from 字元限制、maxPosts 上限約 200）。
+  const body = buildScraperInput(spec, postsLimit);
 
   const url = `https://api.apify.com/v2/acts/${actor.replace("/", "~")}/run-sync-get-dataset-items?token=${token}`;
   // 只對 429（rate limited、run 尚未啟動）退避重試，避免 5xx 後重試重複觸發爬蟲 run；

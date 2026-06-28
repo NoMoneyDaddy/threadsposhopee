@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import BoundKeyHint from "@/components/BoundKeyHint";
 
 // AI 子系統：綁定自己的 Gemini API key。key 不回傳明文。
 export default function GeminiForm({ bound }: { bound: boolean }) {
@@ -56,11 +57,12 @@ export default function GeminiForm({ bound }: { bound: boolean }) {
       >
         前往 Google AI Studio 取得免費 API key ↗
       </a>
+      {bound && <BoundKeyHint />}
       <div className="flex flex-wrap gap-2">
         <input
           className="input min-w-0 flex-1"
           type="password"
-          placeholder={bound ? "貼上新的 key 以更新" : "Gemini API key"}
+          placeholder={bound ? "貼上新的 key 以更新（留空＝不變）" : "Gemini API key"}
           value={key}
           onChange={(e) => setKey(e.target.value)}
         />

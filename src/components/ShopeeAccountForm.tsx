@@ -48,6 +48,10 @@ export default function ShopeeAccountForm({ bound = null }: { bound?: ShopeeAcco
           <div className="text-ink-2">
             目前已綁定 · App ID <span translate="no" className="font-medium text-ink">{bound.app_id}</span>
           </div>
+          <div className="text-ink-2">
+            Secret <span className="font-mono tracking-[0.2em] text-ink-3" aria-hidden>••••••••</span>
+            <span className="ml-1 text-ink-3">（安全起見不顯示）</span>
+          </div>
           {bound.default_sub_id && (
             <div className="text-ink-2">
               預設分潤標記（subId）：<span translate="no">{bound.default_sub_id}</span>

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { fetchWithTimeout } from "@/lib/http";
+import BoundKeyHint from "@/components/BoundKeyHint";
 
 // 各人自綁 Cloudflare R2 圖床（與 Cloudinary 二擇一）。
 // 安全：分享素材時只共享「公開讀」物件網址（唯讀），寫入 token 只在 server 用、加密存、不外露，
@@ -72,6 +73,7 @@ export default function R2Form({
         留空 key/secret＝沿用既有（只改網域）。詳細步驟見{" "}
         <a href="/guide#r2" className="text-brand underline">金鑰取得教學</a>。
       </p>
+      {bound && <BoundKeyHint label="目前已綁定 R2 Access Key／Secret" />}
       <div className="grid gap-2 sm:grid-cols-2">
         <input className="input" aria-label="R2 Account ID" placeholder="Account ID" value={accountId} onChange={(e) => setAccountId(e.target.value)} />
         <input className="input" aria-label="R2 bucket 名稱" placeholder="bucket 名稱（如 my-media）" value={bucket} onChange={(e) => setBucket(e.target.value)} />

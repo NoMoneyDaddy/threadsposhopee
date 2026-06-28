@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { CopyPrefs, SidePrefs, Tone, Length, EmojiLevel } from "@/services/ai/prefs";
+import type { CopyPrefs, SidePrefs, Tone, Length } from "@/services/ai/prefs";
 
 const TONE_OPTS: { v: Tone; label: string }[] = [
   { v: "friendly", label: "朋友閒聊" },
@@ -14,11 +14,6 @@ const LENGTH_OPTS: { v: Length; label: string }[] = [
   { v: "short", label: "短" },
   { v: "medium", label: "中" },
   { v: "long", label: "長" }
-];
-const EMOJI_OPTS: { v: EmojiLevel; label: string }[] = [
-  { v: "none", label: "不用" },
-  { v: "few", label: "少量" },
-  { v: "some", label: "適中" }
 ];
 
 const sel = "rounded-xl border px-2 py-1 text-sm";
@@ -52,20 +47,13 @@ function SideEditor({
             ))}
           </select>
         </label>
-        <label className="text-xs text-ink-2">
-          Emoji
-          <select className={`${sel} ml-1`} value={side.emoji} onChange={(e) => onChange({ ...side, emoji: e.target.value as EmojiLevel })}>
-            {EMOJI_OPTS.map((o) => (
-              <option key={o.v} value={o.v}>{o.label}</option>
-            ))}
-          </select>
-        </label>
       </div>
     </div>
   );
 }
 
-// AI 文案客製化：語氣/長度/emoji（正文與留言分開）、溫度、自訂指示。各人各設各的。
+// AI 文案客製化：語氣/長度（正文與留言分開）、溫度、自訂指示。各人各設各的。
+// 文案一律不帶 emoji（全站規則），故不提供 emoji 選項。
 export default function CopyPrefsForm({ initial }: { initial: CopyPrefs }) {
   const router = useRouter();
   const [prefs, setPrefs] = useState<CopyPrefs>(initial);

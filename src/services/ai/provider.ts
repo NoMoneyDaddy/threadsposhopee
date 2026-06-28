@@ -1,5 +1,5 @@
 import { env, isDemoMode } from "@/lib/env";
-import { buildCopyPrompt, splitCopy, HUMANIZER_RULES, type CopyContext } from "./humanizer";
+import { buildCopyPrompt, splitCopy, pickReplyLeadIn, HUMANIZER_RULES, type CopyContext } from "./humanizer";
 import { DEFAULT_COPY_PREFS, type CopyPrefs } from "./prefs";
 import { generateWithGemini, geminiText } from "./gemini";
 
@@ -69,6 +69,6 @@ function demoVariations(text: string, n: number): string[] {
 
 // Demo 模式：不呼叫外部 API，產出一段示意文案
 function demoCopy(input: CopyInput): GeneratedCopy {
-  const raw = `正文：${input.productName} 用了快兩週，本來沒抱期待\n結果現在每天都在用，有點後悔太晚買 😅\n留言區：怕你找不到，連結放這 🔗 ${input.shopeeShortLink}\n有人也跟我一樣相見恨晚的嗎`;
+  const raw = `正文：${input.productName} 用了快兩週，本來沒抱期待\n結果現在每天都在用，有點後悔太晚買\n留言區：${pickReplyLeadIn(input.shopeeShortLink)} ${input.shopeeShortLink}\n有人也跟我一樣相見恨晚的嗎`;
   return { ...splitCopy(raw), raw };
 }

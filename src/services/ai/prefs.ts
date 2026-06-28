@@ -1,15 +1,14 @@
 // AI 文案客製化偏好：每位使用者在帳號管理頁設定的全域預設。
-// 語氣／長度／emoji 可分別套用在「正文」與「留言」，溫度為整體創意度。
-// 偏好非機密，明文存 profiles.copy_prefs（jsonb）。
+// 語氣／長度可分別套用在「正文」與「留言」，溫度為整體創意度。
+// 本專案文案一律不使用 emoji／表情符號，故無 emoji 偏好；該硬規則寫在 humanizer。
+// 偏好非機密，明文存 profiles.copy_prefs（jsonb）；舊資料殘留的 emoji 欄位會被忽略。
 
 export type Tone = "friendly" | "professional" | "humorous" | "concise";
 export type Length = "short" | "medium" | "long";
-export type EmojiLevel = "none" | "few" | "some";
 
 export interface SidePrefs {
   tone: Tone;
   length: Length;
-  emoji: EmojiLevel;
 }
 
 export interface CopyPrefs {
@@ -21,13 +20,12 @@ export interface CopyPrefs {
 
 export const DEFAULT_COPY_PREFS: CopyPrefs = {
   temperature: 0.9,
-  main: { tone: "friendly", length: "medium", emoji: "few" },
-  reply: { tone: "friendly", length: "short", emoji: "few" }
+  main: { tone: "friendly", length: "medium" },
+  reply: { tone: "friendly", length: "short" }
 };
 
 const TONES: Tone[] = ["friendly", "professional", "humorous", "concise"];
 const LENGTHS: Length[] = ["short", "medium", "long"];
-const EMOJIS: EmojiLevel[] = ["none", "few", "some"];
 const CUSTOM_PROMPT_MAX = 1000;
 
 const oneOf = <T,>(allowed: T[], v: unknown, fallback: T): T =>
@@ -37,8 +35,7 @@ function normalizeSide(v: unknown, fallback: SidePrefs): SidePrefs {
   const s = (v ?? {}) as Partial<SidePrefs>;
   return {
     tone: oneOf(TONES, s.tone, fallback.tone),
-    length: oneOf(LENGTHS, s.length, fallback.length),
-    emoji: oneOf(EMOJIS, s.emoji, fallback.emoji)
+    length: oneOf(LENGTHS, s.length, fallback.length)
   };
 }
 
@@ -64,12 +61,6 @@ const TONE_DESC: Record<Tone, string> = {
   concise: "精簡直接、一針見血，不囉嗦"
 };
 
-const EMOJI_DESC: Record<EmojiLevel, string> = {
-  none: "完全不要用 emoji",
-  few: "最多 1-2 個 emoji，且要自然",
-  some: "可用 3-4 個 emoji 點綴，但別浮誇"
-};
-
 const MAIN_LENGTH_DESC: Record<Length, string> = {
   short: "30-60 字，1-2 行",
   medium: "30-105 字，1-3 行",
@@ -83,9 +74,9 @@ const REPLY_LENGTH_DESC: Record<Length, string> = {
 };
 
 export function describeMain(p: SidePrefs): string {
-  return `語氣：${TONE_DESC[p.tone]}；長度：${MAIN_LENGTH_DESC[p.length]}；${EMOJI_DESC[p.emoji]}`;
+  return `語氣：${TONE_DESC[p.tone]}；長度：${MAIN_LENGTH_DESC[p.length]}`;
 }
 
 export function describeReply(p: SidePrefs): string {
-  return `語氣：${TONE_DESC[p.tone]}；長度：${REPLY_LENGTH_DESC[p.length]}；${EMOJI_DESC[p.emoji]}`;
+  return `語氣：${TONE_DESC[p.tone]}；長度：${REPLY_LENGTH_DESC[p.length]}`;
 }

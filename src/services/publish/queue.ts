@@ -305,8 +305,9 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
       ) {
         // 就地改寫：取「該篇貼文自己的」商品連結，用 owner 金鑰重產成 owner 的分潤連結（平台保本）；
         // 超額 slot 開放「自賺資格」貢獻者改用自己的金鑰重產（自賺）。無商品連結則略過（不改寫該篇）。
-        const SPONSOR_FLOOR = 1;
-        const isSurplus = (sponsorCountCache[accId] ?? 0) >= SPONSOR_FLOOR;
+        // 保底篇數與配額同源（sponsorCfg.floor）：達保底數後的額外贊助才算「超額」可自賺，
+        // 避免租戶把 floor 調大於 1 時第二篇就過早切到 own-link、與配額不一致。
+        const isSurplus = (sponsorCountCache[accId] ?? 0) >= sponsorCfg.floor;
         const draftCleanUrl = await cleanProductUrlFromDraft(draft).catch(() => null);
         let link: string | null = null;
         let useOwn = false;

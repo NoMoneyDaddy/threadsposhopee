@@ -3,9 +3,7 @@ import {
   getPublishPrefs,
   getNotifyPrefs,
   getRepostLimits,
-  getUserTelegramChatId,
-  getDefaultAffiliateUrl,
-  SUGGESTED_DEFAULT_AFFILIATE_URL
+  getUserTelegramChatId
 } from "@/lib/store";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
@@ -19,7 +17,6 @@ import PushToggle from "@/components/PushToggle";
 import TelegramForm from "@/components/TelegramForm";
 import TelegramWebhookSetup from "@/components/TelegramWebhookSetup";
 import SponsorConfigForm from "@/components/SponsorConfigForm";
-import DefaultAffiliateForm from "@/components/DefaultAffiliateForm";
 
 export const dynamic = "force-dynamic";
 
@@ -28,14 +25,13 @@ export default async function SettingsPage() {
   const user = await getCurrentUser();
   if (!user) return <div className="text-center text-sm text-red-500">請先登入。</div>;
 
-  const [copyPrefs, publishPrefs, repostLimits, notifyPrefs, telegramChatId, defaultAffiliate, sponsor] =
+  const [copyPrefs, publishPrefs, repostLimits, notifyPrefs, telegramChatId, sponsor] =
     await Promise.all([
       getCopyPrefs(user.id),
       getPublishPrefs(user.id),
       getRepostLimits(user.id),
       getNotifyPrefs(user.id),
       getUserTelegramChatId(user.id),
-      getDefaultAffiliateUrl(user.id),
       getSponsorConfig()
     ]);
   const telegramBound = Boolean(telegramChatId);
@@ -61,8 +57,6 @@ export default async function SettingsPage() {
       {repostLimits && <RepostLimitsForm initial={repostLimits} />}
 
       <CopyPrefsForm initial={copyPrefs} />
-
-      <DefaultAffiliateForm initial={defaultAffiliate} suggested={SUGGESTED_DEFAULT_AFFILIATE_URL} />
 
       {user.isOwner && <SponsorConfigForm initial={sponsor} />}
 

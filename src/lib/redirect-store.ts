@@ -34,7 +34,6 @@ export async function selectWithSafetyFallback<T>(
 
 export interface RedirectLinkInput {
   sourceUrl: string;
-  affiliateUrl?: string | null;
   title?: string | null;
   imageUrl?: string | null;
   description?: string | null;
@@ -43,7 +42,6 @@ export interface RedirectLinkInput {
 export interface RedirectLink {
   code: string;
   sourceUrl: string;
-  affiliateUrl: string | null;
   title: string | null;
   imageUrl: string | null;
   description: string | null;
@@ -85,9 +83,8 @@ export async function createRedirectLink(
   input: RedirectLinkInput,
   opts: { fetchPreview?: boolean } = {}
 ): Promise<string> {
-  // 來源必填、分潤選填；皆須為安全公開 URL（擋內網/非法協定/開放重定向濫用）。
+  // 來源必填，須為安全公開 URL（擋內網/非法協定/開放重定向濫用）。
   assertSafePublicUrl(input.sourceUrl);
-  if (input.affiliateUrl) assertSafePublicUrl(input.affiliateUrl);
 
   // demo 模式不落 DB、也不對外抓取（避免示範環境產生外部副作用/延遲）。
   if (isDemoMode) return randomShortCode();
@@ -113,7 +110,6 @@ export async function createRedirectLink(
       owner_id: ownerId,
       code,
       source_url: input.sourceUrl,
-      affiliate_url: input.affiliateUrl ?? null,
       title: meta.title,
       image_url: meta.imageUrl,
       description: meta.description
@@ -142,7 +138,7 @@ export async function createRedirectLink(
   throw new Error("短碼產生衝突過多，請重試");
 }
 
-const LINK_COLS = "code, source_url, affiliate_url, title, image_url, description";
+const LINK_COLS = "code, source_url, title, image_url, description";
 const toSafety = (v: unknown): "safe" | "unsafe" | null => (v === "safe" || v === "unsafe" ? v : null);
 
 // 依 code 取用（對外公開：中轉頁渲染用，不帶 owner 過濾）。
@@ -158,7 +154,6 @@ export async function getRedirectLinkByCode(code: string): Promise<RedirectLink 
   return {
     code: data.code as string,
     sourceUrl: data.source_url as string,
-    affiliateUrl: (data.affiliate_url as string) ?? null,
     title: (data.title as string) ?? null,
     imageUrl: (data.image_url as string) ?? null,
     description: (data.description as string) ?? null,
@@ -183,7 +178,6 @@ export async function listRedirectLinks(ownerId: string, limit = 100): Promise<R
   return (rows ?? []).map((d) => ({
     code: d.code as string,
     sourceUrl: d.source_url as string,
-    affiliateUrl: (d.affiliate_url as string) ?? null,
     title: (d.title as string) ?? null,
     imageUrl: (d.image_url as string) ?? null,
     description: (d.description as string) ?? null,
@@ -195,23 +189,21 @@ export async function listRedirectLinks(ownerId: string, limit = 100): Promise<R
   }));
 }
 
-// 編輯短連結（多租戶：以 owner_id 過濾，只動得到自己的列）。短碼不變，只改目的地/分潤/標題；
+// 編輯短連結（多租戶：以 owner_id 過濾，只動得到自己的列）。短碼不變，只改目的地/標題；
 // 刻意不動 image_url/description（避免編輯時把既有預覽圖/描述清空）。
 // URL 一律過 SSRF 守衛；回傳是否命中該 owner 的列（達成擁有權檢查）。
 export async function updateRedirectLink(
   code: string,
   ownerId: string,
-  input: Pick<RedirectLinkInput, "sourceUrl" | "affiliateUrl" | "title">
+  input: Pick<RedirectLinkInput, "sourceUrl" | "title">
 ): Promise<boolean> {
   assertSafePublicUrl(input.sourceUrl);
-  if (input.affiliateUrl) assertSafePublicUrl(input.affiliateUrl);
   if (isDemoMode) return true;
   const sb = getServiceClient()!;
   const { data, error } = await sb
     .from("redirect_links")
     .update({
       source_url: input.sourceUrl,
-      affiliate_url: input.affiliateUrl ?? null,
       title: input.title ?? null
     })
     .eq("code", code)

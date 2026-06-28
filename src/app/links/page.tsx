@@ -1,6 +1,5 @@
 import { getCurrentUser } from "@/lib/auth";
 import { listRedirectLinks } from "@/lib/redirect-store";
-import { getDefaultAffiliateUrl } from "@/lib/store";
 import RedirectLinkForm from "@/components/RedirectLinkForm";
 import RedirectLinkRow from "@/components/RedirectLinkRow";
 import EmptyState from "@/components/EmptyState";
@@ -12,19 +11,16 @@ export const dynamic = "force-dynamic";
 export default async function LinksPage() {
   const user = await getCurrentUser();
   if (!user) return <div className="text-center text-sm text-red-500">請先登入。</div>;
-  const [links, defaultAffiliateUrl] = await Promise.all([
-    listRedirectLinks(user.id).catch(() => []),
-    getDefaultAffiliateUrl(user.id).catch(() => null)
-  ]);
+  const links = await listRedirectLinks(user.id).catch(() => []);
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">轉址服務</h1>
-        <p className="text-sm text-ink-2">把長連結變成你自己的短連結；別人點開會先看到預覽頁，再前往原始來源（可順便附上合作推廣連結）。</p>
+        <p className="text-sm text-ink-2">把長連結變成你自己的短連結；別人點開會先看到預覽頁，再前往原始來源。</p>
       </div>
 
-      <RedirectLinkForm defaultAffiliateUrl={defaultAffiliateUrl} />
+      <RedirectLinkForm />
 
       <SelfBuyNotice />
 
@@ -44,7 +40,6 @@ export default async function LinksPage() {
                 link={{
                   code: l.code,
                   sourceUrl: l.sourceUrl,
-                  affiliateUrl: l.affiliateUrl,
                   title: l.title,
                   clicks: l.clicks,
                   continues: l.continues

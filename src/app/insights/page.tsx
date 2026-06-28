@@ -94,7 +94,7 @@ export default async function InsightsPage({
           <h2 className="section-title mb-1">最佳發文時段</h2>
           <p className="text-sm text-ink-2">
             這裡會依你貼文的 <b>Threads 互動數據</b>（各時段／星期的平均觀看）算出最佳發文時段。
-            目前可用樣本不足（需至少 3 篇有互動數據的貼文）——多發幾篇就會出現。
+            目前已收集 <b>{engagement?.fetched ?? 0}/3</b> 篇有互動數據的貼文（需至少 3 篇）——多發幾篇就會出現。
           </p>
           {(() => {
             // 抓不到任何互動數據的提示：依目前實際請求的 scope 決定文案（避免在已關閉 insights 的部署叫人白做工）。

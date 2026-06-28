@@ -143,17 +143,17 @@ export default async function AccountsPage() {
                 </div>
                 <span className="shrink-0 text-xs text-ink-2">{a.status}</span>
               </div>
-              <div className="mt-1 text-sm text-ink-2">user id: {a.threads_user_id}</div>
+              <div className="mt-1 text-sm text-ink-2">Threads ID：{a.threads_user_id}</div>
               {a.token_expires_at && (() => {
                 const exp = tokenExpiryState(a.token_expires_at);
                 if (exp.level === "unknown")
-                  return <div className="text-xs font-medium text-ink-2">⚠️ 授權到期日格式異常，請重新連結帳號</div>;
+                  return <div className="text-xs font-medium text-ink-2">⚠️ 帳號授權到期日格式異常，請重新貼上 token</div>;
                 const date = new Date(a.token_expires_at).toLocaleDateString("zh-TW", { timeZone: "Asia/Taipei" });
                 if (exp.level === "expired")
-                  return <div className="text-xs font-medium text-red-600">⚠️ token 已過期（{date}）— 請重新授權</div>;
+                  return <div className="text-xs font-medium text-red-600">⚠️ 帳號授權已過期（{date}）— 請重新貼上 token</div>;
                 if (exp.level === "soon")
-                  return <div className="text-xs font-medium text-amber-600">⏳ token {exp.daysLeft} 天後到期（{date}）— 自動展期中，若仍失敗請重新授權</div>;
-                return <div className="text-xs text-ink-3">token 到期：{date}（自動展期）</div>;
+                  return <div className="text-xs font-medium text-amber-600">⏳ 帳號授權將在 {exp.daysLeft} 天後到期（{date}）— 系統會自動更新，若失敗會通知你</div>;
+                return <div className="text-xs text-ink-3">✅ 帳號授權有效（至 {date}，系統會自動更新）</div>;
               })()}
               <div className="mt-2 flex items-center gap-3 border-t pt-2">
                 {a.status === "paused" ? (
@@ -175,8 +175,8 @@ export default async function AccountsPage() {
           {shopee.map((a) => (
             <div key={a.id} className="rounded-2xl border bg-surface p-4">
               <div className="font-medium">{a.label}</div>
-              <div className="mt-1 text-sm text-ink-2">app id: {a.app_id}</div>
-              {a.default_sub_id && <div className="text-sm text-ink-2">預設 subId: {a.default_sub_id}</div>}
+              <div className="mt-1 text-sm text-ink-2">蝦皮 App ID：{a.app_id}</div>
+              {a.default_sub_id && <div className="text-sm text-ink-2">預設分潤標記（subId）：{a.default_sub_id}</div>}
               <div className="mt-2 border-t pt-2">
                 <DeleteButton endpoint={`/api/accounts/shopee/${a.id}`} />
               </div>

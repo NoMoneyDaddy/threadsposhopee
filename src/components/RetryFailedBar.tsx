@@ -33,16 +33,20 @@ export default function RetryFailedBar({ failedIds }: { failedIds: string[] }) {
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 p-3">
-      <span className="text-sm text-amber-800">{failedIds.length} 則發布失敗：</span>
+    <div role="alert" className="flex flex-wrap items-center gap-3 rounded-2xl border-l-4 border-red-500 bg-red-50 p-3">
+      <span className="text-lg" aria-hidden>⚠️</span>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-red-900">{failedIds.length} 則貼文發布失敗</p>
+        <p className="text-xs text-red-800">多半是暫時性錯誤（如授權過期或網路），可直接重新排入佇列再試。</p>
+      </div>
       <button
         disabled={busy}
         onClick={run}
-        className="rounded-xl border border-amber-300 px-3 py-1.5 text-sm text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+        className="shrink-0 rounded-xl bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
       >
-        {busy ? "重排中…" : "全部重試（重排）"}
+        {busy ? "處理中…" : "全部重新發布"}
       </button>
-      {msg && <span className="text-sm text-ink-2">{msg}</span>}
+      {msg && <span className="w-full text-sm text-ink-2">{msg}</span>}
     </div>
   );
 }

@@ -25,17 +25,18 @@ export default function MediaPicker({
 }) {
   const [url, setUrl] = useState("");
   const [type, setType] = useState<"image" | "video">("image");
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
   const atLimit = items.length >= MAX_MEDIA;
   // functional update：上傳是非同步，回呼觸發時以最新狀態為基準，避免舊 closure 覆蓋掉期間的新增/移除。
   const add = (m: DraftMedia) => onChange((prev) => (prev.length >= MAX_MEDIA ? prev : [...prev, m]));
   const removeAt = (i: number) => onChange((prev) => prev.filter((_, idx) => idx !== i));
-  // 與相鄰項對調，調整輪播出現順序。
-  const move = (i: number, dir: -1 | 1) =>
+  // 把第 from 項移到 to 位置，調整輪播出現順序（桌機拖拉與 ◀▶ 鈕共用）。
+  const moveTo = (from: number, to: number) =>
     onChange((prev) => {
-      const j = i + dir;
-      if (j < 0 || j >= prev.length) return prev;
+      if (from === to || from < 0 || to < 0 || from >= prev.length || to >= prev.length) return prev;
       const next = [...prev];
-      [next[i], next[j]] = [next[j], next[i]];
+      const [m] = next.splice(from, 1);
+      next.splice(to, 0, m);
       return next;
     });
 
@@ -44,7 +45,23 @@ export default function MediaPicker({
       {items.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {items.map((m, i) => (
-            <div key={`${m.url}-${i}`} className="relative">
+            <div
+              key={`${m.url}-${i}`}
+              draggable={items.length > 1}
+              onDragStart={() => setDragIndex(i)}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (dragIndex !== null) moveTo(dragIndex, i);
+                setDragIndex(null);
+              }}
+              onDragEnd={() => setDragIndex(null)}
+              className={
+                "relative rounded-lg" +
+                (items.length > 1 ? " cursor-move" : "") +
+                (dragIndex === i ? " opacity-40 ring-2 ring-brand" : "")
+              }
+            >
               {m.type === "image" ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={cloudinaryThumb(m.url, 160)} alt="" className="h-16 w-16 rounded-lg border object-cover" />
@@ -59,11 +76,12 @@ export default function MediaPicker({
               >
                 ✕
               </button>
+              {/* 手機等不支援拖拉時的後備：◀▶ 鈕調整輪播順序 */}
               {items.length > 1 && (
                 <div className="absolute inset-x-0 bottom-0 flex justify-between rounded-b-lg bg-black/55 text-white">
                   <button
                     type="button"
-                    onClick={() => move(i, -1)}
+                    onClick={() => moveTo(i, i - 1)}
                     disabled={i === 0}
                     aria-label={`第 ${i + 1} 個媒體往前移`}
                     className="px-1.5 text-xs leading-5 disabled:opacity-30"
@@ -72,7 +90,7 @@ export default function MediaPicker({
                   </button>
                   <button
                     type="button"
-                    onClick={() => move(i, 1)}
+                    onClick={() => moveTo(i, i + 1)}
                     disabled={i === items.length - 1}
                     aria-label={`第 ${i + 1} 個媒體往後移`}
                     className="px-1.5 text-xs leading-5 disabled:opacity-30"

@@ -98,6 +98,7 @@ export default function MediaUpload({
         type="file"
         accept="image/*,video/*"
         multiple={multiple}
+        aria-label="上傳圖片或影片檔案"
         className="hidden"
         onChange={(e) => {
           const files = Array.from(e.target.files ?? []);

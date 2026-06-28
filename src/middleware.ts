@@ -18,7 +18,7 @@ const PUBLIC_PREFIXES = [
   "/terms",
   "/data-deletion",
   "/sponsored",
-  "/r", // go2read 服務首頁（/r）與中轉頁（/r/*）：訪客無登入即可看
+  "/r/", // go2read 中轉頁（/r/*）：訪客無登入即可看（服務首頁 /r 另以精確比對放行，見下）
   "/api/redirect/hit" // 中轉頁「繼續」計數 beacon（公開）
 ];
 
@@ -41,7 +41,9 @@ export async function middleware(req: NextRequest) {
   // 未設定 Supabase（Demo 模式）→ 不啟用登入保護
   if (!supabaseUrl || !anonKey) return NextResponse.next();
 
-  if (PUBLIC_PREFIXES.some((p) => url.pathname.startsWith(p))) {
+  // go2read 服務首頁 /r 用「精確」比對放行（不可用 startsWith，否則 /register、/reports 等
+  // 以 /r 開頭的主站路由會一併繞過登入保護＝授權繞過漏洞）。中轉頁 /r/* 仍走 PUBLIC_PREFIXES。
+  if (url.pathname === "/r" || PUBLIC_PREFIXES.some((p) => url.pathname.startsWith(p))) {
     return NextResponse.next();
   }
 

@@ -39,21 +39,23 @@ export default function ContinueButton({
     window.location.href = sourceUrl;
   }
 
-  // 「我不看了，關閉頁面」：停止倒數並關閉分頁；無法關閉（非 script 開啟的分頁）時退回上一頁。
+  // 「我不看了，關閉頁面」：停止倒數並離開本頁。只設 cancelled 停倒數＋自動前往
+  // （倒數 effect 以 cancelled 早退）；不可動 fired，否則 window.close 被擋時「前往」也會被永久封死。
   function leave() {
     setCancelled(true);
-    fired.current = true; // 阻止倒數 effect 再自動前往
     try {
       window.close();
     } catch {
       /* 忽略 */
     }
-    // window.close 對一般分頁多半無效：退回上一頁作為降級（仍離開本中轉頁）。
+    // window.close 對 script 未開啟的一般分頁多半無效：有上一頁就退回，否則導向服務首頁，
+    // 確保使用者一定離得開本中轉頁、不會被卡住。
     setTimeout(() => {
       try {
-        if (history.length > 1) history.back();
+        if (window.history.length > 1) window.history.back();
+        else window.location.replace("/r");
       } catch {
-        /* 忽略 */
+        window.location.replace("/r");
       }
     }, 100);
   }

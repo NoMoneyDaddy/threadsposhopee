@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
 
 export type NavItem = { href: string; label: string; match?: string[]; ownerOnly?: boolean };
 
@@ -25,7 +24,8 @@ export function isNavItemActive(item: NavItem, pathname: string): boolean {
 }
 
 // Threads 風頂部導覽：黏性、毛玻璃、單色高對比，當前頁以實心膠囊標示。
-// 桌機橫列；手機收合成漢堡選單（避免項目被擠出畫面外、提升發現性）。
+// 導覽項目「一律常駐顯示」（不收合成漢堡）：桌機橫列靠右，手機螢幕不夠寬時自動換行，
+// 永遠看得到所有分頁，省去先點漢堡再展開的麻煩。
 export default function SiteHeader({
   user,
   isDemo
@@ -34,11 +34,6 @@ export default function SiteHeader({
   isDemo: boolean;
 }) {
   const pathname = usePathname() ?? "";
-  const [open, setOpen] = useState(false);
-  // 換頁後自動收起手機選單。
-  useEffect(() => {
-    setOpen(false);
-  }, [pathname]);
 
   const items = NAV.filter((n) => !n.ownerOnly || user?.isOwner);
   const isActive = (n: NavItem) => isNavItemActive(n, pathname);
@@ -63,7 +58,7 @@ export default function SiteHeader({
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-surface/80 backdrop-blur-md">
       <div className="mx-auto max-w-6xl px-4 py-2.5">
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2">
           <Link href="/" className="flex items-center gap-2" aria-label="IwantPo 首頁">
             <span aria-hidden className="accent-line grid h-8 w-8 place-items-center rounded-xl text-white">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -78,10 +73,10 @@ export default function SiteHeader({
           </Link>
           {isDemo && <span className="badge-warn whitespace-nowrap">Demo 模式（未連接金鑰）</span>}
 
-          {/* 桌機：橫列導覽（靠右） */}
-          <nav className="ml-auto hidden items-center gap-0.5 text-sm lg:flex" aria-label="主導覽">
-            {user &&
-              items.map((n) => {
+          {/* 導覽常駐顯示（不收合）：桌機靠右一列，手機螢幕不夠寬時自動換行 */}
+          {user && (
+            <nav className="ml-auto flex flex-wrap items-center gap-0.5 text-sm" aria-label="主導覽">
+              {items.map((n) => {
                 const active = isActive(n);
                 return (
                   <Link
@@ -97,54 +92,12 @@ export default function SiteHeader({
                   </Link>
                 );
               })}
-            {user && (
-              <div className="ml-2 flex shrink-0 items-center gap-2 border-l border-border pl-3 text-xs text-ink-3">
+              <div className="ml-1 flex shrink-0 items-center gap-2 border-l border-border pl-2 text-xs text-ink-3">
                 {userMeta}
               </div>
-            )}
-          </nav>
-
-          {/* 手機：漢堡按鈕 */}
-          {user && (
-            <button
-              type="button"
-              onClick={() => setOpen((o) => !o)}
-              aria-expanded={open}
-              aria-controls="mobile-nav"
-              aria-label={open ? "關閉選單" : "開啟選單"}
-              className="btn btn-ghost btn-sm ml-auto lg:hidden"
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                {open ? <path d="M18 6 6 18M6 6l12 12" /> : <path d="M3 12h18M3 6h18M3 18h18" />}
-              </svg>
-            </button>
+            </nav>
           )}
         </div>
-
-        {/* 手機：收合選單內容 */}
-        {user && open && (
-          <nav id="mobile-nav" className="mt-2 flex flex-col gap-0.5 text-sm lg:hidden" aria-label="主導覽">
-            {items.map((n) => {
-              const active = isActive(n);
-              return (
-                <Link
-                  key={n.href}
-                  href={n.href}
-                  aria-current={active ? "page" : undefined}
-                  className={
-                    "rounded-lg px-3 py-2 font-medium transition-colors " +
-                    (active ? "bg-ink text-bg" : "text-ink-2 hover:bg-surface-2 hover:text-ink")
-                  }
-                >
-                  {n.label}
-                </Link>
-              );
-            })}
-            <div className="mt-1 flex items-center gap-2 border-t border-border pt-2 text-xs text-ink-3">
-              {userMeta}
-            </div>
-          </nav>
-        )}
       </div>
     </header>
   );

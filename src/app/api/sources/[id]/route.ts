@@ -4,10 +4,11 @@ import { getCurrentUser, type AppUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-// 任何登入者皆可操作「自己的」來源；多租戶隔離由 store 以 owner_id 過濾保證（只動得到自己的列）。
+// 自動抓文為平台管理員專屬功能；多租戶隔離仍由 store 以 owner_id 過濾保證（只動得到自己的列）。
 async function requireUser(): Promise<{ user: AppUser; error: null } | { user: null; error: NextResponse }> {
   const user = await getCurrentUser();
   if (!user) return { user: null, error: NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 }) };
+  if (!user.isOwner) return { user: null, error: NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 }) };
   return { user, error: null };
 }
 

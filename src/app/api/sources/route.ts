@@ -5,11 +5,12 @@ import { isDemoMode } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 
-// 監看來源（抓取）：任何綁定自己 Apify 金鑰的使用者皆可使用。
+// 監看來源（抓取）：自動抓文為平台管理員專屬功能。
 export async function POST(req: Request) {
   try {
     const user = await getCurrentUser();
     if (!user) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+    if (!user.isOwner) return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
     // 需先綁定自己的 Apify 金鑰（抓取靠它，計費也算在自己帳上）。
     // 不吞 I/O 錯：hasApifyCredentials 若拋錯則落到外層 catch 回 500，不誤判成「未綁定」。
     const apify = await hasApifyCredentials(user.id);

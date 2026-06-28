@@ -31,8 +31,9 @@ export default function SelfComposeForm({
   const [scheduledAt, setScheduledAt] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
-  // 正文必填：空白時停用所有送出鈕（與後端／submit 驗證一致），避免按了才跳錯。
-  const canSubmit = mainText.trim().length > 0;
+  // 送出條件：正文必填＋至少一個發文帳號（與後端／submit 驗證一致），不符時停用所有送出鈕並提示原因。
+  const blockReason = threadsAccounts.length === 0 ? "請先到帳號管理綁定 Threads 帳號" : !mainText.trim() ? "請先輸入正文" : "";
+  const canSubmit = blockReason === "";
 
   async function submit(action: "publish" | "schedule" | "draft" | "queue") {
     if (!mainText.trim()) {
@@ -210,7 +211,7 @@ export default function SelfComposeForm({
         <button
           onClick={() => submit("queue")}
           disabled={!!busy || !canSubmit}
-          title={!canSubmit ? "請先輸入正文" : "自動排進下一個空的每日發文時段（依防封節奏）"}
+          title={blockReason || "自動排進下一個空的每日發文時段（依防封節奏）"}
           className="rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
         >
           {busy === "queue" ? "排入中…" : "加入佇列"}
@@ -218,15 +219,15 @@ export default function SelfComposeForm({
         <button
           onClick={() => submit("publish")}
           disabled={!!busy || !canSubmit}
-          title={!canSubmit ? "請先輸入正文" : "略過排程，立刻發布這一篇"}
+          title={blockReason || "略過排程，立刻發布這一篇"}
           className="rounded-xl border border-brand/40 px-4 py-2 text-sm text-brand hover:bg-orange-50 disabled:opacity-50"
         >
           {busy === "publish" ? "發布中…" : "立即發布"}
         </button>
-        <button onClick={() => submit("schedule")} disabled={!!busy || !canSubmit} className="rounded-xl border px-4 py-2 text-sm hover:bg-surface-2 disabled:opacity-50">
+        <button onClick={() => submit("schedule")} disabled={!!busy || !canSubmit} title={blockReason || undefined} className="rounded-xl border px-4 py-2 text-sm hover:bg-surface-2 disabled:opacity-50">
           指定時間
         </button>
-        <button onClick={() => submit("draft")} disabled={!!busy || !canSubmit} className="rounded-xl border px-4 py-2 text-sm hover:bg-surface-2 disabled:opacity-50">
+        <button onClick={() => submit("draft")} disabled={!!busy || !canSubmit} title={blockReason || undefined} className="rounded-xl border px-4 py-2 text-sm hover:bg-surface-2 disabled:opacity-50">
           存草稿
         </button>
       </div>

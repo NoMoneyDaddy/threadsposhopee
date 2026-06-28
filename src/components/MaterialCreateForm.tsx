@@ -63,7 +63,7 @@ export default function MaterialCreateForm({
         />
       </div>
       <div>
-        <label className="mb-1 block text-xs text-ink-2">媒體（選填，同一篇可多張圖／影片；留空則用商品圖）</label>
+        <label className="mb-1 block text-xs text-ink-2">媒體（同一篇可多張圖／影片；建議自行上傳，留空則該素材無圖）</label>
         <MediaPicker items={media} onChange={setMedia} cloud={cloud} preset={preset} hint="可加多張照片／影片（多張＝輪播）" />
       </div>
       <label className="flex items-center gap-2 text-sm text-ink-2">

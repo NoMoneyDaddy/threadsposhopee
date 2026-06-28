@@ -88,7 +88,7 @@ export default function HowItWorksPage() {
 
       <Section id="materials" title="第二步：準備素材">
         <p className="mb-2 text-sm text-ink">
-          <b>素材＝一個商品＋你的分潤連結＋AI 文案＋圖片/影片</b>。建立後可重複「排一篇」，不必每次重做。
+          <b>素材＝一個商品＋你的分潤連結＋圖片／影片</b>；若已綁定 Gemini，系統會再幫你生成 AI 文案。建立後可重複「排一篇」，不必每次重做。
         </p>
         <Steps
           items={[
@@ -96,11 +96,11 @@ export default function HowItWorksPage() {
               到<Link href="/materials" className="text-brand underline">素材</Link>頁<b>貼上你的蝦皮商品連結</b>，
               並<b>上傳該商品的圖片／影片</b>。
             </>,
-            <>系統會換上<b>你的</b>分潤連結、用你的 Gemini 生成文案，存成素材。</>
+            <>系統會換上<b>你的</b>分潤連結；若已綁定 Gemini，也會一併生成文案，存成素材。</>
           ]}
         />
         <Note>
-          共享素材庫只帶「商品」本身：匯入時用<b>你自己的金鑰重產分潤連結與文案</b>，不會沿用分享者的連結或文案。
+          共享素材庫只帶「商品」本身：匯入時用<b>你自己的金鑰重產分潤連結</b>（綁了 Gemini 才會重產文案），不會沿用分享者的連結或文案。
         </Note>
       </Section>
 

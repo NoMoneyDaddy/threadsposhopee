@@ -2,22 +2,24 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-// 「繼續」一次點擊：①（有分潤時）另開分潤/優惠頁 ②本頁前往來源。
-// 分潤僅在「使用者真實點擊」時開啟＝合法計佣；絕不做零點擊自動觸發（cookie stuffing）。
-// 倒數自動跳轉只導向來源原文（不開分潤），維持「真實點擊才計佣」底線。
-// 社群 App 內建瀏覽器常擋新分頁：附明確「直接看原文」連結作降級，使用者永遠到得了來源。
+// 正規轉址：「前往」一次點擊只導向來源原文（不再開任何分潤頁，純中轉＋廣告維運）。
+// 倒數自動跳轉到來源；使用者可按「取消自動跳轉」停止倒數，改成純手動前往。
+// 來源被標為不安全（unsafe）時不倒數、不自動跳，須使用者主動確認風險才前往。
+// 社群 App 內建瀏覽器情境：附明確「直接前往」連結作降級，使用者永遠到得了來源。
 const AUTO_SECONDS = 5;
 
 export default function ContinueButton({
   code,
   sourceUrl,
-  affiliateUrl
+  unsafe = false
 }: {
   code: string;
   sourceUrl: string;
-  affiliateUrl: string | null;
+  unsafe?: boolean;
 }) {
-  const [left, setLeft] = useState(AUTO_SECONDS);
+  // unsafe：起始即視為「已取消倒數」，不自動前往，等使用者主動確認。
+  const [left, setLeft] = useState(unsafe ? 0 : AUTO_SECONDS);
+  const [cancelled, setCancelled] = useState(unsafe);
   const fired = useRef(false);
 
   const hit = useCallback(() => {
@@ -28,42 +30,48 @@ export default function ContinueButton({
     }
   }, [code]);
 
-  // 使用者真實點擊：開分潤（新分頁）＋本頁前往來源。
-  function onContinue() {
+  // 使用者主動點「前往」：計一次點擊（continues）＋本頁前往來源。
+  function go() {
     if (fired.current) return;
     fired.current = true;
     hit();
-    if (affiliateUrl) {
-      // 新分頁開分潤（user gesture 內，桌機/原生瀏覽器可行；webview 可能被擋→使用者仍會被導到來源）
-      window.open(affiliateUrl, "_blank", "noopener");
-    }
     window.location.href = sourceUrl;
   }
 
-  // 倒數歸零自動跳轉：只前往來源原文，不開分潤、也不計「繼續」（非真實點擊；hit 僅留給手動點擊）。
+  // 倒數歸零自動前往來源（已取消或 unsafe 則不啟動）。自動跳轉不計 continues（非主動點擊）。
   useEffect(() => {
-    if (fired.current) return; // 已（手動或自動）觸發跳轉→不再排計時器/更新狀態
+    if (cancelled || fired.current) return;
     if (left <= 0) {
       fired.current = true;
       window.location.href = sourceUrl;
       return;
     }
     const t = setTimeout(() => {
-      if (!fired.current) setLeft((n) => n - 1);
+      if (!fired.current && !cancelled) setLeft((n) => n - 1);
     }, 1000);
     return () => clearTimeout(t);
-  }, [left, sourceUrl]);
+  }, [left, cancelled, sourceUrl]);
 
+  const counting = !cancelled && !unsafe && left > 0;
   return (
     <div className="mt-5 space-y-2">
-      <button type="button" onClick={onContinue} className="btn btn-brand w-full">
-        {/* 視覺：每秒更新的倒數（對報讀器隱藏，避免每秒朗讀噪音） */}
-        <span aria-hidden="true">繼續 →{left > 0 ? `（${left} 秒後自動前往）` : "前往中…"}</span>
-        {/* 報讀器：只在「掛載」與「歸零跳轉」兩個狀態變化時朗讀，不逐秒播報 */}
-        <span className="sr-only" aria-live="polite">{left > 0 ? "繼續，前往觀看文章" : "前往中…"}</span>
+      <button type="button" onClick={go} className="btn btn-brand w-full">
+        <span aria-hidden="true">
+          {unsafe ? "我了解風險，仍要前往 →" : counting ? `前往 →（${left} 秒後自動前往）` : "前往 →"}
+        </span>
+        <span className="sr-only" aria-live="polite">{counting ? "前往觀看內容" : "前往中…"}</span>
       </button>
+      {counting && (
+        <button
+          type="button"
+          onClick={() => setCancelled(true)}
+          className="block w-full text-xs text-ink-3 hover:text-ink"
+        >
+          取消自動跳轉
+        </button>
+      )}
       <a href={sourceUrl} rel="noopener nofollow" className="block text-xs text-ink-3 hover:text-ink">
-        直接看原文
+        直接前往
       </a>
     </div>
   );

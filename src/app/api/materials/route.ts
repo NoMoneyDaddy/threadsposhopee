@@ -39,7 +39,14 @@ export async function POST(req: Request) {
     // 否則退回舊單一 media_url/media_type（向後相容）。type 走白名單，無效值不靜默當 image。
     const mediaList = parseMediaList(body.media);
     const mediaUrl = typeof body.media_url === "string" && body.media_url.trim() ? body.media_url.trim() : null;
-    if (mediaUrl && body.media_type !== undefined && body.media_type !== null && !["image", "video"].includes(body.media_type)) {
+    // 舊單一 media_type 僅在「無 media[]、實際採用 media_url」時才驗；避免新舊欄位並送時誤擋以 media[] 為準的請求。
+    if (
+      mediaList.length === 0 &&
+      mediaUrl &&
+      body.media_type !== undefined &&
+      body.media_type !== null &&
+      !["image", "video"].includes(body.media_type)
+    ) {
       return NextResponse.json({ ok: false, error: "媒體類型只支援 image 或 video" }, { status: 400 });
     }
     const media =

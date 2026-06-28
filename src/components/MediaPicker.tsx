@@ -120,6 +120,16 @@ export default function MediaPicker({
               className={input + " flex-1"}
               value={url}
               onChange={(e) => setUrl(e.target.value)}
+              onKeyDown={(e) => {
+                // 攔 Enter：執行「加入」而非冒泡觸發外層 form submit（素材表單是 <form>）。
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  if (!atLimit && url.trim()) {
+                    add({ url: url.trim(), type });
+                    setUrl("");
+                  }
+                }
+              }}
               placeholder="圖片／影片網址"
               inputMode="url"
               aria-label="媒體網址"

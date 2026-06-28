@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useState, type Dispatch, type SetStateAction } from "react";
 import { useRouter } from "next/navigation";
 import type { ThreadsAccount, DraftMedia } from "@/lib/types";
 import ThreadsPreview, { CharCount } from "@/components/ThreadsPreview";
@@ -27,8 +27,6 @@ function MediaPicker({
   preset: string | null;
   hint: string;
 }) {
-  // CloudinaryUpload 會先呼叫 onType 再 onUploaded（同步），用 ref 接住型別再組成一項。
-  const pendingType = useRef<"image" | "video">("image");
   const [url, setUrl] = useState("");
   const [type, setType] = useState<"image" | "video">("image");
   const atLimit = items.length >= MAX_MEDIA;
@@ -66,8 +64,8 @@ function MediaPicker({
           preset={preset}
           multiple
           disabled={atLimit}
-          onType={(t) => (pendingType.current = t)}
-          onUploaded={(u) => add({ url: u, type: pendingType.current })}
+          remaining={MAX_MEDIA - items.length}
+          onUploaded={(u, t) => add({ url: u, type: t })}
         />
         <span className="text-xs text-ink-3">{atLimit ? `已達上限 ${MAX_MEDIA} 個媒體` : hint}</span>
         <details className="ml-auto text-xs text-ink-3">

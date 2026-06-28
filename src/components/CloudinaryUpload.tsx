@@ -1,26 +1,33 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 // 本機選圖/影片 → 直接從瀏覽器上傳到使用者的 Cloudinary（unsigned preset）。
-// 檔案完全不經過自家伺服器（不耗伺服器流量），只把回傳的 secure_url 交回表單。
-// multiple=true 時可一次從相簿多選，逐檔依序上傳並各自回呼（onType→onUploaded 成對）。
+// 檔案完全不經過自家伺服器（不耗伺服器流量），只把回傳的 secure_url 與型別交回表單。
+// multiple=true 時可一次從相簿多選，逐檔依序上傳；onUploaded 直接帶 type，呼叫端免暫存。
 export default function CloudinaryUpload({
   cloud,
   preset,
   onUploaded,
-  onType,
   multiple = false,
-  disabled = false
+  disabled = false,
+  remaining = Infinity
 }: {
   cloud: string | null;
   preset: string | null;
-  onUploaded: (url: string) => void;
-  onType?: (t: "image" | "video") => void;
+  onUploaded: (url: string, type: "image" | "video") => void;
   multiple?: boolean;
   disabled?: boolean;
+  remaining?: number;
 }) {
   const ref = useRef<HTMLInputElement>(null);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -47,22 +54,35 @@ export default function CloudinaryUpload({
     return { url: json.secure_url as string, type: json.resource_type === "video" ? "video" : "image" };
   }
 
-  // 逐檔依序上傳：成對觸發 onType→onUploaded，讓接收端用最新型別組成一項；單檔失敗只記錯不中斷其餘。
+  // 逐檔依序上傳：onUploaded 直接帶 type（不依賴外部暫存，免並發競態）；單檔失敗只記錯不中斷其餘。
+  // 先依 remaining 名額裁切，避免超過上限的多餘檔案被白上傳浪費額度。
+  // 卸載後停止後續上傳並略過 setState（多檔路徑較長，使用者可能中途離開）。
   async function handleFiles(files: File[]) {
     setErr(null);
+    const limit = multiple ? Math.max(0, remaining) : 1;
+    const allowed = files.slice(0, limit);
+    if (allowed.length === 0) return;
+    // 各檔錯誤彙整後一次呈現（避免多檔失敗時只看到最後一筆）。
+    const errors: string[] = [];
+    if (allowed.length < files.length) {
+      errors.push(`已達上限，僅上傳前 ${allowed.length} 個檔案`);
+    }
     setBusy(true);
     try {
-      for (const f of files) {
+      for (const f of allowed) {
+        if (!mounted.current) break;
         try {
           const r = await uploadOne(f);
-          onType?.(r.type);
-          onUploaded(r.url);
+          onUploaded(r.url, r.type);
         } catch (e) {
-          setErr(e instanceof Error ? e.message : "上傳失敗");
+          errors.push(e instanceof Error ? e.message : "上傳失敗");
         }
       }
     } finally {
-      setBusy(false);
+      if (mounted.current) {
+        setErr(errors.length ? errors.join("；") : null);
+        setBusy(false);
+      }
       if (ref.current) ref.current.value = "";
     }
   }

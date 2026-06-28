@@ -83,7 +83,14 @@ export default function MaterialCreateForm({
             <option value="image">圖片</option>
             <option value="video">影片</option>
           </select>
-          <CloudinaryUpload cloud={cloud} preset={preset} onUploaded={(u) => setMediaUrl(u)} onType={(t) => setMediaType(t)} />
+          <CloudinaryUpload
+            cloud={cloud}
+            preset={preset}
+            onUploaded={(u, t) => {
+              setMediaUrl(u);
+              setMediaType(t);
+            }}
+          />
         </div>
       </div>
       <label className="flex items-center gap-2 text-sm text-ink-2">

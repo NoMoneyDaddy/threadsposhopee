@@ -62,7 +62,7 @@ export default function GeminiForm({ bound }: { bound: boolean }) {
         <input
           className="input min-w-0 flex-1"
           type="password"
-          placeholder={bound ? "貼上新的 key 以更新（留空＝不變）" : "Gemini API key"}
+          placeholder={bound ? "貼上新的 key 以更新" : "Gemini API key"}
           value={key}
           onChange={(e) => setKey(e.target.value)}
         />

@@ -61,7 +61,7 @@ export default function ApifyForm({ bound }: { bound: boolean }) {
         <input
           className={input}
           type="password"
-          placeholder={bound ? "貼上新的 Apify token 以更新（留空＝不變）" : "Apify API token"}
+          placeholder={bound ? "貼上新的 Apify token 以更新" : "Apify API token"}
           value={token}
           onChange={(e) => setToken(e.target.value)}
         />

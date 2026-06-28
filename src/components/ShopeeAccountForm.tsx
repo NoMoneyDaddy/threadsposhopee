@@ -29,7 +29,8 @@ export default function ShopeeAccountForm({ bound = null }: { bound?: ShopeeAcco
         body: JSON.stringify(form)
       });
       const json = await res.json();
-      if (!json.ok) throw new Error(json.error);
+      // 防呆：error 非字串時不要讓樣板顯示成 [object Object]
+      if (!json.ok) throw new Error(typeof json.error === "string" && json.error ? json.error : "綁定失敗");
       setForm({ app_id: "", secret: "" });
       setMsg(json.warning ? `⚠️ ${json.warning}` : "✅ 已綁定");
       router.refresh();

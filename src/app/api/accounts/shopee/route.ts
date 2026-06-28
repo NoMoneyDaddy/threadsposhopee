@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createShopeeAccount } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
 import { validateShopeeCredentials } from "@/services/shopee/affiliate";
+import { errorMessage } from "@/lib/errors";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,7 @@ export async function POST(req: Request) {
       warning: check.ok ? undefined : `已儲存，但金鑰驗證未通過（${check.reason ?? "請確認 App ID／Secret"}），若產生連結失敗請重新確認。`
     });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 500 });
+    // Supabase/PostgREST 丟的是純物件（非 Error），用 errorMessage 取 message，避免回 "[object Object]"。
+    return NextResponse.json({ ok: false, error: errorMessage(e, "綁定失敗，請稍後再試") }, { status: 500 });
   }
 }

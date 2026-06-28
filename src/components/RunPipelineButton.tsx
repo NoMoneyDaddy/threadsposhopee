@@ -19,7 +19,9 @@ export default function RunPipelineButton() {
       if (!res.ok || !json?.ok) {
         throw new Error(typeof json?.error === "string" && json.error ? json.error : `抓取失敗（HTTP ${res.status}）`);
       }
-      const results: { created: number; reusedMaterial: number; scanned: number; error?: string }[] = json.results ?? [];
+      const results: { created: number; reusedMaterial: number; scanned: number; error?: string }[] = Array.isArray(json?.results)
+        ? json.results
+        : [];
       const created = results.reduce((n, r) => n + (r.created ?? 0), 0);
       const reused = results.reduce((n, r) => n + (r.reusedMaterial ?? 0), 0);
       const failed = results.filter((r) => r.error).length;

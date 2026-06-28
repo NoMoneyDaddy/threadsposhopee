@@ -1,6 +1,7 @@
 import Link from "next/link";
+import { getCurrentUser } from "@/lib/auth";
 
-export const dynamic = "force-static";
+export const dynamic = "force-dynamic";
 
 export const metadata = { title: "金鑰取得教學 — IwantPo" };
 
@@ -41,13 +42,16 @@ function Guide({ steps, note, docs }: Step) {
   );
 }
 
-export default function GuidePage() {
+export default async function GuidePage() {
+  // 一般成員／登出者看不到平台管理員專屬服務（如自動抓文 Apify）的設定教學。
+  const user = await getCurrentUser();
+  const isOwner = user?.isOwner ?? false;
   return (
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-bold">金鑰取得教學</h1>
         <p className="text-sm text-ink-2">
-          除平台管理員專屬的 Apify 自動抓文外，每項服務都綁<b>你自己的</b>金鑰；機密類一律 AES-256 加密存、不入庫、不外露。到{" "}
+          每項服務都綁<b>你自己的</b>金鑰；機密類一律 AES-256 加密存、不入庫、不外露。到{" "}
           <Link href="/accounts" className="text-brand underline">帳號管理</Link> 填入。
         </p>
       </div>
@@ -100,17 +104,20 @@ export default function GuidePage() {
         />
       </Section>
 
-      <Section id="apify" title="自動抓文（Apify）" badge="自動化·選用">
-        <Guide
-          steps={[
-            "到 <a href=\"https://console.apify.com\" target=\"_blank\" rel=\"noopener noreferrer\" class=\"text-brand underline\">console.apify.com</a> 註冊／登入。",
-            "<b>Settings → API &amp; Integrations</b>，複製 <b>Personal API token</b>。",
-            "（平台管理員）可選填 Actor id；到帳號管理的 Apify 欄位填入後即可監看來源。一般成員不會顯示此欄位。"
-          ]}
-          note="Token 為機密，加密存、只在 server 用。自動抓文為平台管理員專屬功能（計費算在管理員的 Apify 帳上）；一般成員可手動建素材。"
-          docs={[{ label: "Apify API token 文件", href: "https://docs.apify.com/platform/integrations/api" }]}
-        />
-      </Section>
+      {/* 自動抓文（Apify）為平台管理員專屬，僅管理員看得到此教學。 */}
+      {isOwner && (
+        <Section id="apify" title="自動抓文（Apify）" badge="管理員專屬">
+          <Guide
+            steps={[
+              "到 <a href=\"https://console.apify.com\" target=\"_blank\" rel=\"noopener noreferrer\" class=\"text-brand underline\">console.apify.com</a> 註冊／登入。",
+              "<b>Settings → API &amp; Integrations</b>，複製 <b>Personal API token</b>。",
+              "可選填 Actor id；到帳號管理的 Apify 欄位填入後即可監看來源。"
+            ]}
+            note="Token 為機密，加密存、只在 server 用（計費算在你的 Apify 帳上）。"
+            docs={[{ label: "Apify API token 文件", href: "https://docs.apify.com/platform/integrations/api" }]}
+          />
+        </Section>
+      )}
 
       <Section id="cloudinary" title="圖片／影片存放：Cloudinary" badge="圖床·選用">
         <Guide

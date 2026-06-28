@@ -59,18 +59,22 @@ export async function validateCloudinaryUnsigned(cloud: string, preset: string):
         } catch (e) {
           log.warn("Cloudinary 驗證後刪除測試圖失敗（不影響綁定）", { err: e });
         }
+      } else {
+        // 回應缺 delete_token（非預期回應/非 JSON）：無法清掉測試圖，記錄以利觀察（不含機密）。
+        log.warn("Cloudinary 驗證上傳成功但缺 delete_token，未能刪除測試圖", { cloud });
       }
       return { ok: true };
     }
-    // 4xx：cloud 不存在、preset 不存在或非 unsigned → 明確無效，擋下。
-    if (res.status >= 400 && res.status < 500) {
+    // 僅「明確無效」的狀態才擋（cloud/preset 錯或非 unsigned）；408/429 等暫時性 4xx 視為無法確認 → 放行。
+    if (res.status === 400 || res.status === 401 || res.status === 403 || res.status === 404) {
       const txt = await res.text().catch(() => "");
       const reason = /preset/i.test(txt)
         ? "Cloudinary upload preset 無效或非 unsigned（請確認 preset 名稱與簽署模式）"
         : "Cloudinary 設定無效（請確認 cloud name 與 upload preset）";
       return { ok: false, reason };
     }
-    // 5xx 等：無法確認 → 放行。
+    // 其餘（408/429/5xx 等暫時性）：無法確認 → 放行（不因第三方限流/故障擋住綁定）。
+    log.warn("Cloudinary 驗證回應無法判定有效性，放行存檔", { status: res.status });
     return { ok: true };
   } catch (e) {
     log.warn("validateCloudinaryUnsigned 無法確認，放行存檔", { err: e });

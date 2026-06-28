@@ -275,7 +275,11 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
       }
       if (!(accId in sponsorPostedTodayCache)) {
         sponsorPostedTodayCache[accId] = draft.owner_id
-          ? await countPublishedTodayByAccount(accId, draft.owner_id, sponsorTodaySinceIso).catch(() => 0)
+          ? await countPublishedTodayByAccount(accId, draft.owner_id, sponsorTodaySinceIso).catch((e) => {
+              // 算不出當日發文數時記錄並保守降級為 0（本篇不抽贊助），不靜默吞錯。
+              log.warn("計算當日發文數失敗，本篇略過贊助配額", { accId, err: e });
+              return 0;
+            })
           : 0;
       }
       const sponsorQuotaToday = sponsorQuota(sponsorPostedTodayCache[accId] + 1, {

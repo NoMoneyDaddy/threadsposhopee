@@ -26,6 +26,14 @@ test("sponsorQuota：perPosts 當抽成率槓桿（貢獻者抽更少）", () =>
   assert.equal(sponsorQuota(24, { perPosts: 12 }), 2);
 });
 
+test("sponsorQuota：低頻硬閘門——perPosts 比門檻小時，低於門檻仍為 0（不被 by-volume 抽到）", () => {
+  const opts = { perPosts: 2, floor: 1, minPostsForFloor: 3 };
+  assert.equal(sponsorQuota(1, opts), 0);
+  assert.equal(sponsorQuota(2, opts), 0); // 2 < 門檻3 → 0，即使 ⌊2/2⌋=1
+  assert.equal(sponsorQuota(3, opts), 1); // 達門檻 → max(1, ⌊3/2⌋=1)=1
+  assert.equal(sponsorQuota(4, opts), 2); // max(1, ⌊4/2⌋=2)=2
+});
+
 test("sponsorQuota：非法輸入回 0", () => {
   assert.equal(sponsorQuota(-3), 0);
   assert.equal(sponsorQuota(Number.NaN), 0);

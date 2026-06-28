@@ -600,12 +600,14 @@ export async function countPublished(ownerId: string): Promise<number> {
 export async function countPublishedTodayByAccount(accountId: string, ownerId: string, sinceIso: string): Promise<number> {
   if (isDemoMode) return 0;
   const sb = getServiceClient()!;
-  const { count } = await sb
+  const { count, error } = await sb
     .from("drafts")
     .select("*", { count: "exact", head: true })
     .eq("owner_id", ownerId)
     .eq("threads_account_id", accountId)
     .eq("status", "published")
     .gte("published_at", sinceIso);
+  // 不吞 DB 錯誤：拋出讓呼叫端記錄並安全降級（贊助配額算不出時保守不抽，而非靜默當 0）。
+  if (error) throw new Error(`countPublishedTodayByAccount 失敗：${error.message}`);
   return count ?? 0;
 }

@@ -104,12 +104,26 @@ export default async function AccountsPage() {
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-ink-2">
                     <span>Threads ID：{a.threads_user_id}</span>
-                    <span
-                      className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${isLong ? "bg-success/10 text-success" : "bg-amber-100 text-amber-700"}`}
-                      title={isLong ? "已換成 60 天長期權杖，系統每日自動展期" : "尚未換成長期權杖；新增時附上 App 密鑰即可自動換 60 天長期"}
-                    >
-                      {isLong ? "長期權杖" : "短期權杖"}
-                    </span>
+                    {(() => {
+                      // 三態：短期（無到期日）／長期已過期（無法自動展期）／長期有效。
+                      const expired = isLong && exp.level === "expired";
+                      const cls = !isLong
+                        ? "bg-amber-100 text-amber-700"
+                        : expired
+                          ? "bg-red-100 text-red-700"
+                          : "bg-success/10 text-success";
+                      const title = !isLong
+                        ? "尚未換成長期權杖；新增時附上 App 密鑰即可自動換 60 天長期"
+                        : expired
+                          ? "長期權杖已過期，無法自動展期，請重新綁定"
+                          : "已換成 60 天長期權杖，系統每日自動展期";
+                      const text = !isLong ? "短期權杖" : expired ? "長期權杖（已過期）" : "長期權杖";
+                      return (
+                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${cls}`} title={title}>
+                          {text}
+                        </span>
+                      );
+                    })()}
                   </div>
                   {a.token_expires_at ? (
                     (() => {

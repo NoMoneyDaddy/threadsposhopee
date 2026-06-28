@@ -67,6 +67,9 @@ export default function ThreadsAccountForm() {
           </li>
           <li>貼到下方欄位。後台產生的權杖本即 60 天長效；若用 1 小時短效權杖，另填 App 密鑰（App 設定 → 基本）換長效。</li>
         </ol>
+        <p className="mt-2 rounded-lg bg-amber-50 p-2 text-[11px] text-amber-800">
+          📱 手機操作提醒：在手機上產生權杖時，請用瀏覽器的「電腦版網站（桌面版）」模式，並先暫時移除（解除安裝）Threads App，授權跳轉才會正確；完成後再裝回。
+        </p>
         <a href="/guide#threads" className="mt-2 inline-block text-brand underline">
           完整教學 →
         </a>

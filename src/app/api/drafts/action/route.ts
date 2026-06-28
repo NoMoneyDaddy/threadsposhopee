@@ -5,6 +5,7 @@ import {
   deleteDraft,
   getDraft,
   getGeminiKey,
+  resolveGeminiModel,
   getCopyPrefs,
   requeueReply,
   rescheduleDraft,
@@ -153,7 +154,7 @@ export async function POST(req: Request) {
   }
   if (action === "regenerate") {
     try {
-      const [geminiKey, copyPrefs] = await Promise.all([getGeminiKey(user.id), getCopyPrefs(user.id)]);
+      const [geminiKey, copyPrefs, geminiModel] = await Promise.all([getGeminiKey(user.id), getCopyPrefs(user.id), resolveGeminiModel(user.id)]);
       if (!geminiKey) return NextResponse.json({ ok: false, error: "請先到帳號管理綁定你自己的 Gemini 金鑰" }, { status: 400 });
       const copy = await generateCopy(
         {
@@ -163,7 +164,8 @@ export async function POST(req: Request) {
           mediaType: (draft.media_type as "image" | "video" | "none") ?? "none"
         },
         geminiKey,
-        copyPrefs
+        copyPrefs,
+        geminiModel
       );
       const updated = await updateDraft(id, user.id, {
         main_text: copy.mainText,
@@ -181,7 +183,7 @@ export async function POST(req: Request) {
   if (action === "variants") {
     const n = Math.min(3, Math.max(2, Number(body.count) || 2));
     try {
-      const [geminiKey, copyPrefs] = await Promise.all([getGeminiKey(user.id), getCopyPrefs(user.id)]);
+      const [geminiKey, copyPrefs, geminiModel] = await Promise.all([getGeminiKey(user.id), getCopyPrefs(user.id), resolveGeminiModel(user.id)]);
       if (!geminiKey) return NextResponse.json({ ok: false, error: "請先到帳號管理綁定你自己的 Gemini 金鑰" }, { status: 400 });
       const ctx = {
         productName: draft.product_name ?? "這個好物",
@@ -190,7 +192,7 @@ export async function POST(req: Request) {
         mediaType: (draft.media_type as "image" | "video" | "none") ?? "none"
       };
       const results = await Promise.all(
-        Array.from({ length: n }, () => generateCopy(ctx, geminiKey, copyPrefs).catch(() => null))
+        Array.from({ length: n }, () => generateCopy(ctx, geminiKey, copyPrefs, geminiModel).catch(() => null))
       );
       const variants = results
         .filter((c): c is NonNullable<typeof c> => c !== null)

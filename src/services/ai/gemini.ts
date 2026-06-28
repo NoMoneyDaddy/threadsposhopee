@@ -19,7 +19,8 @@ export async function generateWithGemini(
   mediaUrl: string | null,
   mediaType: "image" | "video" | "none",
   apiKey?: string | null,
-  temperature = 0.9
+  temperature = 0.9,
+  model?: string | null
 ): Promise<string> {
   const key = apiKey;
   if (!key) throw new Error("無 Gemini 金鑰"); // 先擋空金鑰，避免送出 key=undefined 的必失敗外呼
@@ -72,7 +73,7 @@ export async function generateWithGemini(
     }
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${env.geminiModel}:generateContent?key=${key}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model || env.geminiModel}:generateContent?key=${key}`;
   // 生成無副作用（產文字）→ 429 退避重試安全；放寬逾時 30s（生成較慢）。SSRF 守衛收斂於 fetch 前。
   const res = await fetchWithRetry(assertSafePublicUrl(url).href, {
     method: "POST",
@@ -96,10 +97,10 @@ export async function generateWithGemini(
 }
 
 // 純文字生成（無媒體）：給「成效歸因摘要」等非文案用途共用。失敗會拋錯，由呼叫端決定降級。
-export async function geminiText(prompt: string, apiKey?: string | null, temperature = 0.4, maxOutputTokens = 400): Promise<string> {
+export async function geminiText(prompt: string, apiKey?: string | null, temperature = 0.4, maxOutputTokens = 400, model?: string | null): Promise<string> {
   const key = apiKey;
   if (!key) throw new Error("無 Gemini 金鑰");
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${env.geminiModel}:generateContent?key=${key}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model || env.geminiModel}:generateContent?key=${key}`;
   const res = await fetchWithRetry(assertSafePublicUrl(url).href, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

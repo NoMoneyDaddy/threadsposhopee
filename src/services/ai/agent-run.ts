@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { geminiText } from "@/services/ai/gemini";
 import { ANTI_AI_SLOP_RULES } from "@/services/ai/humanizer";
 import { fetchRssItems, type RssItem } from "@/services/ai/rss";
-import { getGeminiKey } from "@/lib/credentials";
+import { getGeminiKey, resolveGeminiModel } from "@/lib/credentials";
 import { getAiDomain, defaultFeedsForDomain, googleNewsRss, resolveDomainIds } from "@/lib/ai-domains";
 import { maxSimilarity } from "@/lib/text-similarity";
 import { createDraft } from "@/lib/drafts-store";
@@ -164,6 +164,7 @@ export async function runAgentOnce(agent: AiAgent, geminiKey: string): Promise<A
   if (!items.length) return { ok: false, reason: "來源無項目" };
 
   const recentTitles = await recentSeenTitles(agent.id, SEEN_WINDOW_MS);
+  const geminiModel = await resolveGeminiModel(agent.owner_id); // 使用者自選模型（無則 env 預設）
 
   for (const item of items) {
     const hash = sourceHash(item.link);
@@ -174,7 +175,7 @@ export async function runAgentOnce(agent: AiAgent, geminiKey: string): Promise<A
     }
 
     // 改寫
-    const body = (await geminiText(buildAgentPrompt(agent, item), geminiKey, 0.9, Math.max(200, agent.length * 3))).trim();
+    const body = (await geminiText(buildAgentPrompt(agent, item), geminiKey, 0.9, Math.max(200, agent.length * 3), geminiModel)).trim();
     if (!body) {
       await markSeen(agent.id, hash, item.title);
       continue;

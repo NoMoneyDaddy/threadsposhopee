@@ -1,7 +1,7 @@
 // 從一個蝦皮連結解析並建立素材（單筆 /api/materials 與批次共用）。
 import { expandShopeeLink } from "@/services/shopee/expand";
 import { buildMaterialForProduct } from "@/services/materials/build";
-import { findMaterial, getShopeeCredentials, getGeminiKey, getShopeeAffiliateId, getShopeeSubId } from "@/lib/store";
+import { findMaterial, getShopeeCredentials, getGeminiKey, resolveGeminiModel, getShopeeAffiliateId, getShopeeSubId } from "@/lib/store";
 import { getMediaProvider } from "@/services/media/upload";
 import { assertSafePublicUrl } from "@/lib/url-guard";
 import type { AppUser } from "@/lib/auth";
@@ -34,6 +34,7 @@ export async function resolveMaterialFromUrl(
   const shopeeCreds = await getShopeeCredentials(ownerId);
   // AI 文案只用「使用者自己綁的」Gemini 金鑰；沒綁就略過文案，不借用系統共用金鑰。
   const geminiKey = await getGeminiKey(ownerId);
+  const geminiModel = await resolveGeminiModel(ownerId);
   const canCopy = withCopy && Boolean(geminiKey);
   // 沒綁 Shopee API 時的後備：用 affiliate_id 自組追蹤連結
   const affiliateId = shopeeCreds ? null : await getShopeeAffiliateId(ownerId);
@@ -61,7 +62,8 @@ export async function resolveMaterialFromUrl(
     geminiKey,
     undefined,
     affiliateId,
-    mediaProvider
+    mediaProvider,
+    geminiModel
   );
   return { material, reused: false, notes };
 }

@@ -8,17 +8,19 @@ import {
   getAutoReviveLinks,
   getUserCloudinary,
   getUserCloudinaryFull,
-  getUserR2
+  getUserR2,
+  getUserGeminiModel
 } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
 import { getThreadsAccountLimit } from "@/lib/account-limits";
-import { isDemoMode } from "@/lib/env";
+import { isDemoMode, env } from "@/lib/env";
 import { tokenExpiryState } from "@/lib/token-expiry";
 import ThreadsAccountForm from "@/components/ThreadsAccountForm";
 import ShopeeAccountForm from "@/components/ShopeeAccountForm";
 import ApifyForm from "@/components/ApifyForm";
 import DeleteAccountButton from "@/components/DeleteAccountButton";
 import GeminiForm from "@/components/GeminiForm";
+import GeminiModelForm from "@/components/GeminiModelForm";
 import AffiliateIdForm from "@/components/AffiliateIdForm";
 import SubIdForm from "@/components/SubIdForm";
 import AutoReviveForm from "@/components/AutoReviveForm";
@@ -40,7 +42,7 @@ export default async function AccountsPage() {
   }
   const ownerId = user?.id ?? "demo-user";
   const [threads, shopee] = await Promise.all([listThreadsAccounts(ownerId), listShopeeAccounts(ownerId)]);
-  const [apify, geminiBound, affiliateId, customSubId, autoRevive, cloudinary, cloudinaryFull, r2Settings] =
+  const [apify, geminiBound, affiliateId, customSubId, autoRevive, cloudinary, cloudinaryFull, r2Settings, geminiModel] =
     await Promise.all([
       user?.isOwner ? hasApifyCredentials(ownerId) : Promise.resolve({ bound: false, actor: null }),
       user ? hasGeminiKey(user.id) : Promise.resolve(false),
@@ -49,7 +51,8 @@ export default async function AccountsPage() {
       user ? getAutoReviveLinks(ownerId) : Promise.resolve(false),
       user ? getUserCloudinary(ownerId) : Promise.resolve(null),
       user ? getUserCloudinaryFull(ownerId) : Promise.resolve(null),
-      user ? getUserR2(ownerId) : Promise.resolve(null)
+      user ? getUserR2(ownerId) : Promise.resolve(null),
+      user ? getUserGeminiModel(user.id) : Promise.resolve(null)
     ]);
   // 只把非機密欄位帶回表單初始值（accountId/bucket/publicBase）；金鑰留在 server 不外露。
   const r2Bound = Boolean(r2Settings);
@@ -108,8 +111,9 @@ export default async function AccountsPage() {
           </div>
         )}
         {user && (
-          <div id="setup-gemini" className="scroll-mt-24">
+          <div id="setup-gemini" className="scroll-mt-24 space-y-4">
             <GeminiForm bound={geminiBound} />
+            <GeminiModelForm initial={geminiModel} envDefault={env.geminiModel} />
           </div>
         )}
       </div>

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { log } from "@/lib/logger";
-import { getMaterial, createDraftFromMaterial, updateDraft, getGeminiKey, getCopyPrefs, userOwnsThreadsAccount, getRepostLimits, countMaterialReposts } from "@/lib/store";
+import { getMaterial, createDraftFromMaterial, updateDraft, getGeminiKey, resolveGeminiModel, getCopyPrefs, userOwnsThreadsAccount, getRepostLimits, countMaterialReposts } from "@/lib/store";
 import { exceedsRepostLimit } from "@/lib/repost-limits";
 import { withNextSlot, nextOpenSlotAtHours } from "@/services/publish/slots";
 import { getBestHours } from "@/services/threads/engagement";
@@ -14,8 +14,10 @@ export const dynamic = "force-dynamic";
 // 重寫失敗（無金鑰/AI 故障）→ 優雅退回原文案，附 note 提示。
 async function maybeVary(draft: Draft, material: Material, ownerId: string): Promise<{ draft: Draft; note?: string }> {
   try {
-    const [geminiKey, copyPrefs] = await Promise.all([getGeminiKey(ownerId), getCopyPrefs(ownerId)]);
+    // 先確認有金鑰：未綁 key 的正常退回路徑不該被偏好/模型查詢失敗連帶拖成一般錯誤。
+    const geminiKey = await getGeminiKey(ownerId);
     if (!geminiKey) return { draft, note: "未綁定自己的 Gemini 金鑰，沿用原文案（到帳號管理綁定）" };
+    const [copyPrefs, geminiModel] = await Promise.all([getCopyPrefs(ownerId), resolveGeminiModel(ownerId)]);
     const copy = await generateCopy(
       {
         productName: material.product_name ?? "這個好物",
@@ -24,7 +26,8 @@ async function maybeVary(draft: Draft, material: Material, ownerId: string): Pro
         mediaType: (material.media_type as "image" | "video" | "none") ?? "none"
       },
       geminiKey,
-      copyPrefs
+      copyPrefs,
+      geminiModel
     );
     const updated = await updateDraft(draft.id, ownerId, {
       main_text: copy.mainText,

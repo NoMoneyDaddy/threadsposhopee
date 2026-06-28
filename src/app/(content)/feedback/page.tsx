@@ -1,6 +1,6 @@
 import { getCurrentUser, getUserEmailsByIds } from "@/lib/auth";
 import { isDemoMode } from "@/lib/env";
-import { listFeedbackForOwner, listAllFeedback } from "@/lib/feedback-store";
+import { listFeedbackForOwner, listAllFeedback } from "@/lib/store";
 import FeedbackForm from "@/components/FeedbackForm";
 import FeedbackAdminReply from "@/components/FeedbackAdminReply";
 import type { Feedback, FeedbackStatus } from "@/lib/types";

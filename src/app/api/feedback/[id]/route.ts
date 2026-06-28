@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { replyFeedbackAsAdmin, isFeedbackStatus } from "@/lib/feedback-store";
+import { replyFeedbackAsAdmin, isFeedbackStatus } from "@/lib/store";
 import { apiError } from "@/lib/api-error";
 
 export const dynamic = "force-dynamic";

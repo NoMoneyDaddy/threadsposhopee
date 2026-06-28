@@ -345,7 +345,7 @@ export default function LiveDashboard() {
         <Chip label="圖片影片空間" on={Boolean(data.services.cloudinary)} />
         <span className="ml-auto flex items-center gap-2 text-xs text-ink-3">
           {loading && <span className="h-2 w-2 animate-pulse rounded-full bg-green-400" />}
-          更新於 {new Date(data.at).toLocaleTimeString("zh-TW")}
+          更新於 {new Date(data.at).toLocaleTimeString("zh-TW", { timeZone: "Asia/Taipei", hour: "2-digit", minute: "2-digit" })}
           <button onClick={load} className="rounded-full border border-border px-2.5 py-1 hover:bg-surface-2">
             重新整理
           </button>

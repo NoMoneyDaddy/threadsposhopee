@@ -10,15 +10,13 @@ export function classifyMediaMime(mime: string): "image" | "video" | null {
   return null;
 }
 
-// 驗證單檔型別與大小：通過回 {type}，否則回 {error}（給使用者看的訊息）。
-export function checkUploadFile(
-  mime: string,
-  size: number,
-  name = "檔案"
-): { type: "image" | "video" } | { error: string } {
+// 驗證單檔型別與大小：通過回 {type}，否則回 {error, code}。
+// code 為穩定錯誤碼，供 route 對應 HTTP 狀態（415/413）；error 文案只給 UI 顯示，可隨意改不影響狀態碼。
+export type UploadCheck = { type: "image" | "video" } | { error: string; code: "unsupported_type" | "too_large" };
+export function checkUploadFile(mime: string, size: number, name = "檔案"): UploadCheck {
   const type = classifyMediaMime(mime);
-  if (!type) return { error: `「${name}」型別不支援（僅接受常見圖片／影片）` };
+  if (!type) return { code: "unsupported_type", error: `「${name}」型別不支援（僅接受常見圖片／影片）` };
   const maxMB = type === "video" ? MAX_VIDEO_MB : MAX_IMAGE_MB;
-  if (size > maxMB * 1024 * 1024) return { error: `「${name}」過大（上限 ${maxMB}MB）` };
+  if (size > maxMB * 1024 * 1024) return { code: "too_large", error: `「${name}」過大（上限 ${maxMB}MB）` };
   return { type };
 }

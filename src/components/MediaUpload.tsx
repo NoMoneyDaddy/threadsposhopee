@@ -63,13 +63,17 @@ export default function MediaUpload({
     if (!res.ok || !json?.ok || !json?.url) {
       throw new Error(typeof json?.error === "string" && json.error ? json.error : `上傳失敗（HTTP ${res.status}）`);
     }
-    return { url: json.url as string, type: json.type === "video" ? "video" : "image" };
+    // 嚴格驗 server 回傳的 type：缺失或非支援值就丟錯，不臆測成 image（避免回應退化把壞資料加入清單）。
+    if (json.type !== "image" && json.type !== "video") throw new Error("上傳回應缺少有效媒體類型");
+    return { url: json.url as string, type: json.type };
   }
 
   // 逐檔依序上傳：onUploaded 直接帶 type；單檔失敗只記錯不中斷其餘。先依 remaining 名額裁切。
   async function handleFiles(files: File[]) {
     setErr(null);
-    const limit = multiple ? Math.max(0, remaining) : 1;
+    // 單檔模式也要尊重 remaining：名額 0 時連單檔都不放行（否則單檔入口會超過媒體上限）。
+    const remainingSlots = Math.max(0, remaining);
+    const limit = multiple ? remainingSlots : Math.min(1, remainingSlots);
     const allowed = files.slice(0, limit);
     const errors: string[] = [];
     if (allowed.length < files.length) errors.push(`已達上限，僅上傳前 ${allowed.length} 個檔案`);

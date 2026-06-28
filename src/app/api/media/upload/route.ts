@@ -28,9 +28,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "缺少檔案" }, { status: 400 });
     }
     // MIME 白名單＋大小上限（前後端共用 helper）：只放行明確圖片／影片，其餘拒絕（不臆測未知型別）。
+    // 依穩定 code 對應狀態碼（too_large→413、unsupported_type→415），不靠文案判斷避免改字壞掉。
     const checked = checkUploadFile(file.type, file.size, file.name);
     if ("error" in checked) {
-      const status = /過大/.test(checked.error) ? 413 : 415;
+      const status = checked.code === "too_large" ? 413 : 415;
       return NextResponse.json({ ok: false, error: checked.error }, { status });
     }
     const body = Buffer.from(await file.arrayBuffer());

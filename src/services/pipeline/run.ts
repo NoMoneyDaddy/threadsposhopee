@@ -2,7 +2,8 @@
 // 爬1篇 → 去重 → 抓蝦皮連結 → 還原 → 查素材庫
 //   命中且連結有效 → 重用文案/連結/媒體（0 AI token、0 Shopee API）
 //   未命中 → 共用 helper 產生素材（換分潤連結＋商品名＋AI 文案＋Cloudinary）
-// → 從素材產生草稿。auto_publish 來源直接 approved 進發文佇列。
+// 產出止於「素材」入庫：不自動建草稿、不自動排程、不自動發文。
+// 使用者之後到「素材」頁手動挑選素材轉草稿／發文。觸發一律手動（來源頁「立即抓取」按鈕）。
 import { scrapeLatestPosts } from "@/services/scraper/threads";
 import { expandShopeeLink } from "@/services/shopee/expand";
 import { buildMaterialForProduct } from "@/services/materials/build";
@@ -15,7 +16,6 @@ import {
   listSources,
   listAllEnabledSources,
   findMaterial,
-  createDraftFromMaterial,
   getApifyCredentials,
   getShopeeCredentials,
   getGeminiKey,
@@ -25,8 +25,7 @@ import {
   userOwnsThreadsAccount
 } from "@/lib/store";
 import { getMediaProvider } from "@/services/media/upload";
-import { notifyDraftPendingForReview } from "@/services/telegram/review";
-import { autoScheduleApproved } from "@/services/publish/auto-schedule";
+import { isMaterialReusable } from "./summary";
 import { isDemoMode } from "@/lib/env";
 import type { Source } from "@/lib/types";
 
@@ -39,15 +38,19 @@ export interface PipelineResult {
   sourceId: string;
   sourceUsername: string;
   scanned: number;
-  created: number;
+  created: number; // 本輪新建的素材數
   skipped: number;
-  reusedMaterial: number; // 重用素材的次數（省下的 AI/Shopee 呼叫）
-  drafts: { id: string; productName: string | null }[];
+  reusedMaterial: number; // 重用既有素材的次數（省下的 AI/Shopee 呼叫）
+  materials: { id: string; productName: string | null }[]; // 本輪新建入庫的素材
   notes: string[];
   error?: string; // 整條來源流程失敗（非單篇略過）時的錯誤訊息，供 cron 告警
 }
 
-export async function runSourcePipeline(source: Source, ownerId: string): Promise<PipelineResult> {
+export async function runSourcePipeline(
+  source: Source,
+  ownerId: string,
+  opts: { deadline?: number } = {}
+): Promise<PipelineResult> {
   const result: PipelineResult = {
     sourceId: source.id,
     sourceUsername: source.source_username || (source.search_query ? `🔍 ${source.search_query}` : ""),
@@ -55,7 +58,7 @@ export async function runSourcePipeline(source: Source, ownerId: string): Promis
     created: 0,
     skipped: 0,
     reusedMaterial: 0,
-    drafts: [],
+    materials: [],
     notes: []
   };
 
@@ -69,6 +72,14 @@ export async function runSourcePipeline(source: Source, ownerId: string): Promis
   const affiliateId = shopeeCreds ? null : await getShopeeAffiliateId(ownerId);
   // 各人自綁圖床（R2 或 Cloudinary，素材進自己雲端）；一次取出整迴圈重用
   const mediaProvider = await getMediaProvider(ownerId);
+  // 時間預算守門（爬取前）：scrape 是本流程最慢的外部呼叫（Apify run-sync 自身上限 60s）。
+  // 若剩餘預算已不足以安全跑完一輪 scrape，就不啟動、直接回空結果留待下次，避免打穿 route maxDuration。
+  // 註：mid-scrape abort 受 Apify run timeout 約束，故在「啟動前」判斷剩餘 budget 是最務實的保護點。
+  const SCRAPE_BUDGET_MS = 15000;
+  if (opts.deadline && opts.deadline - Date.now() < SCRAPE_BUDGET_MS) {
+    result.notes.push("時間預算不足，這輪略過此來源的爬取（下次再抓）");
+    return result;
+  }
   // 來源兩種模式：有 search_query → 關鍵字搜尋；否則監看 source_username 帳號。
   // 兩者都填＝在該帳號內搜尋關鍵字（同時帶 searchQuery 與 from）。
   const posts = source.search_query
@@ -86,6 +97,11 @@ export async function runSourcePipeline(source: Source, ownerId: string): Promis
   );
 
   for (const post of posts) {
+    // 時間預算：逐篇前檢查，超過即停手（守 /api/pipeline/run 的 maxDuration，單一來源也不會跑爆）。
+    if (opts.deadline && Date.now() > opts.deadline) {
+      result.notes.push("時間預算用盡，剩餘貼文下次再抓");
+      break;
+    }
     // 註：搜尋爬蟲的「2/2 留言」常才是帶蝦皮連結的那篇，故不再略過 isReply；
     // 沒有蝦皮連結的貼文會在下方被略過。
 
@@ -107,55 +123,40 @@ export async function runSourcePipeline(source: Source, ownerId: string): Promis
         continue;
       }
 
-      // 查素材庫：命中且連結有效且有文案 → 重用（省 token / API）
-      let material = await findMaterial(expanded.shopId, expanded.itemId, ownerId);
-      if (material && material.affiliate_valid && material.main_text && material.affiliate_short_link) {
+      // 查素材庫：命中且連結有效且有文案 → 重用（省 token / API），不重複入庫。
+      const existing = await findMaterial(expanded.shopId, expanded.itemId, ownerId);
+      if (isMaterialReusable(existing)) {
         result.reusedMaterial++;
-        result.notes.push(`商品 ${expanded.itemId} 重用既有素材（未燒 token）`);
-      } else {
-        material = await buildMaterialForProduct(
-          {
-            shopId: expanded.shopId,
-            itemId: expanded.itemId,
-            cleanUrl: expanded.cleanUrl,
-            originalShortLink: post.shopeeLinks[0],
-            mediaList: post.media,
-            sourceText: post.text,
-            // 關鍵字模式 source_username 可能為空，改用貼文作者當 subId 追蹤標籤
-            subIdTag: post.username || source.source_username || "search",
-            withCopy: true
-          },
-          ownerId,
-          shopeeCreds,
-          result.notes,
-          geminiKey,
-          copyPrefs,
-          affiliateId,
-          mediaProvider,
-          geminiModel
-        );
+        result.notes.push(`商品 ${expanded.itemId} 已有有效素材，略過（未燒 token）`);
+        await markPostProcessed(source.id, post.postId);
+        continue;
       }
-
-      const base = {
-        owner_id: ownerId,
-        source_id: source.id,
-        threads_account_id: source.threads_account_id,
-        source_post_id: post.postId
-      } as const;
-      // 預設：待人工核准（只有審核過的草稿才會發布）。
-      // 來源開啟「免審直接排程」時：自動排進下一個空時段並標記已核准；無空檔則退回待審草稿保底。
-      let draft = source.auto_publish
-        ? await autoScheduleApproved(ownerId, (slot) =>
-            createDraftFromMaterial(material, { ...base, status: "approved", scheduled_at: slot })
-          )
-        : null;
-      if (!draft) draft = await createDraftFromMaterial(material, { ...base, status: "draft" });
+      // 未命中／素材失效 → 產生（或更新）素材入庫；止於此，不建草稿、不排程、不發文。
+      const material = await buildMaterialForProduct(
+        {
+          shopId: expanded.shopId,
+          itemId: expanded.itemId,
+          cleanUrl: expanded.cleanUrl,
+          originalShortLink: post.shopeeLinks[0],
+          mediaList: post.media,
+          sourceText: post.text,
+          // 關鍵字模式 source_username 可能為空，改用貼文作者當 subId 追蹤標籤
+          subIdTag: post.username || source.source_username || "search",
+          withCopy: true
+        },
+        ownerId,
+        shopeeCreds,
+        result.notes,
+        geminiKey,
+        copyPrefs,
+        affiliateId,
+        mediaProvider,
+        geminiModel
+      );
 
       await markPostProcessed(source.id, post.postId);
       result.created++;
-      result.drafts.push({ id: draft.id, productName: material.product_name ?? null });
-      // 待審草稿推 Telegram 遠端審核（每來源至多前 8 則，避免洗版）；未綁/未啟用則靜默略過。
-      if (result.created <= 8 && draft.status === "draft") await notifyDraftPendingForReview(ownerId, draft);
+      result.materials.push({ id: material.id, productName: material.product_name ?? null });
     } catch (e) {
       result.notes.push(`貼文 ${post.postId} 處理失敗：${e instanceof Error ? e.message : String(e)}`);
     }
@@ -184,7 +185,7 @@ export async function runSourcesForOwner(
     }
     // 單一來源拋錯不該中斷整批後續來源（fail-isolation，對齊 cron/all 的 allSettled 精神）。
     try {
-      results.push(await runSourcePipeline(s, ownerId));
+      results.push(await runSourcePipeline(s, ownerId, { deadline: opts.deadline }));
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       log.error("來源爬取流程失敗", { ownerId, sourceId: s.id, sourceUsername: s.source_username, err: msg });
@@ -195,16 +196,17 @@ export async function runSourcesForOwner(
         created: 0,
         skipped: 0,
         reusedMaterial: 0,
-        drafts: [],
+        materials: [],
         notes: [`來源流程失敗：${msg}`],
         error: msg
       });
     }
   }
-  // 個人通知：本輪新產生的草稿待審（爬蟲掛在 owner 名下）→ 提醒 owner 去核准。
-  const newDrafts = results.reduce((n, r) => n + r.drafts.length, 0);
-  if (newDrafts > 0) {
-    await sendUserAlert(ownerId, `📝 有 ${newDrafts} 則新文案（待審或已自動排程，依來源設定），詳見草稿頁。`, "draft_pending").catch(() => {});
+  // 個人通知：本輪新入庫的素材 → 提醒 owner 去素材頁挑選轉草稿／發文。
+  const newMaterials = results.reduce((n, r) => n + r.materials.length, 0);
+  if (newMaterials > 0) {
+    // 不沿用 draft_pending 類型（避免被「草稿待審」偏好關閉而誤靜音）；素材入庫提醒一律送出。
+    await sendUserAlert(ownerId, `🧱 已入庫 ${newMaterials} 則素材（含更新既有），到「素材」頁挑選即可一鍵轉貼文。`).catch(() => {});
   }
   return results;
 }

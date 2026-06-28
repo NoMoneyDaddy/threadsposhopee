@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { runSourcesForOwner } from "@/services/pipeline/run";
 import { getCurrentUser } from "@/lib/auth";
 import { hasApifyCredentials } from "@/lib/store";
+import { isDemoMode } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -12,10 +13,13 @@ export async function POST() {
     const user = await getCurrentUser();
     if (!user) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     if (!user.isOwner) return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
-    // 不吞 I/O 錯：失敗落外層 catch 回 500，不誤判成「未綁定」。
-    const apify = await hasApifyCredentials(user.id);
-    if (!apify.bound) {
-      return NextResponse.json({ ok: false, error: "請先到帳號管理綁定自己的 Apify 金鑰" }, { status: 403 });
+    // demo 模式（無金鑰）：爬蟲走 fixtures、不需 Apify token，故略過綁定檢查讓按鈕可試用。
+    if (!isDemoMode) {
+      // 不吞 I/O 錯：失敗落外層 catch 回 500，不誤判成「未綁定」。
+      const apify = await hasApifyCredentials(user.id);
+      if (!apify.bound) {
+        return NextResponse.json({ ok: false, error: "請先到帳號管理綁定自己的 Apify 金鑰" }, { status: 403 });
+      }
     }
 
     // 時間預算守 maxDuration(60s)：來源多時逐來源中途停手，剩餘下次再跑。

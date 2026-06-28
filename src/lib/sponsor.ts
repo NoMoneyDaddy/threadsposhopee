@@ -6,11 +6,15 @@ import { parseSubIdSlots, isValidSubIdTemplate } from "@/services/shopee/subid";
 
 export interface SponsorConfig {
   enabled: boolean;
-  offPeakStart: number; // 冷門時段起（小時 0–23，Asia/Taipei）
-  offPeakEnd: number; // 冷門時段迄（小時 0–24）
+  offPeakStart: number; // 冷門時段起（小時 0–23，Asia/Taipei）。註：比例制上線後不再用於贊助判定，保留以相容舊設定。
+  offPeakEnd: number; // 冷門時段迄（小時 0–24）。同上，保留相容。
   // 贊助分潤連結的自訂 sub_id（逗號分隔，最多 5 格，對齊蝦皮 sub_id1..5）。
   // 每格支援變數 {date}/{time}/{platform}/{account}/{item}，建連結時自動代換。例：sponsor,{date}
   subIds: string;
+  // 比例制（B+A）：贊助配額依使用者「當日自己實際發文量」計算，只換使用者自己的貼文、不再注入管理員內容。
+  perPosts: number; // 每幾篇自發文 +1 篇贊助（抽成率槓桿；大＝抽更少）。
+  floor: number; // 每日保底贊助篇數（達 minPostsForFloor 才觸發）。
+  minPostsForFloor: number; // 當日自發 < 此值者完全不抽（低頻使用者友善門檻）。
 }
 
 const KEY = "sponsor_config";
@@ -18,7 +22,11 @@ export const DEFAULT_SPONSOR_CONFIG: SponsorConfig = {
   enabled: false,
   offPeakStart: 2,
   offPeakEnd: 5,
-  subIds: "sponsor"
+  subIds: "sponsor",
+  // 預設：每 6 篇抽 1、保底 1、但當日自發 < 3 篇不抽（低頻者免）。
+  perPosts: 6,
+  floor: 1,
+  minPostsForFloor: 3
 };
 
 export async function getSponsorConfig(): Promise<SponsorConfig> {
@@ -72,15 +80,13 @@ export function swapAffiliateLink(text: string | null | undefined, oldLink: stri
 }
 
 // 該不該把這篇當成贊助文（就地換連結）：
-// - 啟用、非 owner 帳號、今天尚未做過為前提。
+// - 啟用、非 owner 帳號、當日尚未達配額（alreadyDoneToday，配額依使用者自身發文量算）為前提。
 // - 使用者自選一篇（pickDraftId）：只認那一篇；有指定時段（pickHour）則限該時，否則一發即贊助。
-// - 未自選：落在冷門時段的當篇自動成為贊助文。
+// - 未自選（比例制）：在配額內的當篇即成為贊助文（不再限冷門時段——贊助一律取自使用者自己的貼文）。
 export function shouldSponsor(opts: {
   enabled: boolean;
   isOwnerAccount: boolean;
   hour: number;
-  offPeakStart: number;
-  offPeakEnd: number;
   alreadyDoneToday: boolean;
   thisDraftId?: string;
   pickDraftId?: string | null;
@@ -91,7 +97,7 @@ export function shouldSponsor(opts: {
     if (opts.thisDraftId !== opts.pickDraftId) return false;
     return opts.pickHour == null ? true : opts.hour === opts.pickHour;
   }
-  return inOffPeak(opts.hour, opts.offPeakStart, opts.offPeakEnd);
+  return true;
 }
 
 // ── 使用者自選贊助文（app_state：key=sponsor:pick:<accId>）──────
@@ -271,5 +277,19 @@ export function normalizeSponsorConfig(input: Partial<SponsorConfig>): { ok: tru
   if (slots.some((s) => !isValidSubIdTemplate(s))) {
     return { ok: false, error: "贊助 sub_id 每格僅能含英數、底線與變數 {date}/{time}/{platform}/{account}/{item}（單格上限 50）" };
   }
-  return { ok: true, cfg: { enabled, offPeakStart, offPeakEnd, subIds: slots.join(",") } };
+  // 比例制參數：缺省退回預設；驗證為正整數且範圍合理。
+  const perPosts = input.perPosts === undefined ? DEFAULT_SPONSOR_CONFIG.perPosts : Number(input.perPosts);
+  const floor = input.floor === undefined ? DEFAULT_SPONSOR_CONFIG.floor : Number(input.floor);
+  const minPostsForFloor =
+    input.minPostsForFloor === undefined ? DEFAULT_SPONSOR_CONFIG.minPostsForFloor : Number(input.minPostsForFloor);
+  if (!Number.isInteger(perPosts) || perPosts < 1 || perPosts > 100) {
+    return { ok: false, error: "每幾篇抽 1（perPosts）需為 1–100 的整數" };
+  }
+  if (!Number.isInteger(floor) || floor < 0 || floor > 20) {
+    return { ok: false, error: "每日保底贊助篇數（floor）需為 0–20 的整數" };
+  }
+  if (!Number.isInteger(minPostsForFloor) || minPostsForFloor < 1 || minPostsForFloor > 100) {
+    return { ok: false, error: "低頻免抽門檻（minPostsForFloor）需為 1–100 的整數" };
+  }
+  return { ok: true, cfg: { enabled, offPeakStart, offPeakEnd, subIds: slots.join(","), perPosts, floor, minPostsForFloor } };
 }

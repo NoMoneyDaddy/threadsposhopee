@@ -10,8 +10,10 @@ export default function SponsorConfigForm({ initial }: { initial: SponsorConfig 
   const router = useRouter();
   const VARS = ["{date}", "{time}", "{platform}", "{account}", "{item}"];
   const [enabled, setEnabled] = useState(initial.enabled);
-  const [start, setStart] = useState(String(initial.offPeakStart));
-  const [end, setEnd] = useState(String(initial.offPeakEnd));
+  // 比例制參數（取代舊「冷門時段」決策）。
+  const [perPosts, setPerPosts] = useState(String(initial.perPosts));
+  const [floor, setFloor] = useState(String(initial.floor));
+  const [minPosts, setMinPosts] = useState(String(initial.minPostsForFloor));
   const [slots, setSlots] = useState<string[]>(() => {
     const init = (initial.subIds ?? "").split(",").map((s) => s.trim()).filter(Boolean).slice(0, 5);
     return init.length ? init : [""];
@@ -43,8 +45,12 @@ export default function SponsorConfigForm({ initial }: { initial: SponsorConfig 
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             enabled,
-            offPeakStart: Number(start),
-            offPeakEnd: Number(end),
+            // 冷門時段已不參與贊助判定，沿用既有值送出以通過後端相容驗證。
+            offPeakStart: initial.offPeakStart,
+            offPeakEnd: initial.offPeakEnd,
+            perPosts: Number(perPosts),
+            floor: Number(floor),
+            minPostsForFloor: Number(minPosts),
             subIds: slots.map((s) => s.trim()).filter(Boolean).join(",")
           })
         },
@@ -65,8 +71,9 @@ export default function SponsorConfigForm({ initial }: { initial: SponsorConfig 
     <div className="rounded-2xl border bg-surface p-4">
       <div className="mb-1 font-medium">贊助文（管理者）</div>
       <p className="mb-2 text-xs text-ink-2">
-        非管理者帳號每天 1 篇於冷門時段，<b>自動把該篇貼文裡的分潤連結，用你的蝦皮金鑰就地改寫成你的分潤連結</b>
-        （保留原商品、只換分潤歸屬），發後驗證仍在。不需另外設定商品或連結。
+        <b>比例制</b>：只在非管理者帳號發布<b>自己的</b>貼文時，依其當日發文量抽取一部分，
+        <b>用你的蝦皮金鑰就地改寫該篇的分潤連結</b>（保留原商品、只換分潤歸屬），發後驗證仍在。
+        低頻使用者（當日 &lt; 下方門檻篇數）不被抽；<b>不會把管理員內容貼到他人帳號</b>。不需另外設定商品或連結。
         規則見 <a href="/sponsored" className="text-brand underline">《贊助文規則》</a>。
       </p>
       <label className="mb-2 flex items-center gap-2 text-sm">
@@ -130,23 +137,31 @@ export default function SponsorConfigForm({ initial }: { initial: SponsorConfig 
           ＋ 添加辨識參數 Sub id（非必填）（{slots.length}/5）
         </button>
       </div>
-      <div className="flex flex-wrap items-center gap-2 text-sm">
-        <span className="text-ink-2">冷門時段（台北時間，時）</span>
-        <input
-          className="w-16 rounded-xl border px-2 py-1"
-          inputMode="numeric"
-          value={start}
-          onChange={(e) => /^\d*$/.test(e.target.value) && setStart(e.target.value)}
-          aria-label="冷門時段起"
-        />
-        <span>–</span>
-        <input
-          className="w-16 rounded-xl border px-2 py-1"
-          inputMode="numeric"
-          value={end}
-          onChange={(e) => /^\d*$/.test(e.target.value) && setEnd(e.target.value)}
-          aria-label="冷門時段迄"
-        />
+      <div className="mb-3 rounded-xl border border-dashed p-3">
+        <div className="mb-1 text-sm font-medium">比例制配額</div>
+        <p className="mb-2 text-xs text-ink-2">
+          配額＝每帳號當日 <b>max(保底, ⌊自發篇數 ÷ 每幾篇抽1⌋)</b>；當日自發 &lt; 免抽門檻篇數者配額為 0。
+          例（每6抽1／保底1／門檻3）：當日 2 篇→0、3 篇→1、12 篇→2。
+        </p>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <label className="flex items-center justify-between gap-2 text-sm">
+            <span className="text-ink-2">每幾篇抽 1</span>
+            <input className="w-20 rounded-xl border px-2 py-1 text-right" inputMode="numeric" value={perPosts}
+              onChange={(e) => /^\d*$/.test(e.target.value) && setPerPosts(e.target.value)} aria-label="每幾篇抽一篇贊助" />
+          </label>
+          <label className="flex items-center justify-between gap-2 text-sm">
+            <span className="text-ink-2">每日保底</span>
+            <input className="w-20 rounded-xl border px-2 py-1 text-right" inputMode="numeric" value={floor}
+              onChange={(e) => /^\d*$/.test(e.target.value) && setFloor(e.target.value)} aria-label="每日保底贊助篇數" />
+          </label>
+          <label className="flex items-center justify-between gap-2 text-sm">
+            <span className="text-ink-2">免抽門檻</span>
+            <input className="w-20 rounded-xl border px-2 py-1 text-right" inputMode="numeric" value={minPosts}
+              onChange={(e) => /^\d*$/.test(e.target.value) && setMinPosts(e.target.value)} aria-label="低頻免抽門檻（當日自發篇數）" />
+          </label>
+        </div>
+      </div>
+      <div className="flex items-center">
         <button
           onClick={save}
           disabled={busy}

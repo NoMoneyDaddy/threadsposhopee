@@ -594,3 +594,18 @@ export async function countPublished(ownerId: string): Promise<number> {
     .eq("status", "published");
   return count ?? 0;
 }
+
+// 贊助文比例制用：某帳號「今天（sinceIso 之後）已發布」篇數（count head，輕量）。
+// 用於依使用者自身實際發文量決定贊助配額（低頻者不被強抽）。
+export async function countPublishedTodayByAccount(accountId: string, ownerId: string, sinceIso: string): Promise<number> {
+  if (isDemoMode) return 0;
+  const sb = getServiceClient()!;
+  const { count } = await sb
+    .from("drafts")
+    .select("*", { count: "exact", head: true })
+    .eq("owner_id", ownerId)
+    .eq("threads_account_id", accountId)
+    .eq("status", "published")
+    .gte("published_at", sinceIso);
+  return count ?? 0;
+}

@@ -23,18 +23,23 @@ export default function SponsoredPage() {
         本服務以「贊助文」支應免費使用。使用本服務即表示你了解並同意以下規則。
       </p>
 
-      <Section title="運作方式">
+      <Section title="運作方式（比例制）">
         <p>
-          每個發文帳號（<strong className="text-ink">網站管理者帳號除外</strong>）每天會有
-          <strong className="text-ink"> 1 篇</strong>貼文，於冷門時段以「平台分潤連結」發布：系統會把該篇
-          <strong className="text-ink">待發草稿的分潤連結</strong>暫時替換為平台的蝦皮分潤連結後發布，
+          發文帳號（<strong className="text-ink">網站管理者帳號除外</strong>）在發布<strong className="text-ink">你自己的</strong>貼文時，
+          系統會依你<strong className="text-ink">當日實際發文量</strong>抽取其中一部分（「每數篇抽 1 篇」），把該篇
+          <strong className="text-ink">貼文的分潤連結</strong>暫時替換為平台的蝦皮分潤連結後發布，
           <strong className="text-ink">其餘文案內容不變</strong>。
+        </p>
+        <p>
+          <strong className="text-ink">低頻使用者友善</strong>：當日發文量低於門檻者<strong className="text-ink">完全不抽</strong>；
+          系統<strong className="text-ink">不會把管理員或他人的內容貼到你的帳號</strong>，贊助文一律取自你自己原本要發的貼文。
         </p>
       </Section>
 
-      <Section title="事前標示">
+      <Section title="事前標示與自選">
         <p>
-          系統會在網站介面上<strong className="text-ink">明確標示</strong>哪一則將被納入贊助文，你可事先得知。
+          你可在草稿介面<strong className="text-ink">自行指定</strong>某一篇作為當期贊助文（會明確標示）；
+          未自選時，系統會在達配額時自動選取你當下要發的貼文。
         </p>
       </Section>
 

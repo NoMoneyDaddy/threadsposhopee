@@ -12,6 +12,18 @@ import type { ItemRevenue } from "@/services/shopee/report";
 
 const money = (n: number) => `NT$ ${n.toLocaleString("zh-TW", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+// 關鍵字比對（純函式、可單測）：商品名／文案／短連結／商品 id 任一含關鍵字即命中。
+// kw 須為已 trim+toLowerCase 的關鍵字；空字串視為全部命中。
+export function materialMatches(m: Material, kw: string): boolean {
+  if (!kw) return true;
+  return (
+    (m.product_name ?? "").toLowerCase().includes(kw) ||
+    (m.main_text ?? "").toLowerCase().includes(kw) ||
+    (m.affiliate_short_link ?? "").toLowerCase().includes(kw) ||
+    m.item_id.toLowerCase().includes(kw)
+  );
+}
+
 // 素材列表 + 關鍵字搜尋（商品名／文案／連結／商品 id 即時過濾）。大量素材時免捲動找。
 export default function MaterialsExplorer({
   materials,
@@ -25,14 +37,7 @@ export default function MaterialsExplorer({
   const [q, setQ] = useState("");
   const filtered = useMemo(() => {
     const kw = q.trim().toLowerCase();
-    if (!kw) return materials;
-    return materials.filter(
-      (m) =>
-        (m.product_name ?? "").toLowerCase().includes(kw) ||
-        (m.main_text ?? "").toLowerCase().includes(kw) ||
-        (m.affiliate_short_link ?? "").toLowerCase().includes(kw) ||
-        m.item_id.toLowerCase().includes(kw)
-    );
+    return kw ? materials.filter((m) => materialMatches(m, kw)) : materials;
   }, [materials, q]);
 
   return (

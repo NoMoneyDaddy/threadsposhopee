@@ -31,6 +31,14 @@ export function sourceHash(link: string): string {
   return createHash("sha1").update(link.trim()).digest("hex");
 }
 
+// 組短連結來源網址（純函式可測）：貼文會發到 Threads，連結須為絕對網址。
+// 有設短網域 → `<短網域>/r/<code>`（去尾斜線）；未設短網域 → 退回原始絕對連結 fallback
+//（絕不輸出相對 /r/<code>，否則貼到 Threads 會失效）。
+export function buildShortSourceUrl(code: string, shortDomain: string | undefined | null, fallback: string): string {
+  const base = (shortDomain ?? "").replace(/\/+$/, "");
+  return base ? `${base}/r/${code}` : fallback;
+}
+
 const EMOJI_RULE: Record<string, string> = {
   none: "不要使用 emoji。",
   light: "可少量使用 emoji。",
@@ -175,8 +183,8 @@ export async function runAgentOnce(agent: AiAgent, geminiKey: string): Promise<A
         sourceUrl: item.link,
         title: item.title
       }).catch(() => null);
-      // 補全為絕對網址：貼文會發到 Threads，相對路徑會失效。未設短網域時退回相對（與既有行為相同，不回歸）。
-      if (code) sourceUrl = `${process.env.NEXT_PUBLIC_SHORT_DOMAIN || ""}/r/${code}`;
+      // 補全為絕對網址：貼文會發到 Threads，相對路徑會失效。未設短網域時退回原始來源連結（仍為絕對網址）。
+      if (code) sourceUrl = buildShortSourceUrl(code, process.env.NEXT_PUBLIC_SHORT_DOMAIN, item.link);
     }
     const mainText = `${body}\n\n📎 來源：${sourceUrl}`;
 

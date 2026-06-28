@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { summarizePipelineRun } from "@/services/pipeline/summary";
 
 // 手動觸發抓取：跑自己所有啟用中的來源（用自己的 Apify 金鑰），把貼文換成分潤連結後產生「素材」入庫。
 // 自動抓文已改純手動，故觸發點集中在此按鈕（呼叫 /api/pipeline/run）。
@@ -19,16 +20,7 @@ export default function RunPipelineButton() {
       if (!res.ok || !json?.ok) {
         throw new Error(typeof json?.error === "string" && json.error ? json.error : `抓取失敗（HTTP ${res.status}）`);
       }
-      const results: { created: number; reusedMaterial: number; scanned: number; error?: string }[] = Array.isArray(json?.results)
-        ? json.results
-        : [];
-      const created = results.reduce((n, r) => n + (r.created ?? 0), 0);
-      const reused = results.reduce((n, r) => n + (r.reusedMaterial ?? 0), 0);
-      const failed = results.filter((r) => r.error).length;
-      const parts = [`新增 ${created} 則素材`];
-      if (reused) parts.push(`重用 ${reused}`);
-      if (failed) parts.push(`${failed} 個來源失敗`);
-      setMsg(`✅ ${parts.join("、")}${created ? "，到「素材」頁即可一鍵轉貼文" : ""}`);
+      setMsg(`✅ ${summarizePipelineRun(json?.results).message}`);
       router.refresh();
     } catch (e) {
       setMsg(`❌ ${e instanceof Error ? e.message : String(e)}`);

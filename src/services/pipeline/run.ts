@@ -25,6 +25,7 @@ import {
   userOwnsThreadsAccount
 } from "@/lib/store";
 import { getMediaProvider } from "@/services/media/upload";
+import { isMaterialReusable } from "./summary";
 import { isDemoMode } from "@/lib/env";
 import type { Source } from "@/lib/types";
 
@@ -45,7 +46,11 @@ export interface PipelineResult {
   error?: string; // 整條來源流程失敗（非單篇略過）時的錯誤訊息，供 cron 告警
 }
 
-export async function runSourcePipeline(source: Source, ownerId: string): Promise<PipelineResult> {
+export async function runSourcePipeline(
+  source: Source,
+  ownerId: string,
+  opts: { deadline?: number } = {}
+): Promise<PipelineResult> {
   const result: PipelineResult = {
     sourceId: source.id,
     sourceUsername: source.source_username || (source.search_query ? `🔍 ${source.search_query}` : ""),
@@ -84,6 +89,11 @@ export async function runSourcePipeline(source: Source, ownerId: string): Promis
   );
 
   for (const post of posts) {
+    // 時間預算：逐篇前檢查，超過即停手（守 /api/pipeline/run 的 maxDuration，單一來源也不會跑爆）。
+    if (opts.deadline && Date.now() > opts.deadline) {
+      result.notes.push("時間預算用盡，剩餘貼文下次再抓");
+      break;
+    }
     // 註：搜尋爬蟲的「2/2 留言」常才是帶蝦皮連結的那篇，故不再略過 isReply；
     // 沒有蝦皮連結的貼文會在下方被略過。
 
@@ -107,7 +117,7 @@ export async function runSourcePipeline(source: Source, ownerId: string): Promis
 
       // 查素材庫：命中且連結有效且有文案 → 重用（省 token / API），不重複入庫。
       const existing = await findMaterial(expanded.shopId, expanded.itemId, ownerId);
-      if (existing && existing.affiliate_valid && existing.main_text && existing.affiliate_short_link) {
+      if (isMaterialReusable(existing)) {
         result.reusedMaterial++;
         result.notes.push(`商品 ${expanded.itemId} 已有有效素材，略過（未燒 token）`);
         await markPostProcessed(source.id, post.postId);
@@ -167,7 +177,7 @@ export async function runSourcesForOwner(
     }
     // 單一來源拋錯不該中斷整批後續來源（fail-isolation，對齊 cron/all 的 allSettled 精神）。
     try {
-      results.push(await runSourcePipeline(s, ownerId));
+      results.push(await runSourcePipeline(s, ownerId, { deadline: opts.deadline }));
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       log.error("來源爬取流程失敗", { ownerId, sourceId: s.id, sourceUsername: s.source_username, err: msg });
@@ -187,7 +197,8 @@ export async function runSourcesForOwner(
   // 個人通知：本輪新入庫的素材 → 提醒 owner 去素材頁挑選轉草稿／發文。
   const newMaterials = results.reduce((n, r) => n + r.materials.length, 0);
   if (newMaterials > 0) {
-    await sendUserAlert(ownerId, `🧱 已新增 ${newMaterials} 則素材入庫，到「素材」頁挑選即可一鍵轉貼文。`, "draft_pending").catch(() => {});
+    // 不沿用 draft_pending 類型（避免被「草稿待審」偏好關閉而誤靜音）；素材入庫提醒一律送出。
+    await sendUserAlert(ownerId, `🧱 已新增 ${newMaterials} 則素材入庫，到「素材」頁挑選即可一鍵轉貼文。`).catch(() => {});
   }
   return results;
 }

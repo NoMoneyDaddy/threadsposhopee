@@ -66,13 +66,84 @@ export default async function AccountsPage() {
         <p className="text-sm text-ink-2">連接你的發文帳號、綁定各服務金鑰。發文節奏、通知等偏好請到「設定」。</p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <div id="setup-threads" className="scroll-mt-24">
-          <ThreadsAccountForm />
+      {/* Threads 發文帳號：已綁定列表 ＋ 新增表單 合併同一區塊（列表在上、新增在下）。 */}
+      <section id="setup-threads" className="scroll-mt-24 space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="font-semibold">Threads 發文帳號</h2>
+          <span className="rounded-full bg-surface-2 px-3 py-1 text-xs text-ink-2">
+            {user?.isOwner
+              ? `${threads.length} / ${accountLimit} 個（管理者）`
+              : `${threads.length} / ${accountLimit} 個發文帳號`}
+          </span>
         </div>
-        <div id="setup-shopee" className="scroll-mt-24">
-          <ShopeeAccountForm bound={shopee[0] ?? null} />
-        </div>
+        {threads.length > 0 && (
+          <div className="grid gap-3 md:grid-cols-2">
+            {threads.map((a) => {
+              // 長期 vs 短期權杖：換/展長效成功才會有確切到期日（token_expires_at）；
+              // 沒有＝尚未換成 60 天長期（短期 token），標示提醒使用者補 App 密鑰。
+              const exp = tokenExpiryState(a.token_expires_at);
+              const isLong = Boolean(a.token_expires_at) && exp.level !== "unknown";
+              return (
+                <div key={a.id} className="rounded-2xl border bg-surface p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex min-w-0 items-center gap-2">
+                      {a.avatar_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={a.avatar_url} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" referrerPolicy="no-referrer" />
+                      ) : (
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-2 text-sm text-ink-2">
+                          {(a.label || "?").slice(0, 1).toUpperCase()}
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <div className="truncate font-medium">{a.label}</div>
+                        {a.display_name && <div className="truncate text-xs text-ink-3">{a.display_name}</div>}
+                      </div>
+                    </div>
+                    <span className="shrink-0 text-xs text-ink-2">{a.status}</span>
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-ink-2">
+                    <span>Threads ID：{a.threads_user_id}</span>
+                    <span
+                      className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${isLong ? "bg-success/10 text-success" : "bg-amber-100 text-amber-700"}`}
+                      title={isLong ? "已換成 60 天長期權杖，系統每日自動展期" : "尚未換成長期權杖；新增時附上 App 密鑰即可自動換 60 天長期"}
+                    >
+                      {isLong ? "長期權杖" : "短期權杖"}
+                    </span>
+                  </div>
+                  {a.token_expires_at ? (
+                    (() => {
+                      if (exp.level === "unknown")
+                        return <div className="text-xs font-medium text-ink-2">⚠️ 帳號授權到期日格式異常，請重新貼上 token</div>;
+                      const date = new Date(a.token_expires_at).toLocaleDateString("zh-TW", { timeZone: "Asia/Taipei" });
+                      if (exp.level === "expired")
+                        return <div className="text-xs font-medium text-red-600">⚠️ 帳號授權已過期（{date}）— 請重新貼上 token</div>;
+                      if (exp.level === "soon")
+                        return <div className="text-xs font-medium text-amber-600">⏳ 帳號授權將在 {exp.daysLeft} 天後到期（{date}）— 系統會在到期前自動嘗試更新；若授權失效會通知你並停止排程</div>;
+                      return <div className="text-xs text-ink-3">✅ 帳號授權有效（至 {date}，系統會定期自動嘗試更新）</div>;
+                    })()
+                  ) : (
+                    <div className="text-xs font-medium text-amber-600">⚠️ 未取得長期權杖到期日（可能是短期 token）— 新增時附上 App 密鑰可自動換 60 天長期；系統仍會嘗試自動展期</div>
+                  )}
+                  <div className="mt-2 flex items-center gap-3 border-t pt-2">
+                    {a.status === "paused" ? (
+                      <ToggleButton endpoint={`/api/accounts/threads/${a.id}`} body={{ status: "active" }} label="▶ 恢復排程" />
+                    ) : (
+                      <ToggleButton endpoint={`/api/accounts/threads/${a.id}`} body={{ status: "paused" }} label="⏸ 暫停排程" />
+                    )}
+                    <RenameAccountButton endpoint={`/api/accounts/threads/${a.id}`} current={a.label} />
+                    <DeleteButton endpoint={`/api/accounts/threads/${a.id}`} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <ThreadsAccountForm />
+      </section>
+
+      <div id="setup-shopee" className="scroll-mt-24">
+        <ShopeeAccountForm bound={shopee[0] ?? null} />
       </div>
 
       {user && (
@@ -117,61 +188,6 @@ export default async function AccountsPage() {
           </div>
         )}
       </div>
-
-      <section>
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <h2 className="font-semibold">Threads 發文帳號</h2>
-          <span className="rounded-full bg-surface-2 px-3 py-1 text-xs text-ink-2">
-            {user?.isOwner
-              ? `${threads.length} / ${accountLimit} 個（管理者）`
-              : `${threads.length} / ${accountLimit} 個發文帳號`}
-          </span>
-        </div>
-        <div className="grid gap-3 md:grid-cols-2">
-          {threads.map((a) => (
-            <div key={a.id} className="rounded-2xl border bg-surface p-4">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex min-w-0 items-center gap-2">
-                  {a.avatar_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={a.avatar_url} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" referrerPolicy="no-referrer" />
-                  ) : (
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-2 text-sm text-ink-2">
-                      {(a.label || "?").slice(0, 1).toUpperCase()}
-                    </div>
-                  )}
-                  <div className="min-w-0">
-                    <div className="truncate font-medium">{a.label}</div>
-                    {a.display_name && <div className="truncate text-xs text-ink-3">{a.display_name}</div>}
-                  </div>
-                </div>
-                <span className="shrink-0 text-xs text-ink-2">{a.status}</span>
-              </div>
-              <div className="mt-1 text-sm text-ink-2">Threads ID：{a.threads_user_id}</div>
-              {a.token_expires_at && (() => {
-                const exp = tokenExpiryState(a.token_expires_at);
-                if (exp.level === "unknown")
-                  return <div className="text-xs font-medium text-ink-2">⚠️ 帳號授權到期日格式異常，請重新貼上 token</div>;
-                const date = new Date(a.token_expires_at).toLocaleDateString("zh-TW", { timeZone: "Asia/Taipei" });
-                if (exp.level === "expired")
-                  return <div className="text-xs font-medium text-red-600">⚠️ 帳號授權已過期（{date}）— 請重新貼上 token</div>;
-                if (exp.level === "soon")
-                  return <div className="text-xs font-medium text-amber-600">⏳ 帳號授權將在 {exp.daysLeft} 天後到期（{date}）— 系統會在到期前自動嘗試更新；若授權失效會通知你並停止排程</div>;
-                return <div className="text-xs text-ink-3">✅ 帳號授權有效（至 {date}，系統會定期自動嘗試更新）</div>;
-              })()}
-              <div className="mt-2 flex items-center gap-3 border-t pt-2">
-                {a.status === "paused" ? (
-                  <ToggleButton endpoint={`/api/accounts/threads/${a.id}`} body={{ status: "active" }} label="▶ 恢復排程" />
-                ) : (
-                  <ToggleButton endpoint={`/api/accounts/threads/${a.id}`} body={{ status: "paused" }} label="⏸ 暫停排程" />
-                )}
-                <RenameAccountButton endpoint={`/api/accounts/threads/${a.id}`} current={a.label} />
-                <DeleteButton endpoint={`/api/accounts/threads/${a.id}`} />
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
 
       <p className="text-sm text-ink-3">
         🔒 你綁定的所有金鑰／權杖（Threads／Shopee／Gemini／Cloudinary／R2）皆以 AES-256-GCM 加密、僅在伺服器使用，

@@ -27,7 +27,8 @@ export const ANTI_AI_SLOP_RULES = `寫得要像真人隨手打的貼文，不能
 export const HUMANIZER_RULES = `你是經營 Threads 的真人創作者，不是行銷小編。寫蝦皮好物分享要像跟朋友聊天，不能有業配味、不能像 AI 寫的。
 
 ${ANTI_AI_SLOP_RULES}
-- 另外：不要客套開場與正能量結尾（如「希望對你有幫助」「快來試試吧」）。`;
+- 另外：不要客套開場與正能量結尾（如「希望對你有幫助」「快來試試吧」）。
+- emoji 適量即可（依下方各段指定的數量上限），自然點綴、不要當標題或整排堆疊；沒有合適的就不用。`;
 
 export interface CopyContext {
   productName: string;
@@ -35,8 +36,31 @@ export interface CopyContext {
   sourceText?: string; // 來源貼文原文（給 AI 當靈感，但不可照抄）
 }
 
+// 留言開場句池：帶出分潤連結的引導句。每篇輪換，避免每則都同一句「怕你找不到，連結放這」
+// 而顯得洗版／被判機器人。開場句本身保持中性口語、不放 emoji（emoji 由模型依數量上限自行點綴）。
+const REPLY_LEAD_INS = [
+  "連結放這，需要的自己拿",
+  "想看的話連結放下面",
+  "連結附上，有興趣再點",
+  "怕有人問，連結先放著",
+  "連結在這，不用特地找",
+  "放個連結，慢慢逛",
+  "連結補上，方便大家",
+  "順手把連結放這"
+];
+
+// 依商品連結做穩定雜湊選一句開場：同一商品穩定（重排同一篇不亂跳）、不同商品分散開來。
+// 純函式、可單測；無外部隨機源（符合工作流可重現的要求）。
+// seed 異常（空字串／非字串，如 API 異常或草稿未填）時退回第一句，避免讀 .length 崩潰。
+export function pickReplyLeadIn(seed: string): string {
+  if (!seed || typeof seed !== "string") return REPLY_LEAD_INS[0];
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  return REPLY_LEAD_INS[h % REPLY_LEAD_INS.length];
+}
+
 // 組出最終 prompt。沿用「正文／留言區」輸出格式，方便發文時拆成主文＋留言。
-// prefs：使用者客製化偏好（語氣/長度/emoji，正文與留言可分開；溫度在生成端套用）。
+// prefs：使用者客製化偏好（語氣／字數／emoji 數量，正文與留言可分開；溫度在生成端套用）。
 export function buildCopyPrompt(ctx: CopyContext, prefs: CopyPrefs = DEFAULT_COPY_PREFS): string {
   // 自訂要求要遵守，但「不得違反輸出格式」——格式是不可覆蓋的硬約束，
   // 否則下游 splitCopy 會失配、分潤連結遺失。
@@ -52,8 +76,8 @@ ${ctx.sourceText ? `別人怎麼介紹（僅供參考，不要照抄，要用你
 【輸出格式，最高優先、不可被任何要求覆蓋】
 務必完整輸出「正文：…」與「留言區：…」兩段，缺一不可。
 正文：[${describeMain(prefs.main)}，自然有觀點]
-留言區：怕你找不到，連結放這 🔗 ${ctx.shopeeShortLink}
-[再補一句反應或問句，${describeReply(prefs.reply)}]`;
+留言區：${pickReplyLeadIn(ctx.shopeeShortLink)} ${ctx.shopeeShortLink}
+[換行後再補一句你的真實反應或問句，${describeReply(prefs.reply)}；連結網址務必原樣保留、不要改動]`;
 }
 
 // 管理員「預覽 prompt」用的範例情境：用固定範例商品＋使用者偏好組出實際送進模型的 prompt。

@@ -1,15 +1,15 @@
 // AI 文案客製化偏好：每位使用者在帳號管理頁設定的全域預設。
-// 語氣／長度／emoji 可分別套用在「正文」與「留言」，溫度為整體創意度。
-// 偏好非機密，明文存 profiles.copy_prefs（jsonb）。
+// 語氣／字數／emoji 數量可分別套用在「正文」與「留言」，溫度為整體創意度。
+// AI 產生的貼文文案可適度使用 emoji（數量由 emojiMax 客製，0＝不用）；
+// 注意：這是「AI 文案輸出」可帶 emoji，與主站自身 UI 一律用 SVG／不放 emoji 是兩回事。
+// 偏好非機密，明文存 profiles.copy_prefs（jsonb）；舊資料殘留的欄位（如 length）會被忽略。
 
 export type Tone = "friendly" | "professional" | "humorous" | "concise";
-export type Length = "short" | "medium" | "long";
-export type EmojiLevel = "none" | "few" | "some";
 
 export interface SidePrefs {
   tone: Tone;
-  length: Length;
-  emoji: EmojiLevel;
+  maxChars: number; // 字數上限（客製；夾在合理範圍）
+  emojiMax: number; // emoji 數量上限（0＝不用；客製）
 }
 
 export interface CopyPrefs {
@@ -19,26 +19,36 @@ export interface CopyPrefs {
   reply: SidePrefs;
 }
 
+// 字數夾在 Threads 單則上限（500）以內並留緩衝；emoji 上限給合理天花板避免被塞滿。
+const CHARS_MIN = 20;
+const CHARS_MAX = 480;
+const EMOJI_MIN = 0;
+const EMOJI_MAX = 8;
+
 export const DEFAULT_COPY_PREFS: CopyPrefs = {
   temperature: 0.9,
-  main: { tone: "friendly", length: "medium", emoji: "few" },
-  reply: { tone: "friendly", length: "short", emoji: "few" }
+  main: { tone: "friendly", maxChars: 105, emojiMax: 2 },
+  reply: { tone: "friendly", maxChars: 60, emojiMax: 1 }
 };
 
 const TONES: Tone[] = ["friendly", "professional", "humorous", "concise"];
-const LENGTHS: Length[] = ["short", "medium", "long"];
-const EMOJIS: EmojiLevel[] = ["none", "few", "some"];
 const CUSTOM_PROMPT_MAX = 1000;
 
 const oneOf = <T,>(allowed: T[], v: unknown, fallback: T): T =>
   allowed.includes(v as T) ? (v as T) : fallback;
 
+// 把數值客製欄位夾進合法整數範圍；非數值/NaN 退回預設。
+const clampInt = (v: unknown, min: number, max: number, fallback: number): number => {
+  const n = typeof v === "number" && Number.isFinite(v) ? Math.round(v) : fallback;
+  return Math.min(max, Math.max(min, n));
+};
+
 function normalizeSide(v: unknown, fallback: SidePrefs): SidePrefs {
   const s = (v ?? {}) as Partial<SidePrefs>;
   return {
     tone: oneOf(TONES, s.tone, fallback.tone),
-    length: oneOf(LENGTHS, s.length, fallback.length),
-    emoji: oneOf(EMOJIS, s.emoji, fallback.emoji)
+    maxChars: clampInt(s.maxChars, CHARS_MIN, CHARS_MAX, fallback.maxChars),
+    emojiMax: clampInt(s.emojiMax, EMOJI_MIN, EMOJI_MAX, fallback.emojiMax)
   };
 }
 
@@ -64,28 +74,15 @@ const TONE_DESC: Record<Tone, string> = {
   concise: "精簡直接、一針見血，不囉嗦"
 };
 
-const EMOJI_DESC: Record<EmojiLevel, string> = {
-  none: "完全不要用 emoji",
-  few: "最多 1-2 個 emoji，且要自然",
-  some: "可用 3-4 個 emoji 點綴，但別浮誇"
-};
-
-const MAIN_LENGTH_DESC: Record<Length, string> = {
-  short: "30-60 字，1-2 行",
-  medium: "30-105 字，1-3 行",
-  long: "80-150 字，2-4 行"
-};
-
-const REPLY_LENGTH_DESC: Record<Length, string> = {
-  short: "一句話帶過",
-  medium: "一到兩句",
-  long: "兩到三句"
-};
+// emoji 用量描述：0＝完全不用；否則給「最多 N 個、自然點綴」的彈性指示。
+function emojiDesc(max: number): string {
+  return max <= 0 ? "完全不要用 emoji" : `最多 ${max} 個 emoji，自然點綴、別浮誇，沒適合的就不用`;
+}
 
 export function describeMain(p: SidePrefs): string {
-  return `語氣：${TONE_DESC[p.tone]}；長度：${MAIN_LENGTH_DESC[p.length]}；${EMOJI_DESC[p.emoji]}`;
+  return `語氣：${TONE_DESC[p.tone]}；字數約 ${p.maxChars} 字以內、可分多行；${emojiDesc(p.emojiMax)}`;
 }
 
 export function describeReply(p: SidePrefs): string {
-  return `語氣：${TONE_DESC[p.tone]}；長度：${REPLY_LENGTH_DESC[p.length]}；${EMOJI_DESC[p.emoji]}`;
+  return `語氣：${TONE_DESC[p.tone]}；字數約 ${p.maxChars} 字以內；${emojiDesc(p.emojiMax)}`;
 }

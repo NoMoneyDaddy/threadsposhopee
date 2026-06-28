@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { FieldHint } from "@/components/FieldHint";
 import type { ShopeeAccount, ThreadsAccount } from "@/lib/types";
 
 const input = "w-full rounded-xl border px-3 py-2 text-sm";
@@ -77,21 +76,18 @@ export default function SourceForm({
           <option key={a.id} value={a.id}>Shopee：{a.label}</option>
         ))}
       </select>
-      <input className={input} type="number" min={1} title="輪詢間隔（分鐘）" value={form.poll_interval_minutes} onChange={(e) => set("poll_interval_minutes", e.target.value)} />
-      <input className={input} type="number" min={1} title="每次抓幾篇" value={form.posts_limit} onChange={(e) => set("posts_limit", e.target.value)} />
-      <div className="md:col-span-2">
-        <label className="flex items-center gap-2 text-sm text-ink-2">
-          <input type="checkbox" checked={form.auto_publish} onChange={(e) => set("auto_publish", e.target.checked)} />
-          免審直接排程（抓到就自動排入發文時段）
-        </label>
-        {form.auto_publish ? (
-          <FieldHint tone="warn">
-            此來源抓到的內容將不經人工審核，自動排進你的發文時段直接發出。請確認來源品質穩定，內容違規或失準的風險由你自負。
-          </FieldHint>
-        ) : (
-          <FieldHint>預設關閉：抓取內容先進「文案佇列」待你審核，核准後才發布（可在佇列頁批次核准／加入佇列）。</FieldHint>
-        )}
-      </div>
+      <input
+        className={`${input} md:col-span-2`}
+        type="number"
+        min={1}
+        title="每次抓幾篇"
+        placeholder="每次抓幾篇（建議從小開始省 Apify 額度）"
+        value={form.posts_limit}
+        onChange={(e) => set("posts_limit", e.target.value)}
+      />
+      <p className="text-xs text-ink-3 md:col-span-2">
+        抓取為手動觸發：新增後到上方按「立即抓取」即可產生素材。抓到的貼文只會生成「素材」，不會自動發文。
+      </p>
       <div className="flex items-center gap-3 md:col-span-2">
         <button disabled={busy} className="rounded-xl bg-brand px-4 py-2 text-sm text-white disabled:opacity-50">
           {busy ? "新增中…" : "新增來源"}

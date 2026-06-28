@@ -2,7 +2,8 @@
 // 爬1篇 → 去重 → 抓蝦皮連結 → 還原 → 查素材庫
 //   命中且連結有效 → 重用文案/連結/媒體（0 AI token、0 Shopee API）
 //   未命中 → 共用 helper 產生素材（換分潤連結＋商品名＋AI 文案＋Cloudinary）
-// → 從素材產生草稿。auto_publish 來源直接 approved 進發文佇列。
+// 產出止於「素材」入庫：不自動建草稿、不自動排程、不自動發文。
+// 使用者之後到「素材」頁手動挑選素材轉草稿／發文。觸發一律手動（來源頁「立即抓取」按鈕）。
 import { scrapeLatestPosts } from "@/services/scraper/threads";
 import { expandShopeeLink } from "@/services/shopee/expand";
 import { buildMaterialForProduct } from "@/services/materials/build";
@@ -15,7 +16,6 @@ import {
   listSources,
   listAllEnabledSources,
   findMaterial,
-  createDraftFromMaterial,
   getApifyCredentials,
   getShopeeCredentials,
   getGeminiKey,
@@ -25,8 +25,6 @@ import {
   userOwnsThreadsAccount
 } from "@/lib/store";
 import { getMediaProvider } from "@/services/media/upload";
-import { notifyDraftPendingForReview } from "@/services/telegram/review";
-import { autoScheduleApproved } from "@/services/publish/auto-schedule";
 import { isDemoMode } from "@/lib/env";
 import type { Source } from "@/lib/types";
 
@@ -39,10 +37,10 @@ export interface PipelineResult {
   sourceId: string;
   sourceUsername: string;
   scanned: number;
-  created: number;
+  created: number; // 本輪新建的素材數
   skipped: number;
-  reusedMaterial: number; // 重用素材的次數（省下的 AI/Shopee 呼叫）
-  drafts: { id: string; productName: string | null }[];
+  reusedMaterial: number; // 重用既有素材的次數（省下的 AI/Shopee 呼叫）
+  materials: { id: string; productName: string | null }[]; // 本輪新建入庫的素材
   notes: string[];
   error?: string; // 整條來源流程失敗（非單篇略過）時的錯誤訊息，供 cron 告警
 }
@@ -55,7 +53,7 @@ export async function runSourcePipeline(source: Source, ownerId: string): Promis
     created: 0,
     skipped: 0,
     reusedMaterial: 0,
-    drafts: [],
+    materials: [],
     notes: []
   };
 
@@ -107,55 +105,40 @@ export async function runSourcePipeline(source: Source, ownerId: string): Promis
         continue;
       }
 
-      // 查素材庫：命中且連結有效且有文案 → 重用（省 token / API）
-      let material = await findMaterial(expanded.shopId, expanded.itemId, ownerId);
-      if (material && material.affiliate_valid && material.main_text && material.affiliate_short_link) {
+      // 查素材庫：命中且連結有效且有文案 → 重用（省 token / API），不重複入庫。
+      const existing = await findMaterial(expanded.shopId, expanded.itemId, ownerId);
+      if (existing && existing.affiliate_valid && existing.main_text && existing.affiliate_short_link) {
         result.reusedMaterial++;
-        result.notes.push(`商品 ${expanded.itemId} 重用既有素材（未燒 token）`);
-      } else {
-        material = await buildMaterialForProduct(
-          {
-            shopId: expanded.shopId,
-            itemId: expanded.itemId,
-            cleanUrl: expanded.cleanUrl,
-            originalShortLink: post.shopeeLinks[0],
-            mediaList: post.media,
-            sourceText: post.text,
-            // 關鍵字模式 source_username 可能為空，改用貼文作者當 subId 追蹤標籤
-            subIdTag: post.username || source.source_username || "search",
-            withCopy: true
-          },
-          ownerId,
-          shopeeCreds,
-          result.notes,
-          geminiKey,
-          copyPrefs,
-          affiliateId,
-          mediaProvider,
-          geminiModel
-        );
+        result.notes.push(`商品 ${expanded.itemId} 已有有效素材，略過（未燒 token）`);
+        await markPostProcessed(source.id, post.postId);
+        continue;
       }
-
-      const base = {
-        owner_id: ownerId,
-        source_id: source.id,
-        threads_account_id: source.threads_account_id,
-        source_post_id: post.postId
-      } as const;
-      // 預設：待人工核准（只有審核過的草稿才會發布）。
-      // 來源開啟「免審直接排程」時：自動排進下一個空時段並標記已核准；無空檔則退回待審草稿保底。
-      let draft = source.auto_publish
-        ? await autoScheduleApproved(ownerId, (slot) =>
-            createDraftFromMaterial(material, { ...base, status: "approved", scheduled_at: slot })
-          )
-        : null;
-      if (!draft) draft = await createDraftFromMaterial(material, { ...base, status: "draft" });
+      // 未命中／素材失效 → 產生（或更新）素材入庫；止於此，不建草稿、不排程、不發文。
+      const material = await buildMaterialForProduct(
+        {
+          shopId: expanded.shopId,
+          itemId: expanded.itemId,
+          cleanUrl: expanded.cleanUrl,
+          originalShortLink: post.shopeeLinks[0],
+          mediaList: post.media,
+          sourceText: post.text,
+          // 關鍵字模式 source_username 可能為空，改用貼文作者當 subId 追蹤標籤
+          subIdTag: post.username || source.source_username || "search",
+          withCopy: true
+        },
+        ownerId,
+        shopeeCreds,
+        result.notes,
+        geminiKey,
+        copyPrefs,
+        affiliateId,
+        mediaProvider,
+        geminiModel
+      );
 
       await markPostProcessed(source.id, post.postId);
       result.created++;
-      result.drafts.push({ id: draft.id, productName: material.product_name ?? null });
-      // 待審草稿推 Telegram 遠端審核（每來源至多前 8 則，避免洗版）；未綁/未啟用則靜默略過。
-      if (result.created <= 8 && draft.status === "draft") await notifyDraftPendingForReview(ownerId, draft);
+      result.materials.push({ id: material.id, productName: material.product_name ?? null });
     } catch (e) {
       result.notes.push(`貼文 ${post.postId} 處理失敗：${e instanceof Error ? e.message : String(e)}`);
     }
@@ -195,16 +178,16 @@ export async function runSourcesForOwner(
         created: 0,
         skipped: 0,
         reusedMaterial: 0,
-        drafts: [],
+        materials: [],
         notes: [`來源流程失敗：${msg}`],
         error: msg
       });
     }
   }
-  // 個人通知：本輪新產生的草稿待審（爬蟲掛在 owner 名下）→ 提醒 owner 去核准。
-  const newDrafts = results.reduce((n, r) => n + r.drafts.length, 0);
-  if (newDrafts > 0) {
-    await sendUserAlert(ownerId, `📝 有 ${newDrafts} 則新文案（待審或已自動排程，依來源設定），詳見草稿頁。`, "draft_pending").catch(() => {});
+  // 個人通知：本輪新入庫的素材 → 提醒 owner 去素材頁挑選轉草稿／發文。
+  const newMaterials = results.reduce((n, r) => n + r.materials.length, 0);
+  if (newMaterials > 0) {
+    await sendUserAlert(ownerId, `🧱 已新增 ${newMaterials} 則素材入庫，到「素材」頁挑選即可一鍵轉貼文。`, "draft_pending").catch(() => {});
   }
   return results;
 }

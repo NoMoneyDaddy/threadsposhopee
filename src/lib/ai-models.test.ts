@@ -22,6 +22,9 @@ test("estimatedPostsPerDay：每篇 1 次呼叫＝約等於 RPD；異常值回 0
   assert.equal(estimatedPostsPerDay(100, 2), 50); // 每篇 2 次呼叫
   assert.equal(estimatedPostsPerDay(0), 0);
   assert.equal(estimatedPostsPerDay(-5), 0);
+  // callsPerPost 為 NaN/Infinity 也要回 0（不可變 NaN）
+  assert.equal(estimatedPostsPerDay(100, Number.NaN), 0);
+  assert.equal(estimatedPostsPerDay(100, Number.POSITIVE_INFINITY), 0);
 });
 
 test("GEMINI_MODELS：由便宜到貴（免費額度遞減），且預設為最省那個", () => {

@@ -75,7 +75,12 @@ export async function getUserGeminiModel(ownerId: string): Promise<string | null
   if (isDemoMode) return null;
   const sb = getServiceClient();
   if (!sb) return null;
-  const { data } = await sb.from("profiles").select("gemini_model").eq("id", ownerId).maybeSingle();
+  const { data, error } = await sb.from("profiles").select("gemini_model").eq("id", ownerId).maybeSingle();
+  // 不靜默吞 DB 錯誤（含欄位未遷移）：記 log 以利觀測；仍回退預設不擋生成。
+  if (error) {
+    log.warn("讀取使用者 Gemini 模型失敗，改用全站預設", { ownerId, err: error.message });
+    return null;
+  }
   const v = data?.gemini_model;
   return isAllowedGeminiModel(v) ? v : null; // 不在白名單（或舊值失效）一律當未設定
 }

@@ -29,6 +29,6 @@ export function geminiModelInfo(id: string): GeminiModelInfo | null {
 
 // 免費層每日「約可生成幾篇」：每篇文案約 1 次 AI 呼叫，故 ≈ freeRpd。純函式（之後若每篇多次呼叫可改係數）。
 export function estimatedPostsPerDay(freeRpd: number, callsPerPost = 1): number {
-  if (!Number.isFinite(freeRpd) || freeRpd <= 0 || callsPerPost <= 0) return 0;
+  if (!Number.isFinite(freeRpd) || !Number.isFinite(callsPerPost) || freeRpd <= 0 || callsPerPost <= 0) return 0;
   return Math.floor(freeRpd / callsPerPost);
 }

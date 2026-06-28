@@ -77,9 +77,11 @@ export default function MaterialsExplorer({
             ) : (
               <div className="text-sm text-ink-3">（尚未生成文案）</div>
             )}
-            <a href={m.affiliate_short_link ?? "#"} target="_blank" rel="noreferrer" className="mt-2 text-xs text-brand hover:underline">
-              {m.affiliate_short_link}
-            </a>
+            {m.affiliate_short_link && (
+              <a href={m.affiliate_short_link} target="_blank" rel="noreferrer" className="mt-2 text-xs text-brand hover:underline">
+                {m.affiliate_short_link}
+              </a>
+            )}
             {m.affiliate_sub_id && <div className="text-xs text-ink-3">分潤標記（subId）：{m.affiliate_sub_id}</div>}
             {m.affiliate_checked_at && (
               <div className="mt-1 text-xs text-ink-3">

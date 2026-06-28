@@ -38,10 +38,11 @@ export interface PipelineResult {
   sourceId: string;
   sourceUsername: string;
   scanned: number;
-  created: number; // 本輪新建的素材數
+  created: number; // 本輪新產生/更新的素材數（含已核准重產）
+  pending: number; // 本輪「進入待審」的素材數（不含已核准重產）；通知/摘要的待審數以此為準
   skipped: number;
   reusedMaterial: number; // 重用既有素材的次數（省下的 AI/Shopee 呼叫）
-  materials: { id: string; productName: string | null }[]; // 本輪新建入庫的素材
+  materials: { id: string; productName: string | null }[]; // 本輪新產生/更新的素材
   notes: string[];
   error?: string; // 整條來源流程失敗（非單篇略過）時的錯誤訊息，供 cron 告警
 }
@@ -56,6 +57,7 @@ export async function runSourcePipeline(
     sourceUsername: source.source_username || (source.search_query ? `🔍 ${source.search_query}` : ""),
     scanned: 0,
     created: 0,
+    pending: 0,
     skipped: 0,
     reusedMaterial: 0,
     materials: [],
@@ -133,7 +135,8 @@ export async function runSourcePipeline(
       }
       // 未命中／素材失效 → 產生（或更新）素材，進「待審」由人工逐筆核准才入庫；不建草稿、不排程、不發文。
       // 已核准過的素材若連結失效需重產，保留 approved（不無故退回待審）；其餘（新建/原本待審）一律 pending。
-      const intakeStatus = existing?.intake_status === "approved" ? "approved" : "pending";
+      // 舊資料 intake_status 為 null/undefined 視同已核准（與 listMaterials 一致），重產時不可被降級為待審。
+      const intakeStatus = existing && (existing.intake_status ?? "approved") === "approved" ? "approved" : "pending";
       const material = await buildMaterialForProduct(
         {
           shopId: expanded.shopId,
@@ -159,6 +162,7 @@ export async function runSourcePipeline(
 
       await markPostProcessed(source.id, post.postId);
       result.created++;
+      if (intakeStatus === "pending") result.pending++; // 只有真正進待審的才計入待審數
       result.materials.push({ id: material.id, productName: material.product_name ?? null });
     } catch (e) {
       result.notes.push(`貼文 ${post.postId} 處理失敗：${e instanceof Error ? e.message : String(e)}`);
@@ -197,6 +201,7 @@ export async function runSourcesForOwner(
         sourceUsername: s.source_username || (s.search_query ? `🔍 ${s.search_query}` : ""),
         scanned: 0,
         created: 0,
+        pending: 0,
         skipped: 0,
         reusedMaterial: 0,
         materials: [],
@@ -205,11 +210,11 @@ export async function runSourcesForOwner(
       });
     }
   }
-  // 個人通知：本輪新產生的素材待審 → 提醒 owner 去素材頁逐筆核准入庫。
-  const newMaterials = results.reduce((n, r) => n + r.materials.length, 0);
-  if (newMaterials > 0) {
+  // 個人通知：本輪「實際進待審」的素材數（不含已核准重產）→ 提醒 owner 去素材頁逐筆核准入庫。
+  const newPending = results.reduce((n, r) => n + r.pending, 0);
+  if (newPending > 0) {
     // 不沿用 draft_pending 類型（避免被「草稿待審」偏好關閉而誤靜音）；素材待審提醒一律送出。
-    await sendUserAlert(ownerId, `🔎 抓到 ${newMaterials} 則新素材待審，到「素材」頁逐筆確認入庫。`).catch(() => {});
+    await sendUserAlert(ownerId, `🔎 抓到 ${newPending} 則新素材待審，到「素材」頁逐筆確認入庫。`).catch(() => {});
   }
   return results;
 }

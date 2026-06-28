@@ -9,11 +9,12 @@ import { cloudinaryThumb } from "@/lib/img";
 // 入庫 → POST /api/materials/[id]/intake；丟棄 → DELETE /api/materials/[id]（沿用既有刪除）。
 export default function PendingMaterialsReview({ items }: { items: Material[] }) {
   const router = useRouter();
-  const [busyId, setBusyId] = useState<string | null>(null);
+  // 用 Set 追蹤每筆獨立的處理中狀態：避免快速連點多筆時，單一 busyId 互相覆蓋造成按鈕提早解禁（race）。
+  const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
   const [err, setErr] = useState<string | null>(null);
 
   async function act(id: string, kind: "approve" | "discard") {
-    setBusyId(id);
+    setBusyIds((prev) => new Set(prev).add(id));
     setErr(null);
     try {
       const res =
@@ -28,7 +29,11 @@ export default function PendingMaterialsReview({ items }: { items: Material[] })
     } catch (e) {
       setErr(e instanceof Error ? e.message : "操作失敗");
     } finally {
-      setBusyId(null);
+      setBusyIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
     }
   }
 
@@ -45,15 +50,28 @@ export default function PendingMaterialsReview({ items }: { items: Material[] })
         {items.map((m) => {
           const thumb = m.cloudinary_media_url || m.source_media_url || (m.media?.[0]?.url ?? null);
           const isVideo = m.media_type === "video" || m.media?.[0]?.type === "video";
-          const busy = busyId === m.id;
+          const busy = busyIds.has(m.id);
           return (
             <div key={m.id} className="flex gap-3 rounded-xl border bg-surface p-3">
               {thumb ? (
                 isVideo ? (
-                  <video src={thumb} className="h-20 w-20 shrink-0 rounded-lg border object-cover" />
+                  // 行動端相容＋省流量：muted/playsInline 才能在 iOS 顯示首格；preload=metadata 不預載整片。
+                  <video
+                    src={thumb}
+                    muted
+                    playsInline
+                    preload="metadata"
+                    className="h-20 w-20 shrink-0 rounded-lg border object-cover"
+                  />
                 ) : (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={cloudinaryThumb(thumb, 160)} alt="" className="h-20 w-20 shrink-0 rounded-lg border object-cover" />
+                  <img
+                    src={cloudinaryThumb(thumb, 160)}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                    className="h-20 w-20 shrink-0 rounded-lg border object-cover"
+                  />
                 )
               ) : (
                 <div className="grid h-20 w-20 shrink-0 place-items-center rounded-lg border bg-surface-2 text-xs text-ink-3">無圖</div>

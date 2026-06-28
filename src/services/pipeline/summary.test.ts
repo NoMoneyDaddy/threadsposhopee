@@ -31,6 +31,14 @@ test("summarizePipelineRun：無新增時不帶導引語、重用為 0 不顯示
   assert.equal(r.message, "待審 0 則素材");
 });
 
+test("summarizePipelineRun：有 pending 欄位時待審數以 pending 為準（不含已核准重產）", () => {
+  // created=3 但只有 2 筆進待審（1 筆為已核准重產）→ 顯示「待審 2」
+  const r = summarizePipelineRun([{ created: 3, pending: 2, reusedMaterial: 0 }]);
+  assert.equal(r.created, 3);
+  assert.equal(r.pending, 2);
+  assert.ok(r.message.includes("待審 2 則素材"));
+});
+
 test("summarizePipelineRun：非陣列／缺欄位容錯不崩潰", () => {
   assert.equal(summarizePipelineRun(null).created, 0);
   assert.equal(summarizePipelineRun(undefined).failed, 0);

@@ -31,7 +31,9 @@ export async function getMaterial(id: string, ownerId: string): Promise<Material
 // 素材庫列表：只回「已核准」素材（待審的爬蟲產出不入庫列表、不可被排程/發文）。
 // 舊資料 intake_status 由 migration 預設回填 'approved'；demo 端把未設視同已核准。
 export async function listMaterials(ownerId: string): Promise<Material[]> {
-  if (isDemoMode) return demo.materials.filter((m) => (m.intake_status ?? "approved") !== "pending");
+  // demo 也以 owner_id 過濾（與非 demo 一致、與 listPendingMaterials 一致），維持多租戶隔離。
+  if (isDemoMode)
+    return demo.materials.filter((m) => m.owner_id === ownerId && (m.intake_status ?? "approved") !== "pending");
   const sb = getServiceClient()!;
   const { data, error } = await sb
     .from("materials")

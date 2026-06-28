@@ -21,6 +21,19 @@ export function isMissingColumnError(error: { code?: string; message?: string } 
 
 type DbResult<T> = { data: T | null; error: { code?: string; message?: string } | null };
 
+// 預覽圖 URL 安全化（純函式可測）：使用者自填或 OG 自動抓到的圖片網址，在存進 DB／渲染到公開中轉頁前
+// 先過 SSRF/協定守衛；不安全（內網、非 http(s)、javascript:/data: 等）即丟棄回 null，
+// 不讓攻擊者控制的網址出現在公開頁的 <img> 或 og:image（防追蹤像素／載入非預期內容）。
+export function safePublicImageUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  try {
+    assertSafePublicUrl(url);
+    return url;
+  } catch {
+    return null;
+  }
+}
+
 // 讀取降級（純函式、可單測）：先用「含 safety」的查詢；若因 safety 欄位未遷移（PGRST204）失敗，
 // 改用「不含 safety」的查詢重試；其餘錯誤照拋（不可被當成「查無資料」而誤成 404／空列表）。
 export async function selectWithSafetyFallback<T>(
@@ -100,6 +113,8 @@ export async function createRedirectLink(
   ]);
   // unknown（未設金鑰/查詢失敗）存 null＝中轉頁降級為「基本安全檢查」；只有明確 safe/unsafe 才落值。
   const safetyValue: "safe" | "unsafe" | null = safety === "safe" || safety === "unsafe" ? safety : null;
+  // 預覽圖一律過守衛：不安全的 imageUrl（含使用者自填）丟棄成 null，避免存進 DB 後在公開頁載入攻擊者網址。
+  const safeImageUrl = safePublicImageUrl(meta.imageUrl);
   const sb = getServiceClient()!;
   // 安全欄位（migration 0049）若尚未套用到正式 DB，insert 帶 safety 會整批失敗。
   // safety 只是 best-effort 信任標章，不該卡死核心「建立短連結」：偵測到欄位缺失就降級為不帶 safety 重試。
@@ -111,7 +126,7 @@ export async function createRedirectLink(
       code,
       source_url: input.sourceUrl,
       title: meta.title,
-      image_url: meta.imageUrl,
+      image_url: safeImageUrl,
       description: meta.description
     };
     if (includeSafety) {
@@ -155,7 +170,8 @@ export async function getRedirectLinkByCode(code: string): Promise<RedirectLink 
     code: data.code as string,
     sourceUrl: data.source_url as string,
     title: (data.title as string) ?? null,
-    imageUrl: (data.image_url as string) ?? null,
+    // 公開中轉頁/og:image：讀取時再過一次守衛，連既有列中不安全的 imageUrl 也擋掉。
+    imageUrl: safePublicImageUrl(data.image_url as string),
     description: (data.description as string) ?? null,
     safety: toSafety(data.safety)
   };
@@ -262,7 +278,7 @@ export async function getBioPageByHandle(handle: string): Promise<BioPage | null
     .limit(50);
   return {
     title: prof.bio_title ?? null,
-    links: (links ?? []).map((l) => ({ code: l.code, title: l.title, imageUrl: l.image_url }))
+    links: (links ?? []).map((l) => ({ code: l.code, title: l.title, imageUrl: safePublicImageUrl(l.image_url) }))
   };
 }
 

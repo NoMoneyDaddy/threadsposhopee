@@ -118,7 +118,8 @@ export interface ThreadsScraperInput {
 }
 
 export function buildScraperInput(spec: ScrapeQuery, postsLimit: number): ThreadsScraperInput {
-  const from = (spec.username ?? "").trim().replace(/^@+/, "");
+  // 只去單一前導 @；多個 @（如 @@user）保留剩餘 @ 交給下方正規則擋下，不靜默改成真帳號。
+  const from = (spec.username ?? "").trim().replace(/^@/, "");
   if (from && !THREADS_USERNAME_RE.test(from)) {
     throw new Error(`無效的 Threads 帳號名稱「${from}」：僅能包含英數字、底線與點（a-z A-Z 0-9 . _）`);
   }

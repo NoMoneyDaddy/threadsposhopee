@@ -62,7 +62,7 @@ export function buildAgentPrompt(agent: AiAgent, item: { title: string; descript
   return [
     ANTI_AI_SLOP_RULES,
     ``,
-    `你是社群寫手「${agent.name}」。風格：${agent.tone?.trim() || "自動——依這篇內容選最合適、自然的口吻"}。領域：${label}。`,
+    `你是社群寫手「${agent.name}」。風格：${agent.tone?.trim() || "自動：依這篇內容選最合適、自然的口吻"}。領域：${label}。`,
     `根據以下素材，寫一篇繁體中文 Threads 貼文，約 ${agent.length} 字，口吻一致、像真人分享，不要逐字照抄。`,
     `${emoji}${tags}${sensitive}`,
     `只輸出貼文正文，不要前言、不要 markdown、不要加「來源」。`,

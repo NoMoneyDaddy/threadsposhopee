@@ -56,6 +56,17 @@ ${ctx.sourceText ? `別人怎麼介紹（僅供參考，不要照抄，要用你
 [再補一句反應或問句，${describeReply(prefs.reply)}]`;
 }
 
+// 管理員「預覽 prompt」用的範例情境：用固定範例商品＋使用者偏好組出實際送進模型的 prompt。
+// 抽成純函式方便單測（鎖定預覽輸出含去 AI 腔規則與範例商品），設定頁只負責 owner-only 渲染。
+const PREVIEW_CTX: CopyContext = {
+  productName: "（範例）無線藍牙耳機",
+  shopeeShortLink: "https://go2read.link/r/example",
+  sourceText: "（範例）原貼文：這支續航很久、戴起來不夾耳"
+};
+export function buildCopyPromptPreview(prefs: CopyPrefs = DEFAULT_COPY_PREFS): string {
+  return buildCopyPrompt(PREVIEW_CTX, prefs);
+}
+
 // 把 AI 輸出拆成正文 / 留言（對應 n8n「🎬準備媒體資料」的 split 邏輯）
 export function splitCopy(raw: string): { mainText: string; replyText: string } {
   // 容忍 LLM 常見輸出差異：全形/半形冒號（：/:）皆可（後綴空格由 trim 處理）。

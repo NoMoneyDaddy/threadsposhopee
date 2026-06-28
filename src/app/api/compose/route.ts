@@ -92,12 +92,13 @@ async function autoAffiliateLinks(ownerId: string, text: string): Promise<string
 }
 
 // 處理「更多串文段落」（3/n…）：逐段把文字裡的蝦皮連結轉成 owner 分潤連結、媒體過 SSRF＋中轉圖床。
-// 過濾掉無內容（無文字且無媒體）的段落；最多取前 MAX_EXTRA_SEGMENTS 段。
+// 過濾掉無內容（無文字且無媒體）的段落。超過 MAX_EXTRA_SEGMENTS 直接拋錯（呼叫端回 400）——
+// 不靜默截斷，避免「使用者送出/預覽 11 段、實際只存 10 段」的輸入與結果不一致。
 async function processExtraSegments(raw: unknown, ownerId: string, provider: MediaProvider | null): Promise<ThreadSegment[]> {
   if (!Array.isArray(raw)) return [];
+  if (raw.length > MAX_EXTRA_SEGMENTS) throw new Error(`串文段落最多 ${MAX_EXTRA_SEGMENTS} 段`);
   const out: ThreadSegment[] = [];
   for (const seg of raw) {
-    if (out.length >= MAX_EXTRA_SEGMENTS) break;
     if (!seg || typeof seg !== "object") continue;
     const rawText = typeof (seg as { text?: unknown }).text === "string" ? (seg as { text: string }).text : "";
     const media = await processMediaArray((seg as { media?: unknown }).media, provider);

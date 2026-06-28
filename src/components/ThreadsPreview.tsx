@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { DraftMedia, ThreadSegment } from "@/lib/types";
 import { cloudinaryThumb } from "@/lib/img";
+import { buildAfterSegments } from "@/lib/thread-preview";
 
 // Threads 貼文即時預覽（仿 Typefully／Buffer 的所見即所得）。
 // 顯示正文、媒體（單張或多張輪播），以及主文之後的串文段落（2/n 分潤連結、3/n…更多段落）。
@@ -70,14 +71,8 @@ export default function ThreadsPreview({
         ? [{ url: mediaUrl, type: mediaType }]
         : [];
   const carousel = items.length > 1;
-  const replyItems: DraftMedia[] = replyMedia ?? [];
-  // 主文之後的串文段落鏈：留言（2/n 分潤連結）＋更多段落（3/n…）。過濾掉無內容的空段落。
-  const afterSegments: ThreadSegment[] = [
-    ...((replyText && replyText.trim()) || replyItems.length > 0 ? [{ text: replyText ?? null, media: replyItems }] : []),
-    ...(extraSegments ?? [])
-      .map((s) => ({ text: s.text ?? null, media: s.media ?? [] }))
-      .filter((s) => Boolean(s.text && s.text.trim()) || s.media.length > 0)
-  ];
+  // 主文之後的串文段落鏈：留言（2/n 分潤連結）＋更多段落（3/n…）。過濾邏輯抽到 buildAfterSegments（可單測）。
+  const afterSegments: ThreadSegment[] = buildAfterSegments({ replyText, replyMedia, extraSegments });
   const hasReply = afterSegments.length > 0;
   const total = 1 + afterSegments.length;
   // 媒體縮圖渲染（主文與留言共用）

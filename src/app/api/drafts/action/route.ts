@@ -99,6 +99,12 @@ export async function POST(req: Request) {
         patch.reply_text = replyText ? swapAffiliateLink(replyText, old, link) : replyText;
       }
     }
+    // 草稿若已有多段串文鏈：第 0 段＝留言段（2/n），須與編輯後的 reply_text/reply_media 同步，
+    // 否則發布時 effectiveChain 仍會沿用舊的 thread_chain[0]（畫面與實際不一致）。後續段落（3/n…）保留不動。
+    if (Array.isArray(draft.thread_chain) && draft.thread_chain.length > 0) {
+      const firstMedia = patch.reply_media ?? draft.thread_chain[0]?.media ?? draft.reply_media ?? [];
+      patch.thread_chain = [{ text: patch.reply_text ?? null, media: firstMedia }, ...draft.thread_chain.slice(1)];
+    }
     const updated = await updateDraft(id, user.id, patch);
     if (!updated) return NextResponse.json({ ok: false, error: "更新草稿失敗" }, { status: 400 });
     return NextResponse.json({ ok: true, draft: updated });

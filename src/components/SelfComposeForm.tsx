@@ -10,6 +10,7 @@ import { parseTaipeiDateTimeLocal } from "@/lib/datetime";
 
 const input = "w-full rounded-xl border px-3 py-2 text-sm";
 const THREADS_LIMIT = 500;
+const MAX_EXTRA_SEGMENTS = 10; // 與後端 compose route 上限一致，避免送出後被拒
 
 // 發文：像 Threads 一樣直接打字、上傳多張照片／影片，右側即時預覽；正文裡的蝦皮連結發布時自動轉成你的分潤連結。
 export default function SelfComposeForm({
@@ -92,6 +93,11 @@ export default function SelfComposeForm({
     // 串文段落須有內容（文字或媒體），避免送出空段落
     if (extraSegments.some((s) => !(s.text && s.text.trim()) && (s.media ?? []).length === 0)) {
       setMsg("有空白的串文段落，請填入內容或移除");
+      return;
+    }
+    // 段落數同後端上限，避免送出後被 400 退回
+    if (extraSegments.length > MAX_EXTRA_SEGMENTS) {
+      setMsg(`串文段落最多 ${MAX_EXTRA_SEGMENTS} 段`);
       return;
     }
     const targetAccountId = accountId || threadsAccounts[0]?.id;
@@ -301,8 +307,10 @@ export default function SelfComposeForm({
         ))}
         <button
           type="button"
-          onClick={() => setExtraSegments((prev) => [...prev, { text: "", media: [] }])}
-          className="rounded-full border border-border px-3 py-1 text-xs text-ink-2 hover:bg-surface-2"
+          onClick={() => setExtraSegments((prev) => (prev.length >= MAX_EXTRA_SEGMENTS ? prev : [...prev, { text: "", media: [] }]))}
+          disabled={extraSegments.length >= MAX_EXTRA_SEGMENTS}
+          title={extraSegments.length >= MAX_EXTRA_SEGMENTS ? `串文段落最多 ${MAX_EXTRA_SEGMENTS} 段` : undefined}
+          className="rounded-full border border-border px-3 py-1 text-xs text-ink-2 hover:bg-surface-2 disabled:opacity-50"
         >
           ＋ 新增串文段落
         </button>

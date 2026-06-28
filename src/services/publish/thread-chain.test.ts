@@ -37,11 +37,16 @@ test("chainStepAt：游標進度與 isLast", () => {
   assert.equal(chainStepAt(chain, -1), null);
 });
 
-test("hasThreadChain：有內容段落才算明確多段串文", () => {
+test("hasThreadChain：只有「有效段落＞1」才算多段串文（單段走即時補捷徑）", () => {
   assert.equal(hasThreadChain({ thread_chain: [] }), false);
   assert.equal(hasThreadChain({ thread_chain: [{ text: "  ", media: [] }] }), false); // 空白無媒體
-  assert.equal(hasThreadChain({ thread_chain: [{ text: "第三段" }] }), true);
-  assert.equal(hasThreadChain({ thread_chain: [{ text: null, media: [{ url: "https://x/y.jpg", type: "image" }] }] }), true);
+  assert.equal(hasThreadChain({ thread_chain: [{ text: "只有一段" }] }), false); // 單段＝單則留言
+  assert.equal(hasThreadChain({ thread_chain: [{ text: "第一段" }, { text: "  " }] }), false); // 第二段空＝實質單段
+  assert.equal(hasThreadChain({ thread_chain: [{ text: "第一段" }, { text: "第二段" }] }), true);
+  assert.equal(
+    hasThreadChain({ thread_chain: [{ text: null, media: [{ url: "https://x/y.jpg", type: "image" }] }, { text: "第二段" }] }),
+    true
+  );
 });
 
 test("空白 url 的媒體視為無效（與發布層一致）：純空媒體段落被濾掉", () => {

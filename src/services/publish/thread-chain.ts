@@ -21,11 +21,17 @@ export function effectiveChain(
   return [];
 }
 
-// 是否有「明確定義」的多段串文鏈（至少一段有內容）。用來決定主文發出後一律交給 worker 依序補，
-// 不走「單則 delay 0 即時補」的捷徑（多段即時補＝爆發，且需要游標依序進度）。
+// 是否為「真正的多段串文鏈」（有效段落＞1）。只有多段才一律交給 worker 依序補（避免一次爆發＋需游標進度）；
+// 單段（或無）等同單則留言，仍走「delay 0 即時補」的捷徑，故此處需 >1 才算（不可只判「有任一段」）。
 export function hasThreadChain(d: Pick<Draft, "thread_chain">): boolean {
   const raw = Array.isArray(d.thread_chain) ? d.thread_chain : [];
-  return raw.some((seg) => Boolean(seg?.text && seg.text.trim()) || filterMedia(seg?.media).length > 0);
+  let count = 0;
+  for (const seg of raw) {
+    if (Boolean(seg?.text && seg.text.trim()) || filterMedia(seg?.media).length > 0) {
+      if (++count > 1) return true;
+    }
+  }
+  return false;
 }
 
 // 媒體有效性與發布層（threads/publish 的 isValidMedia）對齊：url 須為非空字串、type 須為 image/video。

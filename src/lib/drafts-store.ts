@@ -393,7 +393,8 @@ export async function advanceThreadSegment(
         thread_last_post_id: opts.lastPostId
       };
   if (isDemoMode) {
-    const d = demo.drafts.find((x) => x.id === id);
+    // demo 也要 owner 過濾，維持與 DB 路徑一致的租戶隔離（id 衝突/誤呼叫不會推進到別人的草稿）。
+    const d = demo.drafts.find((x) => x.id === id && x.owner_id === ownerId);
     if (d) Object.assign(d, patch);
     return;
   }

@@ -17,10 +17,11 @@ const NAV: NavItem[] = [
   { href: "/admin", label: "管理", ownerOnly: true }
 ];
 
-// 當前頁高亮判斷（純函式、可單測）：首頁需完全相等；其餘以 prefix 命中任一 match 路徑。
+// 當前頁高亮判斷（純函式、可單測）：首頁需完全相等；其餘需完全相等或為其子路徑（下一字元是 /），
+// 以免 /links-archive、/drafts-old 這類兄弟路徑被誤判為 active。
 export function isNavItemActive(item: NavItem, pathname: string): boolean {
   const all = item.match ?? [item.href];
-  return all.some((h) => (h === "/" ? pathname === "/" : pathname.startsWith(h)));
+  return all.some((h) => (h === "/" ? pathname === "/" : pathname === h || pathname.startsWith(`${h}/`)));
 }
 
 // Threads 風頂部導覽：黏性、毛玻璃、單色高對比，當前頁以實心膠囊標示。

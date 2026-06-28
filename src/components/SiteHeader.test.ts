@@ -28,3 +28,8 @@ test("一般項目只命中自己的路徑前綴", () => {
   assert.equal(isNavItemActive(links, "/links/abc"), true);
   assert.equal(isNavItemActive(links, "/insights"), false);
 });
+
+test("兄弟路徑不被誤判為 active", () => {
+  assert.equal(isNavItemActive(links, "/links-archive"), false);
+  assert.equal(isNavItemActive(drafts, "/drafts-old"), false);
+});

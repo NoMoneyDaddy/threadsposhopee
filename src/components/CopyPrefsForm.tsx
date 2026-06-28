@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { CopyPrefs, SidePrefs, Tone, Length } from "@/services/ai/prefs";
+import type { CopyPrefs, SidePrefs, Tone } from "@/services/ai/prefs";
 
 const TONE_OPTS: { v: Tone; label: string }[] = [
   { v: "friendly", label: "朋友閒聊" },
@@ -10,13 +10,9 @@ const TONE_OPTS: { v: Tone; label: string }[] = [
   { v: "humorous", label: "幽默自嘲" },
   { v: "concise", label: "精簡直接" }
 ];
-const LENGTH_OPTS: { v: Length; label: string }[] = [
-  { v: "short", label: "短" },
-  { v: "medium", label: "中" },
-  { v: "long", label: "長" }
-];
 
 const sel = "rounded-xl border px-2 py-1 text-sm";
+const num = "w-16 rounded-xl border px-2 py-1 text-sm";
 
 function SideEditor({
   title,
@@ -40,20 +36,36 @@ function SideEditor({
           </select>
         </label>
         <label className="text-xs text-ink-2">
-          長度
-          <select className={`${sel} ml-1`} value={side.length} onChange={(e) => onChange({ ...side, length: e.target.value as Length })}>
-            {LENGTH_OPTS.map((o) => (
-              <option key={o.v} value={o.v}>{o.label}</option>
-            ))}
-          </select>
+          字數上限
+          {/* 字數客製：空值/超界由伺服端 normalizeCopyPrefs 夾回合理範圍（20–480） */}
+          <input
+            type="number"
+            min={20}
+            max={480}
+            className={`${num} ml-1`}
+            value={side.maxChars}
+            onChange={(e) => onChange({ ...side, maxChars: Number(e.target.value) })}
+          />
+        </label>
+        <label className="text-xs text-ink-2">
+          emoji 數量
+          {/* 0＝不用；上限 8。伺服端會再夾一次 */}
+          <input
+            type="number"
+            min={0}
+            max={8}
+            className={`${num} ml-1`}
+            value={side.emojiMax}
+            onChange={(e) => onChange({ ...side, emojiMax: Number(e.target.value) })}
+          />
         </label>
       </div>
     </div>
   );
 }
 
-// AI 文案客製化：語氣/長度（正文與留言分開）、溫度、自訂指示。各人各設各的。
-// 文案一律不帶 emoji（全站規則），故不提供 emoji 選項。
+// AI 文案客製化：語氣／字數／emoji 數量（正文與留言分開）、溫度、自訂指示。各人各設各的。
+// AI 文案可適度帶 emoji（數量由各段 emojiMax 決定，0＝不用）。
 export default function CopyPrefsForm({ initial }: { initial: CopyPrefs }) {
   const router = useRouter();
   const [prefs, setPrefs] = useState<CopyPrefs>(initial);

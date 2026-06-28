@@ -32,7 +32,7 @@
 
 - **Next.js 14 App Router + Supabase**（Postgres + Auth + RLS）。Demo 模式（未設金鑰）用 `src/fixtures` 跑。
 - 子系統（皆獨立、可併用）：
-  - **爬蟲**（owner 限定）：owner 綁自己的 Apify → 監看來源 → AI 文案 → 草稿（**一律待人工核准**）。
+  - **爬蟲**（選填，人人可用）：使用者各綁自己的 Apify（計費算自己）→ 監看來源 → AI 文案 → 草稿（**一律待人工核准**）。
   - **發文**：各自 Threads 帳號 → 只發**核准過**的草稿，依防封節奏（間隔＋隨機抖動／每日上限／批次）。留言（串文 2/2 分潤連結）可延遲補發（保底＋抖動＋逐則覆寫）。
   - **AI 代理人**（`src/services/ai/agent-run.ts`）：人格×領域（`src/lib/ai-domains.ts`，含自訂主題）→ 抓當日新聞（Google News RSS／未來 AI 搜尋）→ 去重（來源 hash＋標題 jaccard）→ 依人格用 owner Gemini 改寫 → 草稿（待審）。表：`ai_agents`／`ai_agent_seen`；接 cron（每代理人每日約一次）。
   - **go2read 中轉導流**（`src/app/r/[code]`、`src/lib/redirect-store.ts`）：自有短連結＋揭露式中轉頁，「繼續」一次點擊開分潤＋去來源（分潤只在真實點擊觸發，**不做 cookie stuffing**）。短網域（`NEXT_PUBLIC_SHORT_DOMAIN`，如 go2read.link）由 middleware host gating 限定只服務 `/r/*`，其餘 404、不外露主站。草稿可一鍵套短連結（drafts/action `shorten`）。

@@ -114,6 +114,7 @@ export {
   listApprovedDraftsForShard,
   listPublishedDates,
   countPublished,
+  countPublishedTodayByAccount,
   type PublishedPostRef,
   type ReplyDueDraft
 } from "./drafts-store";

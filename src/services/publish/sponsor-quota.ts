@@ -17,7 +17,9 @@ export function sponsorQuota(postCount: number, opts: SponsorQuotaOpts = {}): nu
   const floor = opts.floor ?? 1;
   const minPostsForFloor = opts.minPostsForFloor ?? 1;
   if (!Number.isFinite(postCount) || postCount <= 0 || perPosts <= 0) return 0;
+  // 低頻免抽硬閘門：當日自發 < minPostsForFloor 一律 0（含 by-volume 項），
+  // 否則 perPosts 設得比門檻小時低頻者仍可能被 by-volume 抽到，違反「完全不抽」承諾。
+  if (postCount < minPostsForFloor) return 0;
   const byVolume = Math.floor(postCount / perPosts);
-  const base = postCount >= minPostsForFloor ? floor : 0;
-  return Math.max(base, byVolume);
+  return Math.max(floor, byVolume);
 }

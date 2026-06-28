@@ -3,6 +3,7 @@ import { log } from "@/lib/logger";
 import { setUserCloudinary } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
 import { parseCloudinaryInput } from "@/services/media/cloudinary-config";
+import { validateCloudinaryUnsigned } from "@/services/validate/keys";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +29,12 @@ export async function POST(req: Request) {
     const apiSecret = typeof rawSecret === "string" ? rawSecret.trim() : "";
     if (apiKey.length > 200 || apiSecret.length > 200) {
       return NextResponse.json({ ok: false, error: "API 金鑰格式不正確" }, { status: 400 });
+    }
+
+    // 綁定（非清除）時實打一次 unsigned 上傳驗證 cloud+preset 有效；明確被拒才擋，第三方故障則放行。
+    if (parsed.cloud && parsed.preset) {
+      const check = await validateCloudinaryUnsigned(parsed.cloud, parsed.preset);
+      if (!check.ok) return NextResponse.json({ ok: false, error: check.reason }, { status: 400 });
     }
 
     await setUserCloudinary(user.id, parsed.cloud, parsed.preset, apiKey, apiSecret);

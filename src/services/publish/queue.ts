@@ -24,7 +24,8 @@ import {
   tripAccountCircuit,
   clearAccountCircuit,
   getContributionScore,
-  getSponsorRewardMode
+  getSponsorRewardMode,
+  countPublishedTodayByAccount
 } from "@/lib/store";
 import { canOwnLink } from "@/lib/contribution";
 import { publishToThreads, publishReply, PublishUncertainError } from "@/services/threads/publish";
@@ -136,11 +137,15 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
   // 本輪 DB 冷卻查詢結果快取（owner|url → 是否冷卻中），避免同商品多草稿時每篇都打一次 DB（N+1）。
   const productCooldownCache = new Map<string, boolean>();
 
-  // 贊助文（功能 B）：冷門時段把非 owner 帳號的待發草稿連結就地換成平台連結（DB 原文不動＝發後還原）。
+  // 贊助文（比例制 B+A）：把非 owner 帳號「自己的」待發草稿連結就地換成平台連結（DB 原文不動＝發後還原）。
+  // 配額依該帳號「當日實際自發篇數」計算（sponsorQuota），低頻者不被強抽；不再注入管理員內容、不再限冷門時段。
   const sponsorCfg = await getSponsorConfig();
   const sponsorTaipei = taipeiParts();
+  // 台北當日零點 ISO（Asia/Taipei 恆為 +08:00，無 DST）：算「今天」已發篇數的下界。
+  const sponsorTodaySinceIso = new Date(`${sponsorTaipei.date}T00:00:00+08:00`).toISOString();
   const sponsorOwnerId = sponsorCfg.enabled && !isDemoMode ? await getOwnerUserId().catch(() => null) : null;
   const sponsorCountCache: Record<string, number> = {}; // accId -> 今天已發贊助文篇數
+  const sponsorPostedTodayCache: Record<string, number> = {}; // accId -> 今天（此帳號）已發布篇數（比例配額用）
   // 自賺資格＋自己的金鑰資源（依 owner 快取）：超額 slot 用貢獻者自己的分潤連結。
   const sponsorOwnLinkCache: Record<string, { eligible: boolean; creds: Awaited<ReturnType<typeof resolveSponsorOwnerCreds>> | null }> = {};
   const sponsorPickCache: Record<string, SponsorPick | null> = {}; // accId -> 使用者自選
@@ -263,11 +268,25 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
     let pubMainText = draft.main_text ?? "";
     let pubReplyText = draft.reply_text;
     if (sponsorCfg.enabled && !isDemoMode) {
-      // 每日配額：依該帳號每日上限換算（max(保底, floor(上限/perPosts))）；今日已達配額則不再贊助。
+      // 比例配額：依該帳號「當日實際自發篇數（含這篇）」換算 max(保底, floor(篇數/perPosts))；
+      // 低頻者（當日 < minPostsForFloor 篇）配額為 0 不被抽。今日已達配額則不再贊助。
       if (!(accId in sponsorCountCache)) {
         sponsorCountCache[accId] = await countSponsorToday(accId, sponsorTaipei.date).catch(() => 0);
       }
-      const sponsorQuotaToday = sponsorQuota(pp.maxPerDay);
+      if (!(accId in sponsorPostedTodayCache)) {
+        sponsorPostedTodayCache[accId] = draft.owner_id
+          ? await countPublishedTodayByAccount(accId, draft.owner_id, sponsorTodaySinceIso).catch((e) => {
+              // 算不出當日發文數時記錄並保守降級為 0（本篇不抽贊助），不靜默吞錯。
+              log.warn("計算當日發文數失敗，本篇略過贊助配額", { accId, err: e });
+              return 0;
+            })
+          : 0;
+      }
+      const sponsorQuotaToday = sponsorQuota(sponsorPostedTodayCache[accId] + 1, {
+        perPosts: sponsorCfg.perPosts,
+        floor: sponsorCfg.floor,
+        minPostsForFloor: sponsorCfg.minPostsForFloor
+      });
       const isOwnerAccount = Boolean(sponsorOwnerId) && draft.owner_id === sponsorOwnerId;
       if (!(accId in sponsorPickCache)) {
         sponsorPickCache[accId] = await getSponsorPick(accId).catch(() => null);
@@ -278,8 +297,6 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
           enabled: sponsorCfg.enabled,
           isOwnerAccount,
           hour: sponsorTaipei.hour,
-          offPeakStart: sponsorCfg.offPeakStart,
-          offPeakEnd: sponsorCfg.offPeakEnd,
           alreadyDoneToday: sponsorCountCache[accId] >= sponsorQuotaToday,
           thisDraftId: draft.id,
           pickDraftId: pick?.draftId ?? null,
@@ -288,8 +305,9 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
       ) {
         // 就地改寫：取「該篇貼文自己的」商品連結，用 owner 金鑰重產成 owner 的分潤連結（平台保本）；
         // 超額 slot 開放「自賺資格」貢獻者改用自己的金鑰重產（自賺）。無商品連結則略過（不改寫該篇）。
-        const SPONSOR_FLOOR = 1;
-        const isSurplus = (sponsorCountCache[accId] ?? 0) >= SPONSOR_FLOOR;
+        // 保底篇數與配額同源（sponsorCfg.floor）：達保底數後的額外贊助才算「超額」可自賺，
+        // 避免租戶把 floor 調大於 1 時第二篇就過早切到 own-link、與配額不一致。
+        const isSurplus = (sponsorCountCache[accId] ?? 0) >= sponsorCfg.floor;
         const draftCleanUrl = await cleanProductUrlFromDraft(draft).catch(() => null);
         let link: string | null = null;
         let useOwn = false;
@@ -349,6 +367,9 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
         postId = res.postId;
         replyFailedInline = Boolean(res.replyFailed);
       }
+
+      // 本帳號今日自發篇數 +1（比例配額用）：同輪後續同帳號草稿據此遞增，配額隨實際發文量成長。
+      if (accId in sponsorPostedTodayCache) sponsorPostedTodayCache[accId] += 1;
 
       // 贊助文發布成功 → 追加當日紀錄（供驗證），DB 草稿原文未動＝自動還原。
       if (sponsorLinkUsed) {

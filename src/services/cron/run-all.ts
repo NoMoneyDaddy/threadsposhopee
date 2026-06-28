@@ -8,7 +8,7 @@ import { buildDailyDigest } from "@/services/digest/daily";
 import { buildPeriodicDigest } from "@/services/digest/periodic";
 import { broadcastWeeklyDigests } from "@/services/digest/weekly-broadcast";
 import type { NotifyType } from "@/lib/notify-prefs";
-import { verifySponsorPosts, ensureSponsorPosts } from "@/services/sponsor/run";
+import { verifySponsorPosts } from "@/services/sponsor/run";
 import { runAiAgents } from "@/services/ai/agent-run";
 import { cleanupExpiredBindTokens } from "@/lib/telegram-bind";
 import { getOwnerUserId } from "@/lib/auth";
@@ -40,11 +40,6 @@ export async function runCronAll(now: Date = new Date()): Promise<Record<string,
         if (r?.replies?.failed) parts.push(`補留言 ${r.replies.failed} 則失敗`);
         return parts.length ? `⚠️ ${parts.join("；")}` : null;
       }
-    },
-    {
-      key: "sponsorFill",
-      run: async () => ensureSponsorPosts(await getOwnerUserId()),
-      warn: (r) => (r?.created ? `★ 自動補發贊助文 ${r.created} 篇` : null)
     },
     {
       key: "verifySponsor",

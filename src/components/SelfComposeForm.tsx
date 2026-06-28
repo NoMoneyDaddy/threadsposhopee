@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ThreadsAccount, DraftMedia } from "@/lib/types";
 import ThreadsPreview, { CharCount } from "@/components/ThreadsPreview";
@@ -31,6 +31,38 @@ export default function SelfComposeForm({
   const [scheduledAt, setScheduledAt] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  // 「換個說法」：AI 改寫出多個版本供挑選。
+  const [variations, setVariations] = useState<string[]>([]);
+  const [rewriting, setRewriting] = useState(false);
+  // 正文一變動（編輯／套用／送出後清空）即讓舊的改寫版本失效，避免點到過期內容。
+  useEffect(() => {
+    setVariations([]);
+  }, [mainText]);
+
+  async function rewrite() {
+    if (!mainText.trim()) {
+      setMsg("請先輸入正文再換句話說");
+      return;
+    }
+    setRewriting(true);
+    setMsg(null);
+    setVariations([]);
+    try {
+      const res = await fetchWithTimeout(
+        "/api/ai/rewrite",
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: mainText }) },
+        30000
+      );
+      // 回應不保證是 JSON（如 gateway 502 HTML）：安全解析，失敗則用狀態碼當訊息。
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.ok) throw new Error(json?.error || `換句話說失敗（${res.status}）`);
+      setVariations((json.variations as string[]) ?? []);
+    } catch (e) {
+      setMsg(`❌ ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setRewriting(false);
+    }
+  }
   // 送出條件：正文必填＋至少一個發文帳號（與後端／submit 驗證一致），不符時停用所有送出鈕並提示原因。
   const blockReason = threadsAccounts.length === 0 ? "請先到帳號管理綁定 Threads 帳號" : !mainText.trim() ? "請先輸入正文" : "";
   const canSubmit = blockReason === "";
@@ -133,9 +165,41 @@ export default function SelfComposeForm({
           onChange={(e) => setMainText(e.target.value)}
           placeholder="有什麼新鮮事？直接打字分享…"
         />
-        <div className="mt-1 flex justify-end">
+        <div className="mt-1 flex items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={rewrite}
+            disabled={rewriting || !mainText.trim()}
+            title={!mainText.trim() ? "請先輸入正文" : "用 AI 改寫出幾個不同說法供你挑選"}
+            className="rounded-full border border-brand/40 px-2.5 py-1 text-xs text-brand hover:bg-orange-50 disabled:opacity-50"
+          >
+            {rewriting ? "改寫中…" : "✨ 換個說法"}
+          </button>
           <CharCount text={mainText} limit={THREADS_LIMIT} />
         </div>
+        {variations.length > 0 && (
+          <div className="mt-2 space-y-1.5 rounded-xl border border-dashed border-border bg-surface-2/50 p-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-ink-2">點一個版本即可套用</span>
+              <button type="button" onClick={() => setVariations([])} aria-label="關閉版本清單" className="text-xs text-ink-3 hover:text-ink">
+                ✕
+              </button>
+            </div>
+            {variations.map((v, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => {
+                  setMainText(v);
+                  setVariations([]);
+                }}
+                className="block w-full whitespace-pre-wrap rounded-lg border bg-surface px-2.5 py-2 text-left text-sm text-ink hover:border-brand/50 hover:bg-orange-50"
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+        )}
         {/* 正文媒體：可上傳多張圖片／影片（>1 張發成輪播） */}
         <MediaPicker items={mainMedia} onChange={setMainMedia} cloud={cloud} preset={preset} hint="可加多張照片／影片（多張＝輪播）" />
       </div>

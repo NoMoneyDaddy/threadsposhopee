@@ -1,13 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { TOUR_STORAGE_KEY, TOUR_OPEN_EVENT, shouldAutoOpenTour } from "./product-tour-logic";
 
 // 互動導覽：首次登入自動開啟一次（localStorage 記住），之後可從「使用說明」頁的按鈕重開。
 // 用步驟式對話框介紹六大區與核心流程；每步可直接「前往該頁」。
 // 採對話框而非 DOM 聚光燈：避免與桌機橫列／手機漢堡選單兩種版型的元素選擇器耦合而易碎。
-export const TOUR_STORAGE_KEY = "iwantpo.tour.v1";
-export const TOUR_OPEN_EVENT = "iwantpo:open-tour";
+export { TOUR_STORAGE_KEY, TOUR_OPEN_EVENT } from "./product-tour-logic";
 
 type TourStep = { emoji: string; title: string; body: string; href?: string; hrefLabel?: string };
 
@@ -62,6 +62,9 @@ const STEPS: TourStep[] = [
 export default function ProductTour({ auto = false }: { auto?: boolean }) {
   const [open, setOpen] = useState(false);
   const [i, setI] = useState(0);
+  const panelRef = useRef<HTMLDivElement>(null);
+  // 開啟前最後聚焦的元素，關閉時還原焦點（a11y）。
+  const lastFocusedRef = useRef<HTMLElement | null>(null);
 
   const markSeen = useCallback(() => {
     try {
@@ -71,11 +74,11 @@ export default function ProductTour({ auto = false }: { auto?: boolean }) {
     }
   }, []);
 
-  // 首次造訪自動開啟一次。
+  // 首次造訪自動開啟一次（是否該開的判斷抽到 shouldAutoOpenTour 純函式、有測試）。
   useEffect(() => {
     if (!auto) return;
     try {
-      if (!localStorage.getItem(TOUR_STORAGE_KEY)) setOpen(true);
+      if (shouldAutoOpenTour(auto, localStorage.getItem(TOUR_STORAGE_KEY))) setOpen(true);
     } catch {
       /* 讀不到就不自動開，使用者仍可手動開 */
     }
@@ -96,11 +99,41 @@ export default function ProductTour({ auto = false }: { auto?: boolean }) {
     markSeen();
   }, [markSeen]);
 
-  // Esc 關閉。
+  // 開啟時把焦點移進對話框；關閉（effect cleanup）時還原到原本聚焦的元素。
+  useEffect(() => {
+    if (!open) return;
+    lastFocusedRef.current = (document.activeElement as HTMLElement) ?? null;
+    panelRef.current?.focus();
+    return () => {
+      lastFocusedRef.current?.focus?.();
+    };
+  }, [open]);
+
+  // 鍵盤：Esc 關閉；Tab／Shift+Tab 在對話框內循環（focus trap），避免焦點落到背景頁。
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close();
+      if (e.key === "Escape") {
+        close();
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const root = panelRef.current;
+      if (!root) return;
+      const focusable = Array.from(
+        root.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])')
+      ).filter((el) => el.offsetParent !== null);
+      if (focusable.length === 0) return;
+      const firstEl = focusable[0];
+      const lastEl = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey && (active === firstEl || active === root)) {
+        e.preventDefault();
+        lastEl.focus();
+      } else if (!e.shiftKey && active === lastEl) {
+        e.preventDefault();
+        firstEl.focus();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -120,7 +153,9 @@ export default function ProductTour({ auto = false }: { auto?: boolean }) {
       onClick={close}
     >
       <div
-        className="w-full max-w-md rounded-2xl border border-border bg-surface p-5 shadow-xl"
+        ref={panelRef}
+        tabIndex={-1}
+        className="w-full max-w-md rounded-2xl border border-border bg-surface p-5 shadow-xl outline-none"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between gap-2">

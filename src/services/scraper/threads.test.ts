@@ -27,6 +27,20 @@ test("extractShopeeLinks：無連結／空字串 → 空陣列", () => {
   assert.deepEqual(extractShopeeLinks(""), []);
 });
 
+test("extractShopeeLinks：修剪句尾全形／半形標點（標點後有空白或在結尾）", () => {
+  // 註：標點後若「緊接」中文（無空白）無法可靠切分——蝦皮商品 slug 本身就含中文，
+  // 排除中文會誤傷合法連結；故僅處理「標點在邊界（空白前／字串尾）」這個常見情形。
+  assert.deepEqual(extractShopeeLinks("買這個 https://www.shopee.tw/product/1/2， 好用"), ["https://www.shopee.tw/product/1/2"]);
+  assert.deepEqual(extractShopeeLinks("連結 https://shopee.tw/某商品-i.222.333。"), ["https://shopee.tw/某商品-i.222.333"]);
+});
+
+test("extractShopeeLinks：非字串輸入（爬蟲 dataset 異常）→ 空陣列，不拋", () => {
+  assert.deepEqual(extractShopeeLinks(null as any), []);
+  assert.deepEqual(extractShopeeLinks(undefined as any), []);
+  assert.deepEqual(extractShopeeLinks(123 as any), []);
+  assert.deepEqual(extractShopeeLinks({} as any), []);
+});
+
 test("parseSearchPosts：從 postUrl 取貼文 id、抽蝦皮短連結、標記 isReply", () => {
   const posts = parseSearchPosts([
     {

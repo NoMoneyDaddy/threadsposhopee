@@ -30,15 +30,20 @@ export interface ScrapedPost {
 // 短碼字元：除英數外也含 - 與 _（部分分潤短碼帶這兩個字元，舊規則 [a-zA-Z0-9]+ 會在此處截斷成壞連結）。
 const SHOPEE_SHORT_RE =
   /(https?:\/\/(?:s\.shopee\.tw|shope\.ee|shp\.ee)\/[a-zA-Z0-9_-]+|https?:\/\/(?:www\.|m\.)?shopee\.tw\/[^\s"'()]+)/g;
+// 完整網址分支的 [^\s"'()]+ 會把句尾的全形／半形標點一起吃進去（如「…/product/1/2，」），
+// 抽出後先修剪尾端標點再回傳，避免產生壞連結。
+// （限制：標點後「緊接」中文且無空白時無法可靠切分——蝦皮 slug 本身含中文，排除中文會誤傷合法連結。）
+const TRAILING_PUNCTUATION_RE = /[，。！？；：、,.!?;:]+$/u;
 
 // 從一段文字抽出所有蝦皮連結（去重，保序）。純函式可測。
+// text 來自外部爬蟲 dataset（parseSearchPosts 吃 any[]），非字串視同無連結（回 []，不拋）。
 export function extractShopeeLinks(text: string): string[] {
-  if (!text) return [];
+  if (typeof text !== "string" || !text) return [];
   const seen = new Set<string>();
   const out: string[] = [];
   for (const m of text.matchAll(SHOPEE_SHORT_RE)) {
-    const link = m[1];
-    if (seen.has(link)) continue;
+    const link = m[1].replace(TRAILING_PUNCTUATION_RE, "");
+    if (!link || seen.has(link)) continue;
     seen.add(link);
     out.push(link);
   }

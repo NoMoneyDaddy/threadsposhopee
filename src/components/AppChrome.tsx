@@ -2,12 +2,25 @@
 
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
-import ProductTour from "./ProductTour";
+import dynamic from "next/dynamic";
+
+// 互動導覽以 dynamic import 延後載入（非首屏關鍵 JS）：在主站外框內常駐掛載事件監聽，
+// 讓任何頁面（含登出狀態的公開「使用說明」頁）按鈕都能喚起導覽；ssr:false 因其純 client 行為。
+const ProductTour = dynamic(() => import("./ProductTour"), { ssr: false });
 
 // 主站外框（頂部導覽＋頁尾）。go2read 中轉頁（/r/*）是獨立子服務，
 // 不套主站品牌/導覽，整頁全幅交由該頁自行排版。
-// tour：登入後掛載互動導覽（首次自動開一次；可由「使用說明」頁手動重開）。
-export default function AppChrome({ header, children, tour = false }: { header: ReactNode; children: ReactNode; tour?: boolean }) {
+// autoTour：是否首次自動開一次。demo 模式與登出狀態不自動開（避免 modal 遮罩攔截點擊、破壞 e2e）；
+// 導覽元件本身一律掛載，確保「使用說明」頁的「開始互動導覽」按鈕在任何登入狀態都有監聽可喚起。
+export default function AppChrome({
+  header,
+  children,
+  autoTour = false
+}: {
+  header: ReactNode;
+  children: ReactNode;
+  autoTour?: boolean;
+}) {
   const pathname = usePathname();
   const bare = pathname?.startsWith("/r/") ?? false;
   if (bare) return <>{children}</>;
@@ -28,7 +41,7 @@ export default function AppChrome({ header, children, tour = false }: { header: 
           </nav>
         </div>
       </footer>
-      {tour && <ProductTour auto />}
+      <ProductTour auto={autoTour} />
     </div>
   );
 }

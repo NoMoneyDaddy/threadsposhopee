@@ -1,6 +1,6 @@
 "use client";
 
-import { TOUR_OPEN_EVENT } from "./ProductTour";
+import { TOUR_OPEN_EVENT } from "./product-tour-logic";
 
 // 「開始互動導覽」按鈕：派發自訂事件喚起全站掛載的 ProductTour 對話框。
 export default function TourLaunchButton({ className, children }: { className?: string; children?: React.ReactNode }) {

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import TourLaunchButton from "@/components/TourLaunchButton";
 
 export const dynamic = "force-static";
@@ -8,7 +9,7 @@ export const metadata = { title: "使用說明 — IwantPo" };
 // 完整使用說明：這是什麼、怎麼運作、怎麼一步步用。對照 src/CLAUDE.md 的架構速覽。
 // 金鑰怎麼取得另見 /guide；本頁聚焦「流程與運作原理」。
 
-function Section({ id, title, badge, children }: { id: string; title: string; badge?: string; children: React.ReactNode }) {
+function Section({ id, title, badge, children }: { id: string; title: string; badge?: string; children: ReactNode }) {
   return (
     <section id={id} className="card scroll-mt-24 p-5">
       <div className="mb-2 flex items-center gap-2">
@@ -20,17 +21,19 @@ function Section({ id, title, badge, children }: { id: string; title: string; ba
   );
 }
 
-function Steps({ items }: { items: string[] }) {
+// 步驟清單：items 直接吃 ReactNode，內部連結用 next/link 的 <Link> 走 client 端導航
+// （避免原生 <a> 觸發整頁重載）。
+function Steps({ items }: { items: ReactNode[] }) {
   return (
     <ol className="list-decimal space-y-1.5 pl-5 text-sm text-ink [overflow-wrap:anywhere]">
       {items.map((s, i) => (
-        <li key={i} dangerouslySetInnerHTML={{ __html: s }} />
+        <li key={i}>{s}</li>
       ))}
     </ol>
   );
 }
 
-function Note({ children }: { children: React.ReactNode }) {
+function Note({ children }: { children: ReactNode }) {
   return <p className="mt-2 rounded-lg bg-surface-2 p-2 text-xs text-ink-2">💡 {children}</p>;
 }
 
@@ -72,10 +75,10 @@ export default function HowItWorksPage() {
       <Section id="setup" title="第一步：綁定你自己的金鑰" badge="必要">
         <Steps
           items={[
-            "<b>Threads 發文帳號</b>（必要）：到帳號管理手動貼上 access token，系統會自動每日展期。",
-            "<b>Gemini AI 金鑰</b>（必要）：用來生成文案；沒綁就只會產出無文案素材。",
-            "<b>蝦皮分潤</b>（選用）：填 Open API（App ID／Secret）或只填 Affiliate ID，皆可自動換成你的分潤連結＋subId 分流。",
-            "<b>圖床</b>（選用）：綁 Cloudflare R2（建議，流量免費）或 Cloudinary，媒體進<b>你自己的</b>雲端，不佔站方空間。"
+            <><b>Threads 發文帳號</b>（必要）：到帳號管理手動貼上 access token，系統會自動每日展期。</>,
+            <><b>Gemini AI 金鑰</b>（必要）：用來生成文案；沒綁就只會產出無文案素材。</>,
+            <><b>蝦皮分潤</b>（選用）：填 Open API（App ID／Secret）或只填 Affiliate ID，皆可自動換成你的分潤連結＋subId 分流。</>,
+            <><b>圖床</b>（選用）：綁 Cloudflare R2（建議，流量免費）或 Cloudinary，媒體進<b>你自己的</b>雲端，不佔站方空間。</>
           ]}
         />
         <Note>
@@ -90,8 +93,14 @@ export default function HowItWorksPage() {
         </p>
         <Steps
           items={[
-            "<b>手動</b>：到<a href=\"/materials\" class=\"text-brand underline\">素材</a>頁貼一條蝦皮連結（短連結或商品網址皆可），系統自動還原連結、抓商品、換上你的分潤連結並生成文案。可自帶圖片／影片。",
-            "<b>自動抓文</b>（平台管理員）：綁自己的 Apify 後監看來源關鍵字／帳號，抓到的素材<b>一律先進「待審」</b>，到素材頁<b>逐筆</b>確認（✅ 入庫／❌ 丟棄），入庫的才能排程。"
+            <>
+              <b>手動</b>：到<Link href="/materials" className="text-brand underline">素材</Link>頁貼一條蝦皮連結（短連結或商品網址皆可），
+              系統自動還原連結、抓商品、換上你的分潤連結並生成文案。可自帶圖片／影片。
+            </>,
+            <>
+              <b>自動抓文</b>（平台管理員）：綁自己的 Apify 後監看來源關鍵字／帳號，抓到的素材<b>一律先進「待審」</b>，
+              到素材頁<b>逐筆</b>確認（✅ 入庫／❌ 丟棄），入庫的才能排程。
+            </>
           ]}
         />
         <Note>
@@ -102,10 +111,10 @@ export default function HowItWorksPage() {
       <Section id="publish" title="第三～四步：核准 → 排程 → 發布">
         <Steps
           items={[
-            "在<a href=\"/materials\" class=\"text-brand underline\">素材</a>對某商品按「排一篇」，產生<b>待審草稿</b>。",
-            "到<a href=\"/drafts\" class=\"text-brand underline\">文章管理</a>檢視／微調草稿，<b>核准</b>後才進發文佇列（也可改排程時間）。",
-            "系統依<b>防封節奏</b>（間隔＋隨機抖動、每日上限、批次）自動發到你的 Threads 帳號。",
-            "串文 2/2 的<b>分潤連結留言</b>可延遲補發（保底＋抖動＋逐則覆寫），降低連結被降觸及的風險。"
+            <>在<Link href="/materials" className="text-brand underline">素材</Link>對某商品按「排一篇」，產生<b>待審草稿</b>。</>,
+            <>到<Link href="/drafts" className="text-brand underline">文章管理</Link>檢視／微調草稿，<b>核准</b>後才進發文佇列（也可改排程時間）。</>,
+            <>系統依<b>防封節奏</b>（間隔＋隨機抖動、每日上限、批次）自動發到你的 Threads 帳號。</>,
+            <>串文 2/2 的<b>分潤連結留言</b>可延遲補發（保底＋抖動＋逐則覆寫），降低連結被降觸及的風險。</>
           ]}
         />
         <Note>文章管理整併了發文、草稿、AI 部落客、素材與來源；發文佇列以分布式鎖序列化，避免手動與排程同跑而繞過防封間隔。</Note>

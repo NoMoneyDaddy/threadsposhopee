@@ -66,7 +66,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         )}
         {user?.isPlatformOwner && <ViewAsBar viewingAsEmail={user.viewingAsEmail ?? null} />}
         <AppChrome
-          tour={Boolean(user)}
+          autoTour={Boolean(user) && !isDemoMode}
           header={<SiteHeader user={user ? { email: user.email, isOwner: user.isOwner } : null} isDemo={isDemoMode} />}
         >
           {children}

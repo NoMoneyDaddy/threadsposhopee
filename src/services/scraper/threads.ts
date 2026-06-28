@@ -1,10 +1,17 @@
 import { isDemoMode } from "@/lib/env";
 import sampleThread from "@/fixtures/sample-thread.json";
 import { fetchWithRetry } from "@/lib/http";
+import { assertSafePublicUrl } from "@/lib/url-guard";
 import type { DraftMedia } from "@/lib/types";
 
 // Threads 搜尋爬蟲 actor（取代舊的帳號時間軸 actor）：可用關鍵字搜尋，或用 from 過濾單一帳號。
 const DEFAULT_THREADS_ACTOR = "igview-owner/threads-search-scraper";
+
+// Apify actor 識別碼格式：username/actor-name、username~actor-name 或 17 碼 actorId。
+// 僅允許英數與 . _ - 及單一 / 或 ~ 分隔；擋掉 ? # & 等可改寫 api.apify.com path/query 的字元。純函式可測。
+export function isValidApifyActor(actor: string): boolean {
+  return /^[a-zA-Z0-9][a-zA-Z0-9._-]*(?:[/~][a-zA-Z0-9._-]+)?$/.test(actor);
+}
 
 export interface ScrapedPost {
   postId: string;
@@ -86,6 +93,44 @@ export interface ScrapeQuery {
   sort?: "top" | "recent";
 }
 
+// actor 的 from 僅允許這組字元（schema：^[a-zA-Z0-9._]*$）。
+const THREADS_USERNAME_RE = /^[a-zA-Z0-9._]+$/;
+
+// 把 posts_limit 正規化成正整數（非有限值／≤0 → 預設 20）。request（maxPosts）與 response（slice）共用，
+// 避免兩邊 fallback 規則分岐（如 NaN 時 slice 出空陣列）。純函式可測。
+export function normalizePostsLimit(postsLimit: number): number {
+  const n = Number.isFinite(postsLimit) ? Math.floor(postsLimit) : 20;
+  return n > 0 ? n : 20;
+}
+
+// 依 Threads Search Scraper 的 input schema 與限制組 actor input（純函式可測）：
+// - searchQuery 必填（只監看帳號時預設 "shope"，精準篩含蝦皮連結的貼文）。
+// - from 僅允許 ^[a-zA-Z0-9._]*$：去掉開頭 @；若仍含不合法字元就明確報錯（fail fast），
+//   不靜默刪字元——否則可能把無效帳號改成「另一個真實帳號」而誤爬。
+// - maxPosts 夾 20–200：actor 每次 run 上限約 20 頁 × 每頁約 10 篇 ≈ 200 篇（schema 名目上限 1000，
+//   但實際取不到那麼多，夾到 200 避免誤期待並少燒額度）。
+// - sort 僅 top / recent（非法值退回 recent）。
+export interface ThreadsScraperInput {
+  searchQuery: string;
+  sort: "top" | "recent";
+  maxPosts: number;
+  from?: string;
+}
+
+export function buildScraperInput(spec: ScrapeQuery, postsLimit: number): ThreadsScraperInput {
+  // 只去單一前導 @；多個 @（如 @@user）保留剩餘 @ 交給下方正規則擋下，不靜默改成真帳號。
+  const from = (spec.username ?? "").trim().replace(/^@/, "");
+  if (from && !THREADS_USERNAME_RE.test(from)) {
+    throw new Error(`無效的 Threads 帳號名稱「${from}」：僅能包含英數字、底線與點（a-z A-Z 0-9 . _）`);
+  }
+  const searchQuery = spec.searchQuery?.trim() || "shope";
+  const sort: "top" | "recent" = spec.sort === "top" ? "top" : "recent";
+  const maxPosts = Math.min(200, Math.max(20, normalizePostsLimit(postsLimit)));
+  const input: ThreadsScraperInput = { searchQuery, sort, maxPosts };
+  if (from) input.from = from;
+  return input;
+}
+
 // 呼叫 Apify Threads Search Scraper 取得貼文。Demo 模式直接回 fixture。
 // creds：使用者自己綁的 Apify token/actor（一律自綁，不再用全域 env）。
 export async function scrapeLatestPosts(
@@ -102,24 +147,32 @@ export async function scrapeLatestPosts(
   if (!token) {
     throw new Error("未綁定 Apify token（請到帳號管理綁定你自己的 Apify 金鑰）");
   }
+  // actor 可由使用者自綁，先驗證格式擋掉可改寫 path/query 的字元（再配合 assertSafePublicUrl 出站守衛）。
+  if (!isValidApifyActor(actor)) {
+    throw new Error(`無效的 Apify actor 識別碼「${actor}」`);
+  }
 
   const spec: ScrapeQuery = typeof query === "string" ? { username: query } : query;
-  const username = spec.username?.trim().replace(/^@/, "") || "";
-  // actor 的 searchQuery 為必填，空字串可能觸發 Apify 驗證錯誤。本專案目標貼文必含蝦皮連結
-  // （s.shopee.tw／shope.ee／shopee.tw 皆含子字串 "shope"），故只監看帳號時預設帶 "shope"，
-  // 既滿足必填又精準篩出含分潤連結的貼文。
-  const searchQuery = spec.searchQuery?.trim() || "shope";
-  const body: Record<string, unknown> = {
-    searchQuery,
-    sort: spec.sort ?? "recent",
-    // maxPosts 下限 20、上限 1000；pipeline 的 posts_limit 常為個位數，故夾到合法範圍。
-    maxPosts: Math.min(1000, Math.max(20, postsLimit))
-  };
-  if (username) body.from = username;
+  // input 欄位與限制集中在 buildScraperInput（依 actor schema：searchQuery 必填、from 字元限制、maxPosts 上限約 200）。
+  // safePostsLimit 與 buildScraperInput 共用同一正規化，request 與 response（slice）的 NaN/0 fallback 一致。
+  const safePostsLimit = normalizePostsLimit(postsLimit);
+  const body = buildScraperInput(spec, safePostsLimit);
 
-  const url = `https://api.apify.com/v2/acts/${actor.replace("/", "~")}/run-sync-get-dataset-items?token=${token}`;
-  // 只對 429（rate limited、run 尚未啟動）退避重試，避免 5xx 後重試重複觸發爬蟲 run；
-  // run-sync 會等爬蟲跑完，放寬逾時 45s。
+  // run-sync 端點注意事項（docs.apify.com/api/v2/act-run-sync-get-dataset-items-post）：
+  // - timeout：綁定本次 run 上限秒數（端點硬上限 300s，逾時回 408）；本爬蟲 maxPosts≤200 通常數秒，設 60s 防卡住燒額度。
+  // - maxItems：限制計費／回傳筆數，與 input 的 maxPosts 對齊當雙重保險。
+  const RUN_TIMEOUT_SEC = 60;
+  const params = new URLSearchParams({
+    token,
+    timeout: String(RUN_TIMEOUT_SEC),
+    maxItems: String(body.maxPosts)
+  });
+  // 出站 URL 一律先過 assertSafePublicUrl（SSRF 守衛，repo 慣例）；host 固定 api.apify.com。
+  const url = assertSafePublicUrl(
+    `https://api.apify.com/v2/acts/${actor.replace("/", "~")}/run-sync-get-dataset-items?${params.toString()}`
+  ).href;
+  // 只對 429（rate limited、run 尚未啟動）退避重試；408（run 逾時）與 4xx/5xx 皆為終態，
+  // 不重試以免重複觸發爬蟲 run 重複計費。client 逾時略大於 run timeout，讓伺服器端先回 408/結果。
   const res = await fetchWithRetry(
     url,
     {
@@ -127,12 +180,12 @@ export async function scrapeLatestPosts(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body)
     },
-    45000
+    (RUN_TIMEOUT_SEC + 5) * 1000
   );
   if (!res.ok) throw new Error(`Apify 失敗: ${res.status} ${await res.text()}`);
   const dataset = await res.json();
   // Apify 回傳是 dataset items 陣列（每筆即一則貼文）。actor 的 maxPosts 下限 20，
   // 但使用者的 posts_limit 可能更小 → 解析後再夾到設定值，避免處理過多、燒 AI/Shopee 額度。
   const posts = parseSearchPosts(Array.isArray(dataset) ? dataset : [dataset]);
-  return posts.slice(0, Math.max(1, postsLimit));
+  return posts.slice(0, safePostsLimit);
 }

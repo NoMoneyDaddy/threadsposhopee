@@ -20,6 +20,7 @@ export default function ContinueButton({
   // unsafe：起始即視為「已取消倒數」，不自動前往，等使用者主動確認。
   const [left, setLeft] = useState(unsafe ? 0 : AUTO_SECONDS);
   const [cancelled, setCancelled] = useState(unsafe);
+  const [navigating, setNavigating] = useState(false); // 真正開始導向才為 true（給報讀器精準狀態）
   const fired = useRef(false);
 
   const hit = useCallback(() => {
@@ -34,6 +35,7 @@ export default function ContinueButton({
   function go() {
     if (fired.current) return;
     fired.current = true;
+    setNavigating(true);
     hit();
     window.location.href = sourceUrl;
   }
@@ -43,6 +45,7 @@ export default function ContinueButton({
     if (cancelled || fired.current) return;
     if (left <= 0) {
       fired.current = true;
+      setNavigating(true);
       window.location.href = sourceUrl;
       return;
     }
@@ -53,13 +56,15 @@ export default function ContinueButton({
   }, [left, cancelled, sourceUrl]);
 
   const counting = !cancelled && !unsafe && left > 0;
+  // 報讀器狀態：真正導向中才說「前往中…」；倒數中說可前往；unsafe/已取消為待命（須確認）。
+  const srStatus = navigating ? "前往中…" : counting ? "前往觀看內容" : unsafe ? "確認後前往" : "可前往";
   return (
     <div className="mt-5 space-y-2">
       <button type="button" onClick={go} className="btn btn-brand w-full">
         <span aria-hidden="true">
           {unsafe ? "我了解風險，仍要前往 →" : counting ? `前往 →（${left} 秒後自動前往）` : "前往 →"}
         </span>
-        <span className="sr-only" aria-live="polite">{counting ? "前往觀看內容" : "前往中…"}</span>
+        <span className="sr-only" aria-live="polite">{srStatus}</span>
       </button>
       {counting && (
         <button

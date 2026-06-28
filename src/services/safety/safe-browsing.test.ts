@@ -11,7 +11,8 @@ test("verdictFromResponse：有 matches＝unsafe", () => {
   assert.equal(verdictFromResponse({ matches: [{ threatType: "MALWARE" }] }), "unsafe");
 });
 
-test("verdictFromResponse：格式異常（null/非陣列）＝safe（不誤判為威脅）", () => {
-  assert.equal(verdictFromResponse(null), "safe");
-  assert.equal(verdictFromResponse({ matches: "x" }), "safe");
+test("verdictFromResponse：解析失敗/格式異常＝unknown（不把未完成掃描誤判為安全）", () => {
+  assert.equal(verdictFromResponse(null), "unknown"); // res.json() 失敗→null
+  assert.equal(verdictFromResponse("not-json"), "unknown"); // 非物件
+  assert.equal(verdictFromResponse({ matches: "x" }), "unknown"); // matches 存在但非陣列
 });

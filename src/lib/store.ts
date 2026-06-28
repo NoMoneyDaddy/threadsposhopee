@@ -35,6 +35,8 @@ export {
   findMaterial,
   getMaterial,
   listMaterials,
+  listPendingMaterials,
+  approveMaterialIntake,
   createMaterial,
   deleteMaterial,
   listMaterialsToCheck,

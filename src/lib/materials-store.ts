@@ -8,7 +8,8 @@ import type { Material } from "./types";
 
 export async function findMaterial(shopId: string, itemId: string, ownerId: string): Promise<Material | null> {
   if (isDemoMode) {
-    return demo.materials.find((m) => m.shop_id === shopId && m.item_id === itemId) ?? null;
+    // demo 也以 owner_id 過濾（與非 demo 一致）：避免別租戶的同商品素材影響本租戶的待審/重用判定。
+    return demo.materials.find((m) => m.owner_id === ownerId && m.shop_id === shopId && m.item_id === itemId) ?? null;
   }
   const sb = getServiceClient()!;
   const { data } = await sb
@@ -22,22 +23,67 @@ export async function findMaterial(shopId: string, itemId: string, ownerId: stri
 }
 
 export async function getMaterial(id: string, ownerId: string): Promise<Material | null> {
-  if (isDemoMode) return demo.materials.find((m) => m.id === id) ?? null;
+  if (isDemoMode) return demo.materials.find((m) => m.id === id && m.owner_id === ownerId) ?? null;
   const sb = getServiceClient()!;
   const { data } = await sb.from("materials").select("*").eq("id", id).eq("owner_id", ownerId).maybeSingle();
   return (data as Material) ?? null;
 }
 
+// 素材庫列表：只回「已核准」素材（待審的爬蟲產出不入庫列表、不可被排程/發文）。
+// 舊資料 intake_status 由 migration 預設回填 'approved'；demo 端把未設視同已核准。
 export async function listMaterials(ownerId: string): Promise<Material[]> {
-  if (isDemoMode) return [...demo.materials];
+  // demo 也以 owner_id 過濾（與非 demo 一致、與 listPendingMaterials 一致），維持多租戶隔離。
+  if (isDemoMode)
+    return demo.materials.filter((m) => m.owner_id === ownerId && (m.intake_status ?? "approved") !== "pending");
   const sb = getServiceClient()!;
-  const { data } = await sb
+  const { data, error } = await sb
     .from("materials")
     .select("*")
     .eq("owner_id", ownerId)
+    .eq("intake_status", "approved")
     .order("created_at", { ascending: false })
     .limit(200);
+  if (error) throw error;
   return (data ?? []) as Material[];
+}
+
+// 待審素材（爬蟲產出待人工核准）：新→舊。供素材頁「待審區」逐筆核准／丟棄。
+export async function listPendingMaterials(ownerId: string): Promise<Material[]> {
+  if (isDemoMode) {
+    return demo.materials
+      .filter((m) => m.owner_id === ownerId && m.intake_status === "pending")
+      .sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""));
+  }
+  const sb = getServiceClient()!;
+  const { data, error } = await sb
+    .from("materials")
+    .select("*")
+    .eq("owner_id", ownerId)
+    .eq("intake_status", "pending")
+    .order("created_at", { ascending: false })
+    .limit(200);
+  if (error) throw error;
+  return (data ?? []) as Material[];
+}
+
+// 核准待審素材（intake_status → 'approved'）。多租戶：以 owner_id 過濾，只改得到自己的。回 true=有更新。
+export async function approveMaterialIntake(id: string, ownerId: string): Promise<boolean> {
+  if (isDemoMode) {
+    const m = demo.materials.find((x) => x.id === id && x.owner_id === ownerId);
+    if (!m) return false;
+    m.intake_status = "approved";
+    return true;
+  }
+  const sb = getServiceClient()!;
+  const { data, error } = await sb
+    .from("materials")
+    .update({ intake_status: "approved" })
+    .eq("id", id)
+    .eq("owner_id", ownerId)
+    .select("id")
+    .maybeSingle();
+  if (error) throw error;
+  return Boolean(data);
 }
 
 export async function createMaterial(input: Partial<Material>, ownerId: string): Promise<Material> {

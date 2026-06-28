@@ -9,7 +9,7 @@ export function shortHostOf(shortDomain: string | undefined | null): string {
   }
 }
 
-// 在短網域上「只允許」轉址相關路徑（中轉頁與其計數 beacon）。其餘回 404。
+// 在短網域上「只允許」轉址相關路徑：服務首頁（/r）、中轉頁（/r/*）與其計數 beacon。其餘回 404。
 export function isAllowedOnShortHost(pathname: string): boolean {
-  return pathname.startsWith("/r/") || pathname === "/api/redirect/hit";
+  return pathname === "/r" || pathname.startsWith("/r/") || pathname === "/api/redirect/hit";
 }

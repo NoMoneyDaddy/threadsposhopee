@@ -51,6 +51,10 @@ export default async function RedirectPage({ params }: { params: { code: string 
   // 安全標章：safe＝已過 Google Safe Browsing；unsafe＝命中威脅名單（醒目警告、不自動跳轉）；
   // null＝未設金鑰/查詢失敗的降級（仍已過 SSRF/協定白名單＝基本檢查通過）。
   const unsafe = link.safety === "unsafe";
+  // 倒數秒數依「是否有廣告」而定：有廣告位時給長一點（讓廣告有機會被看到），否則用保底秒數。
+  // 保底 5 秒（建議值）；可日後加環境變數微調。
+  const adOn = Boolean(process.env.NEXT_PUBLIC_ADSENSE_CLIENT && process.env.NEXT_PUBLIC_ADSENSE_SLOT_REDIRECT);
+  const countdownSeconds = adOn ? 8 : 5;
   const safetyBadge =
     link.safety === "safe"
       ? { cls: "bg-emerald-50 text-emerald-700", text: "✓ 已通過安全檢查" }
@@ -100,7 +104,7 @@ export default async function RedirectPage({ params }: { params: { code: string 
             <p className={`mt-2 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${safetyBadge.cls}`}>
               {safetyBadge.text}
             </p>
-            <ContinueButton code={link.code} sourceUrl={link.sourceUrl} unsafe={unsafe} />
+            <ContinueButton code={link.code} sourceUrl={link.sourceUrl} unsafe={unsafe} seconds={countdownSeconds} />
             {/* 揭露：正規轉址服務，由廣告維運（中性、低調；不偽裝、不誇張） */}
             <p className="mt-3 text-[11px] leading-relaxed text-ink-3">
               go2read 為你安全中轉到目標頁面，本頁由廣告維護運轉。

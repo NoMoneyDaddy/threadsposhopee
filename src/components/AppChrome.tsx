@@ -22,7 +22,8 @@ export default function AppChrome({
   autoTour?: boolean;
 }) {
   const pathname = usePathname();
-  const bare = pathname?.startsWith("/r/") ?? false;
+  // go2read 子服務（中轉頁 /r/* 與服務首頁 /r）：不套主站品牌/導覽，整頁全幅自行排版。
+  const bare = pathname === "/r" || (pathname?.startsWith("/r/") ?? false);
   if (bare) return <>{children}</>;
   return (
     <div className="flex min-h-dvh flex-col">

@@ -37,3 +37,24 @@ export async function uploadToCloudinary(
   const json = await res.json();
   return json.secure_url as string;
 }
+
+// 使用者本機上傳：把檔案 bytes 直接上傳到 Cloudinary（unsigned preset），回傳 secure_url。
+export async function uploadBytesToCloudinary(
+  body: Buffer,
+  contentType: string,
+  type: "image" | "video",
+  creds: { cloud: string; preset: string }
+): Promise<string> {
+  const endpoint = `https://api.cloudinary.com/v1_1/${creds.cloud}/${type}/upload`;
+  const form = new FormData();
+  form.append("file", new Blob([new Uint8Array(body)], { type: contentType }));
+  form.append("upload_preset", creds.preset);
+  form.append("folder", "threads/uploads");
+  const res = await fetchWithRetry(assertSafePublicUrl(endpoint).href, { method: "POST", body: form }, 20000);
+  if (!res.ok) {
+    log.error("Cloudinary 上傳失敗", { status: res.status, body: (await res.text()).slice(0, 500) });
+    throw new Error(`Cloudinary 上傳失敗（${res.status}）`);
+  }
+  const json = await res.json();
+  return json.secure_url as string;
+}

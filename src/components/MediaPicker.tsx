@@ -2,7 +2,7 @@
 
 import { useState, type Dispatch, type SetStateAction } from "react";
 import type { DraftMedia } from "@/lib/types";
-import CloudinaryUpload from "@/components/CloudinaryUpload";
+import MediaUpload from "@/components/MediaUpload";
 import { cloudinaryThumb } from "@/lib/img";
 
 const input = "w-full rounded-xl border px-3 py-2 text-sm";
@@ -104,7 +104,7 @@ export default function MediaPicker({
         </div>
       )}
       <div className="flex flex-wrap items-center gap-2">
-        <CloudinaryUpload
+        <MediaUpload
           cloud={cloud}
           preset={preset}
           multiple

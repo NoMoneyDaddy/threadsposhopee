@@ -1,8 +1,8 @@
 // 圖床派發：使用者可二擇一綁定 Cloudflare R2 或 Cloudinary（R2 優先）。都沒綁則沿用來源原 URL。
 // 一個 owner 解析一次 provider，餵給整批上傳，避免每張圖都查一次 DB。
 import { getUserR2, getUserCloudinary, type R2Settings } from "@/lib/store";
-import { uploadToR2 } from "./r2";
-import { uploadToCloudinary } from "./cloudinary";
+import { uploadToR2, uploadBytesToR2 } from "./r2";
+import { uploadToCloudinary, uploadBytesToCloudinary } from "./cloudinary";
 
 export type MediaProvider =
   | { kind: "r2"; creds: R2Settings }
@@ -29,4 +29,17 @@ export async function uploadMediaWith(
   if (provider.kind === "r2") return uploadToR2(sourceUrl, type, provider.creds, keyHint);
   if (provider.kind === "cloudinary") return uploadToCloudinary(sourceUrl, type, provider.creds, keyHint);
   return sourceUrl;
+}
+
+// 使用者本機上傳：把檔案 bytes 經 server 中轉到使用者綁定的圖床（R2 或 Cloudinary）。none 則拋錯（呼叫端轉 400）。
+export async function uploadBytesWith(
+  provider: MediaProvider,
+  body: Buffer,
+  contentType: string,
+  type: "image" | "video",
+  keyHint?: string
+): Promise<string> {
+  if (provider.kind === "r2") return uploadBytesToR2(body, contentType, type, provider.creds, keyHint);
+  if (provider.kind === "cloudinary") return uploadBytesToCloudinary(body, contentType, type, provider.creds);
+  throw new Error("尚未綁定圖床");
 }

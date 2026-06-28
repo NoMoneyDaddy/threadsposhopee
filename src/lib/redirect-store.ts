@@ -115,7 +115,7 @@ export async function createRedirectLink(
     if (error.code === "23505") continue;
     // safety/safety_checked_at 欄位尚未遷移 → 降級為不帶 safety 重試（標章退回「基本安全檢查」）。
     if (includeSafety && (isMissingColumnError(error, "safety") || isMissingColumnError(error, "safety_checked_at"))) {
-      log.warn("redirect_links.safety 欄位不存在（migration 0049 未套用？），改用無安全欄位建立短連結", { code: error.code });
+      log.warn("redirect_links.safety 欄位不存在（migration 0049 未套用？），改用無安全欄位建立短連結", { ownerId, code, pgCode: error.code });
       includeSafety = false;
       continue;
     }
@@ -124,24 +124,30 @@ export async function createRedirectLink(
   throw new Error("短碼產生衝突過多，請重試");
 }
 
+const LINK_COLS = "code, source_url, affiliate_url, title, image_url, description";
+const toSafety = (v: unknown): "safe" | "unsafe" | null => (v === "safe" || v === "unsafe" ? v : null);
+
 // 依 code 取用（對外公開：中轉頁渲染用，不帶 owner 過濾）。
+// 與 insert 對稱：safety 欄位若尚未遷移（PGRST204）就改用不含 safety 的查詢重試（標章退回 null）；
+// 其餘查詢錯誤照拋——不可被當成「找不到」而誤成 404（呼叫端只在回 null 時才 notFound）。
 export async function getRedirectLinkByCode(code: string): Promise<RedirectLink | null> {
   if (isDemoMode) return null;
   const sb = getServiceClient()!;
-  const { data } = await sb
-    .from("redirect_links")
-    .select("code, source_url, affiliate_url, title, image_url, description, safety")
-    .eq("code", code)
-    .maybeSingle();
+  let res = await sb.from("redirect_links").select(`${LINK_COLS}, safety`).eq("code", code).maybeSingle();
+  if (res.error && isMissingColumnError(res.error, "safety")) {
+    res = await sb.from("redirect_links").select(LINK_COLS).eq("code", code).maybeSingle();
+  }
+  if (res.error) throw new Error(`讀取短連結失敗：${res.error.message}`);
+  const data = res.data as unknown as Record<string, unknown> | null;
   if (!data) return null;
   return {
-    code: data.code,
-    sourceUrl: data.source_url,
-    affiliateUrl: data.affiliate_url,
-    title: data.title,
-    imageUrl: data.image_url,
-    description: data.description,
-    safety: data.safety === "safe" || data.safety === "unsafe" ? data.safety : null
+    code: data.code as string,
+    sourceUrl: data.source_url as string,
+    affiliateUrl: (data.affiliate_url as string) ?? null,
+    title: (data.title as string) ?? null,
+    imageUrl: (data.image_url as string) ?? null,
+    description: (data.description as string) ?? null,
+    safety: toSafety(data.safety)
   };
 }
 
@@ -149,23 +155,26 @@ export async function getRedirectLinkByCode(code: string): Promise<RedirectLink 
 export async function listRedirectLinks(ownerId: string, limit = 100): Promise<RedirectLinkRow[]> {
   if (isDemoMode) return [];
   const sb = getServiceClient()!;
-  const { data } = await sb
-    .from("redirect_links")
-    .select("code, source_url, affiliate_url, title, image_url, description, safety, clicks, continues, created_at, in_bio")
-    .eq("owner_id", ownerId)
-    .order("created_at", { ascending: false })
-    .limit(limit);
-  return (data ?? []).map((d) => ({
-    code: d.code,
-    sourceUrl: d.source_url,
-    affiliateUrl: d.affiliate_url,
-    title: d.title,
-    imageUrl: d.image_url,
-    description: d.description,
-    safety: d.safety === "safe" || d.safety === "unsafe" ? d.safety : null,
-    clicks: d.clicks,
-    continues: d.continues,
-    createdAt: d.created_at,
+  const stats = "clicks, continues, created_at, in_bio";
+  const q = (cols: string) =>
+    sb.from("redirect_links").select(cols).eq("owner_id", ownerId).order("created_at", { ascending: false }).limit(limit);
+  // 與 insert/讀取對稱：safety 欄位未遷移就改用不含 safety 的查詢；其餘錯誤照拋（不要把查詢失敗誤呈現成空列表）。
+  let res = await q(`${LINK_COLS}, safety, ${stats}`);
+  if (res.error && isMissingColumnError(res.error, "safety")) {
+    res = await q(`${LINK_COLS}, ${stats}`);
+  }
+  if (res.error) throw new Error(`列出短連結失敗：${res.error.message}`);
+  return ((res.data as unknown as Record<string, unknown>[]) ?? []).map((d) => ({
+    code: d.code as string,
+    sourceUrl: d.source_url as string,
+    affiliateUrl: (d.affiliate_url as string) ?? null,
+    title: (d.title as string) ?? null,
+    imageUrl: (d.image_url as string) ?? null,
+    description: (d.description as string) ?? null,
+    safety: toSafety(d.safety),
+    clicks: d.clicks as number,
+    continues: d.continues as number,
+    createdAt: d.created_at as string,
     inBio: Boolean(d.in_bio)
   }));
 }

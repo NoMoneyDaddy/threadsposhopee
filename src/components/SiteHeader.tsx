@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
-type NavItem = { href: string; label: string; match?: string[]; ownerOnly?: boolean };
+export type NavItem = { href: string; label: string; match?: string[]; ownerOnly?: boolean };
 
 // 六大頁資訊架構（依使用流程排序、白話命名）。「文章管理」整併發文/草稿/AI部落客/素材/自動抓文。
 const NAV: NavItem[] = [
@@ -16,6 +16,12 @@ const NAV: NavItem[] = [
   { href: "/settings", label: "設定" },
   { href: "/admin", label: "管理", ownerOnly: true }
 ];
+
+// 當前頁高亮判斷（純函式、可單測）：首頁需完全相等；其餘以 prefix 命中任一 match 路徑。
+export function isNavItemActive(item: NavItem, pathname: string): boolean {
+  const all = item.match ?? [item.href];
+  return all.some((h) => (h === "/" ? pathname === "/" : pathname.startsWith(h)));
+}
 
 // Threads 風頂部導覽：黏性、毛玻璃、單色高對比，當前頁以實心膠囊標示。
 // 桌機橫列；手機收合成漢堡選單（避免項目被擠出畫面外、提升發現性）。
@@ -34,10 +40,7 @@ export default function SiteHeader({
   }, [pathname]);
 
   const items = NAV.filter((n) => !n.ownerOnly || user?.isOwner);
-  const isActive = (n: NavItem) => {
-    const all = n.match ?? [n.href];
-    return all.some((h) => (h === "/" ? pathname === "/" : pathname.startsWith(h)));
-  };
+  const isActive = (n: NavItem) => isNavItemActive(n, pathname);
 
   const userMeta = user && (
     <>
@@ -74,7 +77,7 @@ export default function SiteHeader({
           {isDemo && <span className="badge-warn whitespace-nowrap">Demo 模式（未連接金鑰）</span>}
 
           {/* 桌機：橫列導覽（靠右） */}
-          <nav className="ml-auto hidden items-center gap-0.5 text-sm sm:flex" aria-label="主導覽">
+          <nav className="ml-auto hidden items-center gap-0.5 text-sm lg:flex" aria-label="主導覽">
             {user &&
               items.map((n) => {
                 const active = isActive(n);
@@ -93,9 +96,9 @@ export default function SiteHeader({
                 );
               })}
             {user && (
-              <span className="ml-2 flex shrink-0 items-center gap-2 border-l border-border pl-3 text-xs text-ink-3">
+              <div className="ml-2 flex shrink-0 items-center gap-2 border-l border-border pl-3 text-xs text-ink-3">
                 {userMeta}
-              </span>
+              </div>
             )}
           </nav>
 
@@ -107,7 +110,7 @@ export default function SiteHeader({
               aria-expanded={open}
               aria-controls="mobile-nav"
               aria-label={open ? "關閉選單" : "開啟選單"}
-              className="btn btn-ghost btn-sm ml-auto sm:hidden"
+              className="btn btn-ghost btn-sm ml-auto lg:hidden"
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                 {open ? <path d="M18 6 6 18M6 6l12 12" /> : <path d="M3 12h18M3 6h18M3 18h18" />}
@@ -118,7 +121,7 @@ export default function SiteHeader({
 
         {/* 手機：收合選單內容 */}
         {user && open && (
-          <nav id="mobile-nav" className="mt-2 flex flex-col gap-0.5 text-sm sm:hidden" aria-label="主導覽">
+          <nav id="mobile-nav" className="mt-2 flex flex-col gap-0.5 text-sm lg:hidden" aria-label="主導覽">
             {items.map((n) => {
               const active = isActive(n);
               return (

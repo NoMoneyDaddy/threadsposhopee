@@ -175,7 +175,8 @@ export async function runAgentOnce(agent: AiAgent, geminiKey: string): Promise<A
         sourceUrl: item.link,
         title: item.title
       }).catch(() => null);
-      if (code) sourceUrl = `/r/${code}`; // 對外請搭配 NEXT_PUBLIC_SHORT_DOMAIN 顯示完整網域
+      // 補全為絕對網址：貼文會發到 Threads，相對路徑會失效。未設短網域時退回相對（與既有行為相同，不回歸）。
+      if (code) sourceUrl = `${process.env.NEXT_PUBLIC_SHORT_DOMAIN || ""}/r/${code}`;
     }
     const mainText = `${body}\n\n📎 來源：${sourceUrl}`;
 

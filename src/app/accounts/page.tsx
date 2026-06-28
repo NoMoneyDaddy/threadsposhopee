@@ -68,7 +68,7 @@ export default async function AccountsPage() {
           <ThreadsAccountForm />
         </div>
         <div id="setup-shopee" className="scroll-mt-24">
-          <ShopeeAccountForm />
+          <ShopeeAccountForm bound={shopee[0] ?? null} />
         </div>
       </div>
 
@@ -163,22 +163,6 @@ export default async function AccountsPage() {
                 )}
                 <RenameAccountButton endpoint={`/api/accounts/threads/${a.id}`} current={a.label} />
                 <DeleteButton endpoint={`/api/accounts/threads/${a.id}`} />
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section>
-        <h2 className="mb-2 font-semibold">Shopee 分潤帳號</h2>
-        <div className="grid gap-3 md:grid-cols-2">
-          {shopee.map((a) => (
-            <div key={a.id} className="rounded-2xl border bg-surface p-4">
-              <div className="font-medium">{a.label}</div>
-              <div className="mt-1 text-sm text-ink-2">蝦皮 App ID：{a.app_id}</div>
-              {a.default_sub_id && <div className="text-sm text-ink-2">預設分潤標記（subId）：{a.default_sub_id}</div>}
-              <div className="mt-2 border-t pt-2">
-                <DeleteButton endpoint={`/api/accounts/shopee/${a.id}`} />
               </div>
             </div>
           ))}

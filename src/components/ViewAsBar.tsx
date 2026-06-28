@@ -108,7 +108,7 @@ export default function ViewAsBar({ viewingAsEmail }: { viewingAsEmail: string |
                 選擇成員…（{users?.length ?? 0}）
               </option>
               {users?.map((u) => (
-                <option key={u.id} value={u.id}>
+                <option key={u.id} value={u.id} translate="no">
                   {u.email ?? u.id}
                 </option>
               ))}

@@ -262,7 +262,9 @@ export async function renameThreadsAccount(id: string, ownerId: string, label: s
 export async function listShopeeAccounts(ownerId: string): Promise<ShopeeAccount[]> {
   if (isDemoMode) return demo.shopeeAccounts;
   const sb = getServiceClient()!;
-  const { data } = await sb.from("shopee_accounts").select("id,label,app_id,default_sub_id").eq("owner_id", ownerId);
+  const { data, error } = await sb.from("shopee_accounts").select("id,label,app_id,default_sub_id").eq("owner_id", ownerId);
+  // 查詢失敗勿吞成空陣列：否則會被 UI 誤判成「未綁定」，隱藏現況與解除綁定入口（同 listThreadsAccounts）。
+  if (error) throw error;
   return (data ?? []) as ShopeeAccount[];
 }
 

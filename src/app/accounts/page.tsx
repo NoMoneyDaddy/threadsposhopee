@@ -152,8 +152,8 @@ export default async function AccountsPage() {
                 if (exp.level === "expired")
                   return <div className="text-xs font-medium text-red-600">⚠️ 帳號授權已過期（{date}）— 請重新貼上 token</div>;
                 if (exp.level === "soon")
-                  return <div className="text-xs font-medium text-amber-600">⏳ 帳號授權將在 {exp.daysLeft} 天後到期（{date}）— 系統會自動更新，若失敗會通知你</div>;
-                return <div className="text-xs text-ink-3">✅ 帳號授權有效（至 {date}，系統會自動更新）</div>;
+                  return <div className="text-xs font-medium text-amber-600">⏳ 帳號授權將在 {exp.daysLeft} 天後到期（{date}）— 系統會在到期前自動嘗試更新；若授權失效會通知你並停止排程</div>;
+                return <div className="text-xs text-ink-3">✅ 帳號授權有效（至 {date}，系統會定期自動嘗試更新）</div>;
               })()}
               <div className="mt-2 flex items-center gap-3 border-t pt-2">
                 {a.status === "paused" ? (

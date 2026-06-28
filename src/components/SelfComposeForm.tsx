@@ -232,6 +232,8 @@ export default function SelfComposeForm({
         </button>
       </div>
 
+      {/* 停用送出鈕時，render 層直接顯示原因（不依賴點擊觸發；title 在觸控裝置不可靠）。 */}
+      {!busy && blockReason && <p className="text-sm text-amber-600" role="status" aria-live="polite">{blockReason}</p>}
       {msg && <p className="text-sm text-ink-2" role="status" aria-live="polite">{msg}</p>}
     </div>
   );

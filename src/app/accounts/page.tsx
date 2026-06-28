@@ -79,10 +79,10 @@ export default async function AccountsPage() {
         {threads.length > 0 && (
           <div className="grid gap-3 md:grid-cols-2">
             {threads.map((a) => {
-              // 長期 vs 短期權杖：換/展長效成功才會有確切到期日（token_expires_at）；
-              // 沒有＝尚未換成 60 天長期（短期 token），標示提醒使用者補 App 密鑰。
+              // 權杖類型四態：short（無到期日＝尚未換長期）／invalid（到期日格式異常）／
+              // long（長期有效）／long 但 expired（已過期、無法自動展期）。
               const exp = tokenExpiryState(a.token_expires_at);
-              const isLong = Boolean(a.token_expires_at) && exp.level !== "unknown";
+              const tokenKind = !a.token_expires_at ? "short" : exp.level === "unknown" ? "invalid" : "long";
               return (
                 <div key={a.id} className="rounded-2xl border bg-surface p-4">
                   <div className="flex items-center justify-between gap-2">
@@ -105,19 +105,31 @@ export default async function AccountsPage() {
                   <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-ink-2">
                     <span>Threads ID：{a.threads_user_id}</span>
                     {(() => {
-                      // 三態：短期（無到期日）／長期已過期（無法自動展期）／長期有效。
-                      const expired = isLong && exp.level === "expired";
-                      const cls = !isLong
-                        ? "bg-amber-100 text-amber-700"
-                        : expired
-                          ? "bg-red-100 text-red-700"
-                          : "bg-success/10 text-success";
-                      const title = !isLong
-                        ? "尚未換成長期權杖；新增時附上 App 密鑰即可自動換 60 天長期"
-                        : expired
-                          ? "長期權杖已過期，無法自動展期，請重新綁定"
-                          : "已換成 60 天長期權杖，系統每日自動展期";
-                      const text = !isLong ? "短期權杖" : expired ? "長期權杖（已過期）" : "長期權杖";
+                      const expired = tokenKind === "long" && exp.level === "expired";
+                      const cls =
+                        tokenKind === "short"
+                          ? "bg-amber-100 text-amber-700"
+                          : tokenKind === "invalid"
+                            ? "bg-surface-2 text-ink-2"
+                            : expired
+                              ? "bg-red-100 text-red-700"
+                              : "bg-success/10 text-success";
+                      const title =
+                        tokenKind === "short"
+                          ? "尚未換成長期權杖；新增時附上 App 密鑰即可自動換 60 天長期"
+                          : tokenKind === "invalid"
+                            ? "權杖到期資訊格式異常，請重新貼上 token"
+                            : expired
+                              ? "長期權杖已過期，無法自動展期，請重新綁定"
+                              : "已換成 60 天長期權杖，系統每日自動展期";
+                      const text =
+                        tokenKind === "short"
+                          ? "短期權杖"
+                          : tokenKind === "invalid"
+                            ? "權杖資訊異常"
+                            : expired
+                              ? "長期權杖（已過期）"
+                              : "長期權杖";
                       return (
                         <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${cls}`} title={title}>
                           {text}

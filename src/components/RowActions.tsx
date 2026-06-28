@@ -32,7 +32,8 @@ export function DeleteButton({
   }
 
   return (
-    <button onClick={onDelete} disabled={busy} className="text-xs text-red-500 hover:underline disabled:opacity-50">
+    // type="button"：避免嵌在 <form> 內時預設 submit，誤觸表單送出（見 ShopeeAccountForm 解除綁定）。
+    <button type="button" onClick={onDelete} disabled={busy} className="text-xs text-red-500 hover:underline disabled:opacity-50">
       {busy ? "處理中…" : label}
     </button>
   );
@@ -74,7 +75,7 @@ export function ToggleButton({
   }
 
   return (
-    <button onClick={onClick} disabled={busy} className="text-xs text-ink-2 hover:underline disabled:opacity-50">
+    <button type="button" onClick={onClick} disabled={busy} className="text-xs text-ink-2 hover:underline disabled:opacity-50">
       {busy ? "處理中…" : label}
     </button>
   );

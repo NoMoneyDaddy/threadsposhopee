@@ -33,3 +33,12 @@ test("buildAfterSegments：媒體-only 額外段落保留", () => {
   assert.equal(after.length, 2);
   assert.equal(after[1].media?.length, 1);
 });
+
+test("buildAfterSegments：空白 url 媒體視為無效，與發布層一致地濾掉", () => {
+  const after = buildAfterSegments({
+    replyText: "",
+    replyMedia: [{ url: "   ", type: "image" }],
+    extraSegments: [{ text: null, media: [{ url: "   ", type: "video" }] }]
+  });
+  assert.equal(after.length, 0);
+});

@@ -78,9 +78,10 @@ export async function POST(req: Request) {
               (m): m is { url: string; type: "image" | "video" } =>
                 Boolean(m) &&
                 typeof (m as { url?: unknown }).url === "string" &&
+                Boolean((m as { url: string }).url.trim()) && // url 須 trim 後非空，與發布層一致（不寫回空白媒體）
                 ((m as { type?: unknown }).type === "image" || (m as { type?: unknown }).type === "video")
             )
-            .map((m) => ({ url: m.url, type: m.type }))
+            .map((m) => ({ url: m.url.trim(), type: m.type }))
         : [];
     if (Array.isArray(body.media)) patch.media = sanitizeMedia(body.media);
     if (Array.isArray(body.reply_media)) patch.reply_media = sanitizeMedia(body.reply_media);
@@ -101,7 +102,9 @@ export async function POST(req: Request) {
     }
     // 草稿若已有多段串文鏈：第 0 段＝留言段（2/n），須與編輯後的 reply_text/reply_media 同步，
     // 否則發布時 effectiveChain 仍會沿用舊的 thread_chain[0]（畫面與實際不一致）。後續段落（3/n…）保留不動。
-    if (Array.isArray(draft.thread_chain) && draft.thread_chain.length > 0) {
+    // 僅在「鏈尚未開始補發」（thread_cursor 為 0/未設）時同步：補發中（cursor>0）改第 0 段會讓
+    // effectiveChain 濾空後索引左移、cursor 失準而跳段，故此時不動鏈（已發出的第 0 段也無需再改）。
+    if (Array.isArray(draft.thread_chain) && draft.thread_chain.length > 0 && (draft.thread_cursor ?? 0) === 0) {
       const firstMedia = patch.reply_media ?? draft.thread_chain[0]?.media ?? draft.reply_media ?? [];
       patch.thread_chain = [{ text: patch.reply_text ?? null, media: firstMedia }, ...draft.thread_chain.slice(1)];
     }

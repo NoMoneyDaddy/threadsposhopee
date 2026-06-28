@@ -7,13 +7,16 @@ export function buildAfterSegments(input: {
   replyMedia?: DraftMedia[];
   extraSegments?: ThreadSegment[];
 }): ThreadSegment[] {
-  const replyItems = input.replyMedia ?? [];
+  // 與發布層 effectiveChain/filterMedia 一致：url 須 trim 後非空，否則預覽段數會與實際補發不符。
+  const normalizeMedia = (media?: DraftMedia[]): DraftMedia[] =>
+    (media ?? []).filter((m) => typeof m.url === "string" && Boolean(m.url.trim())).map((m) => ({ ...m, url: m.url.trim() }));
+  const replyItems = normalizeMedia(input.replyMedia);
   const reply: ThreadSegment[] =
     (input.replyText && input.replyText.trim()) || replyItems.length > 0
       ? [{ text: input.replyText ?? null, media: replyItems }]
       : [];
   const extras = (input.extraSegments ?? [])
-    .map((s) => ({ text: s.text ?? null, media: s.media ?? [] }))
+    .map((s) => ({ text: s.text ?? null, media: normalizeMedia(s.media) }))
     .filter((s) => Boolean(s.text && s.text.trim()) || s.media.length > 0);
   return [...reply, ...extras];
 }

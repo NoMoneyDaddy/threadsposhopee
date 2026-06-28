@@ -1,6 +1,7 @@
 // 從一個蝦皮連結解析並建立素材（單筆 /api/materials 與批次共用）。
 import { expandShopeeLink } from "@/services/shopee/expand";
 import { buildMaterialForProduct } from "@/services/materials/build";
+import { isOwnAffiliateLink } from "@/services/shopee/affiliate-link";
 import { findMaterial, getShopeeCredentials, getGeminiKey, resolveGeminiModel, getShopeeAffiliateId, getShopeeSubId } from "@/lib/store";
 import { getMediaProvider } from "@/services/media/upload";
 import { assertSafePublicUrl } from "@/lib/url-guard";
@@ -36,8 +37,12 @@ export async function resolveMaterialFromUrl(
   const geminiKey = await getGeminiKey(ownerId);
   const geminiModel = await resolveGeminiModel(ownerId);
   const canCopy = withCopy && Boolean(geminiKey);
-  // 沒綁 Shopee API 時的後備：用 affiliate_id 自組追蹤連結
-  const affiliateId = shopeeCreds ? null : await getShopeeAffiliateId(ownerId);
+  // affiliate_id：(1) 沒綁 Open API 時當後備自組追蹤連結；(2) 判斷貼上的是否為「本人分潤連結」。
+  // 故一律取出（即使有 Open API 金鑰也要，才能驗證歸屬）；build.ts 的後備分支仍以「無金鑰」為前提。
+  const affiliateId = await getShopeeAffiliateId(ownerId);
+  // 貼上的本來就是「本人的分潤連結」→ 沿用不重產（不重燒 token、保留既有 subId 歸屬）。
+  // 失效時走既有 regen 流程替換，符合「除非失效」。他人連結／看不出歸屬者不在此列，照常重產成本人連結。
+  const preserveOriginalLink = isOwnAffiliateLink(url, affiliateId);
   // 各人自綁圖床（R2 或 Cloudinary，素材進自己雲端）；沒綁則不中轉媒體
   const mediaProvider = await getMediaProvider(ownerId);
   const customSubId = await getShopeeSubId(ownerId);
@@ -54,7 +59,8 @@ export async function resolveMaterialFromUrl(
       customSubId,
       withCopy: canCopy,
       media: media ? { url: media.url, type: media.type } : undefined,
-      mediaList: mediaList && mediaList.length > 0 ? mediaList : undefined
+      mediaList: mediaList && mediaList.length > 0 ? mediaList : undefined,
+      preserveOriginalLink
     },
     ownerId,
     shopeeCreds,

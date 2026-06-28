@@ -28,6 +28,21 @@ export function isAffiliateLink(raw: string): boolean {
   }
 }
 
+// 判斷某連結是否「使用者本人的分潤連結」（純函式，可測）：URL 帶 affiliate_id 參數且等於本人的
+// affiliate_id（an_redir 自組連結、或帶 ?affiliate_id= 的商品連結皆適用）。用於「存分潤連結時，
+// 若已是本人連結就不另外重產／替換」。Open API 短連結（s.shopee.tw/xxx、shope.ee/xxx）為不透明
+// 短碼，URL 上看不出 affiliate_id，無法驗證歸屬→回 false（交由既有重用／重產流程，絕不誤判他人為本人）。
+export function isOwnAffiliateLink(raw: string, ownerAffiliateId: string | null | undefined): boolean {
+  const own = ownerAffiliateId?.toString().trim();
+  if (!own) return false;
+  try {
+    const aid = new URL(raw).searchParams.get("affiliate_id")?.trim();
+    return Boolean(aid) && aid === own;
+  } catch {
+    return false;
+  }
+}
+
 export interface ResolvedAffiliate {
   url: string;
   converted: boolean;

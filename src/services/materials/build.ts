@@ -24,6 +24,9 @@ interface BuildMaterialInput {
   withCopy?: boolean; // 是否生成 AI 文案（手動建立可先不生成，之後再補）
   // 入庫審核狀態：爬蟲流程傳 'pending'（待人工核准）；手動/匯入不傳＝預設 'approved'。
   intakeStatus?: "pending" | "approved";
+  // 貼上的 originalShortLink 本來就是「使用者本人的分潤連結」：沿用不重產（不重燒 token、保留既有
+  // subId 歸屬）。僅手動建立路徑（fromUrl）會設；爬蟲流程不設＝照常重產成本人連結。
+  preserveOriginalLink?: boolean;
 }
 
 export async function buildMaterialForProduct(
@@ -62,7 +65,29 @@ export async function buildMaterialForProduct(
   const ctx = { date: dateStr, time: timeStr, platform: "threads", account, item: input.itemId ? String(input.itemId) : "" };
   const resolvedSlots = parseSubIdSlots(input.customSubId).map((slot) => resolveSubIdTemplate(slot, ctx));
 
-  if (!isDemoMode && shopeeCreds) {
+  if (!isDemoMode && input.preserveOriginalLink) {
+    // 貼上的本來就是使用者本人的分潤連結：沿用不重產（不重燒 token、保留既有 subId 歸屬）。
+    shortLink = input.originalShortLink;
+    try {
+      subId = new URL(input.originalShortLink).searchParams.get("sub_id") || null;
+    } catch {
+      subId = null;
+    }
+    notes.push("偵測到貼上的是你本人的分潤連結，沿用不重產（不重燒 token）");
+    // 仍嘗試取商品資訊（名稱／分潤率）供文案與顯示；有 Open API 金鑰才查得到，失敗不影響沿用連結。
+    if (shopeeCreds) {
+      try {
+        const info = await getProductInfo(shopeeCreds.appId, shopeeCreds.secret, input.shopId, input.itemId);
+        productNameRaw = info.productName;
+        commissionRate = info.commissionRate;
+      } catch (e) {
+        productNameRaw = `商品 ${input.itemId}`;
+        notes.push(`Shopee 商品資訊查詢失敗（不影響沿用連結）：${e instanceof Error ? e.message : String(e)}`);
+      }
+    } else {
+      productNameRaw = `商品 ${input.itemId}`;
+    }
+  } else if (!isDemoMode && shopeeCreds) {
     try {
       const subIds = normalizeSubIds([...resolvedSlots, account, input.itemId]);
       subId = subIds.join(",");

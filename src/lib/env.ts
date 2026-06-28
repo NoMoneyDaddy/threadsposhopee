@@ -14,7 +14,9 @@ export const env = {
 
   aiProvider: (process.env.AI_PROVIDER ?? "gemini") as "gemini" | "anthropic",
   geminiApiKey: process.env.GEMINI_API_KEY ?? "",
-  geminiModel: process.env.GEMINI_MODEL ?? "gemini-2.5-flash",
+  // 預設用最便宜的多模態 Flash-Lite（input/output 約為 2.5-flash 的 1/3、1/6）；
+  // 想換更高品質可設 GEMINI_MODEL=gemini-2.5-flash 等覆蓋。
+  geminiModel: process.env.GEMINI_MODEL ?? "gemini-2.5-flash-lite",
   anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
   anthropicModel: process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-6",
 

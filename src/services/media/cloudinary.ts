@@ -6,7 +6,9 @@ import { log } from "@/lib/logger";
 // 並截斷 64 字後分到商品資料夾；無 keyHint 則用呼叫端給的 fallback。
 export function cloudinaryFolder(keyHint: string | undefined, fallback: string): string {
   if (!keyHint) return fallback;
-  return `threads/${keyHint.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64)}`;
+  // sanitize 後若全被移除（如 keyHint 全是非法字元）→ 退回 fallback，不落到空的 "threads/"。
+  const sanitized = keyHint.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64);
+  return sanitized ? `threads/${sanitized}` : fallback;
 }
 
 // 把來源媒體（Threads CDN 短效 URL）中轉到 Cloudinary，取得穩定 URL 給 Threads 發文用。
@@ -40,8 +42,12 @@ export async function uploadToCloudinary(
     log.error("Cloudinary 上傳失敗", { status: res.status, body: (await res.text()).slice(0, 500) });
     throw new Error(`Cloudinary 上傳失敗（${res.status}）`);
   }
-  const json = await res.json();
-  return json.secure_url as string;
+  const json = await res.json().catch(() => null);
+  // 2xx 但缺 secure_url 視為失敗：避免把無效 URL 當成功往下傳，破壞 service→API 契約。
+  if (typeof json?.secure_url !== "string" || !json.secure_url) {
+    throw new Error("Cloudinary 上傳回應缺少 secure_url");
+  }
+  return json.secure_url;
 }
 
 // 使用者本機上傳：把檔案 bytes 直接上傳到 Cloudinary（unsigned preset），回傳 secure_url。
@@ -67,6 +73,10 @@ export async function uploadBytesToCloudinary(
     log.error("Cloudinary 上傳失敗", { status: res.status, body: (await res.text()).slice(0, 500) });
     throw new Error(`Cloudinary 上傳失敗（${res.status}）`);
   }
-  const json = await res.json();
-  return json.secure_url as string;
+  const json = await res.json().catch(() => null);
+  // 2xx 但缺 secure_url 視為失敗：避免把無效 URL 當成功往下傳，破壞 service→API 契約。
+  if (typeof json?.secure_url !== "string" || !json.secure_url) {
+    throw new Error("Cloudinary 上傳回應缺少 secure_url");
+  }
+  return json.secure_url;
 }

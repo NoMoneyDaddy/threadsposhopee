@@ -18,3 +18,8 @@ test("cloudinaryFolder：無 keyHint → 用 fallback", () => {
   assert.equal(cloudinaryFolder(undefined, "threads/uploads"), "threads/uploads");
   assert.equal(cloudinaryFolder("", "threads/videos"), "threads/videos");
 });
+
+test("cloudinaryFolder：keyHint 全非法字元 sanitize 後為空 → 退回 fallback（不落空 threads/）", () => {
+  assert.equal(cloudinaryFolder("///", "threads/uploads"), "threads/uploads");
+  assert.equal(cloudinaryFolder("@@@ ###", "threads/images"), "threads/images");
+});

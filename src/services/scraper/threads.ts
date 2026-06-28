@@ -26,9 +26,24 @@ export interface ScrapedPost {
   shopeeLinks: string[];
 }
 
-// 抓取蝦皮連結：短連結（s.shopee.tw / shope.ee）或完整商品網址（shopee.tw/...）
+// 抓取蝦皮連結：短連結（s.shopee.tw / shope.ee / shp.ee）或完整商品網址（含 www./m. 子網域）。
+// 短碼字元：除英數外也含 - 與 _（部分分潤短碼帶這兩個字元，舊規則 [a-zA-Z0-9]+ 會在此處截斷成壞連結）。
 const SHOPEE_SHORT_RE =
-  /(https?:\/\/(?:s\.shopee\.tw|shope\.ee)\/[a-zA-Z0-9]+|https?:\/\/shopee\.tw\/[^\s"'()]+)/g;
+  /(https?:\/\/(?:s\.shopee\.tw|shope\.ee|shp\.ee)\/[a-zA-Z0-9_-]+|https?:\/\/(?:www\.|m\.)?shopee\.tw\/[^\s"'()]+)/g;
+
+// 從一段文字抽出所有蝦皮連結（去重，保序）。純函式可測。
+export function extractShopeeLinks(text: string): string[] {
+  if (!text) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const m of text.matchAll(SHOPEE_SHORT_RE)) {
+    const link = m[1];
+    if (seen.has(link)) continue;
+    seen.add(link);
+    out.push(link);
+  }
+  return out;
+}
 
 // 從貼文網址抽出貼文 id（去重鍵）：https://www.threads.com/@user/post/<code> → <code>
 function postIdFromUrl(url: string): string {
@@ -79,7 +94,7 @@ export function parseSearchPosts(items: any[]): ScrapedPost[] {
       media,
       mediaType: media[0]?.type ?? "none",
       mediaUrl: media[0]?.url ?? null,
-      shopeeLinks: Array.from(text.matchAll(SHOPEE_SHORT_RE)).map((m) => m[1])
+      shopeeLinks: extractShopeeLinks(text)
     });
   }
   return out;

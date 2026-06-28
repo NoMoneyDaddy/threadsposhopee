@@ -10,6 +10,7 @@ test("isAffiliateLink：an_redir / affiliate_id → 已是分潤", () => {
 test("isAffiliateLink：分潤/分享短連結網域 → 已是分潤", () => {
   assert.equal(isAffiliateLink("https://s.shopee.tw/abcd1234"), true);
   assert.equal(isAffiliateLink("https://shope.ee/abcd1234"), true);
+  assert.equal(isAffiliateLink("https://shp.ee/abcd1234"), true);
 });
 
 test("isAffiliateLink：一般商品/商城連結 → 不是分潤（需轉換）", () => {

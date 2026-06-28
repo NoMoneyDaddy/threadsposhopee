@@ -4,7 +4,7 @@
 //
 // 簽章：AWS Signature V4（service=s3、region=auto）。用 x-amz-content-sha256: UNSIGNED-PAYLOAD
 // （R2 走 HTTPS 允許），免緩衝整檔做雜湊。簽章組裝為純函式，便於單測（注入 amzDate）。
-import { createHash, createHmac } from "node:crypto";
+import { createHash, createHmac, randomBytes } from "node:crypto";
 import { fetchWithRetry, fetchWithTimeout } from "@/lib/http";
 import { assertSafePublicUrl } from "@/lib/url-guard";
 import { log } from "@/lib/logger";
@@ -70,6 +70,10 @@ export function buildS3PutAuth(opts: {
   return { authorization, amzDate };
 }
 
+// accountId 格式守衛（英數 16–64，與設定頁 ACCOUNT_RE 一致）：防 `/`、`@` 等 authority 字元竄改 host，
+// 把帶簽章請求送到非預期主機（SSRF）。assertSafePublicUrl 只擋非公開目標，故簽章前先過這層。
+const R2_ACCOUNT_RE = /^[a-zA-Z0-9]{16,64}$/;
+
 // 物件 key 的路徑分段編碼（保留 "/"，其餘 RFC3986 編碼）。
 function encodeKeyPath(key: string): string {
   return key
@@ -119,7 +123,7 @@ export async function validateR2(creds: {
 }): Promise<{ ok: true } | { ok: false; reason: string }> {
   // 嚴格限制 accountId（英數，與設定頁 ACCOUNT_RE 一致）：防 `/`、`@` 等 authority 字元竄改 host，
   // 把帶簽章的 HEAD 送到非預期主機（SSRF）。assertSafePublicUrl 只擋非公開目標，故這層額外把關。
-  if (!/^[a-zA-Z0-9]{16,64}$/.test(creds.accountId)) return { ok: false, reason: "Cloudflare Account ID 格式不正確" };
+  if (!R2_ACCOUNT_RE.test(creds.accountId)) return { ok: false, reason: "Cloudflare Account ID 格式不正確" };
   const host = `${creds.accountId}.r2.cloudflarestorage.com`;
   const canonicalPath = `/${encodeURIComponent(creds.bucket)}`;
   const amzDate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, "");
@@ -156,31 +160,17 @@ function stableMediaName(sourceUrl: string): string {
   return id ?? createHash("sha1").update(sourceUrl).digest("hex").slice(0, 16);
 }
 
-export async function uploadToR2(
-  sourceUrl: string,
-  type: "image" | "video",
-  creds: R2Creds,
-  keyHint?: string
-): Promise<string> {
-  const safe = assertSafePublicUrl(sourceUrl);
-  const src = await fetchWithRetry(safe.href, {}, 20000);
-  if (!src.ok) throw new Error(`下載來源媒體失敗（${src.status}）`);
-  const contentType = src.headers.get("content-type") || (type === "video" ? "video/mp4" : "image/jpeg");
-  const body = Buffer.from(await src.arrayBuffer());
+function extFromContentType(contentType: string, type: "image" | "video"): string {
+  return contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : type === "video" ? "mp4" : "jpg";
+}
 
-  const ext = contentType.includes("png")
-    ? "png"
-    : contentType.includes("webp")
-      ? "webp"
-      : type === "video"
-        ? "mp4"
-        : "jpg";
-  const folder = keyHint ? sanitizeSeg(keyHint) : `${type}s`;
-  const key = `threads/${folder}/${stableMediaName(sourceUrl)}.${ext}`;
+// 共用：把 bytes 以 SigV4 簽章 PUT 到 R2 的指定 key，回傳公開讀網址。失敗拋錯。
+async function putObjectToR2(body: Buffer, contentType: string, key: string, creds: R2Creds): Promise<string> {
+  // 簽章前重驗 accountId（舊資料/髒資料可能繞過綁定時的 validateR2），確保只把簽章 PUT 送到合法 R2 主機。
+  if (!R2_ACCOUNT_RE.test(creds.accountId)) throw new Error("Cloudflare Account ID 格式不正確");
   const host = `${creds.accountId}.r2.cloudflarestorage.com`;
   const canonicalPath = `/${encodeURIComponent(creds.bucket)}/${encodeKeyPath(key)}`;
   const amzDate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, "");
-
   const { authorization } = buildS3PutAuth({
     accessKeyId: creds.accessKeyId,
     secretAccessKey: creds.secretAccessKey,
@@ -190,7 +180,6 @@ export async function uploadToR2(
     amzDate,
     contentType
   });
-
   const endpoint = `https://${host}${canonicalPath}`;
   const res = await fetchWithRetry(
     assertSafePublicUrl(endpoint).href,
@@ -202,7 +191,8 @@ export async function uploadToR2(
         "x-amz-content-sha256": UNSIGNED,
         "content-type": contentType
       },
-      body
+      // 零拷貝：以原 Buffer 底層 ArrayBuffer 視窗餵 fetch body（避免 Buffer<ArrayBufferLike> 型別不相容＋免再複製整檔）。
+      body: new Uint8Array(body.buffer as ArrayBuffer, body.byteOffset, body.byteLength)
     },
     20000
   );
@@ -211,4 +201,33 @@ export async function uploadToR2(
     throw new Error(`R2 上傳失敗（${res.status}）`);
   }
   return `${creds.publicBase.replace(/\/+$/, "")}/${key}`;
+}
+
+export async function uploadToR2(
+  sourceUrl: string,
+  type: "image" | "video",
+  creds: R2Creds,
+  keyHint?: string
+): Promise<string> {
+  const safe = assertSafePublicUrl(sourceUrl);
+  const src = await fetchWithRetry(safe.href, {}, 20000);
+  if (!src.ok) throw new Error(`下載來源媒體失敗（${src.status}）`);
+  const contentType = src.headers.get("content-type") || (type === "video" ? "video/mp4" : "image/jpeg");
+  const body = Buffer.from(await src.arrayBuffer());
+  const folder = keyHint ? sanitizeSeg(keyHint) : `${type}s`;
+  const key = `threads/${folder}/${stableMediaName(sourceUrl)}.${extFromContentType(contentType, type)}`;
+  return putObjectToR2(body, contentType, key, creds);
+}
+
+// 使用者本機上傳：直接把檔案 bytes 上傳到 R2（不經由來源 URL）。物件落 threads/uploads/<隨機>.ext。
+export async function uploadBytesToR2(
+  body: Buffer,
+  contentType: string,
+  type: "image" | "video",
+  creds: R2Creds,
+  keyHint?: string
+): Promise<string> {
+  const folder = keyHint ? sanitizeSeg(keyHint) : "uploads";
+  const key = `threads/${folder}/${randomBytes(8).toString("hex")}.${extFromContentType(contentType, type)}`;
+  return putObjectToR2(body, contentType, key, creds);
 }

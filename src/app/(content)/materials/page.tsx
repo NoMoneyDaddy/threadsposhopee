@@ -3,7 +3,8 @@ import CheckLinksButton from "@/components/CheckLinksButton";
 import BulkRepostButton from "@/components/BulkRepostButton";
 import MaterialsExplorer from "@/components/MaterialsExplorer";
 import PendingMaterialsReview from "@/components/PendingMaterialsReview";
-import { listMaterials, listPendingMaterials, listThreadsAccounts, getUserCloudinary } from "@/lib/store";
+import { listMaterials, listPendingMaterials, listThreadsAccounts } from "@/lib/store";
+import { getMediaProvider } from "@/services/media/upload";
 import { getItemRevenueMap, type ItemRevenue } from "@/services/shopee/report";
 import { getCurrentUser } from "@/lib/auth";
 import { isDemoMode } from "@/lib/env";
@@ -13,13 +14,15 @@ export const dynamic = "force-dynamic";
 export default async function MaterialsPage() {
   const user = await getCurrentUser();
   const ownerId = user?.id ?? "demo-user";
-  const [materialsRaw, pending, accounts, ownCloud] = await Promise.all([
+  const [materialsRaw, pending, accounts, provider] = await Promise.all([
     listMaterials(ownerId),
     listPendingMaterials(ownerId),
     listThreadsAccounts(ownerId),
-    user ? getUserCloudinary(ownerId) : Promise.resolve(null)
+    user ? getMediaProvider(ownerId) : Promise.resolve({ kind: "none" as const })
   ]);
-  const cc = ownCloud?.cloud && ownCloud?.preset ? ownCloud : null;
+  // 只有當 Cloudinary 是「實際生效」的圖床（即未綁 R2，getMediaProvider R2 優先）時才走瀏覽器直傳；
+  // 綁了 R2 則 cloud/preset 留空 → MediaUpload 改走 /api/media/upload，與 server 端 R2 優先一致。
+  const cc = provider.kind === "cloudinary" ? provider.creds : null;
 
   // 成效回灌：有自綁 Shopee 金鑰時（getItemRevenueMap 內部判斷），抓 itemId→佣金 對照（快取），
   // 把賺錢素材排前並標收益；沒綁則回空物件、維持原順序。

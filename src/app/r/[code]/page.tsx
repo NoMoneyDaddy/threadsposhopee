@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { getRedirectLinkByCode, bumpRedirectClick } from "@/lib/redirect-store";
 import ContinueButton from "./ContinueButton";
+import AdSlot from "@/components/AdSlot";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +48,16 @@ export default async function RedirectPage({ params }: { params: { code: string 
     /* 忽略無法解析的來源 */
   }
 
+  // 安全標章：safe＝已過 Google Safe Browsing；unsafe＝命中威脅名單（醒目警告、不自動跳轉）；
+  // null＝未設金鑰/查詢失敗的降級（仍已過 SSRF/協定白名單＝基本檢查通過）。
+  const unsafe = link.safety === "unsafe";
+  const safetyBadge =
+    link.safety === "safe"
+      ? { cls: "bg-emerald-50 text-emerald-700", text: "✓ 已通過安全檢查" }
+      : link.safety === "unsafe"
+        ? { cls: "bg-red-50 text-red-600", text: "⚠ 此連結可能不安全，請自行斟酌" }
+        : { cls: "bg-surface-2 text-ink-3", text: "✓ 基本安全檢查通過" };
+
   return (
     <div className="relative flex min-h-[100dvh] flex-col items-center justify-center overflow-hidden bg-surface-2 px-4 py-10">
       {/* 獨立導流子服務品牌（go2read），與主站分離 */}
@@ -85,13 +96,20 @@ export default async function RedirectPage({ params }: { params: { code: string 
                 即將前往 <span className="truncate font-medium text-ink-2" title={link.sourceUrl}>{sourceDisplay}</span>
               </p>
             )}
-            <ContinueButton code={link.code} sourceUrl={link.sourceUrl} affiliateUrl={link.affiliateUrl} />
-            {/* 揭露：中性、低調但仍可讀地告知含合作連結（合規底線；不偽裝、不誇張、不點名平台） */}
+            {/* 來源安全標章（增加信任度） */}
+            <p className={`mt-2 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${safetyBadge.cls}`}>
+              {safetyBadge.text}
+            </p>
+            <ContinueButton code={link.code} sourceUrl={link.sourceUrl} unsafe={unsafe} />
+            {/* 揭露：正規轉址服務，由廣告維運（中性、低調；不偽裝、不誇張） */}
             <p className="mt-3 text-[11px] leading-relaxed text-ink-3">
-              本站含推廣連結以維護運轉，點擊「繼續」前往觀看文章。
+              go2read 為你安全中轉到目標頁面，本頁由廣告維護運轉。
             </p>
           </div>
         </div>
+
+        {/* 低干擾廣告位（設定 NEXT_PUBLIC_ADSENSE_CLIENT＋slot 才顯示，未設不留空位） */}
+        <AdSlot slot={process.env.NEXT_PUBLIC_ADSENSE_SLOT_REDIRECT} className="mt-4" />
       </main>
 
       <footer className="relative mt-8 text-[11px] text-ink-3">由 go2read 提供安全中轉</footer>

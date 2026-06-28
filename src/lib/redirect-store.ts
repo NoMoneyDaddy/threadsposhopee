@@ -5,6 +5,7 @@ import { isDemoMode } from "./env";
 import { assertSafePublicUrl } from "./url-guard";
 import { randomShortCode } from "./shortcode";
 import { fetchLinkPreview } from "@/services/og/preview";
+import { checkUrlSafety, type SafetyVerdict } from "@/services/safety/safe-browsing";
 
 export interface RedirectLinkInput {
   sourceUrl: string;
@@ -21,6 +22,8 @@ export interface RedirectLink {
   title: string | null;
   imageUrl: string | null;
   description: string | null;
+  // 來源安全掃描結果：'safe'｜'unsafe'｜null（未掃描/降級＝基本檢查）。中轉頁顯示信任標章用。
+  safety: "safe" | "unsafe" | null;
 }
 
 export interface RedirectLinkRow extends RedirectLink {
@@ -64,9 +67,17 @@ export async function createRedirectLink(
   // demo 模式不落 DB、也不對外抓取（避免示範環境產生外部副作用/延遲）。
   if (isDemoMode) return randomShortCode();
 
-  // 自動預覽：使用者未自填標題/預覽圖/描述時，best-effort 抓來源 OG 帶入（供中轉頁與 Threads unfurl）。
-  // batch 流程（一鍵套轉址）可關閉以避免逐筆阻塞；預設開啟。
-  const meta = opts.fetchPreview === false ? { title: input.title ?? null, imageUrl: input.imageUrl ?? null, description: input.description ?? null } : await resolvePreviewMeta(input);
+  // 自動預覽＋安全掃描：未自填預覽時 best-effort 抓 OG；同時用 Safe Browsing 掃來源網址（信任標章用）。
+  // 兩者並行（互不阻塞）；batch 流程（一鍵套轉址）關閉以避免逐筆阻塞，安全標章則留 null（基本檢查）。
+  const skip = opts.fetchPreview === false;
+  const [meta, safety] = await Promise.all([
+    skip
+      ? Promise.resolve({ title: input.title ?? null, imageUrl: input.imageUrl ?? null, description: input.description ?? null })
+      : resolvePreviewMeta(input),
+    skip ? Promise.resolve<SafetyVerdict>("unknown") : checkUrlSafety(input.sourceUrl)
+  ]);
+  // unknown（未設金鑰/查詢失敗）存 null＝中轉頁降級為「基本安全檢查」；只有明確 safe/unsafe 才落值。
+  const safetyValue: "safe" | "unsafe" | null = safety === "safe" || safety === "unsafe" ? safety : null;
   const sb = getServiceClient()!;
   for (let attempt = 0; attempt < 5; attempt++) {
     const code = randomShortCode();
@@ -77,7 +88,9 @@ export async function createRedirectLink(
       affiliate_url: input.affiliateUrl ?? null,
       title: meta.title,
       image_url: meta.imageUrl,
-      description: meta.description
+      description: meta.description,
+      safety: safetyValue,
+      safety_checked_at: safetyValue ? new Date().toISOString() : null
     });
     if (!error) return code;
     // 唯一鍵衝突（code 重複）→ 換一個重試；其餘錯誤直接拋出。
@@ -92,7 +105,7 @@ export async function getRedirectLinkByCode(code: string): Promise<RedirectLink 
   const sb = getServiceClient()!;
   const { data } = await sb
     .from("redirect_links")
-    .select("code, source_url, affiliate_url, title, image_url, description")
+    .select("code, source_url, affiliate_url, title, image_url, description, safety")
     .eq("code", code)
     .maybeSingle();
   if (!data) return null;
@@ -102,7 +115,8 @@ export async function getRedirectLinkByCode(code: string): Promise<RedirectLink 
     affiliateUrl: data.affiliate_url,
     title: data.title,
     imageUrl: data.image_url,
-    description: data.description
+    description: data.description,
+    safety: data.safety === "safe" || data.safety === "unsafe" ? data.safety : null
   };
 }
 
@@ -112,7 +126,7 @@ export async function listRedirectLinks(ownerId: string, limit = 100): Promise<R
   const sb = getServiceClient()!;
   const { data } = await sb
     .from("redirect_links")
-    .select("code, source_url, affiliate_url, title, image_url, description, clicks, continues, created_at, in_bio")
+    .select("code, source_url, affiliate_url, title, image_url, description, safety, clicks, continues, created_at, in_bio")
     .eq("owner_id", ownerId)
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -123,6 +137,7 @@ export async function listRedirectLinks(ownerId: string, limit = 100): Promise<R
     title: d.title,
     imageUrl: d.image_url,
     description: d.description,
+    safety: d.safety === "safe" || d.safety === "unsafe" ? d.safety : null,
     clicks: d.clicks,
     continues: d.continues,
     createdAt: d.created_at,

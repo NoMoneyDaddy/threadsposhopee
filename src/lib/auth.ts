@@ -101,8 +101,14 @@ export async function getUserEmailsByIds(ids: string[]): Promise<Record<string, 
   const out: Record<string, string> = {};
   await Promise.all(
     unique.map(async (id) => {
-      const { data, error } = await sb.auth.admin.getUserById(id);
-      if (!error && data?.user?.email) out[id] = data.user.email;
+      // best-effort：email 只是顯示用，單筆查詢失敗（含拋錯）只記警告並略過，不中斷整頁。
+      try {
+        const { data, error } = await sb.auth.admin.getUserById(id);
+        if (!error && data?.user?.email) out[id] = data.user.email;
+        else if (error) log.warn("getUserEmailsByIds 單筆查詢失敗", { id, err: error.message });
+      } catch (e) {
+        log.warn("getUserEmailsByIds 單筆查詢例外", { id, err: e instanceof Error ? e.message : String(e) });
+      }
     })
   );
   return out;

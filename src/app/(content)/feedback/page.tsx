@@ -34,9 +34,10 @@ export default async function FeedbackPage() {
   const items = isOwner ? await listAllFeedback() : await listFeedbackForOwner(user?.id ?? "demo-user");
 
   // 管理員視角：只查「本頁工單送出者」的 email（不拉全量使用者，避免量大時的效能/記憶體負擔）。
+  // getUserEmailsByIds 本身 best-effort（單筆失敗記 log 並略過、不拋），故此處不再吞錯。
   let emailOf: Record<string, string> = {};
   if (isOwner && !isDemoMode) {
-    emailOf = await getUserEmailsByIds(items.map((f) => f.owner_id)).catch(() => ({}));
+    emailOf = await getUserEmailsByIds(items.map((f) => f.owner_id));
   }
 
   return (

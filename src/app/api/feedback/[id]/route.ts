@@ -12,6 +12,10 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     if (!user) return NextResponse.json({ ok: false, error: "請先登入" }, { status: 401 });
     if (!user.isOwner) return NextResponse.json({ ok: false, error: "僅管理員可回覆" }, { status: 403 });
 
+    // 先驗 id 為 UUID：擋格式錯誤的 id 在打到 DB 前回 400（避免 PostgREST 對 uuid 欄位報錯被 apiError 當 500）。
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!UUID_RE.test(params.id)) return NextResponse.json({ ok: false, error: "工單 id 不正確" }, { status: 400 });
+
     const body = await req.json().catch(() => null);
     const patch: { admin_reply?: string | null; status?: "open" | "in_progress" | "resolved" | "closed" } = {};
     if (typeof body?.admin_reply === "string") {

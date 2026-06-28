@@ -27,6 +27,18 @@ export function geminiModelInfo(id: string): GeminiModelInfo | null {
   return GEMINI_MODELS.find((m) => m.id === id) ?? null;
 }
 
+// 解析「設定模型」API 收到的 model 輸入（純函式可測）。回傳：
+//   string  → 設成該白名單模型
+//   null    → 明確清除（回到全站預設）：只有 model 為 null 或空字串才算清除
+//   undefined → 非法輸入（缺欄位/型別錯誤/非白名單字串）→ 呼叫端回 400，不可誤當清除而覆寫既有設定
+export function normalizeModelInput(raw: unknown): string | null | undefined {
+  if (raw === null || raw === "") return null;
+  if (typeof raw !== "string") return undefined;
+  const m = raw.trim();
+  if (!m) return null; // 純空白＝清除
+  return isAllowedGeminiModel(m) ? m : undefined;
+}
+
 // 免費層每日「約可生成幾篇」：每篇文案約 1 次 AI 呼叫，故 ≈ freeRpd。純函式（之後若每篇多次呼叫可改係數）。
 export function estimatedPostsPerDay(freeRpd: number, callsPerPost = 1): number {
   if (!Number.isFinite(freeRpd) || !Number.isFinite(callsPerPost) || freeRpd <= 0 || callsPerPost <= 0) return 0;

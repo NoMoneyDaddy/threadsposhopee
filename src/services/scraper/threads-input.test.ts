@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildScraperInput, normalizePostsLimit } from "./threads";
+import { buildScraperInput, normalizePostsLimit, isValidApifyActor } from "./threads";
 
 test("buildScraperInput：只監看帳號時 searchQuery 預設 shope，from 帶入", () => {
   const i = buildScraperInput({ username: "@shop.owner_1" }, 20);
@@ -11,6 +11,16 @@ test("buildScraperInput：只監看帳號時 searchQuery 預設 shope，from 帶
 
 test("buildScraperInput：from 含不合法字元時報錯（不靜默改成別的帳號）", () => {
   assert.throws(() => buildScraperInput({ username: "@user name!#中文.x" }, 20), /無效的 Threads 帳號名稱/);
+});
+
+test("isValidApifyActor：合法識別碼通過，含注入字元的拒絕", () => {
+  assert.equal(isValidApifyActor("igview-owner/threads-search-scraper"), true);
+  assert.equal(isValidApifyActor("igview-owner~threads-search-scraper"), true);
+  assert.equal(isValidApifyActor("FP43CZrdHtiSNn4SY"), true); // 17 碼 actorId
+  assert.equal(isValidApifyActor("user/actor?token=x"), false); // query 注入
+  assert.equal(isValidApifyActor("user/actor/extra"), false); // 多段 path
+  assert.equal(isValidApifyActor("../../evil"), false);
+  assert.equal(isValidApifyActor(""), false);
 });
 
 test("normalizePostsLimit：非有限值／≤0 → 20，正數取整", () => {

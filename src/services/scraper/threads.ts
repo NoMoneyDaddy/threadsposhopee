@@ -1,10 +1,17 @@
 import { isDemoMode } from "@/lib/env";
 import sampleThread from "@/fixtures/sample-thread.json";
 import { fetchWithRetry } from "@/lib/http";
+import { assertSafePublicUrl } from "@/lib/url-guard";
 import type { DraftMedia } from "@/lib/types";
 
 // Threads 搜尋爬蟲 actor（取代舊的帳號時間軸 actor）：可用關鍵字搜尋，或用 from 過濾單一帳號。
 const DEFAULT_THREADS_ACTOR = "igview-owner/threads-search-scraper";
+
+// Apify actor 識別碼格式：username/actor-name、username~actor-name 或 17 碼 actorId。
+// 僅允許英數與 . _ - 及單一 / 或 ~ 分隔；擋掉 ? # & 等可改寫 api.apify.com path/query 的字元。純函式可測。
+export function isValidApifyActor(actor: string): boolean {
+  return /^[a-zA-Z0-9][a-zA-Z0-9._-]*(?:[/~][a-zA-Z0-9._-]+)?$/.test(actor);
+}
 
 export interface ScrapedPost {
   postId: string;
@@ -139,6 +146,10 @@ export async function scrapeLatestPosts(
   if (!token) {
     throw new Error("未綁定 Apify token（請到帳號管理綁定你自己的 Apify 金鑰）");
   }
+  // actor 可由使用者自綁，先驗證格式擋掉可改寫 path/query 的字元（再配合 assertSafePublicUrl 出站守衛）。
+  if (!isValidApifyActor(actor)) {
+    throw new Error(`無效的 Apify actor 識別碼「${actor}」`);
+  }
 
   const spec: ScrapeQuery = typeof query === "string" ? { username: query } : query;
   // input 欄位與限制集中在 buildScraperInput（依 actor schema：searchQuery 必填、from 字元限制、maxPosts 上限約 200）。
@@ -155,7 +166,10 @@ export async function scrapeLatestPosts(
     timeout: String(RUN_TIMEOUT_SEC),
     maxItems: String(body.maxPosts)
   });
-  const url = `https://api.apify.com/v2/acts/${actor.replace("/", "~")}/run-sync-get-dataset-items?${params.toString()}`;
+  // 出站 URL 一律先過 assertSafePublicUrl（SSRF 守衛，repo 慣例）；host 固定 api.apify.com。
+  const url = assertSafePublicUrl(
+    `https://api.apify.com/v2/acts/${actor.replace("/", "~")}/run-sync-get-dataset-items?${params.toString()}`
+  ).href;
   // 只對 429（rate limited、run 尚未啟動）退避重試；408（run 逾時）與 4xx/5xx 皆為終態，
   // 不重試以免重複觸發爬蟲 run 重複計費。client 逾時略大於 run timeout，讓伺服器端先回 408/結果。
   const res = await fetchWithRetry(

@@ -64,6 +64,8 @@ function MediaPicker({
         <CloudinaryUpload
           cloud={cloud}
           preset={preset}
+          multiple
+          disabled={atLimit}
           onType={(t) => (pendingType.current = t)}
           onUploaded={(u) => add({ url: u, type: pendingType.current })}
         />

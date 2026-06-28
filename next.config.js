@@ -25,7 +25,7 @@ const nextConfig = {
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
           // HSTS：強制 HTTPS、防 SSL strip 降級。站台僅以 HTTPS 服務，含子網域；
           // 不加 preload（需主動提交 preload list 且涵蓋 apex，避免誤暗示已收錄）。
-          { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" }
+          { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" }
         ]
       }
     ];

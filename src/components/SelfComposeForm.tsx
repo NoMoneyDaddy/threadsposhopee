@@ -1,112 +1,15 @@
 "use client";
 
-import { useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ThreadsAccount, DraftMedia } from "@/lib/types";
 import ThreadsPreview, { CharCount } from "@/components/ThreadsPreview";
-import CloudinaryUpload from "@/components/CloudinaryUpload";
-import { cloudinaryThumb } from "@/lib/img";
+import MediaPicker from "@/components/MediaPicker";
 import { fetchWithTimeout } from "@/lib/http";
 import { parseTaipeiDateTimeLocal } from "@/lib/datetime";
 
 const input = "w-full rounded-xl border px-3 py-2 text-sm";
 const THREADS_LIMIT = 500;
-const MAX_MEDIA = 20; // Threads 單篇輪播上限（對齊後端 route MAX_MEDIA）
-
-// 多媒體挑選器（主文／留言共用）：本機上傳可連續加多張，或貼網址加入；縮圖可逐張移除。
-function MediaPicker({
-  items,
-  onChange,
-  cloud,
-  preset,
-  hint
-}: {
-  items: DraftMedia[];
-  onChange: Dispatch<SetStateAction<DraftMedia[]>>;
-  cloud: string | null;
-  preset: string | null;
-  hint: string;
-}) {
-  // CloudinaryUpload 會先呼叫 onType 再 onUploaded（同步），用 ref 接住型別再組成一項。
-  const pendingType = useRef<"image" | "video">("image");
-  const [url, setUrl] = useState("");
-  const [type, setType] = useState<"image" | "video">("image");
-  const atLimit = items.length >= MAX_MEDIA;
-  // functional update：上傳是非同步，回呼觸發時以最新狀態為基準，避免舊 closure 覆蓋掉期間的新增/移除。
-  const add = (m: DraftMedia) => onChange((prev) => (prev.length >= MAX_MEDIA ? prev : [...prev, m]));
-  const removeAt = (i: number) => onChange((prev) => prev.filter((_, idx) => idx !== i));
-
-  return (
-    <div className="space-y-2">
-      {items.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {items.map((m, i) => (
-            <div key={`${m.url}-${i}`} className="relative">
-              {m.type === "image" ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={cloudinaryThumb(m.url, 160)} alt="" className="h-16 w-16 rounded-lg border object-cover" />
-              ) : (
-                <video src={m.url} className="h-16 w-16 rounded-lg border object-cover" />
-              )}
-              <button
-                type="button"
-                onClick={() => removeAt(i)}
-                aria-label={`移除第 ${i + 1} 個媒體`}
-                className="absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full bg-black/70 text-[10px] text-white hover:bg-black"
-              >
-                ✕
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-      <div className="flex flex-wrap items-center gap-2">
-        <CloudinaryUpload
-          cloud={cloud}
-          preset={preset}
-          onType={(t) => (pendingType.current = t)}
-          onUploaded={(u) => add({ url: u, type: pendingType.current })}
-        />
-        <span className="text-xs text-ink-3">{atLimit ? `已達上限 ${MAX_MEDIA} 個媒體` : hint}</span>
-        <details className="ml-auto text-xs text-ink-3">
-          <summary className="cursor-pointer select-none hover:text-ink">或貼網址</summary>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <input
-              className={input + " flex-1"}
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="圖片／影片網址"
-              inputMode="url"
-              aria-label="媒體網址"
-            />
-            <select
-              className="rounded-xl border px-2 py-2 text-sm"
-              value={type}
-              onChange={(e) => setType(e.target.value as "image" | "video")}
-              aria-label="媒體類型"
-            >
-              <option value="image">圖片</option>
-              <option value="video">影片</option>
-            </select>
-            <button
-              type="button"
-              disabled={atLimit}
-              onClick={() => {
-                if (url.trim()) {
-                  add({ url: url.trim(), type });
-                  setUrl("");
-                }
-              }}
-              className="rounded-xl border px-3 py-2 text-sm hover:bg-surface-2 disabled:opacity-50"
-            >
-              加入
-            </button>
-          </div>
-        </details>
-      </div>
-    </div>
-  );
-}
 
 // 發文：像 Threads 一樣直接打字、上傳多張照片／影片，右側即時預覽；正文裡的蝦皮連結發布時自動轉成你的分潤連結。
 export default function SelfComposeForm({

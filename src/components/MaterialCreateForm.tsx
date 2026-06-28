@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import CloudinaryUpload from "@/components/CloudinaryUpload";
+import type { DraftMedia } from "@/lib/types";
+import MediaPicker from "@/components/MediaPicker";
 
-// 手動建立素材：貼蝦皮商品連結（必填）＋可選自帶媒體（圖／影片網址或本機上傳）。
+// 手動建立素材：貼蝦皮商品連結（必填）＋可選自帶媒體（同一篇可多張圖／影片，本機多選或貼網址）。
 export default function MaterialCreateForm({
   cloud = null,
   preset = null
@@ -15,8 +16,7 @@ export default function MaterialCreateForm({
   const router = useRouter();
   const [url, setUrl] = useState("");
   const [withCopy, setWithCopy] = useState(true);
-  const [mediaUrl, setMediaUrl] = useState("");
-  const [mediaType, setMediaType] = useState<"image" | "video">("image");
+  const [media, setMedia] = useState<DraftMedia[]>([]);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -31,14 +31,13 @@ export default function MaterialCreateForm({
         body: JSON.stringify({
           shopee_url: url,
           generate_copy: withCopy,
-          media_url: mediaUrl.trim() || null,
-          media_type: mediaUrl.trim() ? mediaType : null
+          media
         })
       });
       const json = await res.json();
       if (!json.ok) throw new Error(json.error);
       setUrl("");
-      setMediaUrl("");
+      setMedia([]);
       setMsg(json.reused ? "✅ 已有素材，直接帶出（未重燒 token）" : "✅ 已建立素材＋分潤連結");
       router.refresh();
     } catch (e) {
@@ -64,27 +63,8 @@ export default function MaterialCreateForm({
         />
       </div>
       <div>
-        <label className="mb-1 block text-xs text-ink-2">媒體（選填，自帶圖／影片；留空則用商品圖）</label>
-        <div className="flex flex-wrap items-center gap-2">
-          <input
-            className={input + " flex-1"}
-            placeholder="圖片／影片網址"
-            value={mediaUrl}
-            onChange={(e) => setMediaUrl(e.target.value)}
-            inputMode="url"
-            aria-label="媒體網址"
-          />
-          <select
-            className="rounded-xl border px-2 py-2 text-sm"
-            value={mediaType}
-            onChange={(e) => setMediaType(e.target.value as "image" | "video")}
-            aria-label="媒體類型"
-          >
-            <option value="image">圖片</option>
-            <option value="video">影片</option>
-          </select>
-          <CloudinaryUpload cloud={cloud} preset={preset} onUploaded={(u) => setMediaUrl(u)} onType={(t) => setMediaType(t)} />
-        </div>
+        <label className="mb-1 block text-xs text-ink-2">媒體（選填，同一篇可多張圖／影片；留空則用商品圖）</label>
+        <MediaPicker items={media} onChange={setMedia} cloud={cloud} preset={preset} hint="可加多張照片／影片（多張＝輪播）" />
       </div>
       <label className="flex items-center gap-2 text-sm text-ink-2">
         <input type="checkbox" checked={withCopy} onChange={(e) => setWithCopy(e.target.checked)} />

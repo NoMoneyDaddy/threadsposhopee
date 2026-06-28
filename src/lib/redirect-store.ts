@@ -6,6 +6,31 @@ import { assertSafePublicUrl } from "./url-guard";
 import { randomShortCode } from "./shortcode";
 import { fetchLinkPreview } from "@/services/og/preview";
 import { checkUrlSafety, type SafetyVerdict } from "@/services/safety/safe-browsing";
+import { log } from "./logger";
+
+// PostgREST 在欄位不存在（含 migration 尚未套用、或 schema cache 未刷新）時，回 code PGRST204
+// 且訊息形如 "Could not find the 'safety' column of 'redirect_links' in the schema cache"。
+// 純函式可單測：判斷某次 insert 失敗是否因為指定欄位尚不存在。
+export function isMissingColumnError(error: { code?: string; message?: string } | null, column: string): boolean {
+  if (!error) return false;
+  // 一律要求錯誤訊息提到「目標欄位名」，避免把其他欄位/無關的 schema 錯誤誤判為「safety 缺失」而走降級。
+  const msg = (error.message ?? "").toLowerCase();
+  const mentionsColumn = msg.includes(`'${column.toLowerCase()}'`);
+  return mentionsColumn && (error.code === "PGRST204" || msg.includes("schema cache"));
+}
+
+type DbResult<T> = { data: T | null; error: { code?: string; message?: string } | null };
+
+// 讀取降級（純函式、可單測）：先用「含 safety」的查詢；若因 safety 欄位未遷移（PGRST204）失敗，
+// 改用「不含 safety」的查詢重試；其餘錯誤照拋（不可被當成「查無資料」而誤成 404／空列表）。
+export async function selectWithSafetyFallback<T>(
+  run: (withSafety: boolean) => PromiseLike<DbResult<T>>
+): Promise<T | null> {
+  let res = await run(true);
+  if (res.error && isMissingColumnError(res.error, "safety")) res = await run(false);
+  if (res.error) throw new Error(`查詢短連結失敗：${res.error.message}`);
+  return res.data;
+}
 
 export interface RedirectLinkInput {
   sourceUrl: string;
@@ -79,44 +104,65 @@ export async function createRedirectLink(
   // unknown（未設金鑰/查詢失敗）存 null＝中轉頁降級為「基本安全檢查」；只有明確 safe/unsafe 才落值。
   const safetyValue: "safe" | "unsafe" | null = safety === "safe" || safety === "unsafe" ? safety : null;
   const sb = getServiceClient()!;
-  for (let attempt = 0; attempt < 5; attempt++) {
+  // 安全欄位（migration 0049）若尚未套用到正式 DB，insert 帶 safety 會整批失敗。
+  // safety 只是 best-effort 信任標章，不該卡死核心「建立短連結」：偵測到欄位缺失就降級為不帶 safety 重試。
+  let includeSafety = true;
+  for (let attempt = 0; attempt < 6; attempt++) {
     const code = randomShortCode();
-    const { error } = await sb.from("redirect_links").insert({
+    const row: Record<string, unknown> = {
       owner_id: ownerId,
       code,
       source_url: input.sourceUrl,
       affiliate_url: input.affiliateUrl ?? null,
       title: meta.title,
       image_url: meta.imageUrl,
-      description: meta.description,
-      safety: safetyValue,
-      safety_checked_at: safetyValue ? new Date().toISOString() : null
-    });
+      description: meta.description
+    };
+    if (includeSafety) {
+      row.safety = safetyValue;
+      row.safety_checked_at = safetyValue ? new Date().toISOString() : null;
+    }
+    const { error } = await sb.from("redirect_links").insert(row);
     if (!error) return code;
-    // 唯一鍵衝突（code 重複）→ 換一個重試；其餘錯誤直接拋出。
-    if (error.code !== "23505") throw new Error(`建立短連結失敗：${error.message}`);
+    // 唯一鍵衝突（code 重複）→ 換一個重試。
+    if (error.code === "23505") continue;
+    // safety/safety_checked_at 欄位尚未遷移 → 降級為不帶 safety 重試（標章退回「基本安全檢查」）。
+    const missingCol = isMissingColumnError(error, "safety")
+      ? "safety"
+      : isMissingColumnError(error, "safety_checked_at")
+        ? "safety_checked_at"
+        : null;
+    if (includeSafety && missingCol) {
+      log.warn(`redirect_links.${missingCol} 欄位不存在（migration 0049 未套用？），改用無安全欄位建立短連結`, { ownerId, code, pgCode: error.code });
+      includeSafety = false;
+      continue;
+    }
+    throw new Error(`建立短連結失敗：${error.message}`);
   }
   throw new Error("短碼產生衝突過多，請重試");
 }
 
+const LINK_COLS = "code, source_url, affiliate_url, title, image_url, description";
+const toSafety = (v: unknown): "safe" | "unsafe" | null => (v === "safe" || v === "unsafe" ? v : null);
+
 // 依 code 取用（對外公開：中轉頁渲染用，不帶 owner 過濾）。
+// 與 insert 對稱：safety 欄位若尚未遷移（PGRST204）就改用不含 safety 的查詢重試（標章退回 null）；
+// 其餘查詢錯誤照拋——不可被當成「找不到」而誤成 404（呼叫端只在回 null 時才 notFound）。
 export async function getRedirectLinkByCode(code: string): Promise<RedirectLink | null> {
   if (isDemoMode) return null;
   const sb = getServiceClient()!;
-  const { data } = await sb
-    .from("redirect_links")
-    .select("code, source_url, affiliate_url, title, image_url, description, safety")
-    .eq("code", code)
-    .maybeSingle();
+  const data = (await selectWithSafetyFallback((withSafety) =>
+    sb.from("redirect_links").select(withSafety ? `${LINK_COLS}, safety` : LINK_COLS).eq("code", code).maybeSingle()
+  )) as unknown as Record<string, unknown> | null;
   if (!data) return null;
   return {
-    code: data.code,
-    sourceUrl: data.source_url,
-    affiliateUrl: data.affiliate_url,
-    title: data.title,
-    imageUrl: data.image_url,
-    description: data.description,
-    safety: data.safety === "safe" || data.safety === "unsafe" ? data.safety : null
+    code: data.code as string,
+    sourceUrl: data.source_url as string,
+    affiliateUrl: (data.affiliate_url as string) ?? null,
+    title: (data.title as string) ?? null,
+    imageUrl: (data.image_url as string) ?? null,
+    description: (data.description as string) ?? null,
+    safety: toSafety(data.safety)
   };
 }
 
@@ -124,23 +170,27 @@ export async function getRedirectLinkByCode(code: string): Promise<RedirectLink 
 export async function listRedirectLinks(ownerId: string, limit = 100): Promise<RedirectLinkRow[]> {
   if (isDemoMode) return [];
   const sb = getServiceClient()!;
-  const { data } = await sb
-    .from("redirect_links")
-    .select("code, source_url, affiliate_url, title, image_url, description, safety, clicks, continues, created_at, in_bio")
-    .eq("owner_id", ownerId)
-    .order("created_at", { ascending: false })
-    .limit(limit);
-  return (data ?? []).map((d) => ({
-    code: d.code,
-    sourceUrl: d.source_url,
-    affiliateUrl: d.affiliate_url,
-    title: d.title,
-    imageUrl: d.image_url,
-    description: d.description,
-    safety: d.safety === "safe" || d.safety === "unsafe" ? d.safety : null,
-    clicks: d.clicks,
-    continues: d.continues,
-    createdAt: d.created_at,
+  const stats = "clicks, continues, created_at, in_bio";
+  // 與 insert/讀取對稱：safety 欄位未遷移就改用不含 safety 的查詢；其餘錯誤照拋（不要把查詢失敗誤呈現成空列表）。
+  const rows = (await selectWithSafetyFallback((withSafety) =>
+    sb
+      .from("redirect_links")
+      .select(withSafety ? `${LINK_COLS}, safety, ${stats}` : `${LINK_COLS}, ${stats}`)
+      .eq("owner_id", ownerId)
+      .order("created_at", { ascending: false })
+      .limit(limit)
+  )) as unknown as Record<string, unknown>[] | null;
+  return (rows ?? []).map((d) => ({
+    code: d.code as string,
+    sourceUrl: d.source_url as string,
+    affiliateUrl: (d.affiliate_url as string) ?? null,
+    title: (d.title as string) ?? null,
+    imageUrl: (d.image_url as string) ?? null,
+    description: (d.description as string) ?? null,
+    safety: toSafety(d.safety),
+    clicks: d.clicks as number,
+    continues: d.continues as number,
+    createdAt: d.created_at as string,
     inBio: Boolean(d.in_bio)
   }));
 }

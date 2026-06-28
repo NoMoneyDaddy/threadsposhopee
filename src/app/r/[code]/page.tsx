@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { getRedirectLinkByCode, bumpRedirectClick } from "@/lib/redirect-store";
 import ContinueButton from "./ContinueButton";
 import AdSlot from "@/components/AdSlot";
+import { Go2readMark, G2R_FONT } from "../brand";
 
 export const dynamic = "force-dynamic";
 
@@ -55,36 +57,41 @@ export default async function RedirectPage({ params }: { params: { code: string 
   // 保底 5 秒（建議值）；可日後加環境變數微調。
   const adOn = Boolean(process.env.NEXT_PUBLIC_ADSENSE_CLIENT && process.env.NEXT_PUBLIC_ADSENSE_SLOT_REDIRECT);
   const countdownSeconds = adOn ? 8 : 5;
+  // 安全標章：圖示一律 SVG（不用表情符號）；配色採 go2read 自有識別，與主站無關。
+  const checkIcon: ReactNode = (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+  );
+  const warnIcon: ReactNode = (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" /><path d="M12 9v4" /><path d="M12 17h.01" /></svg>
+  );
   const safetyBadge =
     link.safety === "safe"
-      ? { cls: "bg-emerald-50 text-emerald-700", text: "✓ 已通過安全檢查" }
+      ? { cls: "bg-[#e6f7ef] text-[#0f7a52]", icon: checkIcon, text: "已通過安全檢查" }
       : link.safety === "unsafe"
-        ? { cls: "bg-red-50 text-red-600", text: "⚠ 此連結可能不安全，請自行斟酌" }
-        : { cls: "bg-surface-2 text-ink-3", text: "✓ 基本安全檢查通過" };
+        ? { cls: "bg-[#fdecec] text-[#c0392b]", icon: warnIcon, text: "此連結可能不安全，請自行斟酌" }
+        : { cls: "bg-[#eef4f6] text-[#5a7d88]", icon: checkIcon, text: "基本安全檢查通過" };
 
   return (
-    <div className="relative flex min-h-[100dvh] flex-col items-center justify-center overflow-hidden bg-surface-2 px-4 py-10">
-      {/* 獨立導流子服務品牌（go2read），與主站分離 */}
-      <header className="relative mb-6 flex flex-col items-center gap-1">
-        <div className="flex items-center gap-2">
-          <span aria-hidden className="accent-line grid h-8 w-8 place-items-center rounded-xl text-white shadow-[var(--shadow-card)]">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M22 2 11 13" />
-              <path d="m22 2-7 20-4-9-9-4Z" />
-            </svg>
-          </span>
-          <span className="text-lg font-bold tracking-tight text-ink">go2read</span>
+    <div
+      className="relative flex min-h-[100dvh] flex-col items-center justify-center bg-gradient-to-b from-[#f1f8fa] to-[#e2eef1] px-4 py-10"
+      style={{ fontFamily: G2R_FONT }}
+    >
+      {/* 獨立中轉子服務品牌（go2read）：自有識別，與主站視覺完全分離 */}
+      <header className="relative mb-6 flex flex-col items-center gap-2">
+        <div className="flex items-center gap-2.5">
+          <Go2readMark size={34} />
+          <span className="text-lg font-bold tracking-tight text-[#0c3543]" style={{ fontFamily: G2R_FONT }}>go2read</span>
         </div>
-        <p className="text-xs text-ink-3">安全中轉，前往你想看的內容</p>
+        <p className="text-xs text-[#7ba0aa]">安全中轉，前往你想看的內容</p>
       </header>
 
       <main className="relative w-full max-w-md">
-        <div className="overflow-hidden rounded-3xl border border-strong bg-surface shadow-[var(--shadow-card)]">
+        <div className="overflow-hidden rounded-3xl bg-white ring-1 ring-[#d6e6ea] shadow-[0_18px_50px_-20px_rgba(6,78,90,0.35)]">
           {link.imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={link.imageUrl} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-52 w-full object-cover" />
           ) : (
-            <div aria-hidden className="accent-line flex h-44 w-full flex-col items-center justify-center gap-2 text-white/95">
+            <div aria-hidden className="flex h-44 w-full flex-col items-center justify-center gap-2 bg-gradient-to-br from-[#06b6d4] to-[#0f9488] text-white/95">
               <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
                 <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
@@ -93,20 +100,21 @@ export default async function RedirectPage({ params }: { params: { code: string 
             </div>
           )}
           <div className="p-5 text-center">
-            <h1 className="text-xl font-bold leading-snug tracking-tight">{link.title ?? "即將前往"}</h1>
-            {link.description && <p className="mt-2 line-clamp-3 text-sm text-ink-2">{link.description}</p>}
+            <h1 className="text-xl font-bold leading-snug tracking-tight text-[#0c3543]" style={{ fontFamily: G2R_FONT }}>{link.title ?? "即將前往"}</h1>
+            {link.description && <p className="mt-2 line-clamp-3 text-sm text-[#48707c]">{link.description}</p>}
             {sourceDisplay && (
-              <p className="mt-3 inline-flex max-w-full items-center gap-1 rounded-full bg-surface-2 px-2.5 py-1 text-xs text-ink-3">
-                即將前往 <span className="truncate font-medium text-ink-2" title={link.sourceUrl}>{sourceDisplay}</span>
+              <p className="mt-3 inline-flex max-w-full items-center gap-1 rounded-full bg-[#eef4f6] px-2.5 py-1 text-xs text-[#5a7d88]">
+                即將前往 <span className="truncate font-medium text-[#0c3543]" title={link.sourceUrl}>{sourceDisplay}</span>
               </p>
             )}
             {/* 來源安全標章（增加信任度） */}
-            <p className={`mt-2 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${safetyBadge.cls}`}>
+            <p className={`mt-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${safetyBadge.cls}`}>
+              <span aria-hidden className="inline-flex">{safetyBadge.icon}</span>
               {safetyBadge.text}
             </p>
             <ContinueButton code={link.code} sourceUrl={link.sourceUrl} unsafe={unsafe} seconds={countdownSeconds} />
             {/* 揭露：正規轉址服務，由廣告維運（中性、低調；不偽裝、不誇張） */}
-            <p className="mt-3 text-[11px] leading-relaxed text-ink-3">
+            <p className="mt-3 text-[11px] leading-relaxed text-[#7ba0aa]">
               go2read 為你安全中轉到目標頁面，本頁由廣告維護運轉。
             </p>
           </div>
@@ -116,7 +124,7 @@ export default async function RedirectPage({ params }: { params: { code: string 
         <AdSlot slot={process.env.NEXT_PUBLIC_ADSENSE_SLOT_REDIRECT} className="mt-4" />
       </main>
 
-      <footer className="relative mt-8 text-[11px] text-ink-3">由 go2read 提供安全中轉</footer>
+      <footer className="relative mt-8 text-[11px] text-[#7ba0aa]">由 go2read 提供安全中轉</footer>
     </div>
   );
 }

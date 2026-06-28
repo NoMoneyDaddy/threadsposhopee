@@ -79,16 +79,22 @@ export default function ContinueButton({
   const srStatus = navigating ? "前往中…" : counting ? "前往觀看內容" : unsafe ? "確認後前往" : "可前往";
   return (
     <div className="mt-5 space-y-2">
-      <button type="button" onClick={go} className="btn btn-brand w-full">
-        <span aria-hidden="true">
-          {unsafe ? "我了解風險，仍要前往 →" : counting ? `前往 →（${left} 秒）` : "前往 →"}
+      <button
+        type="button"
+        onClick={go}
+        className="inline-flex min-h-[2.75rem] w-full items-center justify-center gap-1.5 rounded-full bg-[#0e7490] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#155e6b] focus-visible:ring-[#0e7490]/60 active:translate-y-px"
+      >
+        <span aria-hidden="true" className="inline-flex items-center gap-1.5">
+          {unsafe ? "我了解風險，仍要前往" : counting ? `前往（${left} 秒）` : "前往"}
+          {/* 箭頭一律用 SVG（不用文字箭號或表情符號） */}
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14" /><path d="m13 6 6 6-6 6" /></svg>
         </span>
         <span className="sr-only" aria-live="polite">{srStatus}</span>
       </button>
       <button
         type="button"
         onClick={leave}
-        className="block w-full text-xs text-ink-3 hover:text-ink"
+        className="block w-full text-xs text-[#7ba0aa] transition-colors hover:text-[#0c3543]"
       >
         我不看了，關閉頁面
       </button>

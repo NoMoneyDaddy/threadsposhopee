@@ -73,6 +73,11 @@ export default function R2Form({
         留空 key/secret＝沿用既有（只改網域）。詳細步驟見{" "}
         <a href="/guide#r2" className="text-brand underline">金鑰取得教學</a>。
       </p>
+      <p className="mb-2 rounded-lg bg-surface-2 p-2 text-xs text-ink-2">
+        ⚠️ 建立 token 後，填下面兩格的是 <b>「針對 S3 用戶端」的認證</b>：<b>存取金鑰識別碼</b> → Access Key ID、
+        <b>秘密存取金鑰</b> → Secret Access Key。<b>不是</b>最上方的「權杖值（cfat… / cfut…）」（那是 Cloudflare API 用、本服務用不到）。
+        另外 token 權限要選 <b>Object Read &amp; Write（物件讀取和寫入）</b>——選成「物件唯讀」會無法上傳。
+      </p>
       {bound && <BoundKeyHint label="目前已綁定 R2 Access Key／Secret" />}
       <div className="grid gap-2 sm:grid-cols-2">
         <input className="input" aria-label="R2 Account ID" placeholder="Account ID" value={accountId} onChange={(e) => setAccountId(e.target.value)} />

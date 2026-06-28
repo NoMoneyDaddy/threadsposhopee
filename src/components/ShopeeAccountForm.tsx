@@ -28,8 +28,12 @@ export default function ShopeeAccountForm({ bound = null }: { bound?: ShopeeAcco
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form)
       });
-      const json = await res.json();
-      if (!json.ok) throw new Error(json.error);
+      // 防呆：非 JSON 回應（502/代理錯誤頁）別讓 res.json() 拋難懂訊息；用 HTTP 狀態當後備，
+      // 且 error 非字串時不顯示成 [object Object]。
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.ok) {
+        throw new Error(typeof json?.error === "string" && json.error ? json.error : `綁定失敗（HTTP ${res.status}）`);
+      }
       setForm({ app_id: "", secret: "" });
       setMsg(json.warning ? `⚠️ ${json.warning}` : "✅ 已綁定");
       router.refresh();

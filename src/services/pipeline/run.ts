@@ -25,7 +25,7 @@ import {
   userOwnsThreadsAccount
 } from "@/lib/store";
 import { getMediaProvider } from "@/services/media/upload";
-import { isMaterialReusable } from "./summary";
+import { isMaterialReusable, decideIntakeStatus } from "./summary";
 import { isDemoMode } from "@/lib/env";
 import type { Source } from "@/lib/types";
 
@@ -134,9 +134,9 @@ export async function runSourcePipeline(
         continue;
       }
       // 未命中／素材失效 → 產生（或更新）素材，進「待審」由人工逐筆核准才入庫；不建草稿、不排程、不發文。
-      // 已核准過的素材若連結失效需重產，保留 approved（不無故退回待審）；其餘（新建/原本待審）一律 pending。
-      // 舊資料 intake_status 為 null/undefined 視同已核准（與 listMaterials 一致），重產時不可被降級為待審。
-      const intakeStatus = existing && (existing.intake_status ?? "approved") === "approved" ? "approved" : "pending";
+      // 入庫狀態決策（純函式 decideIntakeStatus）：新建→pending；既有已核准（含舊資料 null）→ 保留 approved
+      // 不降級；既有待審→維持 pending。
+      const intakeStatus = decideIntakeStatus(existing);
       const material = await buildMaterialForProduct(
         {
           shopId: expanded.shopId,

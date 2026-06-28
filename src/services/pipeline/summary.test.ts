@@ -1,6 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isMaterialReusable, summarizePipelineRun } from "./summary";
+import { isMaterialReusable, summarizePipelineRun, decideIntakeStatus } from "./summary";
+
+test("decideIntakeStatus：新建→pending；已核准(含 null)→approved 不降級；待審→pending", () => {
+  assert.equal(decideIntakeStatus(null), "pending");
+  assert.equal(decideIntakeStatus(undefined), "pending");
+  assert.equal(decideIntakeStatus({ intake_status: "approved" }), "approved");
+  assert.equal(decideIntakeStatus({ intake_status: null }), "approved"); // 舊資料視同已核准，不降級
+  assert.equal(decideIntakeStatus({}), "approved");
+  assert.equal(decideIntakeStatus({ intake_status: "pending" }), "pending");
+});
 
 test("isMaterialReusable：連結有效＋有文案＋有短連結才可重用", () => {
   assert.equal(isMaterialReusable({ affiliate_valid: true, main_text: "文案", affiliate_short_link: "https://s.shopee.tw/x" }), true);

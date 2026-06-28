@@ -11,6 +11,8 @@ export default function PendingMaterialsReview({ items }: { items: Material[] })
   const router = useRouter();
   // 用 Set 追蹤每筆獨立的處理中狀態：避免快速連點多筆時，單一 busyId 互相覆蓋造成按鈕提早解禁（race）。
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
+  // 成功處理過的 id：在 router.refresh() 帶回新資料前先本地隱藏，避免舊卡片仍可點而對同一筆重複送出。
+  const [doneIds, setDoneIds] = useState<Set<string>>(new Set());
   const [err, setErr] = useState<string | null>(null);
 
   async function act(id: string, kind: "approve" | "discard") {
@@ -25,6 +27,7 @@ export default function PendingMaterialsReview({ items }: { items: Material[] })
       if (!res.ok || !json?.ok) {
         throw new Error(typeof json?.error === "string" && json.error ? json.error : `操作失敗（HTTP ${res.status}）`);
       }
+      setDoneIds((prev) => new Set(prev).add(id)); // 成功 → 立即隱藏該筆，刷新前不可再操作
       router.refresh();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "操作失敗");
@@ -37,17 +40,18 @@ export default function PendingMaterialsReview({ items }: { items: Material[] })
     }
   }
 
-  if (items.length === 0) return null;
+  const visible = items.filter((m) => !doneIds.has(m.id));
+  if (visible.length === 0) return null;
 
   return (
     <section className="space-y-3 rounded-2xl border border-amber-200 bg-amber-50/50 p-4">
       <div className="flex items-center gap-2">
         <h2 className="text-lg font-semibold">🔎 待審素材</h2>
-        <span className="rounded-full bg-amber-200 px-2 py-0.5 text-xs text-amber-800">{items.length}</span>
+        <span className="rounded-full bg-amber-200 px-2 py-0.5 text-xs text-amber-800">{visible.length}</span>
       </div>
       <p className="text-sm text-ink-2">爬蟲抓到的素材（已換好你的分潤連結＋AI 文案）。逐筆確認後才會入庫，入庫的才能排程發文。</p>
       <div className="space-y-3">
-        {items.map((m) => {
+        {visible.map((m) => {
           const thumb = m.cloudinary_media_url || m.source_media_url || (m.media?.[0]?.url ?? null);
           const isVideo = m.media_type === "video" || m.media?.[0]?.type === "video";
           const busy = busyIds.has(m.id);

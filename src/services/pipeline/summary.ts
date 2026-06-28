@@ -11,6 +11,16 @@ export function isMaterialReusable(m: MaterialReuseCandidate | null | undefined)
   return Boolean(m && m.affiliate_valid && m.main_text && m.affiliate_short_link);
 }
 
+// 爬蟲產出素材的入庫狀態決策（純函式可測）：
+// 無既有素材（新建）→ pending；既有已核准（含舊資料 null/undefined 視同已核准）→ 維持 approved（重產不降級）；
+// 既有仍待審 → 維持 pending。
+export function decideIntakeStatus(
+  existing: { intake_status?: "pending" | "approved" | null } | null | undefined
+): "pending" | "approved" {
+  if (!existing) return "pending";
+  return (existing.intake_status ?? "approved") === "approved" ? "approved" : "pending";
+}
+
 export interface PipelineRunSummary {
   created: number;
   pending: number; // 實際進待審的素材數（不含已核准重產）；顯示「待審 N」以此為準

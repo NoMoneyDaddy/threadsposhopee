@@ -8,7 +8,8 @@ import type { Material } from "./types";
 
 export async function findMaterial(shopId: string, itemId: string, ownerId: string): Promise<Material | null> {
   if (isDemoMode) {
-    return demo.materials.find((m) => m.shop_id === shopId && m.item_id === itemId) ?? null;
+    // demo 也以 owner_id 過濾（與非 demo 一致）：避免別租戶的同商品素材影響本租戶的待審/重用判定。
+    return demo.materials.find((m) => m.owner_id === ownerId && m.shop_id === shopId && m.item_id === itemId) ?? null;
   }
   const sb = getServiceClient()!;
   const { data } = await sb
@@ -22,7 +23,7 @@ export async function findMaterial(shopId: string, itemId: string, ownerId: stri
 }
 
 export async function getMaterial(id: string, ownerId: string): Promise<Material | null> {
-  if (isDemoMode) return demo.materials.find((m) => m.id === id) ?? null;
+  if (isDemoMode) return demo.materials.find((m) => m.id === id && m.owner_id === ownerId) ?? null;
   const sb = getServiceClient()!;
   const { data } = await sb.from("materials").select("*").eq("id", id).eq("owner_id", ownerId).maybeSingle();
   return (data as Material) ?? null;

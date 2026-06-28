@@ -10,10 +10,13 @@ export type MediaProvider =
   | { kind: "none" };
 
 // 解析使用者偏好的圖床（R2 優先於 Cloudinary）。
+// 不在此吞例外：getUserR2／getUserCloudinary 已「刻意」把 DB 讀取錯誤降級為 log.warn＋回 null
+// （見 credentials.ts，供 pipeline 在迴圈外取一次時不因暫時性錯誤中斷整條 run）。故此處 none＝確定未綁定，
+// 而非查詢故障；若日後 getter 改為拋錯，這裡也會往上拋（不再用多餘的 .catch 把故障誤判成未綁定）。
 export async function getMediaProvider(ownerId: string): Promise<MediaProvider> {
-  const r2 = await getUserR2(ownerId).catch(() => null);
+  const r2 = await getUserR2(ownerId);
   if (r2) return { kind: "r2", creds: r2 };
-  const cl = await getUserCloudinary(ownerId).catch(() => null);
+  const cl = await getUserCloudinary(ownerId);
   if (cl) return { kind: "cloudinary", creds: cl };
   return { kind: "none" };
 }

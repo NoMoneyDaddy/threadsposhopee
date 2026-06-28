@@ -233,7 +233,20 @@ export default function DraftsExplorer({
                 <Link href="/compose" className="btn btn-brand mt-5">去發一篇</Link>
               </>
             ) : (
-              <p className="mt-3 text-sm text-ink-2">沒有符合目前篩選條件的草稿。</p>
+              <>
+                <p className="mt-3 text-sm text-ink-2">沒有符合目前篩選條件的草稿。</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStatus("all");
+                    setAccount("all");
+                    setQ("");
+                  }}
+                  className="btn btn-ghost btn-sm mt-4"
+                >
+                  清除篩選條件
+                </button>
+              </>
             )}
           </div>
         )}

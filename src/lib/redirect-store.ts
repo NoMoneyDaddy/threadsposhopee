@@ -19,6 +19,19 @@ export function isMissingColumnError(error: { code?: string; message?: string } 
   return mentionsColumn && (error.code === "PGRST204" || msg.includes("schema cache"));
 }
 
+type DbResult<T> = { data: T | null; error: { code?: string; message?: string } | null };
+
+// 讀取降級（純函式、可單測）：先用「含 safety」的查詢；若因 safety 欄位未遷移（PGRST204）失敗，
+// 改用「不含 safety」的查詢重試；其餘錯誤照拋（不可被當成「查無資料」而誤成 404／空列表）。
+export async function selectWithSafetyFallback<T>(
+  run: (withSafety: boolean) => PromiseLike<DbResult<T>>
+): Promise<T | null> {
+  let res = await run(true);
+  if (res.error && isMissingColumnError(res.error, "safety")) res = await run(false);
+  if (res.error) throw new Error(`查詢短連結失敗：${res.error.message}`);
+  return res.data;
+}
+
 export interface RedirectLinkInput {
   sourceUrl: string;
   affiliateUrl?: string | null;
@@ -114,8 +127,13 @@ export async function createRedirectLink(
     // 唯一鍵衝突（code 重複）→ 換一個重試。
     if (error.code === "23505") continue;
     // safety/safety_checked_at 欄位尚未遷移 → 降級為不帶 safety 重試（標章退回「基本安全檢查」）。
-    if (includeSafety && (isMissingColumnError(error, "safety") || isMissingColumnError(error, "safety_checked_at"))) {
-      log.warn("redirect_links.safety 欄位不存在（migration 0049 未套用？），改用無安全欄位建立短連結", { ownerId, code, pgCode: error.code });
+    const missingCol = isMissingColumnError(error, "safety")
+      ? "safety"
+      : isMissingColumnError(error, "safety_checked_at")
+        ? "safety_checked_at"
+        : null;
+    if (includeSafety && missingCol) {
+      log.warn(`redirect_links.${missingCol} 欄位不存在（migration 0049 未套用？），改用無安全欄位建立短連結`, { ownerId, code, pgCode: error.code });
       includeSafety = false;
       continue;
     }
@@ -133,12 +151,9 @@ const toSafety = (v: unknown): "safe" | "unsafe" | null => (v === "safe" || v ==
 export async function getRedirectLinkByCode(code: string): Promise<RedirectLink | null> {
   if (isDemoMode) return null;
   const sb = getServiceClient()!;
-  let res = await sb.from("redirect_links").select(`${LINK_COLS}, safety`).eq("code", code).maybeSingle();
-  if (res.error && isMissingColumnError(res.error, "safety")) {
-    res = await sb.from("redirect_links").select(LINK_COLS).eq("code", code).maybeSingle();
-  }
-  if (res.error) throw new Error(`讀取短連結失敗：${res.error.message}`);
-  const data = res.data as unknown as Record<string, unknown> | null;
+  const data = (await selectWithSafetyFallback((withSafety) =>
+    sb.from("redirect_links").select(withSafety ? `${LINK_COLS}, safety` : LINK_COLS).eq("code", code).maybeSingle()
+  )) as unknown as Record<string, unknown> | null;
   if (!data) return null;
   return {
     code: data.code as string,
@@ -156,15 +171,16 @@ export async function listRedirectLinks(ownerId: string, limit = 100): Promise<R
   if (isDemoMode) return [];
   const sb = getServiceClient()!;
   const stats = "clicks, continues, created_at, in_bio";
-  const q = (cols: string) =>
-    sb.from("redirect_links").select(cols).eq("owner_id", ownerId).order("created_at", { ascending: false }).limit(limit);
   // 與 insert/讀取對稱：safety 欄位未遷移就改用不含 safety 的查詢；其餘錯誤照拋（不要把查詢失敗誤呈現成空列表）。
-  let res = await q(`${LINK_COLS}, safety, ${stats}`);
-  if (res.error && isMissingColumnError(res.error, "safety")) {
-    res = await q(`${LINK_COLS}, ${stats}`);
-  }
-  if (res.error) throw new Error(`列出短連結失敗：${res.error.message}`);
-  return ((res.data as unknown as Record<string, unknown>[]) ?? []).map((d) => ({
+  const rows = (await selectWithSafetyFallback((withSafety) =>
+    sb
+      .from("redirect_links")
+      .select(withSafety ? `${LINK_COLS}, safety, ${stats}` : `${LINK_COLS}, ${stats}`)
+      .eq("owner_id", ownerId)
+      .order("created_at", { ascending: false })
+      .limit(limit)
+  )) as unknown as Record<string, unknown>[] | null;
+  return (rows ?? []).map((d) => ({
     code: d.code as string,
     sourceUrl: d.source_url as string,
     affiliateUrl: (d.affiliate_url as string) ?? null,

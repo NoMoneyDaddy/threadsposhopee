@@ -167,6 +167,10 @@ create table ai_agent_seen (                 -- 去重記錄
 
 # Part B — go2read.link 中轉導流服務
 
+> **現況（已實作，取代以下 B1/B4/B5 的分潤雙開設計）**：中轉頁已改為**純轉址**——「繼續前往」只 `location = source_url`（去來源原文），**不再 `window.open(affiliate_url)`、不再開任何分潤頁**；維運改以低干擾廣告（AdSense）＋來源安全掃描（Safe Browsing）信任標章。
+> 因此 `redirect_links.affiliate_url`、`profiles.default_affiliate_url` 與「預設分潤連結」設定**皆已移除讀寫**（DB 欄位保留不刪，避免破壞性 migration，但不再使用）。
+> 以下 B1～B5 段落保留原始規劃以記錄脈絡；凡提到 `affiliate_url`／雙開／App 導流彈窗者**已不適用**。
+
 ## B1. 目標
 
 把「來源連結」換成自有短連結 `go2read.link/r/<code>`。使用者點擊後看到**中轉頁**（來源預覽），按「繼續前往」時：

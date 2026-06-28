@@ -9,8 +9,8 @@ export const dynamic = "force-dynamic";
 // 短碼格式（信任邊界：route param 為不可信輸入；對齊 shortcode 字母表的字元集與寬鬆長度上限，擋畸形/濫用）。
 const CODE_RE = /^[a-z0-9]{1,32}$/i;
 
-// 編輯短連結目的地/分潤/標題（短碼不變）。多租戶隔離由 store 以 owner_id 過濾保證。
-// body: { sourceUrl, affiliateUrl?, title? }
+// 編輯短連結目的地/標題（短碼不變）。多租戶隔離由 store 以 owner_id 過濾保證。
+// body: { sourceUrl, title? }
 export async function PATCH(req: Request, { params }: { params: { code: string } }) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ ok: false, error: "請先登入" }, { status: 401 });
@@ -21,12 +21,10 @@ export async function PATCH(req: Request, { params }: { params: { code: string }
   const sourceUrl = typeof body.sourceUrl === "string" ? body.sourceUrl.trim() : "";
   if (!sourceUrl) return NextResponse.json({ ok: false, error: "請填來源網址" }, { status: 400 });
   const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
-  const affiliateUrl = str(body.affiliateUrl);
 
   // 先做 URL 驗證（SSRF/協定/格式）→ 屬使用者輸入錯誤，回 400。
   try {
     assertSafePublicUrl(sourceUrl);
-    if (affiliateUrl) assertSafePublicUrl(affiliateUrl);
   } catch (e) {
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "網址不安全或格式錯誤" }, { status: 400 });
   }
@@ -34,7 +32,7 @@ export async function PATCH(req: Request, { params }: { params: { code: string }
   // DB 寫入失敗屬伺服器錯誤 → 收斂為 500 + 固定文案（細節只進 log，不洩漏 PostgREST 內部訊息）。
   let found: boolean;
   try {
-    found = await updateRedirectLink(params.code, user.id, { sourceUrl, affiliateUrl, title: str(body.title) });
+    found = await updateRedirectLink(params.code, user.id, { sourceUrl, title: str(body.title) });
   } catch (e) {
     return apiError("updateRedirectLink failed", e);
   }

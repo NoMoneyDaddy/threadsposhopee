@@ -3,7 +3,7 @@
 import { createHash } from "node:crypto";
 import { geminiText } from "@/services/ai/gemini";
 import { fetchRssItems, type RssItem } from "@/services/ai/rss";
-import { getGeminiKey, getDefaultAffiliateUrl } from "@/lib/credentials";
+import { getGeminiKey } from "@/lib/credentials";
 import { getAiDomain, defaultFeedsForDomain, googleNewsRss, resolveDomainIds } from "@/lib/ai-domains";
 import { maxSimilarity } from "@/lib/text-similarity";
 import { createDraft } from "@/lib/drafts-store";
@@ -29,6 +29,14 @@ const RUN_GUARD_MS = 20 * 60 * 60 * 1000; // 每代理人每日約一次
 // 來源去重鍵：連結正規化後 SHA-1。純函式。
 export function sourceHash(link: string): string {
   return createHash("sha1").update(link.trim()).digest("hex");
+}
+
+// 組短連結來源網址（純函式可測）：貼文會發到 Threads，連結須為絕對網址。
+// 有設短網域 → `<短網域>/r/<code>`（去尾斜線）；未設短網域 → 退回原始絕對連結 fallback
+//（絕不輸出相對 /r/<code>，否則貼到 Threads 會失效）。
+export function buildShortSourceUrl(code: string, shortDomain: string | undefined | null, fallback: string): string {
+  const base = (shortDomain ?? "").replace(/\/+$/, "");
+  return base ? `${base}/r/${code}` : fallback;
 }
 
 const EMOJI_RULE: Record<string, string> = {
@@ -152,13 +160,6 @@ export async function runAgentOnce(agent: AiAgent, geminiKey: string): Promise<A
   if (!items.length) return { ok: false, reason: "來源無項目" };
 
   const recentTitles = await recentSeenTitles(agent.id, SEEN_WINDOW_MS);
-  // 預設分潤連結：走 go2read 中轉時，「繼續」要去的分潤連結（使用者一次設定、套用所有代理人貼文）。
-  const defaultAffiliateUrl = agent.use_redirect
-    ? await getDefaultAffiliateUrl(agent.owner_id).catch((err) => {
-        log.error("取得代理人預設分潤連結失敗", { agentId: agent.id, err });
-        return null;
-      })
-    : null;
 
   for (const item of items) {
     const hash = sourceHash(item.link);
@@ -175,15 +176,15 @@ export async function runAgentOnce(agent: AiAgent, geminiKey: string): Promise<A
       continue;
     }
 
-    // 來源連結：選擇走 go2read 短連結（可附分潤）或原始連結
+    // 來源連結：選擇走 go2read 短連結或原始連結
     let sourceUrl = item.link;
     if (agent.use_redirect) {
       const code = await createRedirectLink(agent.owner_id, {
         sourceUrl: item.link,
-        affiliateUrl: defaultAffiliateUrl, // 預設分潤連結（未設則中轉頁僅去來源）
         title: item.title
       }).catch(() => null);
-      if (code) sourceUrl = `/r/${code}`; // 對外請搭配 NEXT_PUBLIC_SHORT_DOMAIN 顯示完整網域
+      // 補全為絕對網址：貼文會發到 Threads，相對路徑會失效。未設短網域時退回原始來源連結（仍為絕對網址）。
+      if (code) sourceUrl = buildShortSourceUrl(code, process.env.NEXT_PUBLIC_SHORT_DOMAIN, item.link);
     }
     const mainText = `${body}\n\n📎 來源：${sourceUrl}`;
 

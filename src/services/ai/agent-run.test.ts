@@ -1,12 +1,23 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { sourceHash, buildAgentPrompt } from "./agent-run";
+import { sourceHash, buildAgentPrompt, buildShortSourceUrl } from "./agent-run";
 import type { AiAgent } from "@/lib/agents-store";
 
 test("sourceHash：穩定、忽略前後空白、不同連結不同", () => {
   assert.equal(sourceHash("https://x/a"), sourceHash("  https://x/a  "));
   assert.notEqual(sourceHash("https://x/a"), sourceHash("https://x/b"));
   assert.match(sourceHash("https://x/a"), /^[0-9a-f]{40}$/);
+});
+
+test("buildShortSourceUrl：有短網域→組絕對短連結（去尾斜線）；無短網域→退回原始連結，絕不出相對路徑", () => {
+  assert.equal(buildShortSourceUrl("abc", "https://go2read.link", "https://src/x"), "https://go2read.link/r/abc");
+  assert.equal(buildShortSourceUrl("abc", "https://go2read.link/", "https://src/x"), "https://go2read.link/r/abc"); // 去尾斜線
+  // 未設短網域（空字串/undefined/null）→ 退回原始絕對來源連結，不可輸出相對 /r/abc
+  for (const empty of ["", undefined, null]) {
+    const out = buildShortSourceUrl("abc", empty, "https://src/x");
+    assert.equal(out, "https://src/x");
+    assert.doesNotMatch(out, /^\/r\//);
+  }
 });
 
 const agent: AiAgent = {

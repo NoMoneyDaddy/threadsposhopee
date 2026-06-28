@@ -4,7 +4,7 @@ import { createRedirectLink } from "@/lib/redirect-store";
 
 export const dynamic = "force-dynamic";
 
-// 建立 go2read 短連結（owner 限定登入者）。body: { sourceUrl, affiliateUrl?, title?, imageUrl?, description? }
+// 建立 go2read 短連結（owner 限定登入者）。body: { sourceUrl, title?, imageUrl?, description? }
 export async function POST(req: Request) {
   try {
     const user = await getCurrentUser();
@@ -17,7 +17,6 @@ export async function POST(req: Request) {
     const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
     const code = await createRedirectLink(user.id, {
       sourceUrl,
-      affiliateUrl: str(body.affiliateUrl),
       title: str(body.title),
       imageUrl: str(body.imageUrl),
       description: str(body.description)

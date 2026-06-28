@@ -8,20 +8,18 @@ import CopyLink from "@/components/CopyLink";
 export interface RedirectLinkView {
   code: string;
   sourceUrl: string;
-  affiliateUrl: string | null;
   title: string | null;
   clicks: number;
   continues: number;
 }
 
-// 單筆短連結列：顯示／編輯（目的地/分潤/標題，短碼不變）／刪除。
+// 單筆短連結列：顯示／編輯（目的地/標題，短碼不變）／刪除。
 export default function RedirectLinkRow({ link }: { link: RedirectLinkView }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState<null | "save" | "delete">(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [sourceUrl, setSourceUrl] = useState(link.sourceUrl);
-  const [affiliateUrl, setAffiliateUrl] = useState(link.affiliateUrl ?? "");
   const [title, setTitle] = useState(link.title ?? "");
   const [showQr, setShowQr] = useState(false);
   // 短連結完整 URL（與 CopyLink 同慣例：優先短網域，否則當前網域）。SSR 無 location，故 hydrate 後補。
@@ -52,7 +50,7 @@ export default function RedirectLinkRow({ link }: { link: RedirectLinkView }) {
       const res = await fetch(`/api/redirect/${link.code}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sourceUrl, affiliateUrl, title })
+        body: JSON.stringify({ sourceUrl, title })
       });
       const json = await res.json();
       if (!json.ok) throw new Error(json.error || "更新失敗");
@@ -85,7 +83,6 @@ export default function RedirectLinkRow({ link }: { link: RedirectLinkView }) {
   // 進/退編輯都把表單同步成最新的 link props：避免 router.refresh() 後本地 state 仍是舊快取。
   function syncFromProps() {
     setSourceUrl(link.sourceUrl);
-    setAffiliateUrl(link.affiliateUrl ?? "");
     setTitle(link.title ?? "");
     setMsg(null);
   }
@@ -104,10 +101,6 @@ export default function RedirectLinkRow({ link }: { link: RedirectLinkView }) {
         <div>
           <label className="label" htmlFor={`rl-src-${link.code}`}>來源網址（必填）</label>
           <input id={`rl-src-${link.code}`} className="input" value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} />
-        </div>
-        <div>
-          <label className="label" htmlFor={`rl-aff-${link.code}`}>分潤／導流連結（選填）</label>
-          <input id={`rl-aff-${link.code}`} className="input" value={affiliateUrl} onChange={(e) => setAffiliateUrl(e.target.value)} placeholder="https://s.shopee.tw/..." />
         </div>
         <div>
           <label className="label" htmlFor={`rl-ttl-${link.code}`}>標題（選填）</label>

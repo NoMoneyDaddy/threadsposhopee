@@ -15,6 +15,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { getThreadsAccountLimit } from "@/lib/account-limits";
 import { isDemoMode, env } from "@/lib/env";
 import { tokenExpiryState } from "@/lib/token-expiry";
+import { threadsTokenBadge, type ThreadsTokenKind } from "@/lib/threads-token-ui";
 import ThreadsAccountForm from "@/components/ThreadsAccountForm";
 import ShopeeAccountForm from "@/components/ShopeeAccountForm";
 import ApifyForm from "@/components/ApifyForm";
@@ -32,6 +33,14 @@ import RenameAccountButton from "@/components/RenameAccountButton";
 import { DeleteButton, ToggleButton } from "@/components/RowActions";
 
 export const dynamic = "force-dynamic";
+
+// 權杖徽章配色（kind→tailwind）：與 threads-token-ui 的四態對應。
+const BADGE_CLASS: Record<ThreadsTokenKind, string> = {
+  short: "bg-amber-100 text-amber-700",
+  invalid: "bg-surface-2 text-ink-2",
+  long: "bg-success/10 text-success",
+  "long-expired": "bg-red-100 text-red-700"
+};
 
 // 帳號管理：只放「帳號連接＋金鑰／憑證綁定」。行為偏好與通知設定在「設定」頁。
 export default async function AccountsPage() {
@@ -79,10 +88,9 @@ export default async function AccountsPage() {
         {threads.length > 0 && (
           <div className="grid gap-3 md:grid-cols-2">
             {threads.map((a) => {
-              // 權杖類型四態：short（無到期日＝尚未換長期）／invalid（到期日格式異常）／
-              // long（長期有效）／long 但 expired（已過期、無法自動展期）。
+              // 到期狀態（給下方提示文字）＋權杖徽章（四態分類抽到 threads-token-ui 純函式、有測試）。
               const exp = tokenExpiryState(a.token_expires_at);
-              const tokenKind = !a.token_expires_at ? "short" : exp.level === "unknown" ? "invalid" : "long";
+              const badge = threadsTokenBadge(a.token_expires_at);
               return (
                 <div key={a.id} className="rounded-2xl border bg-surface p-4">
                   <div className="flex items-center justify-between gap-2">
@@ -104,38 +112,9 @@ export default async function AccountsPage() {
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-ink-2">
                     <span>Threads ID：{a.threads_user_id}</span>
-                    {(() => {
-                      const expired = tokenKind === "long" && exp.level === "expired";
-                      const cls =
-                        tokenKind === "short"
-                          ? "bg-amber-100 text-amber-700"
-                          : tokenKind === "invalid"
-                            ? "bg-surface-2 text-ink-2"
-                            : expired
-                              ? "bg-red-100 text-red-700"
-                              : "bg-success/10 text-success";
-                      const title =
-                        tokenKind === "short"
-                          ? "尚未換成長期權杖；新增時附上 App 密鑰即可自動換 60 天長期"
-                          : tokenKind === "invalid"
-                            ? "權杖到期資訊格式異常，請重新貼上 token"
-                            : expired
-                              ? "長期權杖已過期，無法自動展期，請重新綁定"
-                              : "已換成 60 天長期權杖，系統每日自動展期";
-                      const text =
-                        tokenKind === "short"
-                          ? "短期權杖"
-                          : tokenKind === "invalid"
-                            ? "權杖資訊異常"
-                            : expired
-                              ? "長期權杖（已過期）"
-                              : "長期權杖";
-                      return (
-                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${cls}`} title={title}>
-                          {text}
-                        </span>
-                      );
-                    })()}
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${BADGE_CLASS[badge.kind]}`} title={badge.title}>
+                      {badge.label}
+                    </span>
                   </div>
                   {a.token_expires_at ? (
                     (() => {
@@ -145,7 +124,7 @@ export default async function AccountsPage() {
                       if (exp.level === "expired")
                         return <div className="text-xs font-medium text-red-600">⚠️ 帳號授權已過期（{date}）— 請重新貼上 token</div>;
                       if (exp.level === "soon")
-                        return <div className="text-xs font-medium text-amber-600">⏳ 帳號授權將在 {exp.daysLeft} 天後到期（{date}）— 系統會在到期前自動嘗試更新；若授權失效會通知你並停止排程</div>;
+                        return <div className="text-xs font-medium text-amber-600">⏳ 帳號授權將在 {exp.daysLeft} 天後到期（{date}）— 系統會在到期前自動嘗試更新；若更新失敗會停止排程（你也可在此頁查看狀態，若已設定通知會提醒你）</div>;
                       return <div className="text-xs text-ink-3">✅ 帳號授權有效（至 {date}，系統會定期自動嘗試更新）</div>;
                     })()
                   ) : (

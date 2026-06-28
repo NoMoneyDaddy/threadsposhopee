@@ -8,6 +8,7 @@ import { log } from "./logger";
 import { parseSlots, type PublishPrefs } from "./publish-prefs";
 import { normalizeNotifyPrefs, type NotifyPrefs } from "./notify-prefs";
 import type { RepostLimits } from "./repost-limits";
+import { isAllowedGeminiModel } from "./ai-models";
 
 // ── 爬蟲子系統：每個使用者自己綁的 Apify 憑證（owner 用）──────────
 // 取出某使用者的 Apify token + actor（解密）。沒綁則回 null（呼叫端可退回全域 env）。
@@ -66,6 +67,31 @@ export async function setGeminiKey(ownerId: string, key: string): Promise<void> 
     .from("profiles")
     .upsert({ id: ownerId, gemini_api_key_enc: encrypt(key) }, { onConflict: "id" });
   if (error) throw error;
+}
+
+// ── 使用者自選 Gemini 模型（非機密，明文存；NULL＝沿用全站 env.geminiModel）──
+// 寫入時用白名單把關，擋任意字串打進 Gemini API。
+export async function getUserGeminiModel(ownerId: string): Promise<string | null> {
+  if (isDemoMode) return null;
+  const sb = getServiceClient();
+  if (!sb) return null;
+  const { data } = await sb.from("profiles").select("gemini_model").eq("id", ownerId).maybeSingle();
+  const v = data?.gemini_model;
+  return isAllowedGeminiModel(v) ? v : null; // 不在白名單（或舊值失效）一律當未設定
+}
+
+// 解析「實際要用的模型」：使用者自選優先，否則全站預設。背景流程/呼叫端統一用這個。
+export async function resolveGeminiModel(ownerId: string): Promise<string> {
+  return (await getUserGeminiModel(ownerId).catch(() => null)) ?? env.geminiModel;
+}
+
+// model 傳 null＝清除（回到預設）。非白名單值一律拒絕。
+export async function setUserGeminiModel(ownerId: string, model: string | null): Promise<void> {
+  if (model !== null && !isAllowedGeminiModel(model)) throw new Error("不支援的模型");
+  if (isDemoMode) return;
+  const sb = getServiceClient()!;
+  const { error } = await sb.from("profiles").upsert({ id: ownerId, gemini_model: model }, { onConflict: "id" });
+  if (error) throw new Error(`儲存 Gemini 模型失敗：${error.message}`);
 }
 
 // ── 個人 Telegram 通知：每人綁自己的 chat_id（非機密，明文存）。平台共用 bot token 發送 ──

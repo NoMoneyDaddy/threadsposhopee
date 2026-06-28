@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { log } from "@/lib/logger";
-import { getMaterial, createDraftFromMaterial, updateDraft, getGeminiKey, getCopyPrefs, userOwnsThreadsAccount, getRepostLimits, countMaterialReposts } from "@/lib/store";
+import { getMaterial, createDraftFromMaterial, updateDraft, getGeminiKey, resolveGeminiModel, getCopyPrefs, userOwnsThreadsAccount, getRepostLimits, countMaterialReposts } from "@/lib/store";
 import { exceedsRepostLimit } from "@/lib/repost-limits";
 import { withNextSlot, nextOpenSlotAtHours } from "@/services/publish/slots";
 import { getBestHours } from "@/services/threads/engagement";
@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 // 重寫失敗（無金鑰/AI 故障）→ 優雅退回原文案，附 note 提示。
 async function maybeVary(draft: Draft, material: Material, ownerId: string): Promise<{ draft: Draft; note?: string }> {
   try {
-    const [geminiKey, copyPrefs] = await Promise.all([getGeminiKey(ownerId), getCopyPrefs(ownerId)]);
+    const [geminiKey, copyPrefs, geminiModel] = await Promise.all([getGeminiKey(ownerId), getCopyPrefs(ownerId), resolveGeminiModel(ownerId)]);
     if (!geminiKey) return { draft, note: "未綁定自己的 Gemini 金鑰，沿用原文案（到帳號管理綁定）" };
     const copy = await generateCopy(
       {
@@ -24,7 +24,8 @@ async function maybeVary(draft: Draft, material: Material, ownerId: string): Pro
         mediaType: (material.media_type as "image" | "video" | "none") ?? "none"
       },
       geminiKey,
-      copyPrefs
+      copyPrefs,
+      geminiModel
     );
     const updated = await updateDraft(draft.id, ownerId, {
       main_text: copy.mainText,

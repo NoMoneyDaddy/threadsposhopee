@@ -34,7 +34,8 @@ export async function buildMaterialForProduct(
   geminiKey?: string | null, // 使用者自綁的 Gemini key；沒傳則退回 env
   copyPrefs?: CopyPrefs, // 文案偏好；上層（pipeline 迴圈）先取好傳入，避免每篇重查
   affiliateId?: string | null, // 無 API 時的後備：用 affiliate_id 組 an_redir 追蹤連結
-  mediaProvider?: MediaProvider | null // 使用者自綁圖床（R2 或 Cloudinary）；沒綁則不中轉、沿用原 URL（無 env 後備）
+  mediaProvider?: MediaProvider | null, // 使用者自綁圖床（R2 或 Cloudinary）；沒綁則不中轉、沿用原 URL（無 env 後備）
+  geminiModel?: string | null // 使用者自選模型；沒傳則退回 env 預設
 ): Promise<Material> {
   // 媒體清單：優先 mediaList（多媒體），否則退回單一 media 欄位。過濾無效項。
   const inputMedia: DraftMedia[] =
@@ -116,7 +117,8 @@ export async function buildMaterialForProduct(
         mediaType: primary?.type ?? "none"
       },
       geminiKey,
-      prefs
+      prefs,
+      geminiModel
     );
     mainText = copy.mainText;
     replyText = copy.replyText;

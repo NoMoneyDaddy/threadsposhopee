@@ -19,7 +19,8 @@ export interface CopyInput extends CopyContext {
 export async function generateCopy(
   input: CopyInput,
   apiKey?: string | null,
-  prefs: CopyPrefs = DEFAULT_COPY_PREFS
+  prefs: CopyPrefs = DEFAULT_COPY_PREFS,
+  model?: string | null
 ): Promise<GeneratedCopy> {
   const prompt = buildCopyPrompt(input, prefs);
   const key = apiKey || null;
@@ -28,13 +29,13 @@ export async function generateCopy(
     return demoCopy(input);
   }
 
-  const raw = await generateWithGemini(prompt, input.mediaUrl ?? null, input.mediaType ?? "none", key, prefs.temperature);
+  const raw = await generateWithGemini(prompt, input.mediaUrl ?? null, input.mediaType ?? "none", key, prefs.temperature, model);
   return { ...splitCopy(raw), raw };
 }
 
 // 把同一段正文改寫成 n 個語氣/開頭不同、意思相同的版本（「換個說法」）。
 // 保留原文的網址/數字/商品名；版本之間以一行「===」分隔。Demo 或無金鑰回示意版本。
-export async function generateVariations(text: string, apiKey?: string | null, n = 3): Promise<string[]> {
+export async function generateVariations(text: string, apiKey?: string | null, n = 3, model?: string | null): Promise<string[]> {
   const clean = text.trim();
   if (!clean) return [];
   if (isDemoMode || !apiKey) return demoVariations(clean, n);
@@ -48,7 +49,7 @@ export async function generateVariations(text: string, apiKey?: string | null, n
 
 原文：
 ${clean}`;
-  const raw = await geminiText(prompt, apiKey, 0.9, 800);
+  const raw = await geminiText(prompt, apiKey, 0.9, 800, model);
   return parseVariations(raw, n);
 }
 

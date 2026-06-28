@@ -72,6 +72,14 @@ export async function runSourcePipeline(
   const affiliateId = shopeeCreds ? null : await getShopeeAffiliateId(ownerId);
   // 各人自綁圖床（R2 或 Cloudinary，素材進自己雲端）；一次取出整迴圈重用
   const mediaProvider = await getMediaProvider(ownerId);
+  // 時間預算守門（爬取前）：scrape 是本流程最慢的外部呼叫（Apify run-sync 自身上限 60s）。
+  // 若剩餘預算已不足以安全跑完一輪 scrape，就不啟動、直接回空結果留待下次，避免打穿 route maxDuration。
+  // 註：mid-scrape abort 受 Apify run timeout 約束，故在「啟動前」判斷剩餘 budget 是最務實的保護點。
+  const SCRAPE_BUDGET_MS = 15000;
+  if (opts.deadline && opts.deadline - Date.now() < SCRAPE_BUDGET_MS) {
+    result.notes.push("時間預算不足，這輪略過此來源的爬取（下次再抓）");
+    return result;
+  }
   // 來源兩種模式：有 search_query → 關鍵字搜尋；否則監看 source_username 帳號。
   // 兩者都填＝在該帳號內搜尋關鍵字（同時帶 searchQuery 與 from）。
   const posts = source.search_query
@@ -198,7 +206,7 @@ export async function runSourcesForOwner(
   const newMaterials = results.reduce((n, r) => n + r.materials.length, 0);
   if (newMaterials > 0) {
     // 不沿用 draft_pending 類型（避免被「草稿待審」偏好關閉而誤靜音）；素材入庫提醒一律送出。
-    await sendUserAlert(ownerId, `🧱 已新增 ${newMaterials} 則素材入庫，到「素材」頁挑選即可一鍵轉貼文。`).catch(() => {});
+    await sendUserAlert(ownerId, `🧱 已入庫 ${newMaterials} 則素材（含更新既有），到「素材」頁挑選即可一鍵轉貼文。`).catch(() => {});
   }
   return results;
 }

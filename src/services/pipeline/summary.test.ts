@@ -20,7 +20,7 @@ test("summarizePipelineRun：彙總新增/重用/失敗並組訊息", () => {
   assert.equal(r.created, 3);
   assert.equal(r.reused, 1);
   assert.equal(r.failed, 1);
-  assert.ok(r.message.includes("新增 3 則素材"));
+  assert.ok(r.message.includes("入庫 3 則素材"));
   assert.ok(r.message.includes("重用 1"));
   assert.ok(r.message.includes("1 個來源失敗"));
   assert.ok(r.message.includes("素材")); // 有新增 → 帶導引
@@ -28,12 +28,12 @@ test("summarizePipelineRun：彙總新增/重用/失敗並組訊息", () => {
 
 test("summarizePipelineRun：無新增時不帶導引語、重用為 0 不顯示", () => {
   const r = summarizePipelineRun([{ created: 0, reusedMaterial: 0 }]);
-  assert.equal(r.message, "新增 0 則素材");
+  assert.equal(r.message, "入庫 0 則素材");
 });
 
 test("summarizePipelineRun：非陣列／缺欄位容錯不崩潰", () => {
   assert.equal(summarizePipelineRun(null).created, 0);
   assert.equal(summarizePipelineRun(undefined).failed, 0);
-  assert.equal(summarizePipelineRun("oops").message, "新增 0 則素材");
+  assert.equal(summarizePipelineRun("oops").message, "入庫 0 則素材");
   assert.equal(summarizePipelineRun([{}, { created: "x" }]).created, 0);
 });

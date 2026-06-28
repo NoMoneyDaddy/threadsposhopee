@@ -82,7 +82,7 @@ export default async function RedirectPage({ params }: { params: { code: string 
           <Go2readMark size={34} />
           <span className="text-lg font-bold tracking-tight text-[#0c3543]" style={{ fontFamily: G2R_FONT }}>go2read</span>
         </div>
-        <p className="text-xs text-[#7ba0aa]">安全中轉，前往你想看的內容</p>
+        <p className="text-xs text-[#48707c]">安全中轉，前往你想看的內容</p>
       </header>
 
       <main className="relative w-full max-w-md">
@@ -114,7 +114,7 @@ export default async function RedirectPage({ params }: { params: { code: string 
             </p>
             <ContinueButton code={link.code} sourceUrl={link.sourceUrl} unsafe={unsafe} seconds={countdownSeconds} />
             {/* 揭露：正規轉址服務，由廣告維運（中性、低調；不偽裝、不誇張） */}
-            <p className="mt-3 text-[11px] leading-relaxed text-[#7ba0aa]">
+            <p className="mt-3 text-[11px] leading-relaxed text-[#5a7d88]">
               go2read 為你安全中轉到目標頁面，本頁由廣告維護運轉。
             </p>
           </div>
@@ -124,7 +124,7 @@ export default async function RedirectPage({ params }: { params: { code: string 
         <AdSlot slot={process.env.NEXT_PUBLIC_ADSENSE_SLOT_REDIRECT} className="mt-4" />
       </main>
 
-      <footer className="relative mt-8 text-[11px] text-[#7ba0aa]">由 go2read 提供安全中轉</footer>
+      <footer className="relative mt-8 text-[11px] text-[#48707c]">由 go2read 提供安全中轉</footer>
     </div>
   );
 }

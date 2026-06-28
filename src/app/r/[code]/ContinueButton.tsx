@@ -82,7 +82,7 @@ export default function ContinueButton({
       <button
         type="button"
         onClick={go}
-        className="inline-flex min-h-[2.75rem] w-full items-center justify-center gap-1.5 rounded-full bg-[#0e7490] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#155e6b] focus-visible:ring-[#0e7490]/60 active:translate-y-px"
+        className="inline-flex min-h-[2.75rem] w-full items-center justify-center gap-1.5 rounded-full bg-[#0e7490] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#155e6b] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0e7490]/60 active:translate-y-px"
       >
         <span aria-hidden="true" className="inline-flex items-center gap-1.5">
           {unsafe ? "我了解風險，仍要前往" : counting ? `前往（${left} 秒）` : "前往"}
@@ -94,7 +94,7 @@ export default function ContinueButton({
       <button
         type="button"
         onClick={leave}
-        className="block w-full text-xs text-[#7ba0aa] transition-colors hover:text-[#0c3543]"
+        className="block w-full text-xs text-[#5a7d88] transition-colors hover:text-[#0c3543]"
       >
         我不看了，關閉頁面
       </button>

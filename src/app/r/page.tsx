@@ -66,12 +66,12 @@ export default function Go2readHome() {
           />
         </div>
 
-        <p className="mt-8 text-xs text-[#7ba0aa]">
+        <p className="mt-8 text-xs text-[#48707c]">
           你是被某個 go2read 短連結帶來這裡的嗎？短連結格式為 <code className="rounded bg-white px-1.5 py-0.5 font-mono text-[#0e7490] ring-1 ring-[#d6e6ea]">go2read.link/r/代碼</code>。
         </p>
       </main>
 
-      <footer className="relative mt-10 text-[11px] text-[#7ba0aa]">© go2read · 安全連結中轉服務</footer>
+      <footer className="relative mt-10 text-[11px] text-[#48707c]">© go2read · 安全連結中轉服務</footer>
     </div>
   );
 }

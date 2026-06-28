@@ -45,7 +45,8 @@ export default function SiteHeader({
 
   const userMeta = user && (
     <>
-      <span className="max-w-[12rem] truncate">{user.email}</span>
+      {/* translate="no"：email 是識別字，避免 Google 翻譯把它包成可點的虛線 token（看起來像超連結） */}
+      <span translate="no" className="max-w-[12rem] truncate">{user.email}</span>
       {user.isOwner ? (
         <span className="badge-brand">管理者</span>
       ) : (

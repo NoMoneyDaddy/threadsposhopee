@@ -2,6 +2,7 @@ import { listShopeeAccounts, listSources, listThreadsAccounts, hasApifyCredentia
 import { getCurrentUser } from "@/lib/auth";
 import { isDemoMode } from "@/lib/env";
 import SourceForm from "@/components/SourceForm";
+import RunPipelineButton from "@/components/RunPipelineButton";
 import { DeleteButton, ToggleButton } from "@/components/RowActions";
 
 export const dynamic = "force-dynamic";
@@ -47,10 +48,17 @@ export default async function SourcesPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold">自動抓文</h1>
+      <h1 className="text-2xl font-bold">抓文生素材</h1>
       <p className="text-sm text-ink-2">
-        每個來源 = 監看一個 Threads 帳號的貼文，自動換成你的分潤連結後產出文案到指定發文帳號。
+        每個來源 = 監看一個 Threads 帳號或關鍵字。按「立即抓取」時，系統把符合的貼文換成你的分潤連結、
+        產生「素材」入庫（不自動發文）。之後到「素材」頁挑選即可一鍵轉貼文／排程。
       </p>
+
+      <div className="rounded-2xl border bg-surface p-4">
+        <div className="mb-1 font-medium">手動抓取</div>
+        <p className="mb-2 text-xs text-ink-3">一次跑你所有「啟用中」的來源，用你自己的 Apify 金鑰（費用算你帳上）。</p>
+        <RunPipelineButton />
+      </div>
 
       <SourceForm threadsAccounts={accounts} shopeeAccounts={shopee} />
 
@@ -59,9 +67,8 @@ export default async function SourcesPage() {
           <thead className="bg-surface-2 text-left text-ink-2">
             <tr>
               <th className="px-4 py-2">來源帳號</th>
-              <th className="px-4 py-2">發文到</th>
-              <th className="px-4 py-2">頻率</th>
-              <th className="px-4 py-2">模式</th>
+              <th className="px-4 py-2">預設發文帳號</th>
+              <th className="px-4 py-2">每次抓幾篇</th>
               <th className="px-4 py-2">狀態</th>
               <th className="px-4 py-2">操作</th>
             </tr>
@@ -71,14 +78,7 @@ export default async function SourcesPage() {
               <tr key={s.id} className="border-t">
                 <td className="px-4 py-2 font-medium">{s.search_query ? `🔍 ${s.search_query}` : `@${s.source_username}`}</td>
                 <td className="px-4 py-2">{accLabel(s.threads_account_id)}</td>
-                <td className="px-4 py-2">每 {s.poll_interval_minutes} 分</td>
-                <td className="px-4 py-2">
-                  {s.auto_publish ? (
-                    <span className="rounded bg-amber-50 px-2 py-0.5 text-amber-700">免審直發</span>
-                  ) : (
-                    <span className="rounded bg-blue-50 px-2 py-0.5 text-blue-600">進審核佇列</span>
-                  )}
-                </td>
+                <td className="px-4 py-2">{s.posts_limit} 篇</td>
                 <td className="px-4 py-2">{s.enabled ? "✅ 啟用" : "⏸ 停用"}</td>
                 <td className="px-4 py-2">
                   <div className="flex items-center gap-3">
@@ -87,16 +87,6 @@ export default async function SourcesPage() {
                       body={{ enabled: !s.enabled }}
                       label={s.enabled ? "⏸ 停用" : "▶ 啟用"}
                     />
-                    <ToggleButton
-                      endpoint={`/api/sources/${s.id}`}
-                      body={{ auto_publish: !s.auto_publish }}
-                      label={s.auto_publish ? "改回待審" : "改免審直發"}
-                      confirm={
-                        s.auto_publish
-                          ? undefined
-                          : "開啟「免審直接排程」後，此來源抓到的內容會自動發文、不經人工審核。確定開啟？"
-                      }
-                    />
                     <DeleteButton endpoint={`/api/sources/${s.id}`} />
                   </div>
                 </td>
@@ -104,8 +94,8 @@ export default async function SourcesPage() {
             ))}
             {sources.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-ink-3">
-                  尚無監看來源。用上方表單新增一個 Threads 帳號來源，系統會定時抓取並產生待審草稿。
+                <td colSpan={5} className="px-4 py-6 text-center text-ink-3">
+                  尚無監看來源。用上方表單新增一個來源，再按「立即抓取」即可產生素材到素材庫。
                 </td>
               </tr>
             )}

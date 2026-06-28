@@ -37,6 +37,9 @@ export interface Material {
   owner_id?: string | null;
   shop_id: string;
   item_id: string;
+  // 入庫審核狀態：'pending'＝爬蟲產出待人工核准；'approved'＝已核准（手動建立/匯入預設、核准後）。
+  // 只有 approved 會出現在素材庫列表、可被排程/發文；未設視同 approved（向後相容舊資料）。
+  intake_status?: "pending" | "approved" | null;
   product_name?: string | null; // 乾淨核心品名（給文案/卡片標題）
   product_name_raw?: string | null; // 原始蝦皮標題（留存，可能含 SEO 關鍵字）
   clean_product_url?: string | null;
@@ -126,4 +129,20 @@ export interface Draft {
   reply_post_id?: string | null;
   reply_delay_minutes?: number | null; // 逐則覆寫；null = 用全域預設
   created_at: string;
+}
+
+// 意見回饋／工單（對應 0051_feedback.sql）：使用者送 bug/功能建議，管理員前端回覆。
+export type FeedbackKind = "bug" | "feature";
+export type FeedbackStatus = "open" | "in_progress" | "resolved" | "closed";
+export interface Feedback {
+  id: string;
+  owner_id: string;
+  kind: FeedbackKind;
+  title: string;
+  message: string;
+  status: FeedbackStatus;
+  admin_reply?: string | null;
+  replied_at?: string | null;
+  created_at: string;
+  updated_at?: string | null;
 }

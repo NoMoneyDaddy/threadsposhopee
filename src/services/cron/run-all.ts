@@ -1,5 +1,4 @@
 import { sendAlert, sendUserAlert } from "@/lib/notify";
-import { runAllSources } from "@/services/pipeline/run";
 import { runPublishQueue } from "@/services/publish/queue";
 import { refreshExpiringTokens } from "@/services/threads/refresh";
 import { reconcileNeedsVerification } from "@/services/threads/reconcile";
@@ -29,15 +28,9 @@ export async function runCronAll(now: Date = new Date()): Promise<Record<string,
   const alerts: string[] = [];
 
   // 用逐步 try/catch，單一步驟失敗不影響其他步驟
+  // 註：自動抓文已改為「純手動」——爬蟲只在使用者於來源頁按「立即抓取」時觸發（/api/pipeline/run），
+  // 故總排程不再自動跑 runAllSources，避免在背景持續產生素材與外部成本。
   const steps: { key: string; run: () => Promise<unknown>; warn?: (r: any) => string | null }[] = [
-    {
-      key: "scrape",
-      run: runAllSources,
-      warn: (r) => {
-        const failed = (Array.isArray(r) ? r : []).filter((x) => x?.error);
-        return failed.length ? `🕷️ 爬取 ${failed.length} 個來源失敗：${failed.map((x) => x.sourceUsername).join("、")}` : null;
-      }
-    },
     {
       key: "publish",
       run: runPublishQueue,

@@ -28,7 +28,7 @@ export async function getSetupSteps(user: AppUser): Promise<SetupStep[]> {
     getShopeeAffiliateId(id),
     getUserCloudinary(id),
     hasUserR2(id),
-    user.isOwner ? hasApifyCredentials(id) : Promise.resolve({ bound: true, actor: null }),
+    hasApifyCredentials(id),
     getUserTelegramChatId(id),
     hasGeminiKey(id)
   ]);
@@ -76,17 +76,15 @@ export async function getSetupSteps(user: AppUser): Promise<SetupStep[]> {
     }
   ];
 
-  // 爬蟲為管理者專屬，插在分潤金鑰之後。
-  if (user.isOwner) {
-    steps.splice(3, 0, {
-      key: "apify",
-      title: "綁定自動抓文（Apify）",
-      desc: "管理者專屬：綁你自己的 Apify 帳號才能自動監看來源。",
-      done: apify.bound,
-      required: true,
-      href: "/accounts#setup-apify"
-    });
-  }
+  // 自動抓文（選填）：任何人綁自己的 Apify 金鑰即可用，插在分潤金鑰之後。
+  steps.splice(3, 0, {
+    key: "apify",
+    title: "綁定自動抓文（Apify，選填）",
+    desc: "綁你自己的 Apify 帳號即可自動監看來源、自動產生草稿；不綁也能手動建素材。計費算在你自己帳上。",
+    done: apify.bound,
+    required: false,
+    href: "/accounts#setup-apify"
+  });
 
   return steps;
 }

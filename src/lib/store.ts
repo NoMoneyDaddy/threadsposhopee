@@ -103,6 +103,7 @@ export {
   reclaimStaleReplies,
   markReplyPublished,
   markReplyFailed,
+  advanceThreadSegment,
   requeueReply,
   updateDraftStatusAtomic,
   listApprovedDrafts,

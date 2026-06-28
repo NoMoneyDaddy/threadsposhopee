@@ -14,7 +14,7 @@ import { publishDraftNow } from "@/services/publish/publish-draft";
 import { resolveAffiliateUrl } from "@/services/shopee/affiliate-link";
 import { apiError } from "@/lib/api-error";
 import { isDemoMode } from "@/lib/env";
-import type { DraftMedia } from "@/lib/types";
+import type { DraftMedia, ThreadSegment } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -64,6 +64,8 @@ function isShopeeUrl(u: string): boolean {
   }
 }
 
+const MAX_EXTRA_SEGMENTS = 10; // 更多串文段落（3/n…）數量上限，防濫用
+
 const URL_RE = /https?:\/\/[^\s)]+/g;
 
 // 自動偵測：把正文／留言裡的蝦皮商品連結轉成 owner 的分潤連結。
@@ -87,6 +89,24 @@ async function autoAffiliateLinks(ownerId: string, text: string): Promise<string
   if (map.size === 0) return text;
   // 對原文做單次 regex 替換（用完整 URL 當 key），避免逐步 split/join 造成長短網址前綴互相污染。
   return text.replace(URL_RE, (u) => map.get(u) ?? u);
+}
+
+// 處理「更多串文段落」（3/n…）：逐段把文字裡的蝦皮連結轉成 owner 分潤連結、媒體過 SSRF＋中轉圖床。
+// 過濾掉無內容（無文字且無媒體）的段落。超過 MAX_EXTRA_SEGMENTS 直接拋錯（呼叫端回 400）——
+// 不靜默截斷，避免「使用者送出/預覽 11 段、實際只存 10 段」的輸入與結果不一致。
+async function processExtraSegments(raw: unknown, ownerId: string, provider: MediaProvider | null): Promise<ThreadSegment[]> {
+  if (!Array.isArray(raw)) return [];
+  if (raw.length > MAX_EXTRA_SEGMENTS) throw new Error(`串文段落最多 ${MAX_EXTRA_SEGMENTS} 段`);
+  const out: ThreadSegment[] = [];
+  for (const seg of raw) {
+    if (!seg || typeof seg !== "object") continue;
+    const rawText = typeof (seg as { text?: unknown }).text === "string" ? (seg as { text: string }).text : "";
+    const media = await processMediaArray((seg as { media?: unknown }).media, provider);
+    const text = rawText.trim() ? await autoAffiliateLinks(ownerId, rawText) : "";
+    const cleanText = text.trim() ? text : null;
+    if (cleanText || media.length > 0) out.push({ text: cleanText, media });
+  }
+  return out;
 }
 
 // 快速發文送出：用素材 + 編輯後文案建草稿，依 action 立即發 / 排程 / 存草稿。
@@ -213,6 +233,25 @@ export async function POST(req: Request) {
     const finalMain = await autoAffiliateLinks(user.id, baseMain);
     const finalReply = baseReply ? await autoAffiliateLinks(user.id, baseReply) : baseReply;
 
+    // 更多串文段落（3/n…）：有額外段落時，thread_chain 存「完整鏈」＝[留言段, ...額外段]（effectiveChain 會濾空段）；
+    // 無額外段落則留空，沿用單則 reply_*（向後相容）。
+    let extraSegments: ThreadSegment[];
+    try {
+      extraSegments = await processExtraSegments(body.thread_chain, user.id, mediaProvider);
+    } catch (e) {
+      return NextResponse.json(
+        { ok: false, error: e instanceof Error ? e.message : "串文段落媒體網址不合法或非公開可存取" },
+        { status: 400 }
+      );
+    }
+    const threadChain: ThreadSegment[] =
+      extraSegments.length > 0 ? [{ text: finalReply ?? null, media: replyMediaArr }, ...extraSegments] : [];
+    // 非草稿：整條串文鏈每段都受 Threads 500 字上限（含第 0 段＝留言 finalReply，避免超長 reply_text
+    // 繞過驗證後卡在 worker 補發失敗）。前端已擋，伺服端再驗。
+    if (action !== "draft" && threadChain.some((s) => [...(s.text ?? "")].length > 500)) {
+      return NextResponse.json({ ok: false, error: "串文段落超過 500 字上限" }, { status: 400 });
+    }
+
     // draft 待審；其餘（publish/schedule/queue）已核准
     const status = action === "draft" ? "draft" : "approved";
     const make = (scheduled_at: string | null) =>
@@ -230,6 +269,7 @@ export async function POST(req: Request) {
         cloudinary_media_url: hasMainArr ? mainMediaArr[0].url : overrideMedia ? selfCloudUrl : material ? material.cloudinary_media_url : selfCloudUrl,
         media: hasMainArr ? mainMediaArr : overrideMedia ? [] : material ? material.media ?? [] : [],
         reply_media: replyMediaArr,
+        thread_chain: threadChain,
         main_text: finalMain,
         reply_text: finalReply,
         reply_delay_minutes: replyDelayOverride,

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { ThreadsAccount, DraftMedia } from "@/lib/types";
+import type { ThreadsAccount, DraftMedia, ThreadSegment } from "@/lib/types";
 import ThreadsPreview, { CharCount } from "@/components/ThreadsPreview";
 import MediaPicker from "@/components/MediaPicker";
 import { fetchWithTimeout } from "@/lib/http";
@@ -10,6 +10,7 @@ import { parseTaipeiDateTimeLocal } from "@/lib/datetime";
 
 const input = "w-full rounded-xl border px-3 py-2 text-sm";
 const THREADS_LIMIT = 500;
+const MAX_EXTRA_SEGMENTS = 10; // 與後端 compose route 上限一致，避免送出後被拒
 
 // 發文：像 Threads 一樣直接打字、上傳多張照片／影片，右側即時預覽；正文裡的蝦皮連結發布時自動轉成你的分潤連結。
 export default function SelfComposeForm({
@@ -27,6 +28,8 @@ export default function SelfComposeForm({
   const [replyDelay, setReplyDelay] = useState(""); // 留言延遲（分），空=用全域預設
   const [mainMedia, setMainMedia] = useState<DraftMedia[]>([]);
   const [replyMedia, setReplyMedia] = useState<DraftMedia[]>([]);
+  // 更多串文段落（3/n…）：留言（2/n）之後再依序補發的段落。空＝只發單則留言（向後相容）。
+  const [extraSegments, setExtraSegments] = useState<ThreadSegment[]>([]);
   const [accountId, setAccountId] = useState(threadsAccounts[0]?.id ?? "");
   const [scheduledAt, setScheduledAt] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
@@ -82,6 +85,20 @@ export default function SelfComposeForm({
         setMsg(`留言區超過 ${THREADS_LIMIT} 字上限，請先精簡`);
         return;
       }
+      if (extraSegments.some((s) => [...(s.text ?? "")].length > THREADS_LIMIT)) {
+        setMsg(`有串文段落超過 ${THREADS_LIMIT} 字上限，請先精簡`);
+        return;
+      }
+    }
+    // 串文段落須有內容（文字或媒體），避免送出空段落
+    if (extraSegments.some((s) => !(s.text && s.text.trim()) && (s.media ?? []).length === 0)) {
+      setMsg("有空白的串文段落，請填入內容或移除");
+      return;
+    }
+    // 段落數同後端上限，避免送出後被 400 退回
+    if (extraSegments.length > MAX_EXTRA_SEGMENTS) {
+      setMsg(`串文段落最多 ${MAX_EXTRA_SEGMENTS} 段`);
+      return;
     }
     const targetAccountId = accountId || threadsAccounts[0]?.id;
     if (!targetAccountId) {
@@ -118,6 +135,7 @@ export default function SelfComposeForm({
             reply_delay_minutes: replyDelay.trim() === "" ? null : Number(replyDelay),
             media: mainMedia,
             reply_media: replyMedia,
+            thread_chain: extraSegments,
             action,
             scheduled_at: scheduledAt ? parseTaipeiDateTimeLocal(scheduledAt).toISOString() : null
           })
@@ -143,6 +161,7 @@ export default function SelfComposeForm({
       setReplyDelay("");
       setMainMedia([]);
       setReplyMedia([]);
+      setExtraSegments([]);
       router.refresh();
     } catch (e) {
       setMsg(`❌ ${e instanceof Error ? e.message : String(e)}`);
@@ -239,12 +258,71 @@ export default function SelfComposeForm({
         )}
       </div>
 
+      {/* 更多串文段落（3/n…）：留言之後再依序補發，每段防封間隔交給排程處理 */}
+      <div className="space-y-2">
+        {extraSegments.map((seg, i) => (
+          <div key={i} className="rounded-xl border border-dashed border-border p-2">
+            <div className="mb-1 flex items-center justify-between">
+              <span className="text-xs font-medium text-ink-2">串文第 {i + 3} 段</span>
+              <button
+                type="button"
+                onClick={() => setExtraSegments((prev) => prev.filter((_, j) => j !== i))}
+                aria-label={`移除第 ${i + 3} 段`}
+                className="text-xs text-ink-3 hover:text-red-500"
+              >
+                移除
+              </button>
+            </div>
+            <textarea
+              className={input + " text-xs"}
+              rows={2}
+              value={seg.text ?? ""}
+              onChange={(e) =>
+                setExtraSegments((prev) => prev.map((s, j) => (j === i ? { ...s, text: e.target.value } : s)))
+              }
+              placeholder={`第 ${i + 3} 段內容…`}
+            />
+            <div className="mt-1 flex justify-end">
+              <CharCount text={seg.text ?? ""} limit={THREADS_LIMIT} />
+            </div>
+            <div className="mt-1">
+              <MediaPicker
+                items={seg.media ?? []}
+                onChange={(action) =>
+                  setExtraSegments((prev) =>
+                    prev.map((s, j) => {
+                      if (j !== i) return s;
+                      const cur = s.media ?? [];
+                      const next = typeof action === "function" ? (action as (p: DraftMedia[]) => DraftMedia[])(cur) : action;
+                      return { ...s, media: next };
+                    })
+                  )
+                }
+                cloud={cloud}
+                preset={preset}
+                hint="這段也可加多張照片／影片"
+              />
+            </div>
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={() => setExtraSegments((prev) => (prev.length >= MAX_EXTRA_SEGMENTS ? prev : [...prev, { text: "", media: [] }]))}
+          disabled={extraSegments.length >= MAX_EXTRA_SEGMENTS}
+          title={extraSegments.length >= MAX_EXTRA_SEGMENTS ? `串文段落最多 ${MAX_EXTRA_SEGMENTS} 段` : undefined}
+          className="rounded-full border border-border px-3 py-1 text-xs text-ink-2 hover:bg-surface-2 disabled:opacity-50"
+        >
+          ＋ 新增串文段落
+        </button>
+      </div>
+
       <ThreadsPreview
         accountLabel={threadsAccounts.find((a) => a.id === (accountId || threadsAccounts[0]?.id))?.label}
         mainText={mainText}
         replyText={replyText}
         media={mainMedia}
         replyMedia={replyMedia}
+        extraSegments={extraSegments}
       />
 
       <div className="flex flex-wrap items-center gap-2">

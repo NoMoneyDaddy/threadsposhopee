@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { DraftMedia } from "@/lib/types";
+import type { DraftMedia, ThreadSegment } from "@/lib/types";
 import { cloudinaryThumb } from "@/lib/img";
+import { buildAfterSegments } from "@/lib/thread-preview";
 
 // Threads 貼文即時預覽（仿 Typefully／Buffer 的所見即所得）。
-// 顯示正文、媒體（單張或多張輪播）、以及留言區（分潤連結），讓使用者發布前先看版面。
+// 顯示正文、媒體（單張或多張輪播），以及主文之後的串文段落（2/n 分潤連結、3/n…更多段落）。
 export default function ThreadsPreview({
   accountLabel,
   displayName,
@@ -15,7 +16,8 @@ export default function ThreadsPreview({
   mediaUrl,
   mediaType,
   media,
-  replyMedia
+  replyMedia,
+  extraSegments
 }: {
   accountLabel?: string;
   displayName?: string | null;
@@ -26,6 +28,7 @@ export default function ThreadsPreview({
   mediaType?: string | null;
   media?: DraftMedia[];
   replyMedia?: DraftMedia[];
+  extraSegments?: ThreadSegment[];
 }) {
   const handle = (accountLabel || "your_account").replace(/^@/, "");
   // 只把網址染成連結色，其餘文字維持一般色（修正整段被當成超連結的問題）。
@@ -68,10 +71,10 @@ export default function ThreadsPreview({
         ? [{ url: mediaUrl, type: mediaType }]
         : [];
   const carousel = items.length > 1;
-  const replyItems: DraftMedia[] = replyMedia ?? [];
-  // 留言＝串文接續貼文（Threads 上會顯示成 1/2、2/2 的串文鏈，非一般留言）
-  const hasReply = Boolean((replyText && replyText.trim()) || replyItems.length > 0);
-  const total = hasReply ? 2 : 1;
+  // 主文之後的串文段落鏈：留言（2/n 分潤連結）＋更多段落（3/n…）。過濾邏輯抽到 buildAfterSegments（可單測）。
+  const afterSegments: ThreadSegment[] = buildAfterSegments({ replyText, replyMedia, extraSegments });
+  const hasReply = afterSegments.length > 0;
+  const total = 1 + afterSegments.length;
   // 媒體縮圖渲染（主文與留言共用）
   const renderMedia = (list: DraftMedia[]) => {
     const multi = list.length > 1;
@@ -121,22 +124,25 @@ export default function ThreadsPreview({
         </div>
       </div>
 
-      {/* 接續貼文 2/2（分潤連結 CTA） */}
-      {hasReply && (
-        <div className="flex gap-3">
-          {renderAvatar()}
-          <div className="min-w-0 flex-1 pt-1">
-            <div className="flex items-center gap-1 text-sm">
-              <span className="truncate font-semibold text-ink">{name}</span>
-              {name !== handle && <span className="truncate text-ink-3">@{handle}</span>}
-              <span className="shrink-0 text-ink-3">{`2/${total}`}</span>
-              <span className="shrink-0 text-ink-3">· 接續</span>
+      {/* 接續貼文（2/n 分潤連結 CTA、3/n… 更多段落） */}
+      {afterSegments.map((seg, idx) => {
+        const segItems = seg.media ?? [];
+        return (
+          <div key={idx} className="flex gap-3">
+            {renderAvatar()}
+            <div className="min-w-0 flex-1 pt-1">
+              <div className="flex items-center gap-1 text-sm">
+                <span className="truncate font-semibold text-ink">{name}</span>
+                {name !== handle && <span className="truncate text-ink-3">@{handle}</span>}
+                <span className="shrink-0 text-ink-3">{`${idx + 2}/${total}`}</span>
+                <span className="shrink-0 text-ink-3">· 接續</span>
+              </div>
+              <div className="mt-0.5 whitespace-pre-wrap break-words text-sm text-ink">{seg.text ? renderWithLinks(seg.text) : null}</div>
+              {segItems.length > 0 && renderMedia(segItems)}
             </div>
-            <div className="mt-0.5 whitespace-pre-wrap break-words text-sm text-ink">{replyText ? renderWithLinks(replyText) : null}</div>
-            {replyItems.length > 0 && renderMedia(replyItems)}
           </div>
-        </div>
-      )}
+        );
+      })}
     </div>
   );
 }

@@ -70,7 +70,10 @@ export const env = {
   vapidPrivateKey: process.env.VAPID_PRIVATE_KEY ?? "",
   vapidSubject: process.env.VAPID_SUBJECT || "mailto:admin@example.com",
   // 每日摘要附 AI 成效歸因分析（需 owner Gemini 金鑰）。1/true 開啟，預設關（多一次 LLM 呼叫）。
-  dailyDigestAi: /^(1|true)$/i.test(process.env.DAILY_DIGEST_AI ?? "")
+  dailyDigestAi: /^(1|true)$/i.test(process.env.DAILY_DIGEST_AI ?? ""),
+  // go2read 轉址服務：建立短連結時用 Google Safe Browsing 掃描來源網址，於中轉頁顯示安全標章。
+  // 未設金鑰則降級為「基本安全檢查」（沿用 SSRF/協定白名單），不影響功能。
+  safeBrowsingKey: process.env.GOOGLE_SAFE_BROWSING_KEY ?? ""
 };
 
 export const isSupabaseConfigured = Boolean(env.supabaseUrl && env.supabaseServiceKey);

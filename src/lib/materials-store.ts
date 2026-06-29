@@ -7,7 +7,7 @@ import { demo } from "./demo-store";
 import { normalizeDraftMedia, normalizeReplyMedia } from "./media";
 import { mergeToMaterialMedia } from "./material-media";
 import { parseShopeeIds } from "@/services/shopee/expand";
-import type { Draft, Material } from "./types";
+import type { Draft, Material, DraftMedia } from "./types";
 
 export async function findMaterial(shopId: string, itemId: string, ownerId: string): Promise<Material | null> {
   if (isDemoMode) {
@@ -81,6 +81,27 @@ export async function approveMaterialIntake(id: string, ownerId: string): Promis
   const { data, error } = await sb
     .from("materials")
     .update({ intake_status: "approved" })
+    .eq("id", id)
+    .eq("owner_id", ownerId)
+    .select("id")
+    .maybeSingle();
+  if (error) throw error;
+  return Boolean(data);
+}
+
+// 更新素材的媒體清單（含每項 slot：main/reply/both）。多租戶：以 owner_id 過濾，只改得到自己的。回 true=有更新。
+// 供待審素材逐張標記「用於主文／留言／都用」後保存（核准轉草稿時由 splitMaterialMedia 依 slot 分流）。
+export async function updateMaterialMedia(id: string, ownerId: string, media: DraftMedia[]): Promise<boolean> {
+  if (isDemoMode) {
+    const m = demo.materials.find((x) => x.id === id && x.owner_id === ownerId);
+    if (!m) return false;
+    m.media = media;
+    return true;
+  }
+  const sb = getServiceClient()!;
+  const { data, error } = await sb
+    .from("materials")
+    .update({ media })
     .eq("id", id)
     .eq("owner_id", ownerId)
     .select("id")

@@ -4,7 +4,10 @@ import { randomUUID } from "node:crypto";
 import { getServiceClient } from "./supabase/server";
 import { isDemoMode } from "./env";
 import { demo } from "./demo-store";
-import type { Material } from "./types";
+import { normalizeDraftMedia, normalizeReplyMedia } from "./media";
+import { mergeToMaterialMedia } from "./material-media";
+import { parseShopeeIds } from "@/services/shopee/expand";
+import type { Draft, Material } from "./types";
 
 export async function findMaterial(shopId: string, itemId: string, ownerId: string): Promise<Material | null> {
   if (isDemoMode) {
@@ -106,6 +109,50 @@ export async function createMaterial(input: Partial<Material>, ownerId: string):
     .single();
   if (error) throw error;
   return data as Material;
+}
+
+// 把一篇草稿（或已發文）「存回素材庫」：合併主文＋留言媒體成帶 slot 的統一清單（重複標 both、只存一份），
+// 連同文案／分潤連結 upsert 進素材（鍵＝owner+shop+item）。商品識別優先用來源素材，否則從乾淨商品連結解析；
+// 兩者都拿不到（如自寫無連結貼文）就擋下並回明確訊息。已存在同商品的素材會被更新（媒體/文案覆寫、其餘欄位保留）。
+export async function saveDraftToMaterial(draft: Draft, ownerId: string): Promise<Material> {
+  let shopId: string | null = null;
+  let itemId: string | null = null;
+  if (draft.material_id) {
+    const src = await getMaterial(draft.material_id, ownerId);
+    if (src) {
+      shopId = src.shop_id ?? null;
+      itemId = src.item_id ?? null;
+    }
+  }
+  if ((!shopId || !itemId) && draft.clean_product_url) {
+    const ids = parseShopeeIds(draft.clean_product_url);
+    if (ids) {
+      shopId = ids.shopId;
+      itemId = ids.itemId;
+    }
+  }
+  if (!shopId || !itemId) throw new Error("此貼文沒有可識別的蝦皮商品（缺商品連結），無法存成素材");
+
+  const media = mergeToMaterialMedia(normalizeDraftMedia(draft), normalizeReplyMedia(draft));
+  const primaryMain = media.find((m) => (m.slot ?? "main") !== "reply") ?? null; // 主文首項，給舊單一欄位
+  return createMaterial(
+    {
+      shop_id: shopId,
+      item_id: itemId,
+      clean_product_url: draft.clean_product_url ?? null,
+      affiliate_short_link: draft.shopee_short_link ?? null,
+      affiliate_valid: true,
+      media,
+      media_type: primaryMain?.type ?? "none",
+      source_media_url: primaryMain?.url ?? null,
+      cloudinary_media_url: primaryMain?.url ?? null,
+      product_name: draft.product_name ?? null,
+      main_text: draft.main_text ?? null,
+      reply_text: draft.reply_text ?? null,
+      intake_status: "approved"
+    },
+    ownerId
+  );
 }
 
 // ── 常青內容回收 ───────────────────────────────────────────────

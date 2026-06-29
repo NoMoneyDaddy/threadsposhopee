@@ -9,7 +9,8 @@ import {
   getCopyPrefs,
   requeueReply,
   rescheduleDraft,
-  mainTextUsedByOtherOwner
+  mainTextUsedByOtherOwner,
+  saveDraftToMaterial
 } from "@/lib/store";
 import { setSponsorPick, swapAffiliateLink } from "@/lib/sponsor";
 import { createRedirectLink } from "@/lib/redirect-store";
@@ -66,6 +67,16 @@ export async function POST(req: Request) {
   if (action === "delete") {
     await deleteDraft(id, user.id);
     return NextResponse.json({ ok: true });
+  }
+  // 把這篇草稿/貼文存回素材庫：合併主文＋留言媒體（重複標 both）連同文案／分潤連結 upsert 成素材，
+  // 之後可重排（排一篇會依 slot 把媒體還原回主文/留言）。無可識別商品時回 400。
+  if (action === "save-as-material") {
+    try {
+      const material = await saveDraftToMaterial(draft, user.id);
+      return NextResponse.json({ ok: true, material });
+    } catch (e) {
+      return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "存成素材失敗" }, { status: 400 });
+    }
   }
   if (action === "edit") {
     const mainText = typeof body.main_text === "string" ? body.main_text : draft.main_text;

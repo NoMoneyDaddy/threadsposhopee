@@ -189,7 +189,7 @@ export default async function AccountsPage() {
         {/* 抓取（Apify）：僅平台管理員可綁定使用；AI 文案每人各綁各的 */}
         {user?.isOwner && (
           <div id="setup-apify" className="scroll-mt-24">
-            <ApifyForm bound={apify.bound} />
+            <ApifyForm bound={apify.bound} actor={apify.actor} />
           </div>
         )}
         {user && (

@@ -38,6 +38,15 @@ export async function setApifyCredentials(ownerId: string, token: string, actor?
   if (error) throw error;
 }
 
+// 只切換抓文 actor（不動 token）：給帳號管理的 actor 選擇器用。actor 合法性由呼叫端（路由）以白名單驗證。
+// 僅更新既有 profile 的 apify_actor；未綁 token 者 update 命中 0 列（actor 無 token 無意義，視為 no-op）。
+export async function setApifyActor(ownerId: string, actor: string): Promise<void> {
+  if (isDemoMode) return;
+  const sb = getServiceClient()!;
+  const { error } = await sb.from("profiles").update({ apify_actor: actor }).eq("id", ownerId);
+  if (error) throw error;
+}
+
 // 是否已綁 Apify（給帳號管理頁顯示狀態，不回傳明文）。
 export async function hasApifyCredentials(ownerId: string): Promise<{ bound: boolean; actor: string | null }> {
   if (isDemoMode) return { bound: false, actor: null };

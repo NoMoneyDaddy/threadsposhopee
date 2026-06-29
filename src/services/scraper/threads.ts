@@ -2,14 +2,13 @@ import { isDemoMode } from "@/lib/env";
 import sampleThread from "@/fixtures/sample-thread.json";
 import { fetchWithRetry } from "@/lib/http";
 import { assertSafePublicUrl } from "@/lib/url-guard";
+import { THREADS_ACTORS } from "@/lib/apify-actors";
 import type { DraftMedia } from "@/lib/types";
 
-// Threads 搜尋爬蟲 actor。預設用 automation-lab/threads-scraper（搜尋＋帳號貼文，且會回傳影片 URL 與
-// 完整輪播媒體）；舊的 igview-owner/threads-search-scraper 仍相容（輸入/輸出 schema 不同，下方分流處理）。
-const DEFAULT_THREADS_ACTOR = "automation-lab/threads-scraper";
-// 舊版 igview 搜尋 actor：輸入欄位（searchQuery/from/sort）與輸出欄位（captionText/imageUrl/allImages）
-// 都與新 actor 不同，需特別分流。
-const LEGACY_SEARCH_ACTOR = "igview-owner/threads-search-scraper";
+// Threads 搜尋爬蟲 actor（清單見 lib/apify-actors）。預設 automation-lab/threads-scraper（搜尋＋帳號貼文，
+// 回傳影片 URL 與完整輪播媒體）；舊的 igview-owner/threads-search-scraper 仍相容（輸入/輸出 schema 不同，下方分流）。
+const DEFAULT_THREADS_ACTOR = THREADS_ACTORS.default;
+const LEGACY_SEARCH_ACTOR = THREADS_ACTORS.legacy;
 
 // Apify actor 識別碼格式：username/actor-name、username~actor-name 或 17 碼 actorId。
 // 僅允許英數與 . _ - 及單一 / 或 ~ 分隔；擋掉 ? # & 等可改寫 api.apify.com path/query 的字元。純函式可測。

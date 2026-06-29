@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { monthsBetween, monthBounds, MAX_BATCH_MONTHS } from "@/lib/month-range";
 
@@ -17,7 +17,19 @@ export default function BatchMonthScrape() {
 
   const months = start && end ? monthsBetween(start, end, MAX_BATCH_MONTHS) : [];
   const truncated = months.length === MAX_BATCH_MONTHS && months[months.length - 1] !== end;
-  const canRun = months.length > 0 && !busy;
+  // 只要起訖都選了且非忙碌就可按；無效區間（起晚於迄）交給 run() 內驗證並顯示提示（按鈕禁用會讓使用者不知原因）。
+  const canRun = !!start && !!end && !busy;
+
+  // 批次序列執行可能跑數分鐘：執行中攔截關頁/重整，避免中途中斷。
+  useEffect(() => {
+    if (!busy) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [busy]);
 
   async function run() {
     if (months.length === 0) {

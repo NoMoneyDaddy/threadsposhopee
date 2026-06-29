@@ -4,7 +4,7 @@ import { test, expect } from "@playwright/test";
 const PAGES: { path: string; heading: string }[] = [
   { path: "/", heading: "儀表板" },
   { path: "/compose", heading: "發文" },
-  { path: "/sources", heading: "抓文生素材" },
+  { path: "/sources", heading: "自動抓文" },
   { path: "/materials", heading: "素材" },
   { path: "/drafts", heading: "草稿" },
   { path: "/insights", heading: "成效分析" },

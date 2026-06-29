@@ -184,15 +184,23 @@ export default function PendingMaterialsReview({ items, accounts = [] }: { items
         const json = await res.json().catch(() => null);
         if (!res.ok || !json?.ok) throw new Error(typeof json?.error === "string" && json.error ? json.error : `入庫失敗（HTTP ${res.status}）`);
         // 核准並排程：入庫後直接排進下一個空時段（省去再到素材庫「再排一篇」）。
+        // 入庫已成功（DB 已是 approved），故排程失敗也要把此筆標記完成＋刷新，避免重複入庫；
+        // 失敗訊息照樣拋出提示使用者（素材已在庫，可到素材庫手動排程）。
         if (kind === "approveSchedule") {
-          if (!accId) throw new Error("沒有可用的發文帳號");
-          const r2 = await fetch("/api/materials/repost", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ material_id: id, threads_account_id: accId, action: "queue" })
-          });
-          const j2 = await r2.json().catch(() => null);
-          if (!r2.ok || !j2?.ok) throw new Error(typeof j2?.error === "string" && j2.error ? j2.error : `排程失敗（HTTP ${r2.status}）`);
+          try {
+            if (!accId) throw new Error("沒有可用的發文帳號");
+            const r2 = await fetch("/api/materials/repost", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ material_id: id, threads_account_id: accId, action: "queue" })
+            });
+            const j2 = await r2.json().catch(() => null);
+            if (!r2.ok || !j2?.ok) throw new Error(typeof j2?.error === "string" && j2.error ? j2.error : `已入庫，但排程失敗（HTTP ${r2.status}）；可到素材庫手動排程`);
+          } catch (scheduleErr) {
+            setDoneIds((prev) => new Set(prev).add(id));
+            router.refresh();
+            throw scheduleErr;
+          }
         }
       }
       setDoneIds((prev) => new Set(prev).add(id)); // 成功 → 立即隱藏該筆，刷新前不可再操作

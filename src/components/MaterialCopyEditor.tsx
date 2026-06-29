@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import ThreadsPreview, { CharCount } from "@/components/ThreadsPreview";
 import { normalizeDraftMedia } from "@/lib/media";
@@ -15,6 +15,13 @@ export default function MaterialCopyEditor({ material, accountLabel }: { materia
   const [replyText, setReplyText] = useState(material.reply_text ?? "");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+
+  // 元件關閉時仍 mounted；父層 router.refresh() 帶回新 material 時同步本地 state，
+  // 避免再次打開編輯器看到舊文案（例如剛被「刷新分潤連結」更新過）。
+  useEffect(() => {
+    setMainText(material.main_text ?? "");
+    setReplyText(material.reply_text ?? "");
+  }, [material.main_text, material.reply_text]);
 
   // 依 slot 拆主文／留言媒體供預覽（both 兩邊都帶；舊資料無 slot＝全主文）。
   const all = normalizeDraftMedia(material);

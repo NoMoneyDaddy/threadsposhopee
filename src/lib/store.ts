@@ -214,6 +214,8 @@ export {
   listAllEnabledSources,
   getSource,
   createSource,
+  getScrapeConfig,
+  saveScrapeConfig,
   setSourceEnabled,
   setSourceAutoPublish,
   deleteSource,

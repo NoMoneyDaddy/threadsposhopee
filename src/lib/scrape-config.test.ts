@@ -18,11 +18,11 @@ test("normalizeScrapeKeywords：上限 10 個", () => {
   assert.equal(normalizeScrapeKeywords(many).length, MAX_SCRAPE_KEYWORDS);
 });
 
-test("normalizePostsLimit：夾 1..200、取整、非數值退回 3", () => {
+test("normalizePostsLimit：夾 1..1000、取整、非數值退回 3", () => {
   assert.equal(normalizePostsLimit(0), 1);
-  assert.equal(normalizePostsLimit(999), SCRAPE_POSTS_MAX);
-  assert.equal(SCRAPE_POSTS_MAX, 200);
-  assert.equal(normalizePostsLimit(150), 150);
+  assert.equal(normalizePostsLimit(9999), SCRAPE_POSTS_MAX);
+  assert.equal(SCRAPE_POSTS_MAX, 1000);
+  assert.equal(normalizePostsLimit(800), 800);
   assert.equal(normalizePostsLimit(4.6), 5);
   assert.equal(normalizePostsLimit("x"), 3);
 });

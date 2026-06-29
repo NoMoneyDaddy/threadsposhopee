@@ -127,8 +127,8 @@ export function normalizePostsLimit(postsLimit: number): number {
 // - searchQuery 必填（只監看帳號時預設 "shope"，精準篩含蝦皮連結的貼文）。
 // - from 僅允許 ^[a-zA-Z0-9._]*$：去掉開頭 @；若仍含不合法字元就明確報錯（fail fast），
 //   不靜默刪字元——否則可能把無效帳號改成「另一個真實帳號」而誤爬。
-// - maxPosts 夾 20–200：actor 每次 run 上限約 20 頁 × 每頁約 10 篇 ≈ 200 篇（schema 名目上限 1000，
-//   但實際取不到那麼多，夾到 200 避免誤期待並少燒額度）。
+// - maxPosts 夾 20–1000（actor schema 範圍）：下限 20 為 actor 要求；上限 1000 為 schema 名目上限，
+//   實際取量受 run-sync 端點 300s 硬上限制約，設很大時取多少算多少。
 // - sort 僅 top / recent（非法值退回 recent）。
 export interface ThreadsScraperInput {
   searchQuery: string;
@@ -145,7 +145,7 @@ export function buildScraperInput(spec: ScrapeQuery, postsLimit: number): Thread
   }
   const searchQuery = spec.searchQuery?.trim() || "shope";
   const sort: "top" | "recent" = spec.sort === "top" ? "top" : "recent";
-  const maxPosts = Math.min(200, Math.max(20, normalizePostsLimit(postsLimit)));
+  const maxPosts = Math.min(1000, Math.max(20, normalizePostsLimit(postsLimit)));
   const input: ThreadsScraperInput = { searchQuery, sort, maxPosts };
   if (from) input.from = from;
   return input;
@@ -179,9 +179,10 @@ export async function scrapeLatestPosts(
   const body = buildScraperInput(spec, safePostsLimit);
 
   // run-sync 端點注意事項（docs.apify.com/api/v2/act-run-sync-get-dataset-items-post）：
-  // - timeout：綁定本次 run 上限秒數（端點硬上限 300s，逾時回 408）；本爬蟲 maxPosts≤200 通常數秒，設 60s 防卡住燒額度。
+  // - timeout：綁定本次 run 上限秒數（端點硬上限 300s，逾時回 408）。隨 maxPosts 放大（每頁約 10 篇，
+  //   抓越多需越久）：小量維持 60s 快回、避免卡住燒額度；大量（如 1000 篇）給到接近 300s 端點上限。
   // - maxItems：限制計費／回傳筆數，與 input 的 maxPosts 對齊當雙重保險。
-  const RUN_TIMEOUT_SEC = 60;
+  const RUN_TIMEOUT_SEC = Math.min(290, Math.max(60, Math.ceil(body.maxPosts * 0.3)));
   const params = new URLSearchParams({
     token,
     timeout: String(RUN_TIMEOUT_SEC),

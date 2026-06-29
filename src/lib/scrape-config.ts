@@ -3,8 +3,9 @@
 export const DEFAULT_SCRAPE_KEYWORD = "s.shopee.tw";
 export const MAX_SCRAPE_KEYWORDS = 10;
 export const SCRAPE_POSTS_MIN = 1;
-// actor 每次 run 的實際取量上限約 200 篇（20 頁 × 約 10 篇／頁；schema 名目上限更高但取不到）。
-export const SCRAPE_POSTS_MAX = 200;
+// actor schema 的 maxPosts 上限＝1000。實際取量受 run-sync 端點 300s 硬上限與每頁約 10 篇制約，
+// 設很大時可能取不滿（取多少算多少），費用也隨之增加（每 1000 筆約 US$5，使用者自付）。
+export const SCRAPE_POSTS_MAX = 1000;
 
 export interface ScrapeConfig {
   keywords: string[];

@@ -41,10 +41,10 @@ test("buildScraperInput：無帳號時不帶 from", () => {
   assert.equal(i.searchQuery, "蝦皮");
 });
 
-test("buildScraperInput：maxPosts 夾在 20–200", () => {
+test("buildScraperInput：maxPosts 夾在 20–1000", () => {
   assert.equal(buildScraperInput({}, 5).maxPosts, 20); // 下限
   assert.equal(buildScraperInput({}, 50).maxPosts, 50); // 範圍內
-  assert.equal(buildScraperInput({}, 1000).maxPosts, 200); // 上限（actor 實際約 200）
+  assert.equal(buildScraperInput({}, 9999).maxPosts, 1000); // 上限（actor schema 名目上限 1000）
   assert.equal(buildScraperInput({}, Number.NaN).maxPosts, 20); // 異常值回下限
   assert.equal(buildScraperInput({}, 0).maxPosts, 20);
 });

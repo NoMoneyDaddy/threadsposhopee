@@ -30,11 +30,15 @@ export function materialMatches(m: Material, kw: string): boolean {
 export default function MaterialsExplorer({
   materials,
   accounts,
-  itemRev
+  itemRev,
+  cloud = null,
+  preset = null
 }: {
   materials: Material[];
   accounts: ThreadsAccount[];
   itemRev: Record<string, ItemRevenue>;
+  cloud?: string | null;
+  preset?: string | null;
 }) {
   const [q, setQ] = useState("");
   const filtered = useMemo(() => {
@@ -97,7 +101,7 @@ export default function MaterialsExplorer({
             )}
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <RepostButton materialId={m.id} threadsAccounts={accounts} />
-              <MaterialCopyEditor material={m} accountLabel={accounts[0]?.label} />
+              <MaterialCopyEditor material={m} accountLabel={accounts[0]?.label} cloud={cloud} preset={preset} />
               <MaterialRefreshLinkButton materialId={m.id} />
               <EvergreenToggle materialId={m.id} initial={Boolean(m.evergreen)} />
               <ShareToggle materialId={m.id} initial={Boolean(m.shared)} />

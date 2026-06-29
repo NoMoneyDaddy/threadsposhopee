@@ -62,6 +62,8 @@ export interface Material {
   media?: DraftMedia[];
   main_text?: string | null;
   reply_text?: string | null;
+  // 留言（2/n）之後的多段串文 3/n+；空＝無額外段落。轉草稿時併入 draft.thread_chain。
+  thread_chain?: ThreadSegment[];
   ai_raw?: string | null;
   ai_generated_at?: string | null;
   evergreen?: boolean | null; // 常青回收：定期自動重排成待審草稿

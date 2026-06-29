@@ -1,4 +1,4 @@
-import type { DraftMedia } from "@/lib/types";
+import type { DraftMedia, ThreadSegment } from "@/lib/types";
 
 // 素材媒體（統一清單，每項帶 slot）↔ 草稿主文/留言兩陣列的轉換。純函式、可測。
 // slot 規則：main＝只主文、reply＝只留言、both＝兩邊都放；未設視同 main（向後相容舊素材）。
@@ -38,6 +38,24 @@ export function mergeToMaterialMedia(
     if (seen.has(m.url)) continue; // 已在主文（標過 both/main）
     seen.add(m.url);
     out.push({ url: m.url, type: m.type, slot: "reply" });
+  }
+  return out;
+}
+
+// 清洗外部傳入的多段串文（API body）：每段 text 取字串（否則 null）、media 過 sanitize（去 slot），
+// 並濾掉「無文字且無媒體」的空段落、最多 10 段（與發文 MAX_EXTRA_SEGMENTS 一致）。純函式可測。
+export function sanitizeThreadSegments(input: unknown): ThreadSegment[] {
+  if (!Array.isArray(input)) return [];
+  const out: ThreadSegment[] = [];
+  for (const raw of input) {
+    const seg = raw as { text?: unknown; media?: unknown } | null;
+    if (!seg || typeof seg !== "object") continue;
+    const text = typeof seg.text === "string" ? seg.text : null;
+    // 段落媒體無 slot 概念：取 url+type 即可（去掉 sanitizeMaterialMedia 標的 slot）。
+    const media = sanitizeMaterialMedia(seg.media).map((m) => ({ url: m.url, type: m.type }));
+    if (!(text && text.trim()) && media.length === 0) continue; // 空段落丟棄
+    out.push({ text, media });
+    if (out.length >= 10) break;
   }
   return out;
 }

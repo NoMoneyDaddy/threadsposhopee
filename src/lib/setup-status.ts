@@ -81,7 +81,7 @@ export async function getSetupSteps(user: AppUser): Promise<SetupStep[]> {
   if (user.isOwner) {
     steps.splice(3, 0, {
       key: "apify",
-      title: "綁定自動抓文（Apify，選填）",
+      title: "綁定抓文生素材（Apify，選填）",
       desc: "綁 Apify 帳號即可自動監看來源、自動產生草稿；不綁也能手動建素材。計費算在你自己帳上。",
       done: apify.bound,
       required: false,

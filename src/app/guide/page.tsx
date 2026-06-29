@@ -106,7 +106,7 @@ export default async function GuidePage() {
 
       {/* 自動抓文（Apify）為平台管理員專屬，僅管理員看得到此教學。 */}
       {isOwner && (
-        <Section id="apify" title="自動抓文（Apify）" badge="管理員專屬">
+        <Section id="apify" title="抓文生素材（Apify）" badge="管理員專屬">
           <Guide
             steps={[
               "到 <a href=\"https://console.apify.com\" target=\"_blank\" rel=\"noopener noreferrer\" class=\"text-brand underline\">console.apify.com</a> 註冊／登入。",

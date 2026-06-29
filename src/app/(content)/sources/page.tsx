@@ -24,7 +24,7 @@ export default async function SourcesPage() {
   if (!apify.bound && !isDemoMode) {
     return (
       <div className="space-y-3 rounded-2xl border border-dashed p-10 text-center text-ink-2">
-        <p>自動抓文需要你自己的 Apify 金鑰（抓取靠它，費用也算在你的 Apify 帳號）。</p>
+        <p>抓文生素材需要你自己的 Apify 金鑰（抓取靠它，費用也算在你的 Apify 帳號）。</p>
         <p>
           <a href="/accounts#setup-apify" className="text-brand underline">
             前往帳號管理綁定 Apify 金鑰
@@ -42,7 +42,7 @@ export default async function SourcesPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold">自動抓文</h1>
+      <h1 className="text-2xl font-bold">抓文生素材</h1>
       <p className="text-sm text-ink-2">
         設定<b>關鍵字</b>，系統會去 Threads 搜含該關鍵字的貼文、把符合的換成你的分潤連結，產生「素材」進<b>待審</b>
         （不綁發文帳號、不自動發文）。之後到「素材」頁逐筆核准，再挑選一鍵轉貼文／排程。

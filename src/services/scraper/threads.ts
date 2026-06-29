@@ -4,8 +4,12 @@ import { fetchWithRetry } from "@/lib/http";
 import { assertSafePublicUrl } from "@/lib/url-guard";
 import type { DraftMedia } from "@/lib/types";
 
-// Threads 搜尋爬蟲 actor（取代舊的帳號時間軸 actor）：可用關鍵字搜尋，或用 from 過濾單一帳號。
-const DEFAULT_THREADS_ACTOR = "igview-owner/threads-search-scraper";
+// Threads 搜尋爬蟲 actor。預設用 automation-lab/threads-scraper（搜尋＋帳號貼文，且會回傳影片 URL 與
+// 完整輪播媒體）；舊的 igview-owner/threads-search-scraper 仍相容（輸入/輸出 schema 不同，下方分流處理）。
+const DEFAULT_THREADS_ACTOR = "automation-lab/threads-scraper";
+// 舊版 igview 搜尋 actor：輸入欄位（searchQuery/from/sort）與輸出欄位（captionText/imageUrl/allImages）
+// 都與新 actor 不同，需特別分流。
+const LEGACY_SEARCH_ACTOR = "igview-owner/threads-search-scraper";
 
 // Apify actor 識別碼格式：username/actor-name、username~actor-name 或 17 碼 actorId。
 // 僅允許英數與 . _ - 及單一 / 或 ~ 分隔；擋掉 ? # & 等可改寫 api.apify.com path/query 的字元。純函式可測。
@@ -50,9 +54,10 @@ export function extractShopeeLinks(text: string): string[] {
   return out;
 }
 
-// 從貼文網址抽出貼文 id（去重鍵）：https://www.threads.com/@user/post/<code> → <code>
+// 從貼文網址抽出貼文 id（去重鍵）：相容兩種格式
+// 舊 actor：https://www.threads.com/@user/post/<code>；新 actor：https://www.threads.com/t/<code>
 function postIdFromUrl(url: string): string {
-  const m = url?.match(/\/post\/([^/?#]+)/);
+  const m = url?.match(/\/(?:post|t)\/([^/?#]+)/);
   return m ? m[1] : "";
 }
 
@@ -62,8 +67,11 @@ function mediaId(url: string): string {
   return url.match(/\/(\d{6,})_\d+_\d+_n\./)?.[1] ?? url;
 }
 
-// 收集貼文的全部去重媒體（影片在前，便於主要媒體為影片）：
-// 同一篇含影片＋圖時，兩者都會被收進來，供合格素材組（1 影片＋≥1 圖）整組使用。
+// 收集貼文的全部去重媒體（同圖多尺寸去重）：同一篇含影片＋圖時兩者都收進來，
+// 供合格素材組（1 影片＋≥1 圖）整組使用。相容兩種 actor 輸出格式：
+// - 新 actor（automation-lab）：item.media 為物件陣列 [{type:"video", url:封面, videoUrl:mp4}, {type:"photo", url}]；
+//   影片要取可播放的 videoUrl（url 只是封面圖），輪播每項是不同媒體。
+// - 舊 actor（igview）：扁平欄位 imageUrl/allImages/videoUrl/allVideos（allImages 多為同圖不同尺寸）。
 function collectMedia(item: any): DraftMedia[] {
   const out: DraftMedia[] = [];
   const seen = new Set<string>();
@@ -74,6 +82,20 @@ function collectMedia(item: any): DraftMedia[] {
     seen.add(key);
     out.push({ url, type });
   };
+  // 新 actor：media[] 物件陣列
+  if (Array.isArray(item.media) && item.media.some((m: any) => m && typeof m === "object")) {
+    for (const m of item.media) {
+      if (!m || typeof m !== "object") continue;
+      if (m.type === "video") {
+        if (typeof m.videoUrl === "string" && m.videoUrl) push(m.videoUrl, "video");
+        else push(m.url, "image"); // 無 videoUrl 時退回封面圖，不漏掉這格
+      } else {
+        push(m.url, "image"); // photo（或其他）
+      }
+    }
+    return out;
+  }
+  // 舊 actor：扁平欄位
   push(item.videoUrl, "video");
   if (Array.isArray(item.allVideos)) for (const u of item.allVideos) push(u, "video");
   push(item.imageUrl, "image");
@@ -92,8 +114,11 @@ export function parseSearchPosts(items: any[]): ScrapedPost[] {
   const lastMediaByUser = new Map<string, DraftMedia[]>(); // 作者 → 最近一則有媒體貼文的媒體
   for (const item of items) {
     if (!item) continue;
-    const text: string = item.captionText ?? "";
-    const postId = postIdFromUrl(item.postUrl ?? "");
+    // 新 actor 會混入 type:"profile" 的項目（帳號資訊，非貼文）→ 跳過；舊 actor 無 type 欄位，照舊處理。
+    if (item.type && item.type !== "post") continue;
+    const text: string = item.text ?? item.captionText ?? "";
+    // 新 actor 用 code；舊 actor 從 postUrl 取。
+    const postId = item.code || postIdFromUrl(item.postUrl ?? item.url ?? "");
     if (!postId) continue;
     const username: string = item.username ?? "";
     const isReply = Boolean(item.isReply);
@@ -141,39 +166,43 @@ export function normalizePostsLimit(postsLimit: number): number {
   return n > 0 ? n : 20;
 }
 
-// 依 Threads Search Scraper 的 input schema 與限制組 actor input（純函式可測）：
-// - searchQuery 必填（只監看帳號時預設 "shope"，精準篩含蝦皮連結的貼文）。
-// - from 僅允許 ^[a-zA-Z0-9._]*$：去掉開頭 @；若仍含不合法字元就明確報錯（fail fast），
-//   不靜默刪字元——否則可能把無效帳號改成「另一個真實帳號」而誤爬。
-// - maxPosts 夾 20–1000（actor schema 範圍）：下限 20 為 actor 要求；上限 1000 為 schema 名目上限，
-//   實際取量受 run-sync 端點 300s 硬上限制約，設很大時取多少算多少。
-// - sort 僅 top / recent（非法值退回 recent）。
-export interface ThreadsScraperInput {
-  searchQuery: string;
-  sort: "top" | "recent";
-  maxPosts: number;
-  from?: string;
-  after?: string;
-  before?: string;
-}
+// 兩種 actor 的 input schema 不同：
+// - 新 actor（automation-lab）：{ mode:"posts"|"search", usernames|searchQueries, maxPosts(1–200) }。
+// - 舊 actor（igview）：{ searchQuery, sort, maxPosts(20–1000), from?, after?, before? }。
+export type ThreadsScraperInput =
+  | { mode: "posts"; usernames: string[]; maxPosts: number }
+  | { mode: "search"; searchQueries: string[]; maxPosts: number }
+  | { searchQuery: string; sort: "top" | "recent"; maxPosts: number; from?: string; after?: string; before?: string };
 
-export function buildScraperInput(spec: ScrapeQuery, postsLimit: number): ThreadsScraperInput {
-  // 只去單一前導 @；多個 @（如 @@user）保留剩餘 @ 交給下方正規則擋下，不靜默改成真帳號。
+// 依綁定的 actor 組 input（純函式可測）。from 一律先去單一前導 @ 並驗格式（fail fast，不靜默改字元，
+// 否則可能把無效帳號改成「另一個真實帳號」而誤爬）。
+export function buildScraperInput(spec: ScrapeQuery, postsLimit: number, actor: string = DEFAULT_THREADS_ACTOR): ThreadsScraperInput {
   const from = (spec.username ?? "").trim().replace(/^@/, "");
   if (from && !THREADS_USERNAME_RE.test(from)) {
     throw new Error(`無效的 Threads 帳號名稱「${from}」：僅能包含英數字、底線與點（a-z A-Z 0-9 . _）`);
   }
-  const searchQuery = spec.searchQuery?.trim() || "shope";
-  const sort: "top" | "recent" = spec.sort === "top" ? "top" : "recent";
-  const maxPosts = Math.min(1000, Math.max(20, normalizePostsLimit(postsLimit)));
-  const input: ThreadsScraperInput = { searchQuery, sort, maxPosts };
-  if (from) input.from = from;
-  // 日期區間（選填）：格式對才帶；不合法就略過，不阻斷抓取。
-  const after = (spec.after ?? "").trim();
-  const before = (spec.before ?? "").trim();
-  if (THREADS_DATE_RE.test(after)) input.after = after;
-  if (THREADS_DATE_RE.test(before)) input.before = before;
-  return input;
+
+  if (actor === LEGACY_SEARCH_ACTOR) {
+    // 舊 igview 搜尋 actor：searchQuery 必填（只監看帳號時預設 "shope" 精準篩含蝦皮連結的貼文）；
+    // maxPosts 夾 20–1000（actor schema 範圍，下限 20 為 actor 要求）；sort 僅 top/recent。
+    const searchQuery = spec.searchQuery?.trim() || "shope";
+    const sort: "top" | "recent" = spec.sort === "top" ? "top" : "recent";
+    const maxPosts = Math.min(1000, Math.max(20, normalizePostsLimit(postsLimit)));
+    const input: ThreadsScraperInput = { searchQuery, sort, maxPosts };
+    const after = (spec.after ?? "").trim();
+    const before = (spec.before ?? "").trim();
+    if (from) input.from = from;
+    if (THREADS_DATE_RE.test(after)) input.after = after;
+    if (THREADS_DATE_RE.test(before)) input.before = before;
+    return input;
+  }
+
+  // 新 actor（automation-lab/threads-scraper）：maxPosts 1–200。有指定帳號 → mode:posts 抓該帳號貼文；
+  // 否則 mode:search 用關鍵字（預設 "shope"）。註：此 actor 無「帳號內關鍵字搜尋」與排序/日期區間，
+  // 兩者皆設時以帳號（posts）為主。
+  const maxPosts = Math.min(200, Math.max(1, normalizePostsLimit(postsLimit)));
+  if (from) return { mode: "posts", usernames: [from], maxPosts };
+  return { mode: "search", searchQueries: [spec.searchQuery?.trim() || "shope"], maxPosts };
 }
 
 // 呼叫 Apify Threads Search Scraper 取得貼文。Demo 模式直接回 fixture。
@@ -201,7 +230,7 @@ export async function scrapeLatestPosts(
   // input 欄位與限制集中在 buildScraperInput（依 actor schema：searchQuery 必填、from 字元限制、maxPosts 上限約 200）。
   // safePostsLimit 與 buildScraperInput 共用同一正規化，request 與 response（slice）的 NaN/0 fallback 一致。
   const safePostsLimit = normalizePostsLimit(postsLimit);
-  const body = buildScraperInput(spec, safePostsLimit);
+  const body = buildScraperInput(spec, safePostsLimit, actor);
 
   // run-sync 端點注意事項（docs.apify.com/api/v2/act-run-sync-get-dataset-items-post）：
   // - timeout：綁定本次 run 上限秒數（端點硬上限 300s，逾時回 408）。隨 maxPosts 放大（每頁約 10 篇，

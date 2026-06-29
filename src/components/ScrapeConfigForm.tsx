@@ -9,12 +9,13 @@ import { DEFAULT_SCRAPE_KEYWORD, MAX_SCRAPE_KEYWORDS, SCRAPE_POSTS_MIN, SCRAPE_P
 export default function ScrapeConfigForm({
   initial
 }: {
-  initial: { keywords: string[]; postsLimit: number; enabled: boolean };
+  initial: { keywords: string[]; postsLimit: number; username: string; enabled: boolean };
 }) {
   const router = useRouter();
   const [keywords, setKeywords] = useState<string[]>(initial.keywords.length ? initial.keywords : [DEFAULT_SCRAPE_KEYWORD]);
   const [input, setInput] = useState("");
   const [postsLimit, setPostsLimit] = useState(initial.postsLimit);
+  const [username, setUsername] = useState(initial.username ?? "");
   const [enabled, setEnabled] = useState(initial.enabled);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -36,12 +37,13 @@ export default function ScrapeConfigForm({
       const res = await fetch("/api/scrape-config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ keywords, postsLimit, enabled })
+        body: JSON.stringify({ keywords, postsLimit, username, enabled })
       });
       const json = await res.json();
       if (!json.ok) throw new Error(json.error);
       setKeywords(json.config.keywords);
       setPostsLimit(json.config.postsLimit);
+      setUsername(json.config.username ?? "");
       setEnabled(json.config.enabled);
       setMsg("已儲存設定（下次開頁自動帶出）");
       router.refresh();
@@ -107,7 +109,7 @@ export default function ScrapeConfigForm({
 
       <div>
         <label className="text-xs text-ink-2">
-          每個關鍵字每次抓幾篇
+          每個關鍵字每次抓幾篇（{SCRAPE_POSTS_MIN}–{SCRAPE_POSTS_MAX}）
           <input
             type="number"
             min={SCRAPE_POSTS_MIN}
@@ -117,6 +119,22 @@ export default function ScrapeConfigForm({
             className="ml-2 w-20 rounded-xl border px-2 py-1 text-sm"
           />
         </label>
+      </div>
+
+      <div>
+        <label className="mb-1 block text-xs text-ink-2">目標帳號（選填，無預設）</label>
+        <input
+          className="w-56 rounded-xl border px-3 py-1.5 text-sm"
+          placeholder="例如 shopee_tw（留空＝不限帳號）"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          inputMode="text"
+          autoCapitalize="none"
+          autoCorrect="off"
+        />
+        <p className="mt-1 text-xs text-ink-3">
+          填了就只搜「該帳號」內含上述關鍵字的貼文；留空＝搜全站。僅能用英數字、底線與點（不含 @）。
+        </p>
       </div>
 
       <label className="flex cursor-pointer items-center gap-2 text-sm text-ink-2">

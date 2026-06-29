@@ -142,7 +142,9 @@ export {
   listActiveThreadsCredentials,
   listActiveThreadsAccountsAll,
   listThreadsTokensToRefresh,
+  listActiveThreadsTokensAll,
   updateThreadsToken,
+  updateThreadsAccountProfile,
   markThreadsAccountError,
   canAddThreadsAccount
 } from "./accounts-store";

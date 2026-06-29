@@ -1,6 +1,7 @@
 import { sendAlert, sendUserAlert } from "@/lib/notify";
 import { runPublishQueue } from "@/services/publish/queue";
 import { refreshExpiringTokens } from "@/services/threads/refresh";
+import { refreshThreadsProfiles } from "@/services/threads/profile-refresh";
 import { reconcileNeedsVerification } from "@/services/threads/reconcile";
 import { checkAffiliateLinks } from "@/services/materials/linkcheck";
 import { runEvergreen } from "@/services/materials/evergreen";
@@ -60,6 +61,8 @@ export async function runCronAll(now: Date = new Date()): Promise<Record<string,
   // 每天展期一次（03:00–03:14 視窗，避免每 15 分重複）
   if (h === 3 && min < 15) {
     steps.push({ key: "refreshTokens", run: refreshExpiringTokens, warn: (r) => (r?.failed ? `⚠️ Token 展期 ${r.failed} 個失敗` : null) });
+    // 每日刷新各帳號頭像／顯示名稱：Threads 頭像 URL 是會過期的簽名連結，重抓寫回避免失效（草稿預覽/帳號頁變灰圈）。
+    steps.push({ key: "refreshProfiles", run: refreshThreadsProfiles, warn: (r) => (r?.failed ? `⚠️ 頭像刷新 ${r.failed} 個失敗` : null) });
     // 順手清掉過期未消費的 Telegram 綁定碼（10 分鐘 TTL，殘留量極小，每日清即可）。
     steps.push({ key: "cleanupBindTokens", run: cleanupExpiredBindTokens });
   }

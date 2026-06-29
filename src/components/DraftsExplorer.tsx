@@ -30,10 +30,12 @@ const STATUS_TABS: { value: string; label: string }[] = [
 export default function DraftsExplorer({
   drafts,
   accountMeta = {},
+  defaultAccount,
   sponsor
 }: {
   drafts: Draft[];
   accountMeta?: Record<string, AccountMeta>;
+  defaultAccount?: AccountMeta; // 未指定帳號的草稿，預覽退回此帳號頭像（通常第一個帳號）
   sponsor?: { enabled: boolean; pickByAccount: Record<string, string> };
 }) {
   const [status, setStatus] = useState("all");
@@ -210,6 +212,7 @@ export default function DraftsExplorer({
             draft={d}
             dupSimilarity={dupMap[d.id] >= DUP_THRESHOLD ? dupMap[d.id] : undefined}
             account={d.threads_account_id ? accountMeta[d.threads_account_id] : undefined}
+            fallbackAccount={defaultAccount}
             sponsorEnabled={sponsor?.enabled ?? false}
             selectable={d.status === "draft"}
             selected={selected.has(d.id)}

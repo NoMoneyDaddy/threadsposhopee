@@ -146,6 +146,7 @@ function DraftCard({
         const skipped = typeof json.skipped === "number" ? json.skipped : 0;
         setMsg(`已轉換 ${json.shortened} 個連結${skipped > 0 ? `（另有 ${skipped} 個超過上限未處理）` : ""}`);
       }
+      if (action === "save-as-material") setMsg("已存成素材，可到素材頁重排（媒體含主文／留言指派）");
       router.refresh();
     } catch (e) {
       setMsg(e instanceof Error ? e.message : String(e));
@@ -466,6 +467,14 @@ function DraftCard({
           >
             {busy === "variants" ? "產生中…" : "AI 多版本"}
           </button>
+          <button
+            disabled={!!busy}
+            onClick={() => call("save-as-material")}
+            title="把這篇的文案＋媒體（主文／留言指派一起）存回素材庫，之後可重排"
+            className="rounded border px-3 py-1 text-xs hover:bg-surface-2 disabled:opacity-50"
+          >
+            {busy === "save-as-material" ? "存中…" : "存成素材"}
+          </button>
           <button disabled={!!busy} onClick={() => call("reject")} className="rounded border px-3 py-1 text-xs text-ink-2 hover:bg-surface-2">
             退回
           </button>
@@ -477,6 +486,20 @@ function DraftCard({
             className="rounded border border-red-200 px-3 py-1 text-xs text-red-500 hover:bg-red-50"
           >
             刪除
+          </button>
+        </div>
+      )}
+
+      {/* 已發布／已退回：仍可把這篇存回素材庫，方便日後重排（媒體依主文／留言一起帶回） */}
+      {done && !editing && (
+        <div className="mt-2 border-t pt-2">
+          <button
+            disabled={!!busy}
+            onClick={() => call("save-as-material")}
+            title="把這篇的文案＋媒體（主文／留言指派一起）存回素材庫，之後可重排"
+            className="rounded border px-3 py-1 text-xs hover:bg-surface-2 disabled:opacity-50"
+          >
+            {busy === "save-as-material" ? "存中…" : "存成素材"}
           </button>
         </div>
       )}

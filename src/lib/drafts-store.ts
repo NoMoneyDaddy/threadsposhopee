@@ -6,6 +6,7 @@ import { randomUUID } from "node:crypto";
 import { getServiceClient } from "./supabase/server";
 import { isDemoMode } from "./env";
 import { demo } from "./demo-store";
+import { splitMaterialMedia } from "./material-media";
 import type { Draft, Material } from "./types";
 
 // 從素材快照產生一篇草稿（重用文案/連結/媒體，不重燒 token）
@@ -20,6 +21,7 @@ export async function createDraftFromMaterial(
     scheduled_at?: string | null;
   }
 ): Promise<Draft> {
+  const split = splitMaterialMedia(material.media);
   return createDraft({
     owner_id: opts.owner_id,
     material_id: material.id,
@@ -34,7 +36,9 @@ export async function createDraftFromMaterial(
     media_type: material.media_type,
     source_media_url: material.source_media_url,
     cloudinary_media_url: material.cloudinary_media_url,
-    media: material.media ?? [],
+    // 依素材媒體的 slot 拆成主文 media／留言 reply_media（both 兩邊都帶；舊素材無 slot＝全主文）。
+    media: split.main,
+    reply_media: split.reply,
     main_text: material.main_text,
     reply_text: material.reply_text,
     ai_raw: material.ai_raw,

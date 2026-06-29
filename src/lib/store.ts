@@ -38,6 +38,7 @@ export {
   listPendingMaterials,
   approveMaterialIntake,
   createMaterial,
+  saveDraftToMaterial,
   deleteMaterial,
   listMaterialsToCheck,
   reviveAffiliateLink,

@@ -78,6 +78,9 @@ export type DraftStatus =
 export interface DraftMedia {
   url: string;
   type: "image" | "video";
+  // 媒體歸屬（僅素材庫的統一媒體清單用）：main＝只放主文、reply＝只放留言、both＝主文與留言都放。
+  // 草稿層不看這欄（主文走 media、留言走 reply_media 兩個陣列）；發布層忽略。未設＝視同 main（向後相容）。
+  slot?: "main" | "reply" | "both";
 }
 
 // 串文段落（主文之後依序補發的一則）：文字＋可選媒體。

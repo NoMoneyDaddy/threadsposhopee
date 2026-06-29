@@ -3,10 +3,8 @@ import { test, expect } from "@playwright/test";
 // Demo 模式下每個主要頁面都應該 server-render 出標題，且不噴 console error。
 const PAGES: { path: string; heading: string }[] = [
   { path: "/", heading: "儀表板" },
-  { path: "/compose", heading: "發文" },
+  { path: "/pipeline", heading: "工作台" }, // 發文/素材/草稿三頁已整併進工作台單頁看板
   { path: "/sources", heading: "抓文生素材" },
-  { path: "/materials", heading: "素材" },
-  { path: "/drafts", heading: "草稿" },
   { path: "/insights", heading: "成效分析" },
   { path: "/accounts", heading: "帳號管理" }
 ];
@@ -36,9 +34,9 @@ for (const p of PAGES) {
   });
 }
 
-test("導覽列「文章管理」可切換到草稿頁", async ({ page }) => {
+test("導覽列「文章管理」可切換到工作台", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("link", { name: "文章管理", exact: true }).click();
-  await expect(page).toHaveURL(/\/drafts$/);
-  await expect(page.getByRole("heading", { name: "草稿", level: 1 })).toBeVisible();
+  await expect(page).toHaveURL(/\/pipeline$/);
+  await expect(page.getByRole("heading", { name: "工作台", level: 1 })).toBeVisible();
 });

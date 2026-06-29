@@ -12,6 +12,15 @@ const nextConfig = {
       { protocol: "https", hostname: "**.fbcdn.net" }
     ]
   },
+  // 發文／素材／草稿三頁已整併進「工作台」單頁看板（/pipeline）；舊路由永久導向，
+  // 保留舊書籤/外部連結可用。API 路由（/api/*）不受影響。
+  async redirects() {
+    return [
+      { source: "/drafts", destination: "/pipeline", permanent: true },
+      { source: "/compose", destination: "/pipeline", permanent: true },
+      { source: "/materials", destination: "/pipeline", permanent: true }
+    ];
+  },
   // 安全標頭（縱深防禦）：防點擊劫持、MIME 嗅探、referrer 洩漏、過度權限、強制 HTTPS。
   // 不設嚴格 CSP（需 nonce 且易與 AdSense／字體／Next inline 衝突），留作後續以 nonce 導入。
   async headers() {

@@ -1,24 +1,17 @@
 import { test, expect } from "@playwright/test";
 
-test("草稿：狀態分頁與關鍵字篩選", async ({ page }) => {
-  await page.goto("/drafts");
-  await expect(page.getByRole("heading", { name: "草稿", level: 1 })).toBeVisible();
-
-  // 狀態分頁存在（避免與 BulkBar 的「全部核准」等按鈕衝突，用「全部 N」計數樣式定位）
-  await expect(page.getByRole("button", { name: /^全部 \d/ })).toBeVisible();
-  await expect(page.getByRole("button", { name: /^已發布/ })).toBeVisible();
-
-  // 搜尋不存在的關鍵字 → 顯示空狀態
-  const search = page.getByPlaceholder("搜尋商品名／正文／連結");
-  await expect(search).toBeVisible();
-  await search.fill("zzz_不存在的關鍵字_zzz");
-  await expect(page.getByText("沒有符合目前篩選條件的草稿。")).toBeVisible();
+test("工作台：看板欄位渲染", async ({ page }) => {
+  await page.goto("/pipeline");
+  await expect(page.getByRole("heading", { name: "工作台", level: 1 })).toBeVisible();
+  // 流水線欄位標題（草稿／已發布）可見（h2，含 emoji 前綴，用部分比對）
+  await expect(page.getByRole("heading", { name: /草稿/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /已發布/ })).toBeVisible();
 });
 
-test("發文：表單欄位可見", async ({ page }) => {
-  await page.goto("/compose");
-  await expect(page.getByRole("heading", { name: "發文", level: 1 })).toBeVisible();
-  // 至少有一個文字輸入區（正文）
+test("工作台：新貼文表單可展開", async ({ page }) => {
+  await page.goto("/pipeline");
+  // 「＋ 新貼文」展開共用編輯器（含正文 textarea）
+  await page.getByRole("button", { name: /新貼文/ }).click();
   await expect(page.locator("textarea").first()).toBeVisible();
 });
 

@@ -27,7 +27,7 @@ export async function POST(req: Request) {
     const slots = parseSubIdSlots(raw);
     if (slots.some((s) => !isValidSubIdTemplate(s))) {
       return NextResponse.json(
-        { ok: false, error: "每格 subId 僅能含英數、底線與變數 {date}/{time}/{platform}/{account}/{item}（單格上限 50）" },
+        { ok: false, error: "每格 subId 僅能含英數與變數 {date}/{time}/{platform}/{account}/{item}（底線會被蝦皮拒收，單格上限 50）" },
         { status: 400 }
       );
     }

@@ -1,10 +1,11 @@
-// 蝦皮分潤 subId 正規化（官方規範）：僅允許英數與底線，長度上限 50。
-// 注意：蝦皮 sub_id 在連結中以「-」分隔 5 格，故值本身不可含「-」（會破壞分隔），這裡也一併排除。
-// 來源常含非法字元（@、中文、空白）需清洗；報表依 subId 分流統計。
+// 蝦皮分潤 subId 正規化：僅允許英數，長度上限 50。
+// 注意：蝦皮 generateShortLink 實測會以 error [11001] invalid sub id 拒絕含底線「_」的 sub_id
+// （官方文件範例如 campaign_2024 已過時），故底線一併排除；連結中以「-」分隔 5 格，故也排除「-」。
+// 來源常含非法字元（@、中文、空白、底線）需清洗；報表依 subId 分流統計。
 export const SUBID_MAX = 50;
 
 export function normalizeSubId(s: string | null | undefined): string {
-  return (s ?? "").replace(/[^a-zA-Z0-9_]/g, "").slice(0, SUBID_MAX);
+  return (s ?? "").replace(/[^a-zA-Z0-9]/g, "").slice(0, SUBID_MAX);
 }
 
 // subId 範本的日期/時間變數值（台北時區）。date=YYYYMMDD、time=HHmm。
@@ -34,10 +35,10 @@ export function resolveSubIdTemplate(
 
 const SUBID_TOKENS = /\{(date|time|platform|account|item)\}/gi;
 
-// 驗證「自訂 subId 範本」：移除合法變數後，剩餘只能含英數與底線，且整體長度 ≤ 50。
+// 驗證「自訂 subId 範本」：移除合法變數後，剩餘只能含英數（底線會被蝦皮拒收），且整體長度 ≤ 50。
 export function isValidSubIdTemplate(s: string): boolean {
   if (s.length > SUBID_MAX) return false;
-  return /^[a-zA-Z0-9_]*$/.test(s.replace(SUBID_TOKENS, ""));
+  return /^[a-zA-Z0-9]*$/.test(s.replace(SUBID_TOKENS, ""));
 }
 
 // 自訂來源標記以「逗號分隔」存放，對應蝦皮 sub_id1..5 共 5 格。解析成陣列（去空、最多 5）。

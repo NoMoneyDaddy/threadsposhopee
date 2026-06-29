@@ -91,22 +91,18 @@ export async function saveScrapeConfig(
   const existingByKw = new Map(existing.map((s) => [(s.search_query ?? "").trim(), s]));
   const wanted = new Set(keywords);
 
-  // 刪除：不在新清單裡的關鍵字來源
-  for (const s of existing) {
-    const kw = (s.search_query ?? "").trim();
-    if (!wanted.has(kw)) await deleteSource(s.id, ownerId);
-  }
-  // 新增缺的
-  for (const kw of keywords) {
-    if (!existingByKw.has(kw)) {
-      await createSource({ threads_account_id: null, source_username: username, search_query: kw, posts_limit: postsLimit, auto_publish: false, enabled }, ownerId);
-    }
-  }
-  // 更新保留的：posts_limit / username / enabled
-  for (const s of existing) {
-    const kw = (s.search_query ?? "").trim();
-    if (wanted.has(kw)) await updateScrapeSource(s.id, ownerId, { posts_limit: postsLimit, source_username: username, enabled });
-  }
+  // 各列獨立，平行處理（最多 10 個關鍵字，省去逐筆 DB 往返）：刪除移除的、新增缺的、更新保留的。
+  await Promise.all([
+    ...existing
+      .filter((s) => !wanted.has((s.search_query ?? "").trim()))
+      .map((s) => deleteSource(s.id, ownerId)),
+    ...keywords
+      .filter((kw) => !existingByKw.has(kw))
+      .map((kw) => createSource({ threads_account_id: null, source_username: username, search_query: kw, posts_limit: postsLimit, auto_publish: false, enabled }, ownerId)),
+    ...existing
+      .filter((s) => wanted.has((s.search_query ?? "").trim()))
+      .map((s) => updateScrapeSource(s.id, ownerId, { posts_limit: postsLimit, source_username: username, enabled }))
+  ]);
   return { keywords, postsLimit, username, enabled };
 }
 
@@ -118,7 +114,8 @@ async function updateScrapeSource(id: string, ownerId: string, patch: { posts_li
     return;
   }
   const sb = getServiceClient()!;
-  await sb.from("sources").update(patch).eq("id", id).eq("owner_id", ownerId);
+  const { error } = await sb.from("sources").update(patch).eq("id", id).eq("owner_id", ownerId);
+  if (error) throw error; // 更新失敗勿靜默吞掉（否則呼叫端誤以為已存檔），對齊本檔其他寫入函式
 }
 
 // 啟用／停用來源（回傳是否有命中該 owner 的 row，達成擁有權檢查）

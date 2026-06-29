@@ -54,7 +54,8 @@ export async function runSourcePipeline(
   ownerId: string,
   // force=true：忽略「已抓過去重」與「已有有效素材」兩道略過，強制重新處理本來源貼文
   // （改了設定/換 actor 後想重抓，免手動清 processed_posts）。
-  opts: { deadline?: number; force?: boolean } = {}
+  // after/before：覆寫此次抓取的日期區間（批次逐月用，每月帶不同區間）；未傳則沿用來源儲存的日期。
+  opts: { deadline?: number; force?: boolean; after?: string; before?: string } = {}
 ): Promise<PipelineResult> {
   const result: PipelineResult = {
     sourceId: source.id,
@@ -92,19 +93,22 @@ export async function runSourcePipeline(
   }
   // 來源兩種模式：有 search_query → 關鍵字搜尋；否則監看 source_username 帳號。
   // 兩者都填＝在該帳號內搜尋關鍵字（同時帶 searchQuery 與 from）。
+  // 日期區間：批次逐月時由 opts 覆寫（每月不同區間），否則沿用來源儲存的日期。
+  const after = opts.after ?? source.after_date;
+  const before = opts.before ?? source.before_date;
   const posts = source.search_query
     ? await scrapeLatestPosts(
         {
           searchQuery: source.search_query,
           username: source.source_username,
           sort: source.sort === "top" ? "top" : "recent",
-          after: source.after_date,
-          before: source.before_date
+          after,
+          before
         },
         source.posts_limit,
         apify
       )
-    : await scrapeLatestPosts({ username: source.source_username }, source.posts_limit, apify);
+    : await scrapeLatestPosts({ username: source.source_username, after, before }, source.posts_limit, apify);
   result.scanned = posts.length;
   // 一次預載本來源已處理的貼文 id（取代逐篇 isPostProcessed 查詢，消除 N+1）
   const processedIds = await listProcessedPostIds(
@@ -197,7 +201,7 @@ export async function runSourcePipeline(
 // opts.deadline：時間預算（epoch ms），逐來源前檢查，超過即停手留待下輪（守 cron maxDuration）。
 export async function runSourcesForOwner(
   ownerId: string,
-  opts: { sources?: Source[]; deadline?: number; force?: boolean } = {}
+  opts: { sources?: Source[]; deadline?: number; force?: boolean; after?: string; before?: string } = {}
 ): Promise<PipelineResult[]> {
   const sources = (opts.sources ?? (await listSources(ownerId))).filter((s) => s.enabled);
   const results: PipelineResult[] = [];
@@ -211,7 +215,7 @@ export async function runSourcesForOwner(
     }
     // 單一來源拋錯不該中斷整批後續來源（fail-isolation，對齊 cron/all 的 allSettled 精神）。
     try {
-      results.push(await runSourcePipeline(s, ownerId, { deadline: opts.deadline, force: opts.force }));
+      results.push(await runSourcePipeline(s, ownerId, { deadline: opts.deadline, force: opts.force, after: opts.after, before: opts.before }));
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       log.error("來源爬取流程失敗", { ownerId, sourceId: s.id, sourceUsername: s.source_username, err: msg });

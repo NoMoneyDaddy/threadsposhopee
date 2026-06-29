@@ -5,6 +5,7 @@ import { getApifyUsage } from "@/services/apify/usage";
 import ScrapeConfigForm from "@/components/ScrapeConfigForm";
 import RunPipelineButton from "@/components/RunPipelineButton";
 import ScrapeRunsPanel from "@/components/ScrapeRunsPanel";
+import BatchMonthScrape from "@/components/BatchMonthScrape";
 
 export const dynamic = "force-dynamic";
 
@@ -82,6 +83,8 @@ export default async function SourcesPage() {
         </p>
         <RunPipelineButton />
       </div>
+
+      <BatchMonthScrape />
     </div>
   );
 }

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { DEFAULT_SCRAPE_KEYWORD, MAX_SCRAPE_KEYWORDS, SCRAPE_POSTS_MIN, SCRAPE_POSTS_MAX, type ScrapeSort } from "@/lib/scrape-config";
+import { monthBounds } from "@/lib/month-range";
 
 // 自動抓文設定（一份可保存的設定，不綁發文帳號）：自訂多個關鍵字（去 Threads 搜含該字的貼文）、
 // 每次抓幾篇、排序、日期區間、目標帳號。儲存後下次開頁自動帶出（保留上次設定）。抓到的一律進待審素材。
@@ -20,8 +21,17 @@ export default function ScrapeConfigForm({
   const [after, setAfter] = useState(initial.after ?? "");
   const [before, setBefore] = useState(initial.before ?? "");
   const [enabled, setEnabled] = useState(initial.enabled);
+  const [month, setMonth] = useState(""); // 快選月份（YYYY-MM）：套用後填入起訖日
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+
+  // 快選月份 → 自動填該月 1 號～月底到起始/結束日。
+  function applyMonth() {
+    const b = monthBounds(month);
+    if (!b) return;
+    setAfter(b.after);
+    setBefore(b.before);
+  }
 
   function addKeyword(raw: string) {
     const k = raw.trim();
@@ -190,7 +200,28 @@ export default function ScrapeConfigForm({
             </button>
           )}
         </div>
-        <p className="mt-1 text-xs text-ink-3">兩格都留空就不限日期（清不掉時按「清除日期」）。記得按下方「儲存設定」才會生效。</p>
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-xs text-ink-3">快選月份：</span>
+          <input
+            type="month"
+            value={month}
+            onChange={(e) => setMonth(e.target.value)}
+            aria-label="快選月份"
+            className="rounded-xl border px-3 py-1.5"
+          />
+          <button
+            type="button"
+            onClick={applyMonth}
+            disabled={!month}
+            className="rounded-xl border border-brand/40 px-3 py-1.5 text-xs text-brand hover:bg-orange-50 disabled:opacity-50"
+          >
+            套用此月
+          </button>
+        </div>
+        <p className="mt-1 text-xs text-ink-3">
+          兩格都留空就不限日期（清不掉時按「清除日期」）。「快選月份」會自動填該月 1 號～月底。
+          日期只有<b>舊版 igview 抓取器</b>會生效。記得按下方「儲存設定」。
+        </p>
       </div>
 
       <label className="flex cursor-pointer items-center gap-2 text-sm text-ink-2">

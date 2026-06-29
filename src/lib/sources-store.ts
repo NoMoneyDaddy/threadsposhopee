@@ -30,6 +30,7 @@ export async function createSource(
     poll_interval_minutes?: number;
     auto_publish?: boolean;
     posts_limit?: number;
+    enabled?: boolean;
   },
   ownerId: string
 ): Promise<Source> {
@@ -40,7 +41,7 @@ export async function createSource(
     shopee_account_id: input.shopee_account_id ?? null,
     source_username: (input.source_username ?? "").trim().replace(/^@/, ""),
     search_query,
-    enabled: true,
+    enabled: input.enabled ?? true,
     poll_interval_minutes: input.poll_interval_minutes ?? 15,
     auto_publish: input.auto_publish ?? false,
     posts_limit: input.posts_limit ?? 1

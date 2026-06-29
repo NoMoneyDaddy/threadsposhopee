@@ -1,6 +1,26 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { splitMaterialMedia, mergeToMaterialMedia } from "./material-media";
+import { splitMaterialMedia, mergeToMaterialMedia, sanitizeMaterialMedia } from "./material-media";
+
+test("sanitizeMaterialMedia：濾無效項、slot 夾 main/reply/both、依 url 去重保序", () => {
+  const r = sanitizeMaterialMedia([
+    { url: "a", type: "video", slot: "reply" },
+    { url: "", type: "image" }, // 無 url → 丟
+    { url: "b", type: "gif" }, // 非法 type → 丟
+    { url: "c", type: "image" }, // 未設 slot → main
+    { url: "d", type: "image", slot: "weird" }, // 非法 slot → main
+    { url: "e", type: "image", slot: "both" },
+    { url: "a", type: "image" } // 重複 url → 丟
+  ]);
+  assert.deepEqual(r, [
+    { url: "a", type: "video", slot: "reply" },
+    { url: "c", type: "image", slot: "main" },
+    { url: "d", type: "image", slot: "main" },
+    { url: "e", type: "image", slot: "both" }
+  ]);
+  assert.deepEqual(sanitizeMaterialMedia(null), []);
+  assert.deepEqual(sanitizeMaterialMedia("x"), []);
+});
 
 test("splitMaterialMedia：依 slot 分主文/留言，both 兩邊都放，未設視同主文", () => {
   const r = splitMaterialMedia([

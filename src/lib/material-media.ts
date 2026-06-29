@@ -41,3 +41,21 @@ export function mergeToMaterialMedia(
   }
   return out;
 }
+
+// 清洗外部傳入的素材媒體清單（API body）：濾掉無效項（缺 url／type 非 image/video），
+// slot 夾成 main/reply/both（未設或非法 → main），依 url 去重保序。純函式可測。
+export function sanitizeMaterialMedia(input: unknown): DraftMedia[] {
+  if (!Array.isArray(input)) return [];
+  const out: DraftMedia[] = [];
+  const seen = new Set<string>();
+  for (const raw of input) {
+    const m = raw as Partial<DraftMedia> | null;
+    if (!m || typeof m.url !== "string" || !m.url) continue;
+    if (m.type !== "image" && m.type !== "video") continue;
+    if (seen.has(m.url)) continue;
+    seen.add(m.url);
+    const slot: DraftMedia["slot"] = m.slot === "reply" || m.slot === "both" ? m.slot : "main";
+    out.push({ url: m.url, type: m.type, slot });
+  }
+  return out;
+}

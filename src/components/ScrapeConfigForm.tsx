@@ -15,6 +15,7 @@ export default function ScrapeConfigForm({
   const [keywords, setKeywords] = useState<string[]>(initial.keywords.length ? initial.keywords : [DEFAULT_SCRAPE_KEYWORD]);
   const [input, setInput] = useState("");
   const [postsLimit, setPostsLimit] = useState(initial.postsLimit);
+  const [enabled, setEnabled] = useState(initial.enabled);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -35,12 +36,13 @@ export default function ScrapeConfigForm({
       const res = await fetch("/api/scrape-config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ keywords, postsLimit })
+        body: JSON.stringify({ keywords, postsLimit, enabled })
       });
       const json = await res.json();
       if (!json.ok) throw new Error(json.error);
       setKeywords(json.config.keywords);
       setPostsLimit(json.config.postsLimit);
+      setEnabled(json.config.enabled);
       setMsg("已儲存設定（下次開頁自動帶出）");
       router.refresh();
     } catch (e) {
@@ -116,6 +118,11 @@ export default function ScrapeConfigForm({
           />
         </label>
       </div>
+
+      <label className="flex cursor-pointer items-center gap-2 text-sm text-ink-2">
+        <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} className="h-4 w-4" />
+        啟用（按「立即抓取」時納入這些關鍵字；停用＝暫時略過，本服務無背景自動抓取）
+      </label>
 
       <div className="flex items-center gap-3">
         <button onClick={save} disabled={busy} className="btn btn-brand">

@@ -69,7 +69,8 @@ export async function getScrapeConfig(ownerId: string): Promise<{ keywords: stri
   const sources = (await listSources(ownerId)).filter(isScrapeSource);
   const keywords = sources.map((s) => (s.search_query ?? "").trim()).filter(Boolean);
   const postsLimit = sources[0]?.posts_limit ?? 3;
-  const enabled = sources.some((s) => s.enabled);
+  // 尚未設定任何關鍵字時預設「啟用」，讓首次儲存就會被「立即抓取」納入；已有來源則看其啟用狀態。
+  const enabled = sources.length === 0 ? true : sources.some((s) => s.enabled);
   return { keywords, postsLimit, enabled };
 }
 
@@ -93,7 +94,7 @@ export async function saveScrapeConfig(
   // 新增缺的
   for (const kw of keywords) {
     if (!existingByKw.has(kw)) {
-      await createSource({ threads_account_id: null, source_username: "", search_query: kw, posts_limit: postsLimit, auto_publish: false }, ownerId);
+      await createSource({ threads_account_id: null, source_username: "", search_query: kw, posts_limit: postsLimit, auto_publish: false, enabled }, ownerId);
     }
   }
   // 更新保留的：posts_limit / enabled

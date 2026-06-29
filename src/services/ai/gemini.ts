@@ -9,7 +9,23 @@ interface GeminiPart {
   thought?: boolean; // 2.5 thinking 模型的思考片段標記，不應計入輸出
 }
 interface GeminiResponse {
-  candidates?: Array<{ content?: { parts?: GeminiPart[] } }>;
+  candidates?: Array<{ content?: { parts?: GeminiPart[] }; finishReason?: string }>;
+}
+
+interface GenerationConfig {
+  temperature: number;
+  maxOutputTokens: number;
+  thinkingConfig?: { thinkingBudget: number };
+}
+
+// 組 generationConfig。關鍵：2.5 flash／flash-lite 預設會「思考」，思考 token 會吃掉 maxOutputTokens，
+// 導致文案被截在半句（實測 flash@512 思考 489 token、輸出只剩 22 字）。文案/分類等任務不需要推理，
+// 故對這些模型關閉思考（thinkingBudget:0）：輸出完整、更快也更省。pro 無法關閉，靠較高上限緩衝。
+// 對不支援 thinkingConfig 的舊模型（1.5／2.0）不送此欄位，避免 400。
+export function buildGenerationConfig(temperature: number, maxOutputTokens: number, model: string): GenerationConfig {
+  const cfg: GenerationConfig = { temperature, maxOutputTokens };
+  if (/2\.5-flash/.test(model)) cfg.thinkingConfig = { thinkingBudget: 0 };
+  return cfg;
 }
 
 // 串接候選回覆的所有文字片段。Gemini（尤其 2.5 系列「thinking」模型）會把輸出拆成多個 parts，
@@ -97,16 +113,17 @@ export async function generateWithGemini(
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model || env.geminiModel}:generateContent?key=${key}`;
   // 不對 429 退避重試（attempts=1）：Gemini 免費層是「每分鐘」配額，30–60s 才回補，遠超我們 16s 退避上限，
   // 重試只會白等數十秒又再 429、還多燒一次配額。直接快速失敗，由呼叫端略過該篇、整批抓取才不會卡很久。
+  const resolvedModel = model || env.geminiModel;
   const res = await fetchWithRetry(assertSafePublicUrl(url).href, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       contents: [{ role: "user", parts }],
-      generationConfig: { temperature, maxOutputTokens }
+      generationConfig: buildGenerationConfig(temperature, maxOutputTokens, resolvedModel)
     })
   }, 30000, 1);
   if (!res.ok) throw new Error(`Gemini ${res.status}: ${await res.text()}`);
-  const json = await res.json();
+  const json = (await res.json()) as GeminiResponse;
   const text = extractGeminiText(json);
   if (!text) {
     const finishReason = json?.candidates?.[0]?.finishReason;
@@ -115,6 +132,10 @@ export async function generateWithGemini(
     }
     throw new Error("Gemini 回傳空內容（可能被安全過濾器攔截）");
   }
+  // 達輸出上限＝文案被截在半句（thinking 模型尤其常見）。留個 warn 方便診斷、提示調高額度。
+  if (json?.candidates?.[0]?.finishReason === "MAX_TOKENS") {
+    log.warn("Gemini 輸出達 maxOutputTokens 上限被截斷", { maxOutputTokens, model: resolvedModel });
+  }
   return text;
 }
 
@@ -122,19 +143,23 @@ export async function generateWithGemini(
 export async function geminiText(prompt: string, apiKey?: string | null, temperature = 0.4, maxOutputTokens = 400, model?: string | null): Promise<string> {
   const key = apiKey;
   if (!key) throw new Error("無 Gemini 金鑰");
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model || env.geminiModel}:generateContent?key=${key}`;
+  const resolvedModel = model || env.geminiModel;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${resolvedModel}:generateContent?key=${key}`;
   // attempts=1：同上，免費層每分鐘配額不會在退避視窗內回補，重試只是白等。
   const res = await fetchWithRetry(assertSafePublicUrl(url).href, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: { temperature, maxOutputTokens }
+      generationConfig: buildGenerationConfig(temperature, maxOutputTokens, resolvedModel)
     })
   }, 30000, 1);
   if (!res.ok) throw new Error(`Gemini ${res.status}: ${await res.text()}`);
-  const json = await res.json();
+  const json = (await res.json()) as GeminiResponse;
   const text = extractGeminiText(json);
   if (!text) throw new Error("Gemini 回傳空內容");
+  if (json?.candidates?.[0]?.finishReason === "MAX_TOKENS") {
+    log.warn("Gemini 輸出達 maxOutputTokens 上限被截斷", { maxOutputTokens, model: resolvedModel });
+  }
   return text.trim();
 }

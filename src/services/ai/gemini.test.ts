@@ -1,6 +1,16 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { extractGeminiText } from "./gemini";
+import { extractGeminiText, buildGenerationConfig } from "./gemini";
+
+test("2.5 flash／flash-lite 關閉思考（thinkingBudget:0），避免思考吃掉輸出額度", () => {
+  assert.deepEqual(buildGenerationConfig(0.9, 1024, "gemini-2.5-flash"), { temperature: 0.9, maxOutputTokens: 1024, thinkingConfig: { thinkingBudget: 0 } });
+  assert.deepEqual(buildGenerationConfig(0.9, 1024, "gemini-2.5-flash-lite").thinkingConfig, { thinkingBudget: 0 });
+});
+
+test("非 flash 模型（pro／舊版）不送 thinkingConfig，避免不支援的 400", () => {
+  assert.equal(buildGenerationConfig(0.9, 1024, "gemini-2.5-pro").thinkingConfig, undefined);
+  assert.equal(buildGenerationConfig(0.9, 1024, "gemini-1.5-flash-latest").thinkingConfig, undefined);
+});
 
 test("串接多個 text parts（thinking 模型常把輸出拆段）", () => {
   const json = { candidates: [{ content: { parts: [{ text: "上半段，" }, { text: "下半段。" }] } }] };

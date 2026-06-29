@@ -1,6 +1,7 @@
 import { getScrapeConfig, hasApifyCredentials } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
 import { isDemoMode } from "@/lib/env";
+import { getApifyUsage } from "@/services/apify/usage";
 import ScrapeConfigForm from "@/components/ScrapeConfigForm";
 import RunPipelineButton from "@/components/RunPipelineButton";
 
@@ -38,7 +39,7 @@ export default async function SourcesPage() {
     );
   }
 
-  const config = await getScrapeConfig(ownerId);
+  const [config, usage] = await Promise.all([getScrapeConfig(ownerId), isDemoMode ? Promise.resolve(null) : getApifyUsage(ownerId)]);
 
   return (
     <div className="space-y-4">
@@ -47,6 +48,27 @@ export default async function SourcesPage() {
         設定<b>關鍵字</b>，系統會去 Threads 搜含該關鍵字的貼文、把符合的換成你的分潤連結，產生「素材」進<b>待審</b>
         （不綁發文帳號、不自動發文）。之後到「素材」頁逐筆核准，再挑選一鍵轉貼文／排程。
       </p>
+
+      {usage && (
+        <div className="flex flex-wrap items-center gap-2 rounded-2xl border bg-surface p-3 text-sm">
+          <span className="font-medium">Apify 本月額度</span>
+          <span className="text-ink-2">
+            已用 US$ {usage.usedUsd.toFixed(2)}
+            {usage.limitUsd != null
+              ? ` / 上限 US$ ${usage.limitUsd.toFixed(2)}`
+              : "（查無月上限）"}
+          </span>
+          {usage.remainingUsd != null && (
+            <span
+              className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                usage.remainingUsd <= 0 ? "bg-red-50 text-red-600" : usage.remainingUsd < 1 ? "bg-amber-50 text-amber-700" : "bg-green-50 text-green-700"
+              }`}
+            >
+              剩 US$ {usage.remainingUsd.toFixed(2)}
+            </span>
+          )}
+        </div>
+      )}
 
       <ScrapeConfigForm initial={config} />
 

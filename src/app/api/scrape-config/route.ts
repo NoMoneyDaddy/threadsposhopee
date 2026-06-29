@@ -40,6 +40,10 @@ export async function POST(req: Request) {
       username = normalizeScrapeUsername(body?.username);
       after = normalizeScrapeDate(body?.after);
       before = normalizeScrapeDate(body?.before);
+      // 起始日不可晚於結束日（YYYY-MM-DD 字典序即時間序），擋下無效區間避免白燒 Apify 額度。
+      if (after && before && after > before) {
+        throw new Error("起始日不可晚於結束日");
+      }
     } catch (e) {
       return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 400 });
     }

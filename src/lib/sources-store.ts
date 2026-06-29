@@ -105,7 +105,8 @@ export async function saveScrapeConfig(ownerId: string, cfg: ScrapeConfigData): 
   const existing = (await listSources(ownerId)).filter(isScrapeSource);
   const existingByKw = new Map(existing.map((s) => [(s.search_query ?? "").trim(), s]));
   const wanted = new Set(keywords);
-  const shared = { posts_limit: postsLimit, source_username: username, sort, after_date: after, before_date: before, enabled };
+  // 空日期統一存 null（與 createSource 一致，避免 DB 混用 NULL 與 "" 表示「不限日期」）。
+  const shared = { posts_limit: postsLimit, source_username: username, sort, after_date: after || null, before_date: before || null, enabled };
 
   // 各列獨立，平行處理（最多 10 個關鍵字，省去逐筆 DB 往返）：刪除移除的、新增缺的、更新保留的。
   await Promise.all([
@@ -126,7 +127,7 @@ export async function saveScrapeConfig(ownerId: string, cfg: ScrapeConfigData): 
 async function updateScrapeSource(
   id: string,
   ownerId: string,
-  patch: { posts_limit?: number; source_username?: string; sort?: "top" | "recent"; after_date?: string; before_date?: string; enabled?: boolean }
+  patch: { posts_limit?: number; source_username?: string; sort?: "top" | "recent"; after_date?: string | null; before_date?: string | null; enabled?: boolean }
 ): Promise<void> {
   if (isDemoMode) {
     const s = demo.sources.find((x) => x.id === id && x.owner_id === ownerId);

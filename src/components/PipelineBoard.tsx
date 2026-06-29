@@ -83,8 +83,8 @@ export default function PipelineBoard({
       onToggleSelect={() => {}}
       isSponsorPick={
         Boolean(sponsor?.enabled) &&
-        Boolean(d.threads_account_id) &&
-        sponsor?.pickByAccount[d.threads_account_id as string] === d.id
+        !!d.threads_account_id &&
+        sponsor?.pickByAccount?.[d.threads_account_id] === d.id
       }
     />
   );

@@ -65,3 +65,22 @@ test("fetchWithRetry：429 持續 → 用盡 attempts 後回最後一個", async
     stub.restore();
   }
 });
+
+test("fetchWithRetry：retryStatuses 可覆寫（Gemini 重試 503，預設不重試 503）", async () => {
+  const def = stubFetch([503, 200]); // 預設只重試 429 → 503 直接回，不重試
+  try {
+    const res = await fetchWithRetry("https://x.test", {}, 1000, 3);
+    assert.equal(res.status, 503);
+    assert.equal(def.calls, 1);
+  } finally {
+    def.restore();
+  }
+  const custom = stubFetch([503, 500, 200]); // 指定 [500,503] → 重試到成功
+  try {
+    const res = await fetchWithRetry("https://x.test", {}, 1000, 3, [500, 503]);
+    assert.equal(res.status, 200);
+    assert.equal(custom.calls, 3);
+  } finally {
+    custom.restore();
+  }
+});

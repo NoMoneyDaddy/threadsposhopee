@@ -21,17 +21,20 @@ export function retryAfterMs(header: string | null, now = Date.now()): number | 
   return null;
 }
 
-// 帶逾時 + 429 退避重試的 fetch：只對 429（rate limited、請求「未被處理」）重試，遵守
+// 帶逾時 + 退避重試的 fetch：預設只對 429（rate limited、請求「未被處理」）重試，遵守
 // Retry-After（封頂 16s）；其餘狀態與網路錯誤直接回/拋，由呼叫端處理。
-// 只重試 429 是刻意取捨——5xx 可能其實已處理（如 Apify 已觸發 run），重試恐重複副作用。
+// 預設只重試 429 是刻意取捨——5xx 可能其實已處理（如 Apify 已觸發 run），重試恐重複副作用。
+// retryStatuses 可覆寫要重試的狀態碼：對「無副作用」的呼叫（如 Gemini 純文字生成）可加入 500/503
+// 這類暫時性錯誤（高流量／內部錯誤），重試安全且能大幅降低偶發失敗。
 export async function fetchWithRetry(
   input: string | URL,
   init: RequestInit = {},
   timeoutMs = 8000,
-  attempts = 3
+  attempts = 3,
+  retryStatuses: number[] = [429]
 ): Promise<Response> {
   let res = await fetchWithTimeout(input, init, timeoutMs);
-  for (let i = 1; i < attempts && res.status === 429; i++) {
+  for (let i = 1; i < attempts && retryStatuses.includes(res.status); i++) {
     const waitMs = retryAfterMs(res.headers.get("retry-after")) ?? 1000 * 2 ** (i - 1);
     await new Promise((r) => setTimeout(r, Math.min(waitMs, 16_000)));
     res = await fetchWithTimeout(input, init, timeoutMs);

@@ -31,12 +31,16 @@ export default function DraftsExplorer({
   drafts,
   accountMeta = {},
   defaultAccount,
-  sponsor
+  sponsor,
+  cloud = null,
+  preset = null
 }: {
   drafts: Draft[];
   accountMeta?: Record<string, AccountMeta>;
   defaultAccount?: AccountMeta; // 未指定帳號的草稿，預覽退回此帳號頭像（通常第一個帳號）
   sponsor?: { enabled: boolean; pickByAccount: Record<string, string> };
+  cloud?: string | null;
+  preset?: string | null;
 }) {
   const [status, setStatus] = useState("all");
   const [account, setAccount] = useState("all");
@@ -214,6 +218,8 @@ export default function DraftsExplorer({
             account={d.threads_account_id ? accountMeta[d.threads_account_id] : undefined}
             fallbackAccount={defaultAccount}
             sponsorEnabled={sponsor?.enabled ?? false}
+            cloud={cloud}
+            preset={preset}
             selectable={d.status === "draft"}
             selected={selected.has(d.id)}
             onToggleSelect={toggleSelect}

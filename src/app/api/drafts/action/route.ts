@@ -14,6 +14,7 @@ import {
 } from "@/lib/store";
 import { setSponsorPick, swapAffiliateLink } from "@/lib/sponsor";
 import { refreshAffiliateLink, itemIdFromCleanUrl } from "@/services/materials/refresh-link";
+import { sanitizeThreadSegments } from "@/lib/material-media";
 import { createRedirectLink } from "@/lib/redirect-store";
 import { extractHttpUrls, replaceUrls } from "@/lib/linkify";
 import { assertSafePublicUrl } from "@/lib/url-guard";
@@ -122,11 +123,12 @@ export async function POST(req: Request) {
         patch.reply_text = replyText ? swapAffiliateLink(replyText, old, link) : replyText;
       }
     }
-    // 草稿若已有多段串文鏈：第 0 段＝留言段（2/n），須與編輯後的 reply_text/reply_media 同步，
-    // 否則發布時 effectiveChain 仍會沿用舊的 thread_chain[0]（畫面與實際不一致）。後續段落（3/n…）保留不動。
-    // 僅在「鏈尚未開始補發」（thread_cursor 為 0/未設）時同步：補發中（cursor>0）改第 0 段會讓
-    // effectiveChain 濾空後索引左移、cursor 失準而跳段，故此時不動鏈（已發出的第 0 段也無需再改）。
-    if (Array.isArray(draft.thread_chain) && draft.thread_chain.length > 0 && (draft.thread_cursor ?? 0) === 0) {
+    // 共用編輯器送來「完整串文鏈」（[0]＝留言 2/n，其餘 3/n+）時直接採用（清洗、丟空段）；
+    // 鏈補發中（cursor>0）不動鏈，避免索引左移跳段。空陣列＝清鏈、發布時沿用 reply_*。
+    if (Array.isArray(body.thread_chain) && (draft.thread_cursor ?? 0) === 0) {
+      patch.thread_chain = sanitizeThreadSegments(body.thread_chain);
+    } else if (Array.isArray(draft.thread_chain) && draft.thread_chain.length > 0 && (draft.thread_cursor ?? 0) === 0) {
+      // 舊路徑（只編留言、未送整鏈）：同步第 0 段＝編輯後的留言，後續段落保留不動。
       const firstMedia = patch.reply_media ?? draft.thread_chain[0]?.media ?? draft.reply_media ?? [];
       patch.thread_chain = [{ text: patch.reply_text ?? null, media: firstMedia }, ...draft.thread_chain.slice(1)];
     }

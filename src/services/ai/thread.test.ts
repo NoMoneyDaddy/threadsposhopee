@@ -9,8 +9,12 @@ test("ensureExactLink：已含原樣連結 → 原樣返回", () => {
   assert.equal(ensureExactLink(r, SHORT), r);
 });
 
-test("ensureExactLink：AI 漏放連結 → 末尾補上原始連結", () => {
-  assert.equal(ensureExactLink("連結放下面，需要的自己拿", SHORT), "連結放下面，需要的自己拿\nhttps://s.shopee.tw/abc123");
+test("ensureExactLink：AI 漏放連結 → 接在引導語那一行後", () => {
+  assert.equal(ensureExactLink("連結放下面，需要的自己拿", SHORT), "連結放下面，需要的自己拿 https://s.shopee.tw/abc123");
+});
+
+test("ensureExactLink：連結接在第一行（引導語）後，不跑到反應/問句之後、末行不裸連結", () => {
+  assert.equal(ensureExactLink("連結放下面\n你們覺得值嗎", SHORT), "連結放下面 https://s.shopee.tw/abc123\n你們覺得值嗎");
 });
 
 test("ensureExactLink：AI 竄改網址 → 移除錯網址、補回原始連結", () => {
@@ -19,10 +23,27 @@ test("ensureExactLink：AI 竄改網址 → 移除錯網址、補回原始連結
   assert.ok(r.includes(SHORT));
 });
 
+test("ensureExactLink：被加料的網址（query／尾碼／斜線）不可用子字串矇混，須校正回原樣", () => {
+  for (const tampered of [`${SHORT}?utm=1`, `${SHORT}4`, `${SHORT}/`]) {
+    const r = ensureExactLink(`看這 ${tampered}`, SHORT);
+    assert.ok(!r.includes(tampered), `應移除被加料網址：${tampered}`);
+    assert.ok((r.match(/https?:\/\/\S+/g) ?? []).every((u) => u === SHORT), `留下的網址須完全等於原連結（${tampered}）`);
+  }
+});
+
 test("ensureExactLink：移除 [連結]／(URL) 佔位符後補連結", () => {
-  const r = ensureExactLink("連結放下面 [連結]", SHORT);
-  assert.ok(!/\[連結\]/.test(r));
-  assert.ok(r.endsWith(SHORT));
+  for (const input of ["連結放下面 [連結]", "連結放下面 (URL)"]) {
+    const r = ensureExactLink(input, SHORT);
+    assert.ok(!/\[連結\]|\(URL\)/i.test(r));
+    assert.ok(r.endsWith(SHORT));
+  }
+});
+
+test("ensureExactLink：網址後緊貼中文不被一起吞掉（只吃合法 URL 字元）", () => {
+  const r = ensureExactLink("連結在這https://wrong.tw記得買", SHORT);
+  assert.ok(r.includes("記得買"));
+  assert.ok(!r.includes("wrong.tw"));
+  assert.ok(r.includes(SHORT));
 });
 
 test("ensureExactLink：無連結時不動內容", () => {

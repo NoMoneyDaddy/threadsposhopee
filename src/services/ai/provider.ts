@@ -45,17 +45,27 @@ export async function generateCopy(
   return { mainText, replyText: ensureExactLink(replyText, input.shopeeShortLink || ""), raw };
 }
 
-// 確保留言含「原樣」分潤連結，且不含被 AI 竄改的網址或佔位符。
-// 已含原始連結→原樣返回；否則移除 AI 自產網址與 [連結]/(URL) 佔位符後，補上原始連結。純函式可測。
+// 留言內的網址 token：只吃合法 URL 字元（不含中文、空白、括號），避免把網址後面緊貼的中文一起吞掉。
+const URL_TOKEN_RE = /https?:\/\/[A-Za-z0-9\-._~:/?#@!$&'*+,;=%]+/g;
+
+// 確保留言含「原樣」分潤連結，且不含被 AI 竄改的網址或佔位符。純函式可測。
+// 精準比對（非子字串）：reply 內「有且只有」與原連結完全相等的網址才算正確，
+// 避免 link?x=1／link4／link/ 等被加料的網址用 includes() 矇混過關。
+// 需修補時：移除 AI 自產網址與 [連結]/(URL) 佔位符後，把原連結接在「引導語那一行」（第一個非空行）之後——
+// 不可一律塞文末，否則會跑到「真實反應/問句」後面、且最後一行變裸連結（違反 prompt 的「引導語緊接連結，再換行補一句」）。
 export function ensureExactLink(reply: string, link: string): string {
-  if (!link || reply.includes(link)) return reply;
+  if (!link) return reply;
+  const urls = reply.match(URL_TOKEN_RE) ?? [];
+  if (urls.length > 0 && urls.every((u) => u === link)) return reply;
   const cleaned = reply
-    .replace(/https?:\/\/\S+/g, "") // 移除 AI 自己生的網址（可能被竄改，不可信）
+    .replace(URL_TOKEN_RE, "") // 移除 AI 自己生的網址（可能被竄改，不可信）
     .replace(/[[(（【]\s*(連結|網址|連接|link|url)\s*[)）\]】]/gi, "") // 移除佔位符 [連結]/(URL) 等
-    .replace(/[ \t]+$/gm, "")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-  return cleaned ? `${cleaned}\n${link}` : link;
+    .replace(/[ \t]+$/gm, "");
+  const lines = cleaned.split("\n");
+  const idx = lines.findIndex((l) => l.trim() !== "");
+  if (idx === -1) return link; // 沒有任何引導語 → 至少回連結（上游另有防裸連結降級）
+  lines[idx] = `${lines[idx].replace(/[ \t]+$/, "")} ${link}`;
+  return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
 // 把同一段正文改寫成 n 個語氣/開頭不同、意思相同的版本（「換個說法」）。

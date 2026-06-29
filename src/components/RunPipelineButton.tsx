@@ -66,8 +66,8 @@ export default function RunPipelineButton() {
 
       {noneScanned && (
         <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
-          這次一篇都沒抓到。常見原因是關鍵字太特定，像純網址（<code className="rounded bg-amber-100 px-1">s.shopee.tw</code>）在 Threads 搜尋通常找不到貼文。
-          可以試試：換成會出現在貼文裡的字（例如「蝦皮」「開箱」「好物」），把排序改成「熱門」，或放寬日期區間。
+          這次一篇都沒抓到。可能是這個排序或時間區間剛好沒有符合的貼文，或關鍵字比較冷門。
+          可以把排序改成「熱門」、放寬或清空日期區間、或多加幾個關鍵字再試一次。同樣的關鍵字有時也會因當下狀況回 0，稍後再抓常常就有了。
         </div>
       )}
 

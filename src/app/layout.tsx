@@ -11,6 +11,7 @@ import SiteHeader from "@/components/SiteHeader";
 import AppChrome from "@/components/AppChrome";
 import ViewAsBar from "@/components/ViewAsBar";
 import PwaRegister from "@/components/PwaRegister";
+import SessionSync from "@/components/SessionSync";
 
 // Google AdSense（選用）：設了 NEXT_PUBLIC_ADSENSE_CLIENT（ca-pub-…）才啟用。
 // 驗證走 google-adsense-account meta；載入器只在有設定時插入。建議只在公開頁放廣告單元。
@@ -64,6 +65,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             {...(ANALYTICS_ID ? { "data-website-id": ANALYTICS_ID } : {})}
           />
         )}
+        {user && <SessionSync />}
         {user?.isPlatformOwner && <ViewAsBar viewingAsEmail={user.viewingAsEmail ?? null} />}
         <AppChrome
           autoTour={Boolean(user) && !isDemoMode}

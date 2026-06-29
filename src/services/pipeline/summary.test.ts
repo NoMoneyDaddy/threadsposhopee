@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isMaterialReusable, summarizePipelineRun, decideIntakeStatus } from "./summary";
+import { isMaterialReusable, isMaterialCaptured, summarizePipelineRun, decideIntakeStatus } from "./summary";
 
 test("decideIntakeStatus：新建→pending；已核准(含 null)→approved 不降級；待審→pending", () => {
   assert.equal(decideIntakeStatus(null), "pending");
@@ -18,6 +18,15 @@ test("isMaterialReusable：連結有效＋有文案＋有短連結才可重用",
   assert.equal(isMaterialReusable({ affiliate_valid: true, main_text: "文案", affiliate_short_link: null }), false);
   assert.equal(isMaterialReusable(null), false);
   assert.equal(isMaterialReusable(undefined), false);
+});
+
+test("isMaterialCaptured：連結有效＋有短連結即算已捕捉（不要求文案）", () => {
+  // 抓文不再當下生成文案，故已捕捉的判定不看 main_text，避免同商品被重複重建。
+  assert.equal(isMaterialCaptured({ affiliate_valid: true, main_text: "", affiliate_short_link: "https://s.shopee.tw/x" }), true);
+  assert.equal(isMaterialCaptured({ affiliate_valid: true, main_text: null as unknown as undefined, affiliate_short_link: "x" }), true);
+  assert.equal(isMaterialCaptured({ affiliate_valid: false, affiliate_short_link: "x" }), false); // 連結失效→要重建
+  assert.equal(isMaterialCaptured({ affiliate_valid: true, affiliate_short_link: null }), false);
+  assert.equal(isMaterialCaptured(null), false);
 });
 
 test("summarizePipelineRun：彙總新增/重用/失敗並組訊息", () => {

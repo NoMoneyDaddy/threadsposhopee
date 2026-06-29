@@ -16,7 +16,7 @@ async function maybeVary(draft: Draft, material: Material, ownerId: string): Pro
   try {
     // 先確認有金鑰：未綁 key 的正常退回路徑不該被偏好/模型查詢失敗連帶拖成一般錯誤。
     const geminiKey = await getGeminiKey(ownerId);
-    if (!geminiKey) return { draft, note: "未綁定自己的 Gemini 金鑰，沿用原文案（到帳號管理綁定）" };
+    if (!geminiKey) return { draft, note: "未綁定自己的 Gemini 金鑰，無法生成／重寫文案（到帳號管理綁定後可重寫）" };
     const [copyPrefs, geminiModel] = await Promise.all([getCopyPrefs(ownerId), resolveGeminiModel(ownerId)]);
     const copy = await generateCopy(
       {
@@ -104,8 +104,10 @@ export async function POST(req: Request) {
       });
     }
 
+    // 抓文產生的素材不含文案（文案延到此刻才生成）；故素材無文案時一律生成，或使用者要求重寫（vary）時重寫。
+    const needsCopy = !(material.main_text && material.main_text.trim());
     let note: string | undefined;
-    if (vary) ({ draft, note } = await maybeVary(draft, material, ownerId));
+    if (vary || needsCopy) ({ draft, note } = await maybeVary(draft, material, ownerId));
 
     return NextResponse.json({ ok: true, draft, scheduledAt, note });
   } catch (e) {

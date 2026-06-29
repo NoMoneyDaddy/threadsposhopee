@@ -25,7 +25,7 @@ import {
   userOwnsThreadsAccount
 } from "@/lib/store";
 import { getMediaProvider } from "@/services/media/upload";
-import { isMaterialReusable, decideIntakeStatus } from "./summary";
+import { isMaterialCaptured, decideIntakeStatus } from "./summary";
 import { isDemoMode } from "@/lib/env";
 import type { Source } from "@/lib/types";
 
@@ -133,11 +133,11 @@ export async function runSourcePipeline(
         continue;
       }
 
-      // 查素材庫：命中且連結有效且有文案 → 重用（省 token / API），不重複入庫。
+      // 查素材庫：已捕捉過此商品（連結有效）→ 略過，不重建（省 token / Shopee API / 圖床）。
       const existing = await findMaterial(expanded.shopId, expanded.itemId, ownerId);
-      if (isMaterialReusable(existing)) {
+      if (isMaterialCaptured(existing)) {
         result.reusedMaterial++;
-        result.notes.push(`商品 ${expanded.itemId} 已有有效素材，略過（未燒 token）`);
+        result.notes.push(`商品 ${expanded.itemId} 已有有效素材，略過（未重建）`);
         await markPostProcessed(source.id, post.postId);
         continue;
       }
@@ -155,7 +155,9 @@ export async function runSourcePipeline(
           sourceText: post.text,
           // 關鍵字模式 source_username 可能為空，改用貼文作者當 subId 追蹤標籤
           subIdTag: post.username || source.source_username || "search",
-          withCopy: true,
+          // 抓素材只取商品 ID／名稱／媒體＋換分潤連結，不在這裡生成文案（不燒 Gemini、抓取才快）。
+          // 文案改到「排一篇」轉草稿時才生成（repost 流程；素材無文案會即時補生）。
+          withCopy: false,
           intakeStatus
         },
         ownerId,

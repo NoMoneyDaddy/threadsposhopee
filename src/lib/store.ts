@@ -156,6 +156,7 @@ export {
 export {
   getApifyCredentials,
   setApifyCredentials,
+  setApifyActor,
   hasApifyCredentials,
   getGeminiKey,
   setGeminiKey,

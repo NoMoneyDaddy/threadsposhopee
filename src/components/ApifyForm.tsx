@@ -3,14 +3,42 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import BoundKeyHint from "@/components/BoundKeyHint";
+import { THREADS_ACTORS, THREADS_ACTOR_OPTIONS } from "@/lib/apify-actors";
 
 // 抓取子系統：綁定自己的 Apify API token（任何使用者皆可綁自己的）。token 不回傳明文。
-// actor 固定為系統內建（threads-search-scraper），不開放自訂。
-export default function ApifyForm({ bound }: { bound: boolean }) {
+// 已綁定後可在新／舊兩個抓取器（actor）間自由切換（只改 actor、不用重貼 token）。
+export default function ApifyForm({ bound, actor }: { bound: boolean; actor?: string | null }) {
   const router = useRouter();
   const [token, setToken] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  // 目前生效的 actor（未設＝預設新版）。
+  const [actorSel, setActorSel] = useState(actor || THREADS_ACTORS.default);
+  const [actorBusy, setActorBusy] = useState(false);
+  const [actorMsg, setActorMsg] = useState<string | null>(null);
+
+  async function saveActor(next: string) {
+    const prev = actorSel; // 失敗回滾，避免下拉顯示與後端不一致
+    setActorSel(next);
+    setActorBusy(true);
+    setActorMsg(null);
+    try {
+      const res = await fetch("/api/accounts/apify/actor", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ actor: next })
+      });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error);
+      setActorMsg("✅ 已切換抓取器");
+      router.refresh();
+    } catch (e) {
+      setActorSel(prev);
+      setActorMsg(`❌ ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setActorBusy(false);
+    }
+  }
 
   async function save() {
     if (!token.trim()) {
@@ -70,6 +98,27 @@ export default function ApifyForm({ bound }: { bound: boolean }) {
         </button>
         {msg && <p className="text-sm text-ink-2">{msg}</p>}
       </div>
+
+      {bound && (
+        <div className="mt-4 border-t pt-3">
+          <label className="mb-1 block text-sm font-medium">抓取器（actor）</label>
+          <select
+            className="input"
+            value={actorSel}
+            disabled={actorBusy}
+            onChange={(e) => saveActor(e.target.value)}
+          >
+            {THREADS_ACTOR_OPTIONS.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-ink-3">{THREADS_ACTOR_OPTIONS.find((o) => o.id === actorSel)?.note}</p>
+          <p className="mt-1 text-xs text-ink-3">切換立即生效（沿用現有 token）。「日期區間／排序／帳號內關鍵字」只有舊版 igview 會吃。</p>
+          {actorMsg && <p className="mt-1 text-sm text-ink-2">{actorMsg}</p>}
+        </div>
+      )}
     </div>
   );
 }

@@ -75,6 +75,9 @@ export default function PostEditor({
       // 參考媒體餵給 AI：有影片優先吃影片（資訊量大），否則退回第一個媒體（主文優先，其次留言）。
       const allMedia = [...value.mainMedia, ...value.replyMedia];
       const refMedia = allMedia.find((m) => m.type === "video") ?? allMedia[0] ?? null;
+      // 段數＝目前開啟的欄位數：正文(1)＋留言(1)＋已新增的串文段。你開幾個欄位就生幾段，
+      // 不多拆也不少給；要單篇就只留正文＋留言，要更多串文就先按「新增串文段落」開欄位。
+      const segments = 2 + value.extraSegments.length;
       const res = await fetchWithTimeout(
         "/api/ai/thread",
         {
@@ -84,6 +87,7 @@ export default function PostEditor({
             productName: threadContext.productName ?? "",
             affiliateLink: threadContext.affiliateLink ?? "",
             sourceText: threadContext.sourceText ?? "",
+            segments,
             mediaUrl: refMedia?.url ?? null,
             mediaType: refMedia?.type ?? null
           })
@@ -188,7 +192,7 @@ export default function PostEditor({
                 type="button"
                 onClick={genThread}
                 disabled={generating || rewriting}
-                title="依商品自動生成文案：能一則講完就一則（自動分段），內容多才自動拆成串文；分潤連結放最後一段"
+                title="依你開啟的欄位數生成：正文＋留言（＋你新增的串文段）。要單篇就只留正文＋留言，要更多串文先按「新增串文段落」。分潤連結放最後一段"
                 className="rounded-full border border-brand/40 px-2.5 py-1 text-xs text-brand hover:bg-orange-50 disabled:opacity-50"
               >
                 {generating ? "生成中…" : "✨ AI 生成文案"}

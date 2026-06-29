@@ -19,11 +19,14 @@ export async function POST(req: Request) {
     if (!body || typeof body !== "object") {
       return NextResponse.json({ ok: false, error: "request body 必須是 JSON 物件" }, { status: 400 });
     }
-    const b = body as { productName?: unknown; affiliateLink?: unknown; sourceText?: unknown; segments?: unknown };
+    const b = body as { productName?: unknown; affiliateLink?: unknown; sourceText?: unknown; segments?: unknown; mediaUrl?: unknown; mediaType?: unknown };
     const productName = typeof b.productName === "string" ? b.productName.trim() : "";
     const affiliateLink = typeof b.affiliateLink === "string" ? b.affiliateLink.trim() : "";
     const sourceText = typeof b.sourceText === "string" ? b.sourceText.slice(0, 2000) : "";
     const segments = typeof b.segments === "number" ? b.segments : 3;
+    // 參考媒體（吃圖／影片）：只收 http(s) URL，型別非 video 一律當圖片。
+    const mediaUrl = typeof b.mediaUrl === "string" && /^https?:\/\//.test(b.mediaUrl) ? b.mediaUrl : null;
+    const mediaType: "image" | "video" | "none" = mediaUrl ? (b.mediaType === "video" ? "video" : "image") : "none";
     if (!productName && !affiliateLink) {
       return NextResponse.json({ ok: false, error: "缺少商品資訊（productName / affiliateLink）" }, { status: 400 });
     }
@@ -35,7 +38,7 @@ export async function POST(req: Request) {
 
     const [prefs, model] = await Promise.all([getCopyPrefs(user.id), resolveGeminiModel(user.id)]);
     const t = await generateThreadCopy(
-      { productName: productName || "這個好物", shopeeShortLink: affiliateLink, sourceText },
+      { productName: productName || "這個好物", shopeeShortLink: affiliateLink, sourceText, mediaUrl, mediaType },
       key,
       segments,
       prefs,

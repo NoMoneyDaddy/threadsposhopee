@@ -171,10 +171,11 @@ function DraftCard({
   }
 
   // 自動存進度：編輯中邊打邊靜默存（edit action，不 refresh/不關閉）。失敗時 PostEditor 顯示提示。
-  async function autosaveDraft(c: PostContent) {
+  async function autosaveDraft(c: PostContent, signal?: AbortSignal) {
     const res = await fetch("/api/drafts/action", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      signal,
       body: JSON.stringify({
         id: draft.id,
         action: "edit",

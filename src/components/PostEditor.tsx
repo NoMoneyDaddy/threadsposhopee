@@ -53,7 +53,8 @@ export default function PostEditor({
   // 有商品情境（素材/草稿）時顯示「AI 生成串文」：依商品名/來源產多段，分潤連結附最後一段。
   threadContext?: { productName?: string | null; affiliateLink?: string | null; sourceText?: string | null };
   // 邊打邊自動存進度（debounce）：有 id 的素材/草稿存 DB、發文頁存 localStorage。未傳＝不自動存。
-  onAutosave?: (value: PostContent) => Promise<void>;
+  // signal：新一次輸入觸發時，用來中斷上一次尚未完成的存檔請求（防後端寫入亂序）。
+  onAutosave?: (value: PostContent, signal?: AbortSignal) => Promise<void>;
   autosaveDelayMs?: number;
   limit?: number;
 }) {
@@ -71,6 +72,8 @@ export default function PostEditor({
     setGenerating(true);
     setErr(null);
     try {
+      // 把第一個媒體（優先主文，其次留言）當參考圖／影片餵給 AI。
+      const refMedia = value.mainMedia[0] ?? value.replyMedia[0] ?? null;
       const res = await fetchWithTimeout(
         "/api/ai/thread",
         {
@@ -79,7 +82,9 @@ export default function PostEditor({
           body: JSON.stringify({
             productName: threadContext.productName ?? "",
             affiliateLink: threadContext.affiliateLink ?? "",
-            sourceText: threadContext.sourceText ?? ""
+            sourceText: threadContext.sourceText ?? "",
+            mediaUrl: refMedia?.url ?? null,
+            mediaType: refMedia?.type ?? null
           })
         },
         30000
@@ -105,26 +110,38 @@ export default function PostEditor({
   }, [value.mainText]);
 
   // 自動存進度（debounce）：內容變動 autosaveDelayMs 後呼叫 onAutosave；跳過初次掛載。
+  // onAutosave 用 ref 保存最新版本（避免 stale closure 抓到舊的 draft.id），且不因其身分改變而重觸發 debounce。
+  const onAutosaveRef = useRef(onAutosave);
+  useEffect(() => {
+    onAutosaveRef.current = onAutosave;
+  }, [onAutosave]);
   const [autoStatus, setAutoStatus] = useState<"" | "saving" | "saved" | "error">("");
   const firstAutosave = useRef(true);
+  const hasAutosave = Boolean(onAutosave);
   useEffect(() => {
-    if (!onAutosave) return;
+    if (!hasAutosave) return;
     if (firstAutosave.current) {
       firstAutosave.current = false;
       return;
     }
+    const controller = new AbortController();
     const t = setTimeout(async () => {
+      const fn = onAutosaveRef.current;
+      if (!fn) return;
       setAutoStatus("saving");
       try {
-        await onAutosave(value);
-        setAutoStatus("saved");
-      } catch {
-        setAutoStatus("error");
+        await fn(value, controller.signal);
+        if (!controller.signal.aborted) setAutoStatus("saved");
+      } catch (e) {
+        if (e instanceof Error && e.name === "AbortError") return; // 被新輸入取消，不算失敗
+        if (!controller.signal.aborted) setAutoStatus("error");
       }
     }, autosaveDelayMs);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value]);
+    return () => {
+      clearTimeout(t);
+      controller.abort(); // 取消上一次未完成的存檔
+    };
+  }, [value, autosaveDelayMs, hasAutosave]);
 
   async function rewrite() {
     if (!value.mainText.trim()) return;

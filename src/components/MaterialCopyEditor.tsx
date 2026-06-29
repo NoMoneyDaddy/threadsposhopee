@@ -43,10 +43,11 @@ export default function MaterialCopyEditor({
   }, [material.main_text, material.reply_text, material.media, material.thread_chain, open]);
 
   // 自動存進度：邊打邊靜默 PATCH（不關閉編輯器、不 refresh）。失敗時 PostEditor 會顯示提示。
-  async function autosave(c: PostContent) {
+  async function autosave(c: PostContent, signal?: AbortSignal) {
     const res = await fetch(`/api/materials/${material.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
+      signal,
       body: JSON.stringify({
         main_text: c.mainText,
         reply_text: c.replyText,

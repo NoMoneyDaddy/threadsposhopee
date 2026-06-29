@@ -12,6 +12,20 @@ const COMPOSE_DRAFT_KEY = "compose:draft";
 const isNonEmptyContent = (c: PostContent) =>
   Boolean(c.mainText.trim() || c.replyText.trim() || c.mainMedia.length || c.replyMedia.length || c.extraSegments.length);
 
+// 從 localStorage 還原時做防禦性驗證：欄位型別不符（被竄改／舊格式）一律退回空值，避免下游崩潰。
+function coerceContent(raw: unknown): PostContent {
+  const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const str = (v: unknown) => (typeof v === "string" ? v : "");
+  const arr = (v: unknown) => (Array.isArray(v) ? v : []);
+  return {
+    mainText: str(o.mainText),
+    replyText: str(o.replyText),
+    mainMedia: arr(o.mainMedia) as PostContent["mainMedia"],
+    replyMedia: arr(o.replyMedia) as PostContent["replyMedia"],
+    extraSegments: arr(o.extraSegments) as PostContent["extraSegments"]
+  };
+}
+
 // 發文：像 Threads 一樣直接打字、上傳多張照片／影片，右側即時預覽；正文裡的蝦皮連結發布時自動轉成你的分潤連結。
 // 編輯區共用 <PostEditor>（與草稿/素材一致）；本元件負責發文帳號、排程與送出（發布/排程/佇列/草稿）。
 export default function SelfComposeForm({
@@ -36,8 +50,7 @@ export default function SelfComposeForm({
     try {
       const raw = localStorage.getItem(COMPOSE_DRAFT_KEY);
       if (!raw) return;
-      const saved = JSON.parse(raw) as Partial<PostContent>;
-      const restored: PostContent = { ...emptyPostContent(), ...saved };
+      const restored = coerceContent(JSON.parse(raw));
       if (isNonEmptyContent(restored)) {
         setContent(restored);
         setMsg("↩️ 已救回上次未送出的內容");

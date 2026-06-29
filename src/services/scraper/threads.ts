@@ -1,6 +1,6 @@
 import { isDemoMode } from "@/lib/env";
 import sampleThread from "@/fixtures/sample-thread.json";
-import { fetchWithRetry } from "@/lib/http";
+import { fetchWithRetry, fetchWithTimeout } from "@/lib/http";
 import { assertSafePublicUrl } from "@/lib/url-guard";
 import { THREADS_ACTORS } from "@/lib/apify-actors";
 import type { DraftMedia } from "@/lib/types";
@@ -262,4 +262,64 @@ export async function scrapeLatestPosts(
   // 但使用者的 posts_limit 可能更小 → 解析後再夾到設定值，避免處理過多、燒 AI/Shopee 額度。
   const posts = parseSearchPosts(Array.isArray(dataset) ? dataset : [dataset]);
   return posts.slice(0, safePostsLimit);
+}
+
+// ───── 非同步抓取（A+B）：啟動 run → 背景輪詢狀態/log → 完成抓 dataset 入庫 ─────
+// 取代 run-sync 的 300s 硬上限：長跑（timeout 可達 actor 上限）＋即時進度。token 一律走 Bearer 標頭（不放 URL）。
+const APIFY_BASE = "https://api.apify.com/v2";
+export type ApifyRunStatus = "READY" | "RUNNING" | "SUCCEEDED" | "FAILED" | "ABORTED" | "TIMING-OUT" | "TIMED-OUT" | string;
+
+// 啟動一個 Apify run（非同步）：立刻回 runId/datasetId，不等跑完。timeoutSec 設足（受 actor 自身上限約束）。
+export async function startApifyRun(
+  query: ScrapeQuery,
+  postsLimit: number,
+  creds: { token: string; actor?: string | null },
+  timeoutSec = 3600
+): Promise<{ runId: string; datasetId: string | null; actor: string }> {
+  const token = creds.token;
+  const actor = creds.actor || DEFAULT_THREADS_ACTOR;
+  if (!token) throw new Error("未綁定 Apify token（請到帳號管理綁定你自己的 Apify 金鑰）");
+  if (!isValidApifyActor(actor)) throw new Error(`無效的 Apify actor 識別碼「${actor}」`);
+  const body = buildScraperInput(query, normalizePostsLimit(postsLimit), actor);
+  const url = assertSafePublicUrl(`${APIFY_BASE}/acts/${actor.replace("/", "~")}/runs?timeout=${encodeURIComponent(String(timeoutSec))}`).href;
+  const res = await fetchWithRetry(
+    url,
+    { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify(body) },
+    20000,
+    1
+  );
+  if (!res.ok) throw new Error(`Apify 啟動失敗: ${res.status} ${await res.text()}`);
+  const json = await res.json();
+  const d = json?.data;
+  if (!d?.id) throw new Error("Apify 未回傳 run id");
+  return { runId: String(d.id), datasetId: d.defaultDatasetId ?? null, actor };
+}
+
+// 查 run 狀態（背景輪詢／前端進度用）。
+export async function getApifyRunInfo(runId: string, token: string): Promise<{ status: ApifyRunStatus; datasetId: string | null }> {
+  const url = assertSafePublicUrl(`${APIFY_BASE}/actor-runs/${encodeURIComponent(runId)}`).href;
+  const res = await fetchWithTimeout(url, { headers: { Authorization: `Bearer ${token}` } }, 10000);
+  if (!res.ok) throw new Error(`Apify run 查詢失敗: ${res.status}`);
+  const json = await res.json();
+  return { status: json?.data?.status ?? "UNKNOWN", datasetId: json?.data?.defaultDatasetId ?? null };
+}
+
+// 取 run log（純文字，前端即時顯示用）。失敗回空字串（log 非關鍵，不擋流程）。
+export async function getApifyRunLog(runId: string, token: string): Promise<string> {
+  try {
+    const url = assertSafePublicUrl(`${APIFY_BASE}/actor-runs/${encodeURIComponent(runId)}/log`).href;
+    const res = await fetchWithTimeout(url, { headers: { Authorization: `Bearer ${token}` } }, 10000);
+    return res.ok ? await res.text() : "";
+  } catch {
+    return "";
+  }
+}
+
+// 完成後抓 dataset 全部貼文（解析成 ScrapedPost[]）。
+export async function fetchApifyDatasetPosts(datasetId: string, token: string): Promise<ScrapedPost[]> {
+  const url = assertSafePublicUrl(`${APIFY_BASE}/datasets/${encodeURIComponent(datasetId)}/items?clean=true&format=json`).href;
+  const res = await fetchWithTimeout(url, { headers: { Authorization: `Bearer ${token}` } }, 30000);
+  if (!res.ok) throw new Error(`Apify dataset 抓取失敗: ${res.status}`);
+  const json = await res.json();
+  return parseSearchPosts(Array.isArray(json) ? json : [json]);
 }

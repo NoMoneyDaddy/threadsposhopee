@@ -11,6 +11,7 @@ import { broadcastWeeklyDigests } from "@/services/digest/weekly-broadcast";
 import type { NotifyType } from "@/lib/notify-prefs";
 import { verifySponsorPosts } from "@/services/sponsor/run";
 import { runAiAgents } from "@/services/ai/agent-run";
+import { pollActiveScrapeRuns } from "@/services/scraper/async-scrape";
 import { cleanupExpiredBindTokens } from "@/lib/telegram-bind";
 import { getOwnerUserId } from "@/lib/auth";
 import { env } from "@/lib/env";
@@ -56,6 +57,11 @@ export async function runCronAll(now: Date = new Date()): Promise<Record<string,
       key: "reconcile",
       run: reconcileNeedsVerification, // 發後讀回比對：確定已發出的「待確認」自動標 published（不自動重發）
       warn: (r) => (r?.resolved ? `✅ 自動確認 ${r.resolved} 則已發布（原待確認）` : null)
+    },
+    {
+      // 非同步抓取：推進使用者啟動的 Apify run（完成就抓 dataset 入庫）。關頁也會由此跑完。
+      key: "scrapeRuns",
+      run: () => pollActiveScrapeRuns()
     }
   ];
   // 每天展期一次（03:00–03:14 視窗，避免每 15 分重複）

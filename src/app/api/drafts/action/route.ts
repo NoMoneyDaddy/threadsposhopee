@@ -13,6 +13,7 @@ import {
   saveDraftToMaterial
 } from "@/lib/store";
 import { setSponsorPick, swapAffiliateLink } from "@/lib/sponsor";
+import { refreshAffiliateLink, itemIdFromCleanUrl } from "@/services/materials/refresh-link";
 import { createRedirectLink } from "@/lib/redirect-store";
 import { extractHttpUrls, replaceUrls } from "@/lib/linkify";
 import { assertSafePublicUrl } from "@/lib/url-guard";
@@ -171,6 +172,42 @@ export async function POST(req: Request) {
       shortened: Object.keys(map).length,
       skipped: Math.max(0, urls.length - MAX_SHORTEN)
     });
+  }
+  if (action === "refresh-link") {
+    // 刷新分潤連結：用當前 Shopee 金鑰＋當前 Sub id 設定，依乾淨商品連結重產，並把舊連結就地換成新連結。
+    if (!draft.clean_product_url) {
+      return NextResponse.json({ ok: false, error: "此草稿沒有乾淨商品連結，無法刷新（請改用素材重排）" }, { status: 400 });
+    }
+    let link: string;
+    let subIdNote: string | null;
+    try {
+      const r = await refreshAffiliateLink(user.id, {
+        cleanUrl: draft.clean_product_url,
+        itemId: itemIdFromCleanUrl(draft.clean_product_url),
+        accountTag: null
+      });
+      link = r.link;
+      subIdNote = r.subId;
+    } catch (e) {
+      return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 400 });
+    }
+    const old = draft.shopee_short_link;
+    const patch: Partial<Draft> = { shopee_short_link: link };
+    if (old && old !== link) {
+      patch.main_text = draft.main_text ? swapAffiliateLink(draft.main_text, old, link) : draft.main_text;
+      patch.reply_text = draft.reply_text ? swapAffiliateLink(draft.reply_text, old, link) : draft.reply_text;
+      // 串文鏈尚未開始補發（cursor 0）時同步第 0 段（留言段）的連結，避免發布時沿用舊鏈連結。
+      if (Array.isArray(draft.thread_chain) && draft.thread_chain.length > 0 && (draft.thread_cursor ?? 0) === 0) {
+        const seg0 = draft.thread_chain[0];
+        patch.thread_chain = [
+          { text: seg0?.text ? swapAffiliateLink(seg0.text, old, link) : seg0?.text ?? null, media: seg0?.media ?? [] },
+          ...draft.thread_chain.slice(1)
+        ];
+      }
+    }
+    const updated = await updateDraft(id, user.id, patch);
+    if (!updated) return NextResponse.json({ ok: false, error: "更新草稿失敗" }, { status: 400 });
+    return NextResponse.json({ ok: true, draft: updated, subId: subIdNote });
   }
   if (action === "regenerate") {
     try {

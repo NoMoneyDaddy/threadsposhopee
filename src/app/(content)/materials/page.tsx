@@ -47,7 +47,7 @@ export default async function MaterialsPage() {
         每個素材 = 一個商品的分潤連結＋AI 文案＋媒體。可重複「再排一篇」而不重燒 token；連結失效才會重產。
       </p>
 
-      <PendingMaterialsReview items={pending} />
+      <PendingMaterialsReview items={pending} accounts={accounts} />
 
       <MaterialCreateForm cloud={cc?.cloud ?? null} preset={cc?.preset ?? null} />
 

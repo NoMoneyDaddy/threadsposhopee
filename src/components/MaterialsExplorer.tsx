@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from "react";
 import RepostButton from "@/components/RepostButton";
+import MaterialRefreshLinkButton from "@/components/MaterialRefreshLinkButton";
+import MaterialCopyEditor from "@/components/MaterialCopyEditor";
 import EvergreenToggle from "@/components/EvergreenToggle";
 import ShareToggle from "@/components/ShareToggle";
 import EmptyState from "@/components/EmptyState";
@@ -95,6 +97,8 @@ export default function MaterialsExplorer({
             )}
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <RepostButton materialId={m.id} threadsAccounts={accounts} />
+              <MaterialCopyEditor material={m} accountLabel={accounts[0]?.label} />
+              <MaterialRefreshLinkButton materialId={m.id} />
               <EvergreenToggle materialId={m.id} initial={Boolean(m.evergreen)} />
               <ShareToggle materialId={m.id} initial={Boolean(m.shared)} />
               <DeleteButton

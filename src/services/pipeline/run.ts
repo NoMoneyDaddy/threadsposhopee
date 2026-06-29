@@ -52,7 +52,9 @@ export interface PipelineResult {
 export async function runSourcePipeline(
   source: Source,
   ownerId: string,
-  opts: { deadline?: number } = {}
+  // force=true：忽略「已抓過去重」與「已有有效素材」兩道略過，強制重新處理本來源貼文
+  // （改了設定/換 actor 後想重抓，免手動清 processed_posts）。
+  opts: { deadline?: number; force?: boolean } = {}
 ): Promise<PipelineResult> {
   const result: PipelineResult = {
     sourceId: source.id,
@@ -121,7 +123,7 @@ export async function runSourcePipeline(
 
     // 單篇容錯：任一外部 API 失敗只略過該篇，不中斷整條流程
     try {
-      if (processedIds.has(post.postId)) {
+      if (!opts.force && processedIds.has(post.postId)) {
         result.skipped++;
         continue;
       }
@@ -139,7 +141,7 @@ export async function runSourcePipeline(
 
       // 查素材庫：已捕捉過此商品（連結有效）→ 略過，不重建（省 token / Shopee API / 圖床）。
       const existing = await findMaterial(expanded.shopId, expanded.itemId, ownerId);
-      if (isMaterialCaptured(existing)) {
+      if (!opts.force && isMaterialCaptured(existing)) {
         result.reusedMaterial++;
         result.notes.push(`商品 ${expanded.itemId} 已有有效素材，略過（未重建）`);
         await markPostProcessed(source.id, post.postId);
@@ -195,7 +197,7 @@ export async function runSourcePipeline(
 // opts.deadline：時間預算（epoch ms），逐來源前檢查，超過即停手留待下輪（守 cron maxDuration）。
 export async function runSourcesForOwner(
   ownerId: string,
-  opts: { sources?: Source[]; deadline?: number } = {}
+  opts: { sources?: Source[]; deadline?: number; force?: boolean } = {}
 ): Promise<PipelineResult[]> {
   const sources = (opts.sources ?? (await listSources(ownerId))).filter((s) => s.enabled);
   const results: PipelineResult[] = [];
@@ -209,7 +211,7 @@ export async function runSourcesForOwner(
     }
     // 單一來源拋錯不該中斷整批後續來源（fail-isolation，對齊 cron/all 的 allSettled 精神）。
     try {
-      results.push(await runSourcePipeline(s, ownerId, { deadline: opts.deadline }));
+      results.push(await runSourcePipeline(s, ownerId, { deadline: opts.deadline, force: opts.force }));
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       log.error("來源爬取流程失敗", { ownerId, sourceId: s.id, sourceUsername: s.source_username, err: msg });

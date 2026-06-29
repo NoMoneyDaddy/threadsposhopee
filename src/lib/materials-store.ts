@@ -110,6 +110,34 @@ export async function updateMaterialMedia(id: string, ownerId: string, media: Dr
   return Boolean(data);
 }
 
+// 編輯素材文案（主文／留言）。多租戶由 owner_id 過濾保證。回傳更新後素材或 null（找不到/無權限）。
+export async function updateMaterialContent(
+  id: string,
+  ownerId: string,
+  patch: { main_text?: string | null; reply_text?: string | null }
+): Promise<Material | null> {
+  const fields: Record<string, unknown> = {};
+  if (patch.main_text !== undefined) fields.main_text = patch.main_text;
+  if (patch.reply_text !== undefined) fields.reply_text = patch.reply_text;
+  if (Object.keys(fields).length === 0) return getMaterial(id, ownerId);
+  if (isDemoMode) {
+    const m = demo.materials.find((x) => x.id === id && x.owner_id === ownerId);
+    if (!m) return null;
+    Object.assign(m, fields);
+    return m;
+  }
+  const sb = getServiceClient()!;
+  const { data, error } = await sb
+    .from("materials")
+    .update(fields)
+    .eq("id", id)
+    .eq("owner_id", ownerId)
+    .select()
+    .maybeSingle();
+  if (error) throw error;
+  return (data as Material) ?? null;
+}
+
 export async function createMaterial(input: Partial<Material>, ownerId: string): Promise<Material> {
   if (isDemoMode) {
     const existing = demo.materials.find((m) => m.shop_id === input.shop_id && m.item_id === input.item_id);

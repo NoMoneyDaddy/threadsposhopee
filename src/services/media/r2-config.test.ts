@@ -7,6 +7,16 @@ test("parseR2Input：空 accountId → 清除", () => {
   assert.deepEqual(r, { ok: true, accountId: null, bucket: null, publicBase: null });
 });
 
+test("parseR2Input：擋掉 S3 API 端點當公開讀網域（會 403）", () => {
+  const r = parseR2Input({
+    accountId: "abc123def456abc123def456abc12345",
+    bucket: "my-media",
+    publicBase: "https://8e09874034c7189ce32cc9d478f09127.r2.cloudflarestorage.com"
+  });
+  assert.equal(r.ok, false);
+  if (!r.ok) assert.match(r.error, /S3 API 端點/);
+});
+
 test("parseR2Input：合法輸入 → 正規化 publicBase（去尾斜線）", () => {
   const r = parseR2Input({
     accountId: "abc123def456abc123def456abc12345",

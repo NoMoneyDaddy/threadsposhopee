@@ -46,7 +46,7 @@ const STEPS: TourStep[] = [
   {
     emoji: "🔗",
     title: "go2read 中轉短連結",
-    body: "可把分潤連結套成自有短連結，搭配揭露式中轉頁：使用者按「繼續」一次點擊才開分潤＋去來源（真實點擊才觸發，不做 cookie stuffing）。",
+    body: "可把分潤連結套成自有短連結，搭配揭露式中轉頁。",
     href: "/links",
     hrefLabel: "前往轉址服務"
   },

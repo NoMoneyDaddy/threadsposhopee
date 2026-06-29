@@ -293,7 +293,10 @@ function DraftCard({
                           type="checkbox"
                           checked={m.inMain}
                           aria-label="放主文"
-                          onChange={(e) => setMediaSlots((prev) => prev.map((x, j) => (j === i ? { ...x, inMain: e.target.checked } : x)))}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setMediaSlots((prev) => prev.map((x, j) => (j === i ? { ...x, inMain: checked } : x)));
+                          }}
                         />
                         主文
                       </label>
@@ -302,7 +305,10 @@ function DraftCard({
                           type="checkbox"
                           checked={m.inReply}
                           aria-label="放留言"
-                          onChange={(e) => setMediaSlots((prev) => prev.map((x, j) => (j === i ? { ...x, inReply: e.target.checked } : x)))}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setMediaSlots((prev) => prev.map((x, j) => (j === i ? { ...x, inReply: checked } : x)));
+                          }}
                         />
                         留言
                       </label>

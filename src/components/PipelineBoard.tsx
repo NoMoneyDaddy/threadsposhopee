@@ -15,8 +15,12 @@ import {
 } from "@dnd-kit/core";
 import DraftCard, { type AccountMeta } from "@/components/DraftCard";
 import MaterialCard from "@/components/MaterialCard";
+import MaterialCreateForm from "@/components/MaterialCreateForm";
 import PendingMaterialsReview from "@/components/PendingMaterialsReview";
 import SelfComposeForm from "@/components/SelfComposeForm";
+import CheckLinksButton from "@/components/CheckLinksButton";
+import BulkRepostButton from "@/components/BulkRepostButton";
+import RetryFailedBar from "@/components/RetryFailedBar";
 import type { Draft, Material, ThreadsAccount } from "@/lib/types";
 import type { ItemRevenue } from "@/services/shopee/report";
 
@@ -130,6 +134,7 @@ export default function PipelineBoard({
 }) {
   const router = useRouter();
   const [composing, setComposing] = useState(false);
+  const [creatingMaterial, setCreatingMaterial] = useState(false);
   // 樂觀更新：拖放後先本地改狀態，API 成功再 router.refresh()（帶回真實資料時清掉覆寫）。
   const [overrides, setOverrides] = useState<Record<string, DraftStatus>>({});
   const [dragStatus, setDragStatus] = useState<DraftStatus | null>(null);
@@ -202,6 +207,9 @@ export default function PipelineBoard({
   // 拖曳中，依來源狀態算出哪些欄是合法目標 → 高亮提示。
   const validTarget = (col: string) => dragStatus != null && resolveDrop(dragStatus, col) != null;
 
+  // 發布失敗的草稿 → 一鍵全部重排（沿用既有 RetryFailedBar）。
+  const failedIds = useMemo(() => drafts.filter((d) => (overrides[d.id] ?? d.status) === "failed").map((d) => d.id), [drafts, overrides]);
+
   const renderDraft = (d: Draft, draggable: boolean) => {
     const card = (
       <DraftCard
@@ -238,10 +246,21 @@ export default function PipelineBoard({
         >
           {composing ? "✕ 收起" : "＋ 新貼文"}
         </button>
-        <span className="text-xs text-ink-3">直接打字發文／排程，或從素材庫「再排一篇」。草稿卡可拖曳變更狀態。</span>
+        <button
+          type="button"
+          onClick={() => setCreatingMaterial((v) => !v)}
+          className="rounded-xl border border-brand/40 px-4 py-2 text-sm font-medium text-brand hover:bg-orange-50"
+        >
+          {creatingMaterial ? "✕ 收起" : "＋ 建立素材"}
+        </button>
+        <BulkRepostButton threadsAccounts={accounts} />
+        <CheckLinksButton />
       </div>
+      <p className="text-xs text-ink-3">直接打字發文／排程，或從素材庫「再排一篇」。草稿卡可拖曳變更狀態。</p>
 
       {composing && <SelfComposeForm threadsAccounts={accounts} cloud={cloud} preset={preset} />}
+      {creatingMaterial && <MaterialCreateForm cloud={cloud} preset={preset} />}
+      {failedIds.length > 0 && <RetryFailedBar failedIds={failedIds} />}
       {err && <p className="text-sm text-danger" role="alert">❌ {err}</p>}
 
       <DndContext

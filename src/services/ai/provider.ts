@@ -101,31 +101,38 @@ export function assembleThread(texts: string[], linkLine: string): { mainText: s
   };
 }
 
-// AI 生成「多段串文」：主文＋數段後續，分潤連結一律由程式附到最後一段（不靠 AI 放，確保穩定）。
-// segments＝總段數（含主文），夾 2–5。回傳直接對應編輯器的 PostContent 文字欄位。
+// AI 生成貼文：分潤連結一律由程式附到最後一段（不靠 AI 放，確保穩定）。
+// segments：總段數（含主文）。<=0＝自動偵測：讓 AI 視內容長度自己決定 1～5 段
+//（能一則講完就一則、段落內可換行分段；內容多才拆成多則串文）。>=2 則固定段數。
 export async function generateThreadCopy(
   input: CopyInput,
   apiKey?: string | null,
-  segments = 3,
+  segments = 0,
   prefs: CopyPrefs = DEFAULT_COPY_PREFS,
   model?: string | null
 ): Promise<GeneratedThread> {
-  const n = Math.min(5, Math.max(2, Math.floor(segments) || 3));
+  const auto = !Number.isFinite(segments) || segments <= 0;
+  const n = auto ? 5 : Math.min(5, Math.max(2, Math.floor(segments))); // auto 時 n 當作「最多段數」上限
   const link = input.shopeeShortLink || "";
   const linkLine = link ? `${pickReplyLeadIn(link)} ${link}` : "";
   if (isDemoMode || !apiKey) {
-    const demo = Array.from({ length: n }, (_, i) =>
+    const demoN = auto ? 1 : n; // 自動模式 demo 給單篇，符合「能一則就一則」
+    const demo = Array.from({ length: demoN }, (_, i) =>
       i === 0 ? `${input.productName} 用了一陣子，真心覺得不錯` : `補充第 ${i + 1} 點：實際用起來的小心得`
     );
     return { ...assembleThread(demo, linkLine), raw: demo.join("\n===\n") };
   }
   const hasMedia = Boolean(input.mediaUrl) && input.mediaType !== "none";
+  // 段數指示：自動模式讓 AI 自己決定要不要拆串文；固定模式照指定段數。
+  const segInstruction = auto
+    ? `請視內容多寡自己決定段數（1～5 段）：能用一則貼文講完就只寫一則（段落間適度換行分段，不要硬拆成多則）；內容真的多到一則塞不下，才拆成多則串文逐則發。`
+    : `請寫一則「${n} 段的 Threads 串文」（主文＋${n - 1} 段後續），像真人逐則發。`;
   const prompt = `${HUMANIZER_RULES}
 
-請為以下蝦皮好物寫一則「${n} 段的 Threads 串文」（主文＋${n - 1} 段後續），像真人逐則發。規則：
+${segInstruction}規則：
 - 繁體中文、口語、無業配味，每段可獨立成立
 - 第 1 段是主文（吸睛開頭、帶出情境），不要放任何網址
-- 後續每段延伸一個重點／使用心得／情境，也不要放網址（連結由系統自動補在最後一段）
+- 若有後續段，每段延伸一個重點／使用心得／情境，也不要放網址（連結由系統自動補在最後一段）
 - 每段最多 4 行，段與段之間只用「獨立一行的 ===」分隔，不要加編號或標題
 ${hasMedia ? "- 已附上商品的照片／影片，請依畫面實際看到的外觀、顏色、特點來寫，但不要描述「這張圖」這類字眼\n" : ""}
 商品：${input.productName}

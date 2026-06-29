@@ -23,7 +23,8 @@ export async function POST(req: Request) {
     const productName = typeof b.productName === "string" ? b.productName.trim() : "";
     const affiliateLink = typeof b.affiliateLink === "string" ? b.affiliateLink.trim() : "";
     const sourceText = typeof b.sourceText === "string" ? b.sourceText.slice(0, 2000) : "";
-    const segments = typeof b.segments === "number" ? b.segments : 3;
+    // 預設 0＝自動偵測段數（能一則講完就一則、內容多才拆串文）；前端不傳 segments 即走自動。
+    const segments = typeof b.segments === "number" ? b.segments : 0;
     // 參考媒體（吃圖／影片）：只收 http(s) URL，型別非 video 一律當圖片。
     const mediaUrl = typeof b.mediaUrl === "string" && /^https?:\/\//.test(b.mediaUrl) ? b.mediaUrl : null;
     const mediaType: "image" | "video" | "none" = mediaUrl ? (b.mediaType === "video" ? "video" : "image") : "none";

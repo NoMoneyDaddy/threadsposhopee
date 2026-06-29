@@ -188,10 +188,10 @@ export default function PostEditor({
                 type="button"
                 onClick={genThread}
                 disabled={generating || rewriting}
-                title="依商品自動生成多段串文（主文＋後續），分潤連結會放在最後一段"
+                title="依商品自動生成文案：能一則講完就一則（自動分段），內容多才自動拆成串文；分潤連結放最後一段"
                 className="rounded-full border border-brand/40 px-2.5 py-1 text-xs text-brand hover:bg-orange-50 disabled:opacity-50"
               >
-                {generating ? "生成中…" : "✨ AI 生成串文"}
+                {generating ? "生成中…" : "✨ AI 生成文案"}
               </button>
             )}
             <button

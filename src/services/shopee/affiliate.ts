@@ -72,6 +72,8 @@ export async function generateAffiliateLink(
 
 // 取商品資訊（productOfferV2）：商品名稱 + 目前分潤率（顯示用，不做選品過濾）。
 // commissionRate 為字串小數（如 "0.05"＝5%）；隨時間變動，呼叫端應記查詢時間。
+// 注意：schema 雖宣告 shopId/itemId 為 Int64，但 Shopee API 實際要求「字串」格式——
+// 傳數字會被回「wrong type」。故 variables 一律用 String()（參考自有可運作的 shopee bot 實作）。
 export async function getProductInfo(
   appId: string,
   secret: string,
@@ -82,7 +84,7 @@ export async function getProductInfo(
     "query productOfferV2($shopId: Int64, $itemId: Int64){productOfferV2(shopId:$shopId, itemId:$itemId, limit:1){nodes{productName commissionRate}}}";
   const data = await callShopee(appId, secret, {
     query,
-    variables: { shopId: Number(shopId), itemId: Number(itemId) }
+    variables: { shopId: String(shopId), itemId: String(itemId) }
   });
   const node = data?.productOfferV2?.nodes?.[0];
   return { productName: node?.productName ?? null, commissionRate: node?.commissionRate ?? null };

@@ -86,6 +86,15 @@ export async function POST(req: Request) {
         : [];
     if (Array.isArray(body.media)) patch.media = sanitizeMedia(body.media);
     if (Array.isArray(body.reply_media)) patch.reply_media = sanitizeMedia(body.reply_media);
+    // 同步舊的單一媒體欄位，使其與新的主文 media 陣列一致：否則 media 被清空（例如把某張只留在留言、
+    // 取消主文）時，normalizeDraftMedia 會回溯舊 cloudinary/source 欄位，導致重載後又「自動勾回主文」。
+    // 以主文媒體首項為準；無主文媒體則一併清空。
+    if (patch.media) {
+      const primary = patch.media[0] ?? null;
+      patch.cloudinary_media_url = primary?.url ?? null;
+      patch.source_media_url = primary?.url ?? null;
+      patch.media_type = primary?.type ?? "none";
+    }
     // 手動設定分潤連結（覆寫自動轉換）：驗證為安全公開網址後，更新欄位並把舊連結就地換成新連結。
     if (typeof body.shopee_short_link === "string" && body.shopee_short_link.trim()) {
       let link: string;

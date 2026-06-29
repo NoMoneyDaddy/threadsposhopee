@@ -45,13 +45,20 @@ function DraftCard({
   const [mainText, setMainText] = useState(draft.main_text ?? "");
   const [replyText, setReplyText] = useState(draft.reply_text ?? "");
   const [shopeeLink, setShopeeLink] = useState(draft.shopee_short_link ?? "");
-  // 媒體指派（主文／留言）：把草稿全部媒體攤平標 slot，編輯時可逐項切換
-  type MediaSlot = { url: string; type: "image" | "video"; slot: "main" | "reply" };
-  const initMediaSlots = (): MediaSlot[] => [
-    ...normalizeDraftMedia(draft).map((m) => ({ ...m, slot: "main" as const })),
-    ...normalizeReplyMedia(draft).map((m) => ({ ...m, slot: "reply" as const }))
-  ];
-  const [mediaSlots, setMediaSlots] = useState<MediaSlot[]>(initMediaSlots);
+  // 媒體指派（主文／留言）：把草稿全部媒體攤平，每張可獨立勾「主文」「留言」——兩邊可同時勾，
+  // 同一張即可重複用（主文輪播＋留言各放一份）。依 url 合併，避免同一張在主文與留言各出現一格。
+  type MediaSlot = { url: string; type: "image" | "video"; inMain: boolean; inReply: boolean };
+  const slotsFromDraft = (d: typeof draft): MediaSlot[] => {
+    const byUrl = new Map<string, MediaSlot>();
+    for (const m of normalizeDraftMedia(d)) byUrl.set(m.url, { url: m.url, type: m.type, inMain: true, inReply: false });
+    for (const m of normalizeReplyMedia(d)) {
+      const ex = byUrl.get(m.url);
+      if (ex) ex.inReply = true;
+      else byUrl.set(m.url, { url: m.url, type: m.type, inMain: false, inReply: true });
+    }
+    return [...byUrl.values()];
+  };
+  const [mediaSlots, setMediaSlots] = useState<MediaSlot[]>(() => slotsFromDraft(draft));
   const [msg, setMsg] = useState<string | null>(null);
   const [compliance, setCompliance] = useState<{ risk: string; advice: string } | null>(null);
   const [variants, setVariants] = useState<{ mainText: string; replyText: string }[] | null>(null);
@@ -112,7 +119,7 @@ function DraftCard({
     setMainText(draft.main_text ?? "");
     setReplyText(draft.reply_text ?? "");
     setShopeeLink(draft.shopee_short_link ?? "");
-    setMediaSlots(initMediaSlots());
+    setMediaSlots(slotsFromDraft(draft));
     setSchedTime(toLocalInput(draft.scheduled_at));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft.main_text, draft.reply_text, draft.shopee_short_link, draft.media, draft.reply_media, draft.scheduled_at]);
@@ -132,10 +139,7 @@ function DraftCard({
         setMainText(json.draft.main_text ?? "");
         setReplyText(json.draft.reply_text ?? "");
         setShopeeLink(json.draft.shopee_short_link ?? "");
-        setMediaSlots([
-          ...normalizeDraftMedia(json.draft).map((m) => ({ ...m, slot: "main" as const })),
-          ...normalizeReplyMedia(json.draft).map((m) => ({ ...m, slot: "reply" as const }))
-        ]);
+        setMediaSlots(slotsFromDraft(json.draft));
       }
       if (action === "edit") setEditing(false);
       if (action === "shorten") {
@@ -273,7 +277,7 @@ function DraftCard({
           />
           {mediaSlots.length > 0 && (
             <div className="space-y-1">
-              <div className="text-xs text-ink-2">媒體指派（主文／留言 2/2）</div>
+              <div className="text-xs text-ink-2">媒體指派（可同時勾主文與留言，同一張可重複用）</div>
               <div className="flex flex-wrap gap-3">
                 {mediaSlots.map((m, i) => (
                   <div key={`${m.url}-${i}`} className="flex flex-col items-center gap-1">
@@ -283,19 +287,32 @@ function DraftCard({
                     ) : (
                       <video src={m.url} className="h-14 w-14 rounded border object-cover" />
                     )}
-                    <select
-                      className="rounded border px-1 py-0.5 text-[11px]"
-                      aria-label="媒體歸屬"
-                      value={m.slot}
-                      onChange={(e) =>
-                        setMediaSlots((prev) =>
-                          prev.map((x, j) => (j === i ? { ...x, slot: e.target.value as "main" | "reply" } : x))
-                        )
-                      }
-                    >
-                      <option value="main">主文</option>
-                      <option value="reply">留言</option>
-                    </select>
+                    <div className="flex gap-2 text-[11px] text-ink-2">
+                      <label className="flex items-center gap-0.5">
+                        <input
+                          type="checkbox"
+                          checked={m.inMain}
+                          aria-label="放主文"
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setMediaSlots((prev) => prev.map((x, j) => (j === i ? { ...x, inMain: checked } : x)));
+                          }}
+                        />
+                        主文
+                      </label>
+                      <label className="flex items-center gap-0.5">
+                        <input
+                          type="checkbox"
+                          checked={m.inReply}
+                          aria-label="放留言"
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setMediaSlots((prev) => prev.map((x, j) => (j === i ? { ...x, inReply: checked } : x)));
+                          }}
+                        />
+                        留言
+                      </label>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -309,8 +326,8 @@ function DraftCard({
                   main_text: mainText,
                   reply_text: replyText,
                   shopee_short_link: shopeeLink,
-                  media: mediaSlots.filter((m) => m.slot === "main").map(({ url, type }) => ({ url, type })),
-                  reply_media: mediaSlots.filter((m) => m.slot === "reply").map(({ url, type }) => ({ url, type }))
+                  media: mediaSlots.filter((m) => m.inMain).map(({ url, type }) => ({ url, type })),
+                  reply_media: mediaSlots.filter((m) => m.inReply).map(({ url, type }) => ({ url, type }))
                 })
               }
               className="rounded bg-brand px-3 py-1 text-xs text-white disabled:opacity-50"

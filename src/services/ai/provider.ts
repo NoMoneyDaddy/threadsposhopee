@@ -40,7 +40,32 @@ export async function generateCopy(
   // 1024 tokens：預設 512 在 thinking 模型（思考會吃掉輸出額度）下，正文常被截在半句。
   // 一則 Threads 主文＋留言約 165 字內，1024 留足緩衝；maxOutputTokens 只是上限，不會多花錢。
   const raw = await generateWithGemini(prompt, input.mediaUrl ?? null, input.mediaType ?? "none", key, prefs.temperature, model, 1024);
-  return { ...splitCopy(raw), raw };
+  const { mainText, replyText } = splitCopy(raw);
+  // AI 引導語可自由發揮，但分潤網址必須一字不差：強制把留言裡的網址校正回原始連結（防幻覺/竄改/漏字）。
+  return { mainText, replyText: ensureExactLink(replyText, input.shopeeShortLink || ""), raw };
+}
+
+// 留言內的網址 token：只吃合法 URL 字元（不含中文、空白、括號），避免把網址後面緊貼的中文一起吞掉。
+const URL_TOKEN_RE = /https?:\/\/[A-Za-z0-9\-._~:/?#@!$&'*+,;=%]+/g;
+
+// 確保留言含「原樣」分潤連結，且不含被 AI 竄改的網址或佔位符。純函式可測。
+// 精準比對（非子字串）：reply 內「有且只有」與原連結完全相等的網址才算正確，
+// 避免 link?x=1／link4／link/ 等被加料的網址用 includes() 矇混過關。
+// 需修補時：移除 AI 自產網址與 [連結]/(URL) 佔位符後，把原連結接在「引導語那一行」（第一個非空行）之後——
+// 不可一律塞文末，否則會跑到「真實反應/問句」後面、且最後一行變裸連結（違反 prompt 的「引導語緊接連結，再換行補一句」）。
+export function ensureExactLink(reply: string, link: string): string {
+  if (!link) return reply;
+  const urls = reply.match(URL_TOKEN_RE) ?? [];
+  if (urls.length > 0 && urls.every((u) => u === link)) return reply;
+  const cleaned = reply
+    .replace(URL_TOKEN_RE, "") // 移除 AI 自己生的網址（可能被竄改，不可信）
+    .replace(/[[(（【]\s*(連結|網址|連接|link|url)\s*[)）\]】]/gi, "") // 移除佔位符 [連結]/(URL) 等
+    .replace(/[ \t]+$/gm, "");
+  const lines = cleaned.split("\n");
+  const idx = lines.findIndex((l) => l.trim() !== "");
+  if (idx === -1) return link; // 沒有任何引導語 → 至少回連結（上游另有防裸連結降級）
+  lines[idx] = `${lines[idx].replace(/[ \t]+$/, "")} ${link}`;
+  return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
 // 把同一段正文改寫成 n 個語氣/開頭不同、意思相同的版本（「換個說法」）。
@@ -125,14 +150,17 @@ export async function generateThreadCopy(
   const auto = !Number.isFinite(segments) || segments <= 0;
   const n = auto ? 5 : Math.min(5, Math.max(2, Math.floor(segments))); // auto 時 n 當作「最多段數」上限
   const link = input.shopeeShortLink || "";
-  const linkLine = link ? `${pickReplyLeadIn(link)} ${link}` : "";
   if (isDemoMode || !apiKey) {
+    // demo 沒呼叫 AI，引導語用固定句池示意；真實路徑改由 AI 生成（見下方）。
+    const demoLink = link ? `${pickReplyLeadIn(link)} ${link}` : "";
     const demoN = auto ? 1 : n; // 自動模式 demo 給單篇，符合「能一則就一則」
     const demo = Array.from({ length: demoN }, (_, i) =>
       i === 0 ? `${input.productName} 用了一陣子，真心覺得不錯` : `補充第 ${i + 1} 點：實際用起來的小心得`
     );
-    return { ...assembleThread(demo, linkLine), raw: demo.join("\n===\n") };
+    return { ...assembleThread(demo, demoLink), raw: demo.join("\n===\n") };
   }
+  // 真實路徑：AI 自己寫帶出連結的引導語（最後一段），程式只把「原樣網址」接上，AI 不碰網址。
+  const linkLine = link;
   const hasMedia = Boolean(input.mediaUrl) && input.mediaType !== "none";
   // 段數指示：自動模式讓 AI 自己決定要不要拆串文；固定模式照指定段數。
   const segInstruction = auto
@@ -146,7 +174,8 @@ ${segInstruction}規則：
 - 繁體中文、口語、無業配味，每段可獨立成立
 - 每段語氣與用字：${describeMain(prefs.main)}
 - 第 1 段是主文（吸睛開頭、帶出情境），不要放任何網址
-- 若有後續段，每段延伸一個重點／使用心得／情境，也不要放網址（連結由系統自動補在最後一段）
+- 中間若有段落，各延伸一個重點／使用心得／情境，一樣不要放網址
+- 最後務必「另起一段」，用你自己的話寫一句口語、每篇都不同的引導語帶出連結（像跟朋友說「連結放下面」的口吻；不要放網址本身，也不要放任何網址佔位符如 [連結] 或 [URL]，網址由系統原樣接上）
 - 每段最多 4 行，段與段之間只用「獨立一行的 ===」分隔，不要加編號或標題
 ${hasMedia ? "- 已附上商品的照片／影片，請依畫面實際看到的外觀、顏色、特點來寫，但不要描述「這張圖」這類字眼\n" : ""}
 商品：${input.productName}
@@ -157,7 +186,10 @@ ${input.sourceText ? `參考內容：${input.sourceText}` : ""}`;
     ? await generateWithGemini(prompt, input.mediaUrl ?? null, input.mediaType === "video" ? "video" : "image", apiKey, prefs.temperature ?? 0.8, model, 2048)
     : await geminiText(prompt, apiKey, prefs.temperature ?? 0.8, 2048, model);
   const texts = parseVariations(raw, n);
-  return { ...assembleThread(texts.length ? texts : [input.productName ?? "這個好物"], linkLine), raw };
+  // 防裸連結（防封）：AI 若沒寫引導段、只回 1 段，linkLine 會變成孤零零的裸網址。
+  // 此時降級補上固定引導句，確保留言一定有引導語在連結前。
+  const finalLinkLine = link && texts.length <= 1 ? `${pickReplyLeadIn(link)} ${link}` : linkLine;
+  return { ...assembleThread(texts.length ? texts : [input.productName ?? "這個好物"], finalLinkLine), raw };
 }
 
 // Demo 模式：不呼叫外部 API，產出一段示意文案

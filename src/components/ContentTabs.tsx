@@ -7,6 +7,7 @@ type Tab = { href: string; label: string; ownerOnly?: boolean };
 
 // 文章管理的次導覽：把發文、草稿、AI 部落客、素材、自動抓文整併在同一個頁面群組底下。
 const TABS: Tab[] = [
+  { href: "/pipeline", label: "工作台" },
   { href: "/drafts", label: "草稿" },
   { href: "/compose", label: "發文" },
   { href: "/agents", label: "AI 部落客" },

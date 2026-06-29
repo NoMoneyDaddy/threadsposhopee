@@ -117,11 +117,12 @@ export async function createMaterial(input: Partial<Material>, ownerId: string):
 export async function saveDraftToMaterial(draft: Draft, ownerId: string): Promise<Material> {
   let shopId: string | null = null;
   let itemId: string | null = null;
+  let existing: Material | null = null;
   if (draft.material_id) {
-    const src = await getMaterial(draft.material_id, ownerId);
-    if (src) {
-      shopId = src.shop_id ?? null;
-      itemId = src.item_id ?? null;
+    existing = await getMaterial(draft.material_id, ownerId);
+    if (existing) {
+      shopId = existing.shop_id ?? null;
+      itemId = existing.item_id ?? null;
     }
   }
   if ((!shopId || !itemId) && draft.clean_product_url) {
@@ -129,26 +130,29 @@ export async function saveDraftToMaterial(draft: Draft, ownerId: string): Promis
     if (ids) {
       shopId = ids.shopId;
       itemId = ids.itemId;
+      if (!existing) existing = await findMaterial(shopId, itemId, ownerId);
     }
   }
   if (!shopId || !itemId) throw new Error("此貼文沒有可識別的蝦皮商品（缺商品連結），無法存成素材");
 
   const media = mergeToMaterialMedia(normalizeDraftMedia(draft), normalizeReplyMedia(draft));
   const primaryMain = media.find((m) => (m.slot ?? "main") !== "reply") ?? null; // 主文首項，給舊單一欄位
+  // upsert 會覆寫所提供欄位：草稿缺值時退回既有素材值，避免把既有商品名/連結等中繼資料覆寫成 null。
   return createMaterial(
     {
       shop_id: shopId,
       item_id: itemId,
-      clean_product_url: draft.clean_product_url ?? null,
-      affiliate_short_link: draft.shopee_short_link ?? null,
+      clean_product_url: draft.clean_product_url ?? existing?.clean_product_url ?? null,
+      affiliate_short_link: draft.shopee_short_link ?? existing?.affiliate_short_link ?? null,
       affiliate_valid: true,
       media,
+      // 舊單一媒體欄位代表「主文首項」：以新 media 為準，無主文媒體則一律清空（不退回既有，避免與 media 不一致）。
       media_type: primaryMain?.type ?? "none",
       source_media_url: primaryMain?.url ?? null,
       cloudinary_media_url: primaryMain?.url ?? null,
-      product_name: draft.product_name ?? null,
-      main_text: draft.main_text ?? null,
-      reply_text: draft.reply_text ?? null,
+      product_name: draft.product_name ?? existing?.product_name ?? null,
+      main_text: draft.main_text ?? existing?.main_text ?? null,
+      reply_text: draft.reply_text ?? existing?.reply_text ?? null,
       intake_status: "approved"
     },
     ownerId

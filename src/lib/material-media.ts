@@ -11,9 +11,9 @@ export function splitMaterialMedia(media: DraftMedia[] | null | undefined): { ma
   for (const m of media ?? []) {
     if (!m || typeof m.url !== "string" || !m.url || (m.type !== "image" && m.type !== "video")) continue;
     const item = { url: m.url, type: m.type };
-    const slot = m.slot ?? "main";
-    if (slot === "main" || slot === "both") main.push(item);
-    if (slot === "reply" || slot === "both") reply.push(item);
+    // 防禦：只有明確 reply/both 才進留言；其餘（main、未設、甚至非預期值）一律當主文，避免無效值靜默丟失媒體。
+    if (m.slot === "reply" || m.slot === "both") reply.push(item);
+    if (m.slot !== "reply") main.push(item);
   }
   return { main, reply };
 }

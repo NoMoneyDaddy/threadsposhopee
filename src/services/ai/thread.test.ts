@@ -1,6 +1,33 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { assembleThread, generateThreadCopy } from "./provider";
+import { assembleThread, generateThreadCopy, ensureExactLink } from "./provider";
+
+const SHORT = "https://s.shopee.tw/abc123";
+
+test("ensureExactLink：已含原樣連結 → 原樣返回", () => {
+  const r = "想看連結放下面 https://s.shopee.tw/abc123";
+  assert.equal(ensureExactLink(r, SHORT), r);
+});
+
+test("ensureExactLink：AI 漏放連結 → 末尾補上原始連結", () => {
+  assert.equal(ensureExactLink("連結放下面，需要的自己拿", SHORT), "連結放下面，需要的自己拿\nhttps://s.shopee.tw/abc123");
+});
+
+test("ensureExactLink：AI 竄改網址 → 移除錯網址、補回原始連結", () => {
+  const r = ensureExactLink("連結放這 https://s.shopee.tw/WRONG99", SHORT);
+  assert.ok(!r.includes("WRONG99"));
+  assert.ok(r.includes(SHORT));
+});
+
+test("ensureExactLink：移除 [連結]／(URL) 佔位符後補連結", () => {
+  const r = ensureExactLink("連結放下面 [連結]", SHORT);
+  assert.ok(!/\[連結\]/.test(r));
+  assert.ok(r.endsWith(SHORT));
+});
+
+test("ensureExactLink：無連結時不動內容", () => {
+  assert.equal(ensureExactLink("沒有連結的留言", ""), "沒有連結的留言");
+});
 
 const LINK = "看這 https://s.shopee.tw/abc";
 

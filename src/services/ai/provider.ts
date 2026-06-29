@@ -40,7 +40,22 @@ export async function generateCopy(
   // 1024 tokens：預設 512 在 thinking 模型（思考會吃掉輸出額度）下，正文常被截在半句。
   // 一則 Threads 主文＋留言約 165 字內，1024 留足緩衝；maxOutputTokens 只是上限，不會多花錢。
   const raw = await generateWithGemini(prompt, input.mediaUrl ?? null, input.mediaType ?? "none", key, prefs.temperature, model, 1024);
-  return { ...splitCopy(raw), raw };
+  const { mainText, replyText } = splitCopy(raw);
+  // AI 引導語可自由發揮，但分潤網址必須一字不差：強制把留言裡的網址校正回原始連結（防幻覺/竄改/漏字）。
+  return { mainText, replyText: ensureExactLink(replyText, input.shopeeShortLink || ""), raw };
+}
+
+// 確保留言含「原樣」分潤連結，且不含被 AI 竄改的網址或佔位符。
+// 已含原始連結→原樣返回；否則移除 AI 自產網址與 [連結]/(URL) 佔位符後，補上原始連結。純函式可測。
+export function ensureExactLink(reply: string, link: string): string {
+  if (!link || reply.includes(link)) return reply;
+  const cleaned = reply
+    .replace(/https?:\/\/\S+/g, "") // 移除 AI 自己生的網址（可能被竄改，不可信）
+    .replace(/[[(（【]\s*(連結|網址|連接|link|url)\s*[)）\]】]/gi, "") // 移除佔位符 [連結]/(URL) 等
+    .replace(/[ \t]+$/gm, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return cleaned ? `${cleaned}\n${link}` : link;
 }
 
 // 把同一段正文改寫成 n 個語氣/開頭不同、意思相同的版本（「換個說法」）。
@@ -150,7 +165,7 @@ ${segInstruction}規則：
 - 每段語氣與用字：${describeMain(prefs.main)}
 - 第 1 段是主文（吸睛開頭、帶出情境），不要放任何網址
 - 中間若有段落，各延伸一個重點／使用心得／情境，一樣不要放網址
-- 最後務必「另起一段」，用你自己的話寫一句口語、每篇都不同的引導語帶出連結（像跟朋友說「連結放下面」的口吻；不要放網址本身，網址由系統原樣接上）
+- 最後務必「另起一段」，用你自己的話寫一句口語、每篇都不同的引導語帶出連結（像跟朋友說「連結放下面」的口吻；不要放網址本身，也不要放任何網址佔位符如 [連結] 或 [URL]，網址由系統原樣接上）
 - 每段最多 4 行，段與段之間只用「獨立一行的 ===」分隔，不要加編號或標題
 ${hasMedia ? "- 已附上商品的照片／影片，請依畫面實際看到的外觀、顏色、特點來寫，但不要描述「這張圖」這類字眼\n" : ""}
 商品：${input.productName}
@@ -161,7 +176,10 @@ ${input.sourceText ? `參考內容：${input.sourceText}` : ""}`;
     ? await generateWithGemini(prompt, input.mediaUrl ?? null, input.mediaType === "video" ? "video" : "image", apiKey, prefs.temperature ?? 0.8, model, 2048)
     : await geminiText(prompt, apiKey, prefs.temperature ?? 0.8, 2048, model);
   const texts = parseVariations(raw, n);
-  return { ...assembleThread(texts.length ? texts : [input.productName ?? "這個好物"], linkLine), raw };
+  // 防裸連結（防封）：AI 若沒寫引導段、只回 1 段，linkLine 會變成孤零零的裸網址。
+  // 此時降級補上固定引導句，確保留言一定有引導語在連結前。
+  const finalLinkLine = link && texts.length <= 1 ? `${pickReplyLeadIn(link)} ${link}` : linkLine;
+  return { ...assembleThread(texts.length ? texts : [input.productName ?? "這個好物"], finalLinkLine), raw };
 }
 
 // Demo 模式：不呼叫外部 API，產出一段示意文案

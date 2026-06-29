@@ -18,13 +18,19 @@ export default function SessionSync() {
     // Demo 模式（未設 Supabase env）不建立 client，避免用 undefined 金鑰初始化。
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) return;
     const supabase = getBrowserClient();
+    // 訂閱時會同步觸發一次初始回呼（INITIAL_SESSION，部分版本為 SIGNED_IN）：一律略過首次，避免每次載入白重繪。
+    let initial = true;
     const { data } = supabase.auth.onAuthStateChange((event) => {
-      // 只在 token 刷新／登入登出時同步 server（初次 INITIAL_SESSION 不刷新，避免無謂重繪）。
+      if (initial) {
+        initial = false;
+        return;
+      }
+      // 之後只在 token 刷新／登入登出時同步 server（讓 server component 取得新 cookie）。
       if (event === "TOKEN_REFRESHED" || event === "SIGNED_IN" || event === "SIGNED_OUT") {
         router.refresh();
       }
     });
-    return () => data.subscription.unsubscribe();
+    return () => data?.subscription?.unsubscribe();
   }, [router]);
   return null;
 }

@@ -11,6 +11,13 @@ export function isMaterialReusable(m: MaterialReuseCandidate | null | undefined)
   return Boolean(m && m.affiliate_valid && m.main_text && m.affiliate_short_link);
 }
 
+// 抓文是否「已捕捉過此商品」（不需重建）：連結有效＋有短連結即可。
+// 抓素材不再於當下生成文案（改到「排一篇」時才生成），故這裡不要求 main_text；
+// 否則同商品每次被掃到都會被判定「未捕捉」而重建，重燒分潤 token、重傳媒體。
+export function isMaterialCaptured(m: MaterialReuseCandidate | null | undefined): boolean {
+  return Boolean(m && m.affiliate_valid && m.affiliate_short_link);
+}
+
 // 爬蟲產出素材的入庫狀態決策（純函式可測）：
 // 無既有素材（新建）→ pending；既有已核准（含舊資料 null/undefined 視同已核准）→ 維持 approved（重產不降級）；
 // 既有仍待審 → 維持 pending。

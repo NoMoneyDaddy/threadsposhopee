@@ -4,6 +4,7 @@ import DraftsExplorer from "@/components/DraftsExplorer";
 import { listDrafts, listThreadsAccounts } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
 import { getSponsorConfig, getSponsorPickMap } from "@/lib/sponsor";
+import { getMediaProvider } from "@/services/media/upload";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,9 @@ export default async function DraftsPage() {
   const sponsorCfg = await getSponsorConfig();
   const sponsorEnabled = sponsorCfg.enabled && !!user && !user.isOwner;
   const pickByAccount = sponsorEnabled ? await getSponsorPickMap(accounts.map((a) => a.id)) : {};
+  // 編輯器媒體上傳用：Cloudinary 為實際生效圖床時走瀏覽器直傳，否則留空走 /api/media/upload（與發文/素材一致）。
+  const provider = user ? await getMediaProvider(ownerId) : { kind: "none" as const };
+  const cc = provider.kind === "cloudinary" ? provider.creds : null;
 
   return (
     <div className="space-y-4">
@@ -50,6 +54,8 @@ export default async function DraftsPage() {
         accountMeta={accountMeta}
         defaultAccount={defaultAccount}
         sponsor={{ enabled: sponsorEnabled, pickByAccount }}
+        cloud={cc?.cloud ?? null}
+        preset={cc?.preset ?? null}
       />
     </div>
   );

@@ -5,7 +5,9 @@ import { hasApifyCredentials } from "@/lib/store";
 import { isDemoMode } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+// 單次 Apify run-sync 抓取在大量（maxPosts 上看 1000）時可逼近端點 300s 硬上限，故路由上限放到 300s，
+// 否則大量抓取會在 60s 被砍、回傳不到結果。
+export const maxDuration = 300;
 
 // 手動觸發抓取：跑自己的來源、用自己的 Apify 金鑰
 export async function POST() {
@@ -22,8 +24,8 @@ export async function POST() {
       }
     }
 
-    // 時間預算守 maxDuration(60s)：來源多時逐來源中途停手，剩餘下次再跑。
-    const results = await runSourcesForOwner(user.id, { deadline: Date.now() + 50000 });
+    // 時間預算守 maxDuration(300s)：來源多時逐來源中途停手，剩餘下次再跑（留 10s 緩衝給回應序列化）。
+    const results = await runSourcesForOwner(user.id, { deadline: Date.now() + 290000 });
     return NextResponse.json({ ok: true, results });
   } catch (e) {
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 500 });

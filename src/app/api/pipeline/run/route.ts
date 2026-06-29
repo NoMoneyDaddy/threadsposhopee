@@ -18,6 +18,10 @@ export async function POST(req: Request) {
     if (!user.isOwner) return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
     const body = await req.json().catch(() => ({}));
     const force = body?.force === true;
+    // 批次逐月：本次抓取的日期區間覆寫（YYYY-MM-DD；格式不符忽略）。只有舊版 igview actor 會吃日期。
+    const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+    const after = typeof body?.after === "string" && DATE_RE.test(body.after) ? body.after : undefined;
+    const before = typeof body?.before === "string" && DATE_RE.test(body.before) ? body.before : undefined;
     // demo 模式（無金鑰）：爬蟲走 fixtures、不需 Apify token，故略過綁定檢查讓按鈕可試用。
     if (!isDemoMode) {
       // 不吞 I/O 錯：失敗落外層 catch 回 500，不誤判成「未綁定」。
@@ -28,7 +32,7 @@ export async function POST(req: Request) {
     }
 
     // 時間預算守 maxDuration(300s)：來源多時逐來源中途停手，剩餘下次再跑（留 10s 緩衝給回應序列化）。
-    const results = await runSourcesForOwner(user.id, { deadline: Date.now() + 290000, force });
+    const results = await runSourcesForOwner(user.id, { deadline: Date.now() + 290000, force, after, before });
     return NextResponse.json({ ok: true, results });
   } catch (e) {
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 500 });

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { getGeminiKey, resolveGeminiModel } from "@/lib/store";
+import { getGeminiKey, resolveGeminiModel, getCopyPrefs } from "@/lib/store";
 import { generateVariations } from "@/services/ai/provider";
 import { isDemoMode } from "@/lib/env";
 import { apiError } from "@/lib/api-error";
@@ -29,8 +29,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "請先到帳號管理綁定自己的 Gemini 金鑰" }, { status: 400 });
     }
 
-    const model = await resolveGeminiModel(user.id);
-    const variations = await generateVariations(text, key, 3, model);
+    const [model, prefs] = await Promise.all([resolveGeminiModel(user.id), getCopyPrefs(user.id)]);
+    const variations = await generateVariations(text, key, 3, model, prefs);
     // 少於 2 個版本就不算「可挑選」，回 502 讓使用者重試（避免只給單一版本）。
     if (variations.length < 2) {
       return NextResponse.json({ ok: false, error: "AI 沒有產生足夠版本，請再試一次" }, { status: 502 });

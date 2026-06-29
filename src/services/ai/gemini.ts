@@ -110,10 +110,10 @@ export async function generateWithGemini(
     }
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model || env.geminiModel}:generateContent?key=${key}`;
-  // 不對 429 退避重試（attempts=1）：Gemini 免費層是「每分鐘」配額，30–60s 才回補，遠超我們 16s 退避上限，
-  // 重試只會白等數十秒又再 429、還多燒一次配額。直接快速失敗，由呼叫端略過該篇、整批抓取才不會卡很久。
   const resolvedModel = model || env.geminiModel;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${resolvedModel}:generateContent?key=${key}`;
+  // 重試 500/503（暫時性：內部錯誤／高流量），最多 3 次、短退避——生成無副作用，重試安全且能降偶發失敗。
+  // 不重試 429：免費層「每分鐘」配額 30–60s 才回補，遠超 16s 退避上限，重試只會白等又再 429、多燒配額。
   const res = await fetchWithRetry(assertSafePublicUrl(url).href, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -121,7 +121,7 @@ export async function generateWithGemini(
       contents: [{ role: "user", parts }],
       generationConfig: buildGenerationConfig(temperature, maxOutputTokens, resolvedModel)
     })
-  }, 30000, 1);
+  }, 30000, 3, [500, 503]);
   if (!res.ok) throw new Error(`Gemini ${res.status}: ${await res.text()}`);
   const json = (await res.json()) as GeminiResponse;
   const text = extractGeminiText(json);
@@ -145,7 +145,7 @@ export async function geminiText(prompt: string, apiKey?: string | null, tempera
   if (!key) throw new Error("無 Gemini 金鑰");
   const resolvedModel = model || env.geminiModel;
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${resolvedModel}:generateContent?key=${key}`;
-  // attempts=1：同上，免費層每分鐘配額不會在退避視窗內回補，重試只是白等。
+  // 重試 500/503（暫時性）；不重試 429（每分鐘配額不會在退避視窗內回補）。同 generateWithGemini。
   const res = await fetchWithRetry(assertSafePublicUrl(url).href, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -153,7 +153,7 @@ export async function geminiText(prompt: string, apiKey?: string | null, tempera
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       generationConfig: buildGenerationConfig(temperature, maxOutputTokens, resolvedModel)
     })
-  }, 30000, 1);
+  }, 30000, 3, [500, 503]);
   if (!res.ok) throw new Error(`Gemini ${res.status}: ${await res.text()}`);
   const json = (await res.json()) as GeminiResponse;
   const text = extractGeminiText(json);

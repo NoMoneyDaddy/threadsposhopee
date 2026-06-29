@@ -90,9 +90,10 @@ export default function ScrapeRunsPanel() {
 
   return (
     <div className="rounded-2xl border bg-surface p-4">
-      <div className="mb-1 font-medium">背景抓取（即時進度・可長跑）</div>
+      <div className="mb-1 font-medium">立即抓取（背景・即時進度）</div>
       <p className="mb-2 text-xs text-ink-3">
-        啟動後立刻回、背景繼續跑，<b>關頁也會跑完</b>（不受 5 分鐘上限）。下方即時顯示每個來源的進度，完成後素材自動進待審。
+        跑你自己的 Apify 金鑰抓上面所有關鍵字（費用算你帳上）。啟動後立刻回、背景繼續跑，<b>關頁也會跑完</b>（不受 5 分鐘上限）。
+        下方即時顯示每個來源的進度，完成後素材自動進待審。
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <button onClick={() => start(false)} disabled={busy || hasActive} className="rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white disabled:opacity-50">

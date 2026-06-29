@@ -50,10 +50,12 @@ export function sanitizeThreadSegments(input: unknown): ThreadSegment[] {
   for (const raw of input) {
     const seg = raw as { text?: unknown; media?: unknown } | null;
     if (!seg || typeof seg !== "object") continue;
-    const text = typeof seg.text === "string" ? seg.text : null;
+    const rawText = typeof seg.text === "string" ? seg.text : null;
     // 段落媒體無 slot 概念：取 url+type 即可（去掉 sanitizeMaterialMedia 標的 slot）。
     const media = sanitizeMaterialMedia(seg.media).map((m) => ({ url: m.url, type: m.type }));
-    if (!(text && text.trim()) && media.length === 0) continue; // 空段落丟棄
+    if (!(rawText && rawText.trim()) && media.length === 0) continue; // 空段落丟棄
+    // 純空白文字正規化為 null（避免只有媒體時存進一串空白）。
+    const text = rawText && rawText.trim() ? rawText : null;
     out.push({ text, media });
     if (out.length >= 10) break;
   }

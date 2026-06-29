@@ -28,7 +28,13 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (!hasMedia && !hasMain && !hasReply && !hasChain) {
     return NextResponse.json({ ok: false, error: "缺少要更新的欄位（media / main_text / reply_text / thread_chain）" }, { status: 400 });
   }
-  if ((hasMain && body.main_text.length > MAX_TEXT) || (hasReply && body.reply_text.length > MAX_TEXT)) {
+  const chainTextTooLong =
+    hasChain &&
+    (body.thread_chain as unknown[]).some((seg) => {
+      const t = (seg as { text?: unknown } | null)?.text;
+      return typeof t === "string" && t.length > MAX_TEXT;
+    });
+  if ((hasMain && body.main_text.length > MAX_TEXT) || (hasReply && body.reply_text.length > MAX_TEXT) || chainTextTooLong) {
     return NextResponse.json({ ok: false, error: "文案過長" }, { status: 400 });
   }
 

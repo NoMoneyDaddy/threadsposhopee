@@ -10,10 +10,10 @@ import { isValidSubIdTemplate } from "@/services/shopee/subid";
 // 儲存：以逗號分隔成單一字串。留空＝不帶來源標記（無預設）。
 const VARS = ["{platform}", "{account}", "{item}"];
 
-// 官方規範：sub_id 僅能含英數與底線（值不可含「-」，那是 5 格的分隔符）。
-// 輸入時即過濾：只留英數、底線與變數所需的大括號，讓「所見＝所存」、不再默默被清掉。
+// 蝦皮 sub_id 僅能含英數（實測底線「_」會被拒收 invalid sub id；「-」是 5 格分隔符也不可用）。
+// 輸入時即過濾：只留英數與變數所需的大括號，讓「所見＝所存」、不再默默被清掉。
 function sanitizeSubIdInput(v: string): string {
-  return v.replace(/[^A-Za-z0-9_{}]/g, "").slice(0, 50);
+  return v.replace(/[^A-Za-z0-9{}]/g, "").slice(0, 50);
 }
 
 export default function SubIdForm({ initial }: { initial: string | null }) {
@@ -71,7 +71,7 @@ export default function SubIdForm({ initial }: { initial: string | null }) {
     <div className="card p-4">
       <div className="mb-1 font-medium">蝦皮分潤連結自訂來源標記 Sub id（選填）</div>
       <p className="mb-3 text-xs text-ink-2">
-        對應蝦皮後台的 5 格 Sub id，會出現在分潤報表上，方便你分辨流量來源。<b>只能用英數和底線</b>，每格最多 50 字。
+        對應蝦皮後台的 5 格 Sub id，會出現在分潤報表上，方便你分辨流量來源。<b>只能用英數</b>（底線會被蝦皮拒收），每格最多 50 字。
         可用變數（發文時會自動代換）：
         {VARS.map((v) => (
           <code key={v} className="ml-1 font-mono">
@@ -91,7 +91,7 @@ export default function SubIdForm({ initial }: { initial: string | null }) {
               <input
                 id={`subid-${i}`}
                 className="input min-w-0 flex-1"
-                placeholder="例如 Electronics_FB_1212"
+                placeholder="例如 ElectronicsFB1212"
                 value={slot}
                 maxLength={50}
                 aria-invalid={Boolean(slot.trim() && !isValidSubIdTemplate(slot))}
@@ -122,7 +122,7 @@ export default function SubIdForm({ initial }: { initial: string | null }) {
             </div>
             {slot.trim() && !isValidSubIdTemplate(slot) && (
               <p id={`subid-${i}-hint`} className="mt-1 text-[11px] text-amber-700">
-                ⚠️ 僅能用英數、底線與上方變數（如 {VARS[0]}）；大括號需成對。
+                ⚠️ 僅能用英數與上方變數（如 {VARS[0]}）；底線會被蝦皮拒收，大括號需成對。
               </p>
             )}
           </div>

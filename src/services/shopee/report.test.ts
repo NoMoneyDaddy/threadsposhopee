@@ -56,10 +56,11 @@ test("attributeRevenueByAccount：依 sp_<前8碼> 歸因、含多 subId 串接�
     { id: "abcd1234efgh", label: "主帳號" },
     { id: "zzzz9999yyyy", label: null } // 無 label → 用前8碼
   ];
+  // 蝦皮拒收底線，實際 subId 無「_」；token 為 normalizeSubId("sp_<id8>")＝"sp<id8>"。
   const subs = [
-    { subId: "SP_abcd1234", commission: 10, count: 2 }, // 大寫開頭 → 主帳號（大小寫不敏感）
-    { subId: "threadspo_sp_ABCD1234", commission: 5, count: 1 }, // 串接且大寫 → 主帳號
-    { subId: "sp_zzzz9999", commission: 7, count: 3 }, // → zzzz9999
+    { subId: "SPabcd1234", commission: 10, count: 2 }, // 大寫開頭 → 主帳號（大小寫不敏感）
+    { subId: "threadspospABCD1234", commission: 5, count: 1 }, // 串接且大寫 → 主帳號
+    { subId: "spzzzz9999", commission: 7, count: 3 }, // → zzzz9999
     { subId: "（未標記）", commission: 4, count: 1 } // → 其他
   ];
   const r = attributeRevenueByAccount(subs, accounts);
@@ -72,6 +73,6 @@ test("attributeRevenueByAccount：依 sp_<前8碼> 歸因、含多 subId 串接�
 });
 
 test("attributeRevenueByAccount：無帳號時全歸其他", () => {
-  const r = attributeRevenueByAccount([{ subId: "sp_x", commission: 2, count: 1 }], []);
+  const r = attributeRevenueByAccount([{ subId: "spx", commission: 2, count: 1 }], []);
   assert.deepEqual(r, [{ name: "其他／未對應", commission: 2, count: 1 }]);
 });

@@ -275,7 +275,7 @@ export function normalizeSponsorConfig(input: Partial<SponsorConfig>): { ok: tru
   }
   const slots = parseSubIdSlots(typeof input.subIds === "string" ? input.subIds : "");
   if (slots.some((s) => !isValidSubIdTemplate(s))) {
-    return { ok: false, error: "贊助 sub_id 每格僅能含英數、底線與變數 {date}/{time}/{platform}/{account}/{item}（單格上限 50）" };
+    return { ok: false, error: "贊助 sub_id 每格僅能含英數與變數 {date}/{time}/{platform}/{account}/{item}（底線會被蝦皮拒收，單格上限 50）" };
   }
   // 比例制參數：缺省退回預設；驗證為正整數且範圍合理。
   const perPosts = input.perPosts === undefined ? DEFAULT_SPONSOR_CONFIG.perPosts : Number(input.perPosts);

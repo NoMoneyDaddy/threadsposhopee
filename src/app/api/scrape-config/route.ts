@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { getScrapeConfig, saveScrapeConfig, hasApifyCredentials } from "@/lib/store";
-import { normalizeScrapeKeywords, normalizePostsLimit } from "@/lib/scrape-config";
+import { normalizeScrapeKeywords, normalizePostsLimit, normalizeScrapeUsername } from "@/lib/scrape-config";
 import { isDemoMode } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
@@ -31,7 +31,14 @@ export async function POST(req: Request) {
     const keywords = normalizeScrapeKeywords(body?.keywords);
     const postsLimit = normalizePostsLimit(body?.postsLimit);
     const enabled = body?.enabled === false ? false : true;
-    const config = await saveScrapeConfig(user.id, keywords, postsLimit, enabled);
+    // 目標帳號字元非法時回 400（使用者輸入錯誤），不落 500（伺服器錯誤）。
+    let username: string;
+    try {
+      username = normalizeScrapeUsername(body?.username);
+    } catch (e) {
+      return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 400 });
+    }
+    const config = await saveScrapeConfig(user.id, keywords, postsLimit, username, enabled);
     return NextResponse.json({ ok: true, config });
   } catch (e) {
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 500 });

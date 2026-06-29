@@ -65,56 +65,57 @@ function isScrapeSource(s: Source): boolean {
   return !s.threads_account_id && Boolean(s.search_query);
 }
 
-// 讀目前的抓文設定：關鍵字清單（保序）＋每次抓幾篇＋是否啟用。下次開頁自動帶出（保留上次設定）。
-export async function getScrapeConfig(ownerId: string): Promise<{ keywords: string[]; postsLimit: number; enabled: boolean }> {
+// 讀目前的抓文設定：關鍵字清單（保序）＋每次抓幾篇＋目標帳號（選填）＋是否啟用。下次開頁自動帶出（保留上次設定）。
+export async function getScrapeConfig(ownerId: string): Promise<{ keywords: string[]; postsLimit: number; username: string; enabled: boolean }> {
   const sources = (await listSources(ownerId)).filter(isScrapeSource);
   const keywords = sources.map((s) => (s.search_query ?? "").trim()).filter(Boolean);
   const postsLimit = sources[0]?.posts_limit ?? 3;
+  // 目標帳號是整份設定共用一個值（同寫到每個關鍵字來源列的 source_username）；取第一個即可。
+  const username = (sources[0]?.source_username ?? "").trim();
   // 尚未設定任何關鍵字時預設「啟用」，讓首次儲存就會被「立即抓取」納入；已有來源則看其啟用狀態。
   const enabled = sources.length === 0 ? true : sources.some((s) => s.enabled);
-  return { keywords, postsLimit, enabled };
+  return { keywords, postsLimit, username, enabled };
 }
 
-// 保存抓文設定：把關鍵字清單對帳成關鍵字來源列（新增缺的、刪除移除的、更新保留的的 postsLimit/enabled）。
-// keywords 已由呼叫端正規化（去重/濾空/上限）。回傳保存後的設定。
+// 保存抓文設定：把關鍵字清單對帳成關鍵字來源列（新增缺的、刪除移除的、更新保留的的 postsLimit/username/enabled）。
+// keywords/username 已由呼叫端正規化（去重/濾空/上限、帳號字元驗證）。回傳保存後的設定。
+// username 是整份設定共用一個值，寫到每個關鍵字來源列的 source_username（空＝不限定帳號）。
 export async function saveScrapeConfig(
   ownerId: string,
   keywords: string[],
   postsLimit: number,
+  username = "",
   enabled = true
-): Promise<{ keywords: string[]; postsLimit: number; enabled: boolean }> {
+): Promise<{ keywords: string[]; postsLimit: number; username: string; enabled: boolean }> {
   const existing = (await listSources(ownerId)).filter(isScrapeSource);
   const existingByKw = new Map(existing.map((s) => [(s.search_query ?? "").trim(), s]));
   const wanted = new Set(keywords);
 
-  // 刪除：不在新清單裡的關鍵字來源
-  for (const s of existing) {
-    const kw = (s.search_query ?? "").trim();
-    if (!wanted.has(kw)) await deleteSource(s.id, ownerId);
-  }
-  // 新增缺的
-  for (const kw of keywords) {
-    if (!existingByKw.has(kw)) {
-      await createSource({ threads_account_id: null, source_username: "", search_query: kw, posts_limit: postsLimit, auto_publish: false, enabled }, ownerId);
-    }
-  }
-  // 更新保留的：posts_limit / enabled
-  for (const s of existing) {
-    const kw = (s.search_query ?? "").trim();
-    if (wanted.has(kw)) await updateScrapeSource(s.id, ownerId, { posts_limit: postsLimit, enabled });
-  }
-  return { keywords, postsLimit, enabled };
+  // 各列獨立，平行處理（最多 10 個關鍵字，省去逐筆 DB 往返）：刪除移除的、新增缺的、更新保留的。
+  await Promise.all([
+    ...existing
+      .filter((s) => !wanted.has((s.search_query ?? "").trim()))
+      .map((s) => deleteSource(s.id, ownerId)),
+    ...keywords
+      .filter((kw) => !existingByKw.has(kw))
+      .map((kw) => createSource({ threads_account_id: null, source_username: username, search_query: kw, posts_limit: postsLimit, auto_publish: false, enabled }, ownerId)),
+    ...existing
+      .filter((s) => wanted.has((s.search_query ?? "").trim()))
+      .map((s) => updateScrapeSource(s.id, ownerId, { posts_limit: postsLimit, source_username: username, enabled }))
+  ]);
+  return { keywords, postsLimit, username, enabled };
 }
 
-// 內部：更新關鍵字來源的 posts_limit / enabled（多租戶以 owner_id 過濾）。
-async function updateScrapeSource(id: string, ownerId: string, patch: { posts_limit?: number; enabled?: boolean }): Promise<void> {
+// 內部：更新關鍵字來源的 posts_limit / source_username / enabled（多租戶以 owner_id 過濾）。
+async function updateScrapeSource(id: string, ownerId: string, patch: { posts_limit?: number; source_username?: string; enabled?: boolean }): Promise<void> {
   if (isDemoMode) {
     const s = demo.sources.find((x) => x.id === id && x.owner_id === ownerId);
     if (s) Object.assign(s, patch);
     return;
   }
   const sb = getServiceClient()!;
-  await sb.from("sources").update(patch).eq("id", id).eq("owner_id", ownerId);
+  const { error } = await sb.from("sources").update(patch).eq("id", id).eq("owner_id", ownerId);
+  if (error) throw error; // 更新失敗勿靜默吞掉（否則呼叫端誤以為已存檔），對齊本檔其他寫入函式
 }
 
 // 啟用／停用來源（回傳是否有命中該 owner 的 row，達成擁有權檢查）

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { normalizeScrapeKeywords, normalizePostsLimit, DEFAULT_SCRAPE_KEYWORD, MAX_SCRAPE_KEYWORDS } from "./scrape-config";
+import { normalizeScrapeKeywords, normalizePostsLimit, normalizeScrapeUsername, DEFAULT_SCRAPE_KEYWORD, MAX_SCRAPE_KEYWORDS, SCRAPE_POSTS_MAX } from "./scrape-config";
 
 test("normalizeScrapeKeywords：去空白/濾空/去重保序、空清單退回預設", () => {
   assert.deepEqual(normalizeScrapeKeywords([" a ", "a", "", "b"]), ["a", "b"]);
@@ -18,9 +18,25 @@ test("normalizeScrapeKeywords：上限 10 個", () => {
   assert.equal(normalizeScrapeKeywords(many).length, MAX_SCRAPE_KEYWORDS);
 });
 
-test("normalizePostsLimit：夾 1..20、取整、非數值退回 3", () => {
+test("normalizePostsLimit：夾 1..200、取整、非數值退回 3", () => {
   assert.equal(normalizePostsLimit(0), 1);
-  assert.equal(normalizePostsLimit(999), 20);
+  assert.equal(normalizePostsLimit(999), SCRAPE_POSTS_MAX);
+  assert.equal(SCRAPE_POSTS_MAX, 200);
+  assert.equal(normalizePostsLimit(150), 150);
   assert.equal(normalizePostsLimit(4.6), 5);
   assert.equal(normalizePostsLimit("x"), 3);
+});
+
+test("normalizeScrapeUsername：去前導 @／空白、空字串＝不限帳號", () => {
+  assert.equal(normalizeScrapeUsername("@shopee_tw"), "shopee_tw");
+  assert.equal(normalizeScrapeUsername("  user.name  "), "user.name");
+  assert.equal(normalizeScrapeUsername(""), "");
+  assert.equal(normalizeScrapeUsername("   "), "");
+  assert.equal(normalizeScrapeUsername(undefined), "");
+});
+
+test("normalizeScrapeUsername：非法字元拋錯（不靜默改字元）", () => {
+  assert.throws(() => normalizeScrapeUsername("bad name"));
+  assert.throws(() => normalizeScrapeUsername("@@user"));
+  assert.throws(() => normalizeScrapeUsername("user/slash"));
 });

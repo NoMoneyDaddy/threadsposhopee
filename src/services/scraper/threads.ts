@@ -82,24 +82,38 @@ function collectMedia(item: any): DraftMedia[] {
 }
 
 // 把 search scraper 的扁平 dataset items 攤平成 ScrapedPost[]：每個 item 即一則貼文。純函式可測。
+// 配對主文媒體：常見的「2/2 分潤貼文」版型是——主貼文放圖／影片（無蝦皮連結），其下方的 2/2 留言
+// 才放蝦皮連結（本身無媒體）。pipeline 取的是「帶連結」的留言，若不配對就會做出沒有圖的素材。
+// 故對「isReply＋有蝦皮連結＋自身無媒體」的貼文，沿用同作者「前一則有媒體貼文」的媒體（dataset 中
+// 主文排在其 2/2 留言之前），讓素材帶到母貼文的圖。純函式可測。
 export function parseSearchPosts(items: any[]): ScrapedPost[] {
   if (!Array.isArray(items)) return [];
   const out: ScrapedPost[] = [];
+  const lastMediaByUser = new Map<string, DraftMedia[]>(); // 作者 → 最近一則有媒體貼文的媒體
   for (const item of items) {
     if (!item) continue;
     const text: string = item.captionText ?? "";
     const postId = postIdFromUrl(item.postUrl ?? "");
     if (!postId) continue;
-    const media = collectMedia(item);
+    const username: string = item.username ?? "";
+    const isReply = Boolean(item.isReply);
+    const shopeeLinks = extractShopeeLinks(text);
+    let media = collectMedia(item);
+    if (media.length > 0 && username) {
+      lastMediaByUser.set(username, media);
+    } else if (media.length === 0 && isReply && shopeeLinks.length > 0 && username) {
+      // 帶連結但無媒體的 2/2 留言：沿用同作者母貼文（前一則有媒體者）的媒體。
+      media = lastMediaByUser.get(username) ?? [];
+    }
     out.push({
       postId,
-      username: item.username ?? "",
-      isReply: Boolean(item.isReply),
+      username,
+      isReply,
       text,
       media,
       mediaType: media[0]?.type ?? "none",
       mediaUrl: media[0]?.url ?? null,
-      shopeeLinks: extractShopeeLinks(text)
+      shopeeLinks
     });
   }
   return out;

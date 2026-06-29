@@ -97,6 +97,38 @@ test("parseSearchPosts：無蝦皮連結 → shopeeLinks 空陣列", () => {
   assert.deepEqual(posts[0].shopeeLinks, []);
 });
 
+test("parseSearchPosts：帶連結的 2/2 留言沿用母貼文（同作者前一則有媒體）的媒體", () => {
+  const posts = parseSearchPosts([
+    // 主貼文：有圖、無蝦皮連結
+    {
+      username: "ruilinc790421",
+      isReply: false,
+      captionText: "這個發明太有趣了啦",
+      postUrl: "https://www.threads.com/@ruilinc790421/post/MAIN",
+      imageUrl: "https://c/v/t51/655058747_1_2_n.jpg?stp=e15_tt6"
+    },
+    // 2/2 留言：有蝦皮連結、無媒體 → 應沿用主貼文的圖
+    {
+      username: "ruilinc790421",
+      isReply: true,
+      captionText: "同系列在這\nhttps://s.shopee.tw/5fkAUiPIOm",
+      postUrl: "https://www.threads.com/@ruilinc790421/post/REPLY"
+    }
+  ]);
+  const reply = posts.find((p) => p.postId === "REPLY")!;
+  assert.deepEqual(reply.media, [{ url: "https://c/v/t51/655058747_1_2_n.jpg?stp=e15_tt6", type: "image" }]);
+  assert.equal(reply.mediaType, "image");
+  assert.equal(reply.shopeeLinks.length, 1);
+});
+
+test("parseSearchPosts：留言無連結時不配對母貼文媒體（只給帶連結的 2/2）", () => {
+  const posts = parseSearchPosts([
+    { username: "u", isReply: false, captionText: "圖文", postUrl: "https://www.threads.com/@u/post/M", imageUrl: "https://c/v/t51/1_2_3_n.jpg" },
+    { username: "u", isReply: true, captionText: "純留言無連結", postUrl: "https://www.threads.com/@u/post/R" }
+  ]);
+  assert.deepEqual(posts.find((p) => p.postId === "R")!.media, []);
+});
+
 test("parseSearchPosts：非陣列輸入回空陣列", () => {
   assert.deepEqual(parseSearchPosts(null as any), []);
 });

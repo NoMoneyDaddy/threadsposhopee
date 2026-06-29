@@ -29,6 +29,10 @@ export interface Source {
   poll_interval_minutes: number;
   auto_publish: boolean;
   posts_limit: number;
+  // 抓文設定的排序與日期區間（關鍵字抓文用；對齊 actor 的 sort／after／before）。舊資料 null＝預設 recent、不限日期。
+  sort?: "top" | "recent" | null;
+  after_date?: string | null; // YYYY-MM-DD
+  before_date?: string | null; // YYYY-MM-DD
   last_polled_at?: string | null;
 }
 

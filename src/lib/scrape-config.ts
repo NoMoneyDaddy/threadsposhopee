@@ -7,10 +7,15 @@ export const SCRAPE_POSTS_MIN = 1;
 // 設很大時可能取不滿（取多少算多少），費用也隨之增加（每 1000 筆約 US$5，使用者自付）。
 export const SCRAPE_POSTS_MAX = 1000;
 
+export type ScrapeSort = "top" | "recent";
+
 export interface ScrapeConfig {
   keywords: string[];
   postsLimit: number; // 每個關鍵字每次抓幾篇
   username: string; // 目標帳號（選填，無預設）：限定只搜該帳號的貼文（→ actor 的 from）
+  sort: ScrapeSort; // 排序：top（熱門）／recent（最新）
+  after: string; // 起始日（含），YYYY-MM-DD；空＝不限
+  before: string; // 結束日（含），YYYY-MM-DD；空＝不限
 }
 
 // 正規化關鍵字：去前後空白、濾空、去重（保序）、取前 N。空清單時退回預設關鍵字。純函式可測。
@@ -44,6 +49,23 @@ export function normalizeScrapeUsername(input: unknown): string {
   if (!raw) return "";
   if (!SCRAPE_USERNAME_RE.test(raw)) {
     throw new Error(`無效的目標帳號「${raw}」：僅能包含英數字、底線與點（a-z A-Z 0-9 . _）`);
+  }
+  return raw;
+}
+
+// 排序：只接受 top（熱門）／recent（最新）；其餘退回 recent。純函式可測。
+export function normalizeScrapeSort(input: unknown): ScrapeSort {
+  return input === "top" ? "top" : "recent";
+}
+
+// 日期區間：空＝不限；否則須為合法 YYYY-MM-DD（actor 的 after／before 格式）。
+// 非空但格式/日期不合法時拋錯（fail fast，與帳號驗證一致），讓 API 回 400 而非默默忽略。純函式可測。
+const SCRAPE_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+export function normalizeScrapeDate(input: unknown): string {
+  const raw = typeof input === "string" ? input.trim() : "";
+  if (!raw) return "";
+  if (!SCRAPE_DATE_RE.test(raw) || Number.isNaN(Date.parse(raw))) {
+    throw new Error(`無效的日期「${raw}」：請用 YYYY-MM-DD 格式`);
   }
   return raw;
 }

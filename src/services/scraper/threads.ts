@@ -111,10 +111,14 @@ export interface ScrapeQuery {
   username?: string | null;
   searchQuery?: string | null;
   sort?: "top" | "recent";
+  after?: string | null; // YYYY-MM-DD（含）；空＝不限
+  before?: string | null; // YYYY-MM-DD（含）；空＝不限
 }
 
 // actor 的 from 僅允許這組字元（schema：^[a-zA-Z0-9._]*$）。
 const THREADS_USERNAME_RE = /^[a-zA-Z0-9._]+$/;
+// actor 的 after／before 為 YYYY-MM-DD。非法格式直接忽略（不阻斷抓取；UI 端已先驗證並擋下）。
+const THREADS_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 // 把 posts_limit 正規化成正整數（非有限值／≤0 → 預設 20）。request（maxPosts）與 response（slice）共用，
 // 避免兩邊 fallback 規則分岐（如 NaN 時 slice 出空陣列）。純函式可測。
@@ -135,6 +139,8 @@ export interface ThreadsScraperInput {
   sort: "top" | "recent";
   maxPosts: number;
   from?: string;
+  after?: string;
+  before?: string;
 }
 
 export function buildScraperInput(spec: ScrapeQuery, postsLimit: number): ThreadsScraperInput {
@@ -148,6 +154,11 @@ export function buildScraperInput(spec: ScrapeQuery, postsLimit: number): Thread
   const maxPosts = Math.min(1000, Math.max(20, normalizePostsLimit(postsLimit)));
   const input: ThreadsScraperInput = { searchQuery, sort, maxPosts };
   if (from) input.from = from;
+  // 日期區間（選填）：格式對才帶；不合法就略過，不阻斷抓取。
+  const after = (spec.after ?? "").trim();
+  const before = (spec.before ?? "").trim();
+  if (THREADS_DATE_RE.test(after)) input.after = after;
+  if (THREADS_DATE_RE.test(before)) input.before = before;
   return input;
 }
 

@@ -37,6 +37,7 @@ async function ownerShopeeCreds(ownerId: string): Promise<{ appId: string; secre
 export interface PipelineResult {
   sourceId: string;
   sourceUsername: string;
+  keyword: string; // 此來源的搜尋關鍵字（關鍵字抓文用；空＝純監看帳號）。供結果面板顯示。
   scanned: number;
   created: number; // 本輪新產生/更新的素材數（含已核准重產）
   pending: number; // 本輪「進入待審」的素材數（不含已核准重產）；通知/摘要的待審數以此為準
@@ -55,6 +56,7 @@ export async function runSourcePipeline(
   const result: PipelineResult = {
     sourceId: source.id,
     sourceUsername: source.source_username || (source.search_query ? source.search_query : ""),
+    keyword: source.search_query ?? "",
     scanned: 0,
     created: 0,
     pending: 0,
@@ -86,7 +88,13 @@ export async function runSourcePipeline(
   // 兩者都填＝在該帳號內搜尋關鍵字（同時帶 searchQuery 與 from）。
   const posts = source.search_query
     ? await scrapeLatestPosts(
-        { searchQuery: source.search_query, username: source.source_username, sort: "recent" },
+        {
+          searchQuery: source.search_query,
+          username: source.source_username,
+          sort: source.sort === "top" ? "top" : "recent",
+          after: source.after_date,
+          before: source.before_date
+        },
         source.posts_limit,
         apify
       )
@@ -200,6 +208,7 @@ export async function runSourcesForOwner(
       results.push({
         sourceId: s.id,
         sourceUsername: s.source_username || (s.search_query ? s.search_query : ""),
+        keyword: s.search_query ?? "",
         scanned: 0,
         created: 0,
         pending: 0,

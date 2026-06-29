@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { getScrapeConfig, saveScrapeConfig, hasApifyCredentials } from "@/lib/store";
-import { normalizeScrapeKeywords, normalizePostsLimit, normalizeScrapeUsername } from "@/lib/scrape-config";
+import { normalizeScrapeKeywords, normalizePostsLimit, normalizeScrapeUsername, normalizeScrapeSort, normalizeScrapeDate } from "@/lib/scrape-config";
 import { isDemoMode } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
@@ -31,14 +31,23 @@ export async function POST(req: Request) {
     const keywords = normalizeScrapeKeywords(body?.keywords);
     const postsLimit = normalizePostsLimit(body?.postsLimit);
     const enabled = body?.enabled === false ? false : true;
-    // 目標帳號字元非法時回 400（使用者輸入錯誤），不落 500（伺服器錯誤）。
+    const sort = normalizeScrapeSort(body?.sort);
+    // 目標帳號／日期字元非法時回 400（使用者輸入錯誤），不落 500（伺服器錯誤）。
     let username: string;
+    let after: string;
+    let before: string;
     try {
       username = normalizeScrapeUsername(body?.username);
+      after = normalizeScrapeDate(body?.after);
+      before = normalizeScrapeDate(body?.before);
+      // 起始日不可晚於結束日（YYYY-MM-DD 字典序即時間序），擋下無效區間避免白燒 Apify 額度。
+      if (after && before && after > before) {
+        throw new Error("起始日不可晚於結束日");
+      }
     } catch (e) {
       return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 400 });
     }
-    const config = await saveScrapeConfig(user.id, keywords, postsLimit, username, enabled);
+    const config = await saveScrapeConfig(user.id, { keywords, postsLimit, username, sort, after, before, enabled });
     return NextResponse.json({ ok: true, config });
   } catch (e) {
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 500 });

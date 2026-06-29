@@ -17,6 +17,9 @@ function MediaThumb({ m }: { m: DraftMedia }) {
   if (m.type === "video") {
     return (
       <video
+        // referrerPolicy 不在 React 的 video 型別內，但屬性本身合法且新版瀏覽器支援；
+        // 用 ref 直接設 DOM 屬性，讓防盜連的來源影片也載得到（與圖片一致）。
+        ref={(el) => el?.setAttribute("referrerpolicy", "no-referrer")}
         src={m.url}
         controls
         muted
@@ -51,12 +54,16 @@ function PendingMaterialCard({
 }) {
   const [media, setMedia] = useState<DraftMedia[]>(() => normalizeDraftMedia(m).map((x) => ({ ...x, slot: x.slot ?? "main" })));
   const [slotErr, setSlotErr] = useState<string | null>(null);
+  // 序列化保存：避免快速連點時並行 PATCH 互相覆蓋，且樂觀更新的回復不被後續請求蓋掉。
+  const [saving, setSaving] = useState(false);
 
   async function setSlot(idx: number, slot: DraftMedia["slot"]) {
+    if (saving) return; // 前一筆還在存就忽略，避免競態
     const prev = media;
     const next = media.map((x, i) => (i === idx ? { ...x, slot } : x));
     setMedia(next);
     setSlotErr(null);
+    setSaving(true);
     try {
       const res = await fetch(`/api/materials/${m.id}`, {
         method: "PATCH",
@@ -68,6 +75,8 @@ function PendingMaterialCard({
     } catch (e) {
       setMedia(prev); // 失敗回復，避免畫面與 DB 不一致
       setSlotErr(e instanceof Error ? e.message : "媒體用途儲存失敗");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -92,9 +101,10 @@ function PendingMaterialCard({
                 <MediaThumb m={mm} />
                 <select
                   value={mm.slot ?? "main"}
+                  disabled={saving || busy}
                   onChange={(e) => setSlot(idx, e.target.value as DraftMedia["slot"])}
                   aria-label="這張媒體用在哪"
-                  className="w-24 rounded-lg border px-1 py-0.5 text-xs"
+                  className="w-24 rounded-lg border px-1 py-0.5 text-xs disabled:opacity-50"
                 >
                   {SLOT_OPTS.map((o) => (
                     <option key={o.v} value={o.v}>{o.label}</option>
@@ -111,7 +121,8 @@ function PendingMaterialCard({
         <button
           type="button"
           onClick={() => onAct(m.id, "approve")}
-          disabled={busy}
+          disabled={busy || saving}
+          title={saving ? "媒體用途儲存中…" : undefined}
           className="rounded-xl bg-brand px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
         >
           {busy ? "處理中…" : "✅ 入庫"}
@@ -119,7 +130,7 @@ function PendingMaterialCard({
         <button
           type="button"
           onClick={() => onAct(m.id, "discard")}
-          disabled={busy}
+          disabled={busy || saving}
           className="rounded-xl border px-3 py-1.5 text-sm hover:bg-surface-2 disabled:opacity-50"
         >
           ❌ 丟棄

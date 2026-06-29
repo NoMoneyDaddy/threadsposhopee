@@ -31,6 +31,9 @@ export async function createSource(
     auto_publish?: boolean;
     posts_limit?: number;
     enabled?: boolean;
+    sort?: "top" | "recent" | null;
+    after_date?: string | null;
+    before_date?: string | null;
   },
   ownerId: string
 ): Promise<Source> {
@@ -44,7 +47,10 @@ export async function createSource(
     enabled: input.enabled ?? true,
     poll_interval_minutes: input.poll_interval_minutes ?? 15,
     auto_publish: input.auto_publish ?? false,
-    posts_limit: input.posts_limit ?? 1
+    posts_limit: input.posts_limit ?? 1,
+    sort: input.sort ?? null,
+    after_date: input.after_date || null,
+    before_date: input.before_date || null
   };
   if (isDemoMode) {
     const src: Source = { id: randomUUID(), last_polled_at: null, ...row };
@@ -65,31 +71,41 @@ function isScrapeSource(s: Source): boolean {
   return !s.threads_account_id && Boolean(s.search_query);
 }
 
-// 讀目前的抓文設定：關鍵字清單（保序）＋每次抓幾篇＋目標帳號（選填）＋是否啟用。下次開頁自動帶出（保留上次設定）。
-export async function getScrapeConfig(ownerId: string): Promise<{ keywords: string[]; postsLimit: number; username: string; enabled: boolean }> {
+// 抓文設定（一份共用設定，整份寫到每個關鍵字來源列）。
+export interface ScrapeConfigData {
+  keywords: string[];
+  postsLimit: number;
+  username: string; // 目標帳號（選填，無預設）
+  sort: "top" | "recent";
+  after: string; // YYYY-MM-DD，空＝不限
+  before: string; // YYYY-MM-DD，空＝不限
+  enabled: boolean;
+}
+
+// 讀目前的抓文設定：關鍵字清單（保序）＋每次抓幾篇＋目標帳號＋排序＋日期區間＋是否啟用。下次開頁自動帶出（保留上次設定）。
+export async function getScrapeConfig(ownerId: string): Promise<ScrapeConfigData> {
   const sources = (await listSources(ownerId)).filter(isScrapeSource);
   const keywords = sources.map((s) => (s.search_query ?? "").trim()).filter(Boolean);
   const postsLimit = sources[0]?.posts_limit ?? 3;
-  // 目標帳號是整份設定共用一個值（同寫到每個關鍵字來源列的 source_username）；取第一個即可。
+  // 排序／日期／目標帳號是整份設定共用一個值（同寫到每個關鍵字來源列）；取第一個即可。
   const username = (sources[0]?.source_username ?? "").trim();
+  const sort: "top" | "recent" = sources[0]?.sort === "top" ? "top" : "recent";
+  const after = (sources[0]?.after_date ?? "").trim();
+  const before = (sources[0]?.before_date ?? "").trim();
   // 尚未設定任何關鍵字時預設「啟用」，讓首次儲存就會被「立即抓取」納入；已有來源則看其啟用狀態。
   const enabled = sources.length === 0 ? true : sources.some((s) => s.enabled);
-  return { keywords, postsLimit, username, enabled };
+  return { keywords, postsLimit, username, sort, after, before, enabled };
 }
 
-// 保存抓文設定：把關鍵字清單對帳成關鍵字來源列（新增缺的、刪除移除的、更新保留的的 postsLimit/username/enabled）。
-// keywords/username 已由呼叫端正規化（去重/濾空/上限、帳號字元驗證）。回傳保存後的設定。
-// username 是整份設定共用一個值，寫到每個關鍵字來源列的 source_username（空＝不限定帳號）。
-export async function saveScrapeConfig(
-  ownerId: string,
-  keywords: string[],
-  postsLimit: number,
-  username = "",
-  enabled = true
-): Promise<{ keywords: string[]; postsLimit: number; username: string; enabled: boolean }> {
+// 保存抓文設定：把關鍵字清單對帳成關鍵字來源列（新增缺的、刪除移除的、更新保留的）。
+// 各欄位已由呼叫端正規化（關鍵字去重/上限、帳號與日期字元驗證、排序枚舉）。回傳保存後的設定。
+// 排序／日期／目標帳號為整份共用值，寫到每個關鍵字來源列。
+export async function saveScrapeConfig(ownerId: string, cfg: ScrapeConfigData): Promise<ScrapeConfigData> {
+  const { keywords, postsLimit, username, sort, after, before, enabled } = cfg;
   const existing = (await listSources(ownerId)).filter(isScrapeSource);
   const existingByKw = new Map(existing.map((s) => [(s.search_query ?? "").trim(), s]));
   const wanted = new Set(keywords);
+  const shared = { posts_limit: postsLimit, source_username: username, sort, after_date: after, before_date: before, enabled };
 
   // 各列獨立，平行處理（最多 10 個關鍵字，省去逐筆 DB 往返）：刪除移除的、新增缺的、更新保留的。
   await Promise.all([
@@ -98,16 +114,20 @@ export async function saveScrapeConfig(
       .map((s) => deleteSource(s.id, ownerId)),
     ...keywords
       .filter((kw) => !existingByKw.has(kw))
-      .map((kw) => createSource({ threads_account_id: null, source_username: username, search_query: kw, posts_limit: postsLimit, auto_publish: false, enabled }, ownerId)),
+      .map((kw) => createSource({ threads_account_id: null, search_query: kw, auto_publish: false, ...shared }, ownerId)),
     ...existing
       .filter((s) => wanted.has((s.search_query ?? "").trim()))
-      .map((s) => updateScrapeSource(s.id, ownerId, { posts_limit: postsLimit, source_username: username, enabled }))
+      .map((s) => updateScrapeSource(s.id, ownerId, shared))
   ]);
-  return { keywords, postsLimit, username, enabled };
+  return cfg;
 }
 
-// 內部：更新關鍵字來源的 posts_limit / source_username / enabled（多租戶以 owner_id 過濾）。
-async function updateScrapeSource(id: string, ownerId: string, patch: { posts_limit?: number; source_username?: string; enabled?: boolean }): Promise<void> {
+// 內部：更新關鍵字來源共用欄位（posts_limit / source_username / sort / 日期 / enabled）（多租戶以 owner_id 過濾）。
+async function updateScrapeSource(
+  id: string,
+  ownerId: string,
+  patch: { posts_limit?: number; source_username?: string; sort?: "top" | "recent"; after_date?: string; before_date?: string; enabled?: boolean }
+): Promise<void> {
   if (isDemoMode) {
     const s = demo.sources.find((x) => x.id === id && x.owner_id === ownerId);
     if (s) Object.assign(s, patch);

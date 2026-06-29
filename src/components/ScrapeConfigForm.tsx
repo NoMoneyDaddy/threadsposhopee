@@ -2,20 +2,23 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { DEFAULT_SCRAPE_KEYWORD, MAX_SCRAPE_KEYWORDS, SCRAPE_POSTS_MIN, SCRAPE_POSTS_MAX } from "@/lib/scrape-config";
+import { DEFAULT_SCRAPE_KEYWORD, MAX_SCRAPE_KEYWORDS, SCRAPE_POSTS_MIN, SCRAPE_POSTS_MAX, type ScrapeSort } from "@/lib/scrape-config";
 
 // 自動抓文設定（一份可保存的設定，不綁發文帳號）：自訂多個關鍵字（去 Threads 搜含該字的貼文）、
-// 每次抓幾篇。儲存後下次開頁自動帶出（保留上次設定）。抓到的一律進待審素材，發文帳號之後排程才選。
+// 每次抓幾篇、排序、日期區間、目標帳號。儲存後下次開頁自動帶出（保留上次設定）。抓到的一律進待審素材。
 export default function ScrapeConfigForm({
   initial
 }: {
-  initial: { keywords: string[]; postsLimit: number; username: string; enabled: boolean };
+  initial: { keywords: string[]; postsLimit: number; username: string; sort: ScrapeSort; after: string; before: string; enabled: boolean };
 }) {
   const router = useRouter();
   const [keywords, setKeywords] = useState<string[]>(initial.keywords.length ? initial.keywords : [DEFAULT_SCRAPE_KEYWORD]);
   const [input, setInput] = useState("");
   const [postsLimit, setPostsLimit] = useState(initial.postsLimit);
   const [username, setUsername] = useState(initial.username ?? "");
+  const [sort, setSort] = useState<ScrapeSort>(initial.sort ?? "recent");
+  const [after, setAfter] = useState(initial.after ?? "");
+  const [before, setBefore] = useState(initial.before ?? "");
   const [enabled, setEnabled] = useState(initial.enabled);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -37,13 +40,16 @@ export default function ScrapeConfigForm({
       const res = await fetch("/api/scrape-config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ keywords, postsLimit, username, enabled })
+        body: JSON.stringify({ keywords, postsLimit, username, sort, after, before, enabled })
       });
       const json = await res.json();
       if (!json.ok) throw new Error(json.error);
       setKeywords(json.config.keywords);
       setPostsLimit(json.config.postsLimit);
       setUsername(json.config.username ?? "");
+      setSort(json.config.sort ?? "recent");
+      setAfter(json.config.after ?? "");
+      setBefore(json.config.before ?? "");
       setEnabled(json.config.enabled);
       setMsg("已儲存設定（下次開頁自動帶出）");
       router.refresh();
@@ -135,6 +141,43 @@ export default function ScrapeConfigForm({
         <p className="mt-1 text-xs text-ink-3">
           填了就只在這個帳號的貼文裡找上面的關鍵字，留空就是整個 Threads 都搜。帳號只會用到英數字、底線和點，不用加 @。
         </p>
+      </div>
+
+      <div>
+        <label className="mb-1 block text-xs text-ink-2">排序方式</label>
+        <select
+          className="w-40 rounded-xl border px-3 py-1.5 text-sm"
+          value={sort}
+          onChange={(e) => setSort(e.target.value === "top" ? "top" : "recent")}
+        >
+          <option value="recent">最新（依時間）</option>
+          <option value="top">熱門（依互動）</option>
+        </select>
+        <p className="mt-1 text-xs text-ink-3">
+          搜不太到東西時，可以換成「熱門」試試，常常比「最新」找得到更多貼文。
+        </p>
+      </div>
+
+      <div>
+        <label className="mb-1 block text-xs text-ink-2">只抓這段日期內的貼文（選填）</label>
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <input
+            type="date"
+            value={after}
+            onChange={(e) => setAfter(e.target.value)}
+            aria-label="起始日"
+            className="rounded-xl border px-3 py-1.5"
+          />
+          <span className="text-ink-3">到</span>
+          <input
+            type="date"
+            value={before}
+            onChange={(e) => setBefore(e.target.value)}
+            aria-label="結束日"
+            className="rounded-xl border px-3 py-1.5"
+          />
+        </div>
+        <p className="mt-1 text-xs text-ink-3">兩格都留空就不限日期。只想要近期的貼文時再填。</p>
       </div>
 
       <label className="flex cursor-pointer items-center gap-2 text-sm text-ink-2">

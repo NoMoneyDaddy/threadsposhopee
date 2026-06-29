@@ -54,3 +54,13 @@ test("buildScraperInput：sort 僅 top/recent，非法值退回 recent", () => {
   assert.equal(buildScraperInput({ sort: "recent" }, 20).sort, "recent");
   assert.equal(buildScraperInput({ sort: "weird" as never }, 20).sort, "recent");
 });
+
+test("buildScraperInput：after/before 合法 YYYY-MM-DD 才帶入，否則略過", () => {
+  const ok = buildScraperInput({ searchQuery: "蝦皮", after: "2026-01-01", before: "2026-06-30" }, 20);
+  assert.equal(ok.after, "2026-01-01");
+  assert.equal(ok.before, "2026-06-30");
+  // 空字串／非法格式不帶 key（不阻斷抓取）
+  const none = buildScraperInput({ searchQuery: "蝦皮", after: "", before: "2026/06/30" }, 20);
+  assert.equal("after" in none, false);
+  assert.equal("before" in none, false);
+});

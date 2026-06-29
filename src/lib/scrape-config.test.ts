@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { normalizeScrapeKeywords, normalizePostsLimit, normalizeScrapeUsername, DEFAULT_SCRAPE_KEYWORD, MAX_SCRAPE_KEYWORDS, SCRAPE_POSTS_MAX } from "./scrape-config";
+import { normalizeScrapeKeywords, normalizePostsLimit, normalizeScrapeUsername, normalizeScrapeSort, normalizeScrapeDate, DEFAULT_SCRAPE_KEYWORD, MAX_SCRAPE_KEYWORDS, SCRAPE_POSTS_MAX } from "./scrape-config";
 
 test("normalizeScrapeKeywords：去空白/濾空/去重保序、空清單退回預設", () => {
   assert.deepEqual(normalizeScrapeKeywords([" a ", "a", "", "b"]), ["a", "b"]);
@@ -39,4 +39,22 @@ test("normalizeScrapeUsername：非法字元拋錯（不靜默改字元）", () 
   assert.throws(() => normalizeScrapeUsername("bad name"));
   assert.throws(() => normalizeScrapeUsername("@@user"));
   assert.throws(() => normalizeScrapeUsername("user/slash"));
+});
+
+test("normalizeScrapeSort：只接受 top/recent，其餘退回 recent", () => {
+  assert.equal(normalizeScrapeSort("top"), "top");
+  assert.equal(normalizeScrapeSort("recent"), "recent");
+  assert.equal(normalizeScrapeSort("weird"), "recent");
+  assert.equal(normalizeScrapeSort(undefined), "recent");
+  assert.equal(normalizeScrapeSort(123), "recent");
+});
+
+test("normalizeScrapeDate：空＝不限、合法 YYYY-MM-DD 保留、非法拋錯", () => {
+  assert.equal(normalizeScrapeDate(""), "");
+  assert.equal(normalizeScrapeDate("  "), "");
+  assert.equal(normalizeScrapeDate(undefined), "");
+  assert.equal(normalizeScrapeDate("2026-06-29"), "2026-06-29");
+  assert.throws(() => normalizeScrapeDate("2026/06/29"));
+  assert.throws(() => normalizeScrapeDate("2026-13-40")); // 格式對但非真實日期
+  assert.throws(() => normalizeScrapeDate("June 29"));
 });

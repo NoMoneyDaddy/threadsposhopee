@@ -73,7 +73,9 @@ export async function runSourcePipeline(
   const geminiKey = await getGeminiKey(ownerId);
   const geminiModel = await resolveGeminiModel(ownerId); // 使用者自選模型（無則 env 預設），整迴圈重用
   const copyPrefs = await getCopyPrefs(ownerId); // 一次取出，整個迴圈重用，避免每篇重查
-  const customSubId = await getShopeeSubId(ownerId); // 使用者設定的分潤 Sub id（範本），整迴圈重用；與手動建立一致
+  // 使用者設定的分潤 Sub id（範本），整迴圈重用；與手動建立一致。屬選填設定，讀取失敗時降級為 null
+  // 繼續跑（不讓暫時性 DB 錯誤中止整條來源流程），對齊其他選填設定（如圖床）的容錯策略。
+  const customSubId = await getShopeeSubId(ownerId).catch(() => null);
   // 沒綁 Shopee API 時的後備：用 affiliate_id 自組追蹤連結
   const affiliateId = shopeeCreds ? null : await getShopeeAffiliateId(ownerId);
   // 各人自綁圖床（R2 或 Cloudinary，素材進自己雲端）；一次取出整迴圈重用

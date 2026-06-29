@@ -1,6 +1,5 @@
 import { log } from "@/lib/logger";
 import { callShopeeGql, ShopeeApiError } from "./gql";
-import { normalizeSubId } from "./subid";
 
 export { ShopeeApiError }; // 向後相容：原本由本檔匯出
 
@@ -33,15 +32,6 @@ export async function validateShopeeCredentials(
     }
     throw e;
   }
-}
-
-// 組出帶追蹤識別的 subIds（最多 5 個）：base + 來源帳號 + 商品 item_id。
-// 蝦皮分潤報表會依 subId 分流統計，可看出哪個來源/商品帶來收益。
-// subId 僅允許英數（實測底線會被蝦皮拒收），需清洗（來源含 @、底線、商品名含中文/空白都不適合）。
-export function buildSubIds(base: string | null | undefined, sourceUsername: string, itemId: string): string[] {
-  // 不再注入預設 base（原 "threadspo"）：未設來源標記時就不帶 base，只留來源/商品。
-  const parts = [normalizeSubId(base), normalizeSubId(sourceUsername), normalizeSubId(itemId)];
-  return parts.filter((p) => p.length > 0);
 }
 
 // 無 Open API 的替代：依蝦皮官方「Product Feed 第三方短連結」做法，

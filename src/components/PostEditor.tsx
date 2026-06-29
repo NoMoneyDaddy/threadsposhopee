@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { DraftMedia, ThreadSegment } from "@/lib/types";
 import ThreadsPreview, { CharCount } from "@/components/ThreadsPreview";
 import MediaPicker from "@/components/MediaPicker";
@@ -39,6 +39,8 @@ export default function PostEditor({
   replyDelay,
   onReplyDelayChange,
   threadContext,
+  onAutosave,
+  autosaveDelayMs = 1500,
   limit = THREADS_LIMIT
 }: {
   value: PostContent;
@@ -50,6 +52,9 @@ export default function PostEditor({
   onReplyDelayChange?: (v: string) => void;
   // 有商品情境（素材/草稿）時顯示「AI 生成串文」：依商品名/來源產多段，分潤連結附最後一段。
   threadContext?: { productName?: string | null; affiliateLink?: string | null; sourceText?: string | null };
+  // 邊打邊自動存進度（debounce）：有 id 的素材/草稿存 DB、發文頁存 localStorage。未傳＝不自動存。
+  onAutosave?: (value: PostContent) => Promise<void>;
+  autosaveDelayMs?: number;
   limit?: number;
 }) {
   const set = (patch: Partial<PostContent>) => onChange({ ...value, ...patch });
@@ -99,6 +104,28 @@ export default function PostEditor({
     setVariations([]);
   }, [value.mainText]);
 
+  // 自動存進度（debounce）：內容變動 autosaveDelayMs 後呼叫 onAutosave；跳過初次掛載。
+  const [autoStatus, setAutoStatus] = useState<"" | "saving" | "saved" | "error">("");
+  const firstAutosave = useRef(true);
+  useEffect(() => {
+    if (!onAutosave) return;
+    if (firstAutosave.current) {
+      firstAutosave.current = false;
+      return;
+    }
+    const t = setTimeout(async () => {
+      setAutoStatus("saving");
+      try {
+        await onAutosave(value);
+        setAutoStatus("saved");
+      } catch {
+        setAutoStatus("error");
+      }
+    }, autosaveDelayMs);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
   async function rewrite() {
     if (!value.mainText.trim()) return;
     setRewriting(true);
@@ -122,6 +149,11 @@ export default function PostEditor({
 
   return (
     <div className="space-y-3">
+      {onAutosave && autoStatus && (
+        <div className="text-right text-[11px] text-ink-3" role="status" aria-live="polite">
+          {autoStatus === "saving" ? "自動儲存中…" : autoStatus === "saved" ? "✓ 已自動儲存" : "⚠️ 自動儲存失敗（請手動儲存）"}
+        </div>
+      )}
       <div>
         <label className="mb-1 block text-sm font-medium text-ink">正文</label>
         <textarea

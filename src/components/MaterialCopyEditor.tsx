@@ -42,6 +42,22 @@ export default function MaterialCopyEditor({
     if (!open) setContent(materialToContent(material));
   }, [material.main_text, material.reply_text, material.media, material.thread_chain, open]);
 
+  // 自動存進度：邊打邊靜默 PATCH（不關閉編輯器、不 refresh）。失敗時 PostEditor 會顯示提示。
+  async function autosave(c: PostContent) {
+    const res = await fetch(`/api/materials/${material.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        main_text: c.mainText,
+        reply_text: c.replyText,
+        media: mergeToMaterialMedia(c.mainMedia, c.replyMedia),
+        thread_chain: c.extraSegments
+      })
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok || !json?.ok) throw new Error("autosave failed");
+  }
+
   async function save() {
     setBusy(true);
     setMsg(null);
@@ -86,6 +102,7 @@ export default function MaterialCopyEditor({
         preset={preset}
         accountLabel={accountLabel}
         threadContext={{ productName: material.product_name, affiliateLink: material.affiliate_short_link, sourceText: material.main_text }}
+        onAutosave={autosave}
       />
       <div className="flex items-center gap-2">
         <button type="button" onClick={save} disabled={busy} className="rounded-xl bg-brand px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50">

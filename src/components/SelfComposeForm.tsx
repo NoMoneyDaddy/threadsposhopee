@@ -1,11 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ThreadsAccount } from "@/lib/types";
 import PostEditor, { emptyPostContent, type PostContent, THREADS_LIMIT, MAX_EXTRA_SEGMENTS } from "@/components/PostEditor";
 import { fetchWithTimeout } from "@/lib/http";
 import { parseTaipeiDateTimeLocal } from "@/lib/datetime";
+
+// 發文頁草稿暫存 key：發文沒有後端 id，故自動存進 localStorage（重整／關頁可救回未送出內容）。
+const COMPOSE_DRAFT_KEY = "compose:draft";
+const isNonEmptyContent = (c: PostContent) =>
+  Boolean(c.mainText.trim() || c.replyText.trim() || c.mainMedia.length || c.replyMedia.length || c.extraSegments.length);
 
 // 發文：像 Threads 一樣直接打字、上傳多張照片／影片，右側即時預覽；正文裡的蝦皮連結發布時自動轉成你的分潤連結。
 // 編輯區共用 <PostEditor>（與草稿/素材一致）；本元件負責發文帳號、排程與送出（發布/排程/佇列/草稿）。
@@ -25,6 +30,28 @@ export default function SelfComposeForm({
   const [scheduledAt, setScheduledAt] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+
+  // 掛載時救回上次未送出的內容（localStorage）；解析失敗或為空則忽略。
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(COMPOSE_DRAFT_KEY);
+      if (!raw) return;
+      const saved = JSON.parse(raw) as Partial<PostContent>;
+      const restored: PostContent = { ...emptyPostContent(), ...saved };
+      if (isNonEmptyContent(restored)) {
+        setContent(restored);
+        setMsg("↩️ 已救回上次未送出的內容");
+      }
+    } catch {
+      /* 壞資料就忽略 */
+    }
+  }, []);
+
+  // 自動存進度：邊打邊寫進 localStorage（發文頁無後端 id，故存本機）。
+  async function autosave(c: PostContent) {
+    if (isNonEmptyContent(c)) localStorage.setItem(COMPOSE_DRAFT_KEY, JSON.stringify(c));
+    else localStorage.removeItem(COMPOSE_DRAFT_KEY);
+  }
 
   // 送出條件：正文必填＋至少一個發文帳號（與後端／submit 驗證一致）。
   const blockReason = threadsAccounts.length === 0 ? "請先到帳號管理綁定 Threads 帳號" : !content.mainText.trim() ? "請先輸入正文" : "";
@@ -118,6 +145,7 @@ export default function SelfComposeForm({
       setMsg(done);
       setContent(emptyPostContent());
       setReplyDelay("");
+      localStorage.removeItem(COMPOSE_DRAFT_KEY);
       router.refresh();
     } catch (e) {
       setMsg(`❌ ${e instanceof Error ? e.message : String(e)}`);
@@ -136,6 +164,7 @@ export default function SelfComposeForm({
         accountLabel={threadsAccounts.find((a) => a.id === (accountId || threadsAccounts[0]?.id))?.label}
         replyDelay={replyDelay}
         onReplyDelayChange={setReplyDelay}
+        onAutosave={autosave}
       />
 
       <div className="flex flex-wrap items-center gap-2">

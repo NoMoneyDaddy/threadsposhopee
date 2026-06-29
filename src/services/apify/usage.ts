@@ -1,4 +1,3 @@
-import { assertSafePublicUrl } from "@/lib/url-guard";
 import { fetchWithTimeout } from "@/lib/http";
 import { getApifyCredentials } from "@/lib/credentials";
 
@@ -26,9 +25,13 @@ export async function getApifyUsage(ownerId: string): Promise<ApifyUsage | null>
   const creds = await getApifyCredentials(ownerId);
   if (!creds?.token) return null;
   try {
-    // token 走 query（與 scraper run-sync 一致）；host 固定 api.apify.com，仍過 SSRF 守衛。
-    const url = assertSafePublicUrl(`https://api.apify.com/v2/users/me/limits?token=${encodeURIComponent(creds.token)}`).href;
-    const res = await fetchWithTimeout(url, {}, 10000);
+    // token 走 Authorization 標頭（不放 URL，避免在日誌／代理留下明文金鑰）；固定公網 API，免 SSRF 守衛。
+    // 純顯示用、逾時短（4s），避免 Apify 回應慢時拖住整個抓文頁渲染。
+    const res = await fetchWithTimeout(
+      "https://api.apify.com/v2/users/me/limits",
+      { headers: { Authorization: `Bearer ${creds.token}` } },
+      4000
+    );
     if (!res.ok) return null;
     return parseApifyUsage(await res.json().catch(() => null));
   } catch {

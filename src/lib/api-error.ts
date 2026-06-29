@@ -5,8 +5,10 @@ import { log } from "./logger";
 // 不要 String(物件) 變成 "[object Object]"。供 owner-only 路徑把真實原因（如缺欄位）回給使用者排查。
 export function errMessage(e: unknown): string {
   if (e instanceof Error) return e.message;
-  if (e && typeof e === "object" && typeof (e as { message?: unknown }).message === "string") {
-    return (e as { message: string }).message;
+  if (e && typeof e === "object") {
+    const obj = e as Record<string, unknown>;
+    if (typeof obj.message === "string") return obj.message;
+    if (typeof obj.error === "string") return obj.error; // 部分套件/API 錯誤格式為 { error: "..." }
   }
   return String(e);
 }

@@ -4,6 +4,7 @@ import { getScrapeConfig, saveScrapeConfig, hasApifyCredentials } from "@/lib/st
 import { normalizeScrapeKeywords, normalizePostsLimit, normalizeScrapeUsername, normalizeScrapeSort, normalizeScrapeDate } from "@/lib/scrape-config";
 import { isDemoMode } from "@/lib/env";
 import { errMessage } from "@/lib/api-error";
+import { log } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +52,7 @@ export async function POST(req: Request) {
     const config = await saveScrapeConfig(user.id, { keywords, postsLimit, username, sort, after, before, enabled });
     return NextResponse.json({ ok: true, config });
   } catch (e) {
+    log.error("scrape-config 儲存失敗", { err: e });
     return NextResponse.json({ ok: false, error: errMessage(e) }, { status: 500 });
   }
 }

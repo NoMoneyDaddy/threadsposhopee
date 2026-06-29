@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { DraftMedia, ThreadSegment } from "@/lib/types";
 import ThreadsPreview, { CharCount } from "@/components/ThreadsPreview";
 import MediaPicker from "@/components/MediaPicker";
@@ -39,6 +39,8 @@ export default function PostEditor({
   replyDelay,
   onReplyDelayChange,
   threadContext,
+  onAutosave,
+  autosaveDelayMs = 1500,
   limit = THREADS_LIMIT
 }: {
   value: PostContent;
@@ -50,6 +52,10 @@ export default function PostEditor({
   onReplyDelayChange?: (v: string) => void;
   // 有商品情境（素材/草稿）時顯示「AI 生成串文」：依商品名/來源產多段，分潤連結附最後一段。
   threadContext?: { productName?: string | null; affiliateLink?: string | null; sourceText?: string | null };
+  // 邊打邊自動存進度（debounce）：有 id 的素材/草稿存 DB、發文頁存 localStorage。未傳＝不自動存。
+  // signal：新一次輸入觸發時，用來中斷上一次尚未完成的存檔請求（防後端寫入亂序）。
+  onAutosave?: (value: PostContent, signal?: AbortSignal) => Promise<void>;
+  autosaveDelayMs?: number;
   limit?: number;
 }) {
   const set = (patch: Partial<PostContent>) => onChange({ ...value, ...patch });
@@ -66,6 +72,9 @@ export default function PostEditor({
     setGenerating(true);
     setErr(null);
     try {
+      // 參考媒體餵給 AI：有影片優先吃影片（資訊量大），否則退回第一個媒體（主文優先，其次留言）。
+      const allMedia = [...value.mainMedia, ...value.replyMedia];
+      const refMedia = allMedia.find((m) => m.type === "video") ?? allMedia[0] ?? null;
       const res = await fetchWithTimeout(
         "/api/ai/thread",
         {
@@ -74,7 +83,9 @@ export default function PostEditor({
           body: JSON.stringify({
             productName: threadContext.productName ?? "",
             affiliateLink: threadContext.affiliateLink ?? "",
-            sourceText: threadContext.sourceText ?? ""
+            sourceText: threadContext.sourceText ?? "",
+            mediaUrl: refMedia?.url ?? null,
+            mediaType: refMedia?.type ?? null
           })
         },
         30000
@@ -99,6 +110,40 @@ export default function PostEditor({
     setVariations([]);
   }, [value.mainText]);
 
+  // 自動存進度（debounce）：內容變動 autosaveDelayMs 後呼叫 onAutosave；跳過初次掛載。
+  // onAutosave 用 ref 保存最新版本（避免 stale closure 抓到舊的 draft.id），且不因其身分改變而重觸發 debounce。
+  const onAutosaveRef = useRef(onAutosave);
+  useEffect(() => {
+    onAutosaveRef.current = onAutosave;
+  }, [onAutosave]);
+  const [autoStatus, setAutoStatus] = useState<"" | "saving" | "saved" | "error">("");
+  const firstAutosave = useRef(true);
+  const hasAutosave = Boolean(onAutosave);
+  useEffect(() => {
+    if (!hasAutosave) return;
+    if (firstAutosave.current) {
+      firstAutosave.current = false;
+      return;
+    }
+    const controller = new AbortController();
+    const t = setTimeout(async () => {
+      const fn = onAutosaveRef.current;
+      if (!fn) return;
+      setAutoStatus("saving");
+      try {
+        await fn(value, controller.signal);
+        if (!controller.signal.aborted) setAutoStatus("saved");
+      } catch (e) {
+        if (e instanceof Error && e.name === "AbortError") return; // 被新輸入取消，不算失敗
+        if (!controller.signal.aborted) setAutoStatus("error");
+      }
+    }, autosaveDelayMs);
+    return () => {
+      clearTimeout(t);
+      controller.abort(); // 取消上一次未完成的存檔
+    };
+  }, [value, autosaveDelayMs, hasAutosave]);
+
   async function rewrite() {
     if (!value.mainText.trim()) return;
     setRewriting(true);
@@ -122,6 +167,11 @@ export default function PostEditor({
 
   return (
     <div className="space-y-3">
+      {onAutosave && autoStatus && (
+        <div className="text-right text-[11px] text-ink-3" role="status" aria-live="polite">
+          {autoStatus === "saving" ? "自動儲存中…" : autoStatus === "saved" ? "✓ 已自動儲存" : "⚠️ 自動儲存失敗（請手動儲存）"}
+        </div>
+      )}
       <div>
         <label className="mb-1 block text-sm font-medium text-ink">正文</label>
         <textarea

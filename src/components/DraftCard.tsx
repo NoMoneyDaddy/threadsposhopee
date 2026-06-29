@@ -170,6 +170,26 @@ function DraftCard({
     }
   }
 
+  // 自動存進度：編輯中邊打邊靜默存（edit action，不 refresh/不關閉）。失敗時 PostEditor 顯示提示。
+  async function autosaveDraft(c: PostContent, signal?: AbortSignal) {
+    const res = await fetch("/api/drafts/action", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal,
+      body: JSON.stringify({
+        id: draft.id,
+        action: "edit",
+        main_text: c.mainText,
+        reply_text: c.replyText,
+        media: c.mainMedia.map(({ url, type }) => ({ url, type })),
+        reply_media: c.replyMedia.map(({ url, type }) => ({ url, type })),
+        thread_chain: c.extraSegments.length > 0 ? [{ text: c.replyText, media: c.replyMedia }, ...c.extraSegments] : []
+      })
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok || !json?.ok) throw new Error("autosave failed");
+  }
+
   const done = draft.status === "published" || draft.status === "rejected";
 
   // 合格素材組：主文＋留言所有媒體一起算，需 ≥1 影片 + ≥1 圖。
@@ -274,6 +294,7 @@ function DraftCard({
             preset={preset}
             accountLabel={previewAccount?.label}
             threadContext={{ productName: draft.product_name, affiliateLink: draft.shopee_short_link, sourceText: draft.main_text }}
+            onAutosave={autosaveDraft}
           />
           <div className="flex gap-2">
             <button

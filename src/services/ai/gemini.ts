@@ -20,7 +20,8 @@ export async function generateWithGemini(
   mediaType: "image" | "video" | "none",
   apiKey?: string | null,
   temperature = 0.9,
-  model?: string | null
+  model?: string | null,
+  maxOutputTokens = 512
 ): Promise<string> {
   const key = apiKey;
   if (!key) throw new Error("無 Gemini 金鑰"); // 先擋空金鑰，避免送出 key=undefined 的必失敗外呼
@@ -81,7 +82,7 @@ export async function generateWithGemini(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       contents: [{ role: "user", parts }],
-      generationConfig: { temperature, maxOutputTokens: 512 }
+      generationConfig: { temperature, maxOutputTokens }
     })
   }, 30000, 1);
   if (!res.ok) throw new Error(`Gemini ${res.status}: ${await res.text()}`);

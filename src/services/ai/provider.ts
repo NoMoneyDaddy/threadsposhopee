@@ -110,6 +110,7 @@ export async function generateThreadCopy(
     );
     return { ...assembleThread(demo, linkLine), raw: demo.join("\n===\n") };
   }
+  const hasMedia = Boolean(input.mediaUrl) && input.mediaType !== "none";
   const prompt = `${HUMANIZER_RULES}
 
 請為以下蝦皮好物寫一則「${n} 段的 Threads 串文」（主文＋${n - 1} 段後續），像真人逐則發。規則：
@@ -117,10 +118,13 @@ export async function generateThreadCopy(
 - 第 1 段是主文（吸睛開頭、帶出情境），不要放任何網址
 - 後續每段延伸一個重點／使用心得／情境，也不要放網址（連結由系統自動補在最後一段）
 - 每段最多 4 行，段與段之間只用「獨立一行的 ===」分隔，不要加編號或標題
-
+${hasMedia ? "- 已附上商品的照片／影片，請依畫面實際看到的外觀、顏色、特點來寫，但不要描述「這張圖」這類字眼\n" : ""}
 商品：${input.productName}
 ${input.sourceText ? `參考內容：${input.sourceText}` : ""}`;
-  const raw = await geminiText(prompt, apiKey, prefs.temperature ?? 0.8, 900, model);
+  // 有媒體就走多模態（吃圖片／影片當參考）；否則純文字。
+  const raw = hasMedia
+    ? await generateWithGemini(prompt, input.mediaUrl ?? null, input.mediaType === "video" ? "video" : "image", apiKey, prefs.temperature ?? 0.8, model, 900)
+    : await geminiText(prompt, apiKey, prefs.temperature ?? 0.8, 900, model);
   const texts = parseVariations(raw, n);
   return { ...assembleThread(texts.length ? texts : [input.productName ?? "這個好物"], linkLine), raw };
 }

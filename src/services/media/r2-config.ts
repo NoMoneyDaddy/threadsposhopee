@@ -28,6 +28,14 @@ export function parseR2Input(raw: {
   try {
     const u = new URL(publicBaseRaw);
     if (u.protocol !== "https:") return { ok: false, error: "公開讀網域必須是 https://" };
+    // r2.cloudflarestorage.com 是 R2 的 S3 API 端點（需簽章、不可公開讀），填它會導致圖片載不出來（403）。
+    // 必須填可公開存取的網域：R2 開啟公開存取後的 pub-xxxx.r2.dev，或綁定的自訂網域。
+    if (/(^|\.)r2\.cloudflarestorage\.com$/i.test(u.hostname)) {
+      return {
+        ok: false,
+        error: "這是 R2 的 S3 API 端點，無法公開讀取（圖片會 403）。請改填可公開存取的網域：到 Cloudflare R2 開啟公開存取後的 pub-xxxx.r2.dev，或你綁定的自訂網域。"
+      };
+    }
     publicBase = u.origin + u.pathname.replace(/\/+$/, "");
   } catch {
     return { ok: false, error: "公開讀網域不是合法網址" };

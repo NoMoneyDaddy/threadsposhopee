@@ -18,6 +18,7 @@ export default function ApifyForm({ bound, actor }: { bound: boolean; actor?: st
   const [actorMsg, setActorMsg] = useState<string | null>(null);
 
   async function saveActor(next: string) {
+    const prev = actorSel; // 失敗回滾，避免下拉顯示與後端不一致
     setActorSel(next);
     setActorBusy(true);
     setActorMsg(null);
@@ -32,6 +33,7 @@ export default function ApifyForm({ bound, actor }: { bound: boolean; actor?: st
       setActorMsg("✅ 已切換抓取器");
       router.refresh();
     } catch (e) {
+      setActorSel(prev);
       setActorMsg(`❌ ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setActorBusy(false);

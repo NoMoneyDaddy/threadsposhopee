@@ -1,18 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { ThreadsAccount, DraftMedia, ThreadSegment } from "@/lib/types";
-import ThreadsPreview, { CharCount } from "@/components/ThreadsPreview";
-import MediaPicker from "@/components/MediaPicker";
+import type { ThreadsAccount } from "@/lib/types";
+import PostEditor, { emptyPostContent, type PostContent, THREADS_LIMIT, MAX_EXTRA_SEGMENTS } from "@/components/PostEditor";
 import { fetchWithTimeout } from "@/lib/http";
 import { parseTaipeiDateTimeLocal } from "@/lib/datetime";
 
-const input = "w-full rounded-xl border px-3 py-2 text-sm";
-const THREADS_LIMIT = 500;
-const MAX_EXTRA_SEGMENTS = 10; // 與後端 compose route 上限一致，避免送出後被拒
-
 // 發文：像 Threads 一樣直接打字、上傳多張照片／影片，右側即時預覽；正文裡的蝦皮連結發布時自動轉成你的分潤連結。
+// 編輯區共用 <PostEditor>（與草稿/素材一致）；本元件負責發文帳號、排程與送出（發布/排程/佇列/草稿）。
 export default function SelfComposeForm({
   threadsAccounts,
   cloud = null,
@@ -23,54 +19,19 @@ export default function SelfComposeForm({
   preset?: string | null;
 }) {
   const router = useRouter();
-  const [mainText, setMainText] = useState("");
-  const [replyText, setReplyText] = useState("");
+  const [content, setContent] = useState<PostContent>(emptyPostContent());
   const [replyDelay, setReplyDelay] = useState(""); // 留言延遲（分），空=用全域預設
-  const [mainMedia, setMainMedia] = useState<DraftMedia[]>([]);
-  const [replyMedia, setReplyMedia] = useState<DraftMedia[]>([]);
-  // 更多串文段落（3/n…）：留言（2/n）之後再依序補發的段落。空＝只發單則留言（向後相容）。
-  const [extraSegments, setExtraSegments] = useState<ThreadSegment[]>([]);
   const [accountId, setAccountId] = useState(threadsAccounts[0]?.id ?? "");
   const [scheduledAt, setScheduledAt] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
-  // 「換個說法」：AI 改寫出多個版本供挑選。
-  const [variations, setVariations] = useState<string[]>([]);
-  const [rewriting, setRewriting] = useState(false);
-  // 正文一變動（編輯／套用／送出後清空）即讓舊的改寫版本失效，避免點到過期內容。
-  useEffect(() => {
-    setVariations([]);
-  }, [mainText]);
 
-  async function rewrite() {
-    if (!mainText.trim()) {
-      setMsg("請先輸入正文再換句話說");
-      return;
-    }
-    setRewriting(true);
-    setMsg(null);
-    setVariations([]);
-    try {
-      const res = await fetchWithTimeout(
-        "/api/ai/rewrite",
-        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: mainText }) },
-        30000
-      );
-      // 回應不保證是 JSON（如 gateway 502 HTML）：安全解析，失敗則用狀態碼當訊息。
-      const json = await res.json().catch(() => null);
-      if (!res.ok || !json?.ok) throw new Error(json?.error || `換句話說失敗（${res.status}）`);
-      setVariations((json.variations as string[]) ?? []);
-    } catch (e) {
-      setMsg(`❌ ${e instanceof Error ? e.message : String(e)}`);
-    } finally {
-      setRewriting(false);
-    }
-  }
-  // 送出條件：正文必填＋至少一個發文帳號（與後端／submit 驗證一致），不符時停用所有送出鈕並提示原因。
-  const blockReason = threadsAccounts.length === 0 ? "請先到帳號管理綁定 Threads 帳號" : !mainText.trim() ? "請先輸入正文" : "";
+  // 送出條件：正文必填＋至少一個發文帳號（與後端／submit 驗證一致）。
+  const blockReason = threadsAccounts.length === 0 ? "請先到帳號管理綁定 Threads 帳號" : !content.mainText.trim() ? "請先輸入正文" : "";
   const canSubmit = blockReason === "";
 
   async function submit(action: "publish" | "schedule" | "draft" | "queue") {
+    const { mainText, replyText, mainMedia, replyMedia, extraSegments } = content;
     if (!mainText.trim()) {
       setMsg("請先輸入正文");
       return;
@@ -95,7 +56,6 @@ export default function SelfComposeForm({
       setMsg("有空白的串文段落，請填入內容或移除");
       return;
     }
-    // 段落數同後端上限，避免送出後被 400 退回
     if (extraSegments.length > MAX_EXTRA_SEGMENTS) {
       setMsg(`串文段落最多 ${MAX_EXTRA_SEGMENTS} 段`);
       return;
@@ -156,12 +116,8 @@ export default function SelfComposeForm({
               ? `✅ 已加入佇列（${slotTxt}）`
               : "✅ 已存草稿";
       setMsg(done);
-      setMainText("");
-      setReplyText("");
+      setContent(emptyPostContent());
       setReplyDelay("");
-      setMainMedia([]);
-      setReplyMedia([]);
-      setExtraSegments([]);
       router.refresh();
     } catch (e) {
       setMsg(`❌ ${e instanceof Error ? e.message : String(e)}`);
@@ -172,157 +128,14 @@ export default function SelfComposeForm({
 
   return (
     <div className="space-y-3 rounded-2xl border bg-surface p-4">
-      <div>
-        <label htmlFor="self-compose-main" className="mb-1 block text-sm font-medium text-ink">
-          正文
-        </label>
-        <textarea
-          id="self-compose-main"
-          className={input}
-          rows={3}
-          value={mainText}
-          onChange={(e) => setMainText(e.target.value)}
-          placeholder="有什麼新鮮事？直接打字分享…"
-        />
-        <div className="mt-1 flex items-center justify-between gap-2">
-          <button
-            type="button"
-            onClick={rewrite}
-            disabled={rewriting || !mainText.trim()}
-            title={!mainText.trim() ? "請先輸入正文" : "用 AI 改寫出幾個不同說法供你挑選"}
-            className="rounded-full border border-brand/40 px-2.5 py-1 text-xs text-brand hover:bg-orange-50 disabled:opacity-50"
-          >
-            {rewriting ? "改寫中…" : "✨ 換個說法"}
-          </button>
-          <CharCount text={mainText} limit={THREADS_LIMIT} />
-        </div>
-        {variations.length > 0 && (
-          <div className="mt-2 space-y-1.5 rounded-xl border border-dashed border-border bg-surface-2/50 p-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-ink-2">點一個版本即可套用</span>
-              <button type="button" onClick={() => setVariations([])} aria-label="關閉版本清單" className="text-xs text-ink-3 hover:text-ink">
-                ✕
-              </button>
-            </div>
-            {variations.map((v, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => {
-                  setMainText(v);
-                  setVariations([]);
-                }}
-                className="block w-full whitespace-pre-wrap rounded-lg border bg-surface px-2.5 py-2 text-left text-sm text-ink hover:border-brand/50 hover:bg-orange-50"
-              >
-                {v}
-              </button>
-            ))}
-          </div>
-        )}
-        {/* 正文媒體：可上傳多張圖片／影片（>1 張發成輪播） */}
-        <MediaPicker items={mainMedia} onChange={setMainMedia} cloud={cloud} preset={preset} hint="可加多張照片／影片（多張＝輪播）" />
-      </div>
-      <div>
-        <label htmlFor="self-compose-reply" className="mb-1 block text-sm font-medium text-ink">
-          留言（串文 2/2，選填）
-        </label>
-        <textarea
-          id="self-compose-reply"
-          className={input + " text-xs"}
-          rows={2}
-          value={replyText}
-          onChange={(e) => setReplyText(e.target.value)}
-          placeholder="留言區（選填，例如分潤連結）"
-        />
-        {/* 留言媒體：留言區也可上傳多張圖片／影片 */}
-        <div className="mt-2">
-          <MediaPicker items={replyMedia} onChange={setReplyMedia} cloud={cloud} preset={preset} hint="留言也可加多張照片／影片" />
-        </div>
-        {(replyText.trim() || replyMedia.length > 0) && (
-          <div className="mt-2 flex items-center gap-2">
-            <label htmlFor="self-compose-reply-delay" className="text-xs text-ink-2">
-              留言延遲幾分鐘後補上（留空就用預設值）
-            </label>
-            <input
-              id="self-compose-reply-delay"
-              className="w-24 rounded-xl border px-2 py-1 text-xs"
-              inputMode="numeric"
-              placeholder="如 15"
-              value={replyDelay}
-              onChange={(e) => {
-                const v = e.target.value;
-                if (/^\d*$/.test(v) && (v === "" || Number(v) <= 1440)) setReplyDelay(v);
-              }}
-            />
-          </div>
-        )}
-      </div>
-
-      {/* 更多串文段落（3/n…）：留言之後再依序補發，每段防封間隔交給排程處理 */}
-      <div className="space-y-2">
-        {extraSegments.map((seg, i) => (
-          <div key={i} className="rounded-xl border border-dashed border-border p-2">
-            <div className="mb-1 flex items-center justify-between">
-              <span className="text-xs font-medium text-ink-2">串文第 {i + 3} 段</span>
-              <button
-                type="button"
-                onClick={() => setExtraSegments((prev) => prev.filter((_, j) => j !== i))}
-                aria-label={`移除第 ${i + 3} 段`}
-                className="text-xs text-ink-3 hover:text-red-500"
-              >
-                移除
-              </button>
-            </div>
-            <textarea
-              className={input + " text-xs"}
-              rows={2}
-              value={seg.text ?? ""}
-              onChange={(e) =>
-                setExtraSegments((prev) => prev.map((s, j) => (j === i ? { ...s, text: e.target.value } : s)))
-              }
-              placeholder={`第 ${i + 3} 段內容…`}
-            />
-            <div className="mt-1 flex justify-end">
-              <CharCount text={seg.text ?? ""} limit={THREADS_LIMIT} />
-            </div>
-            <div className="mt-1">
-              <MediaPicker
-                items={seg.media ?? []}
-                onChange={(action) =>
-                  setExtraSegments((prev) =>
-                    prev.map((s, j) => {
-                      if (j !== i) return s;
-                      const cur = s.media ?? [];
-                      const next = typeof action === "function" ? (action as (p: DraftMedia[]) => DraftMedia[])(cur) : action;
-                      return { ...s, media: next };
-                    })
-                  )
-                }
-                cloud={cloud}
-                preset={preset}
-                hint="這段也可加多張照片／影片"
-              />
-            </div>
-          </div>
-        ))}
-        <button
-          type="button"
-          onClick={() => setExtraSegments((prev) => (prev.length >= MAX_EXTRA_SEGMENTS ? prev : [...prev, { text: "", media: [] }]))}
-          disabled={extraSegments.length >= MAX_EXTRA_SEGMENTS}
-          title={extraSegments.length >= MAX_EXTRA_SEGMENTS ? `串文段落最多 ${MAX_EXTRA_SEGMENTS} 段` : undefined}
-          className="rounded-full border border-border px-3 py-1 text-xs text-ink-2 hover:bg-surface-2 disabled:opacity-50"
-        >
-          ＋ 新增串文段落
-        </button>
-      </div>
-
-      <ThreadsPreview
+      <PostEditor
+        value={content}
+        onChange={setContent}
+        cloud={cloud}
+        preset={preset}
         accountLabel={threadsAccounts.find((a) => a.id === (accountId || threadsAccounts[0]?.id))?.label}
-        mainText={mainText}
-        replyText={replyText}
-        media={mainMedia}
-        replyMedia={replyMedia}
-        extraSegments={extraSegments}
+        replyDelay={replyDelay}
+        onReplyDelayChange={setReplyDelay}
       />
 
       <div className="flex flex-wrap items-center gap-2">
@@ -374,7 +187,6 @@ export default function SelfComposeForm({
         </button>
       </div>
 
-      {/* 停用送出鈕時，render 層直接顯示原因（不依賴點擊觸發；title 在觸控裝置不可靠）。 */}
       {!busy && blockReason && <p className="text-sm text-amber-600" role="status" aria-live="polite">{blockReason}</p>}
       {msg && <p className="text-sm text-ink-2" role="status" aria-live="polite">{msg}</p>}
     </div>

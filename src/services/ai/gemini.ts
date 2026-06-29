@@ -4,6 +4,26 @@ import { assertSafePublicUrl, fetchSafePublicUrl } from "@/lib/url-guard";
 import { fetchWithRetry } from "@/lib/http";
 import { uploadToGeminiFiles } from "./gemini-files";
 
+interface GeminiPart {
+  text?: string;
+  thought?: boolean; // 2.5 thinking 模型的思考片段標記，不應計入輸出
+}
+interface GeminiResponse {
+  candidates?: Array<{ content?: { parts?: GeminiPart[] } }>;
+}
+
+// 串接候選回覆的所有文字片段。Gemini（尤其 2.5 系列「thinking」模型）會把輸出拆成多個 parts，
+// 也可能夾帶思考片段（thought:true）。只讀 parts[0] 會漏掉後半段，造成文案被截在半句。
+// 故只取「非 thought 的 text」並依序串起來。空輸入回空字串，由呼叫端判斷。
+export function extractGeminiText(json: unknown): string {
+  const parts = (json as GeminiResponse | null | undefined)?.candidates?.[0]?.content?.parts;
+  if (!Array.isArray(parts)) return "";
+  return parts
+    .filter((p): p is GeminiPart & { text: string } => typeof p?.text === "string" && p.thought !== true)
+    .map((p) => p.text)
+    .join("");
+}
+
 // Gemini inline data 上限約 20MB（含 base64 膨脹約 1.34x）→ 二進位設 12MB 安全門檻。
 // 圖片超過就跳過 inline、純文字生成（避免送出超限請求讓整個文案生成失敗）。
 export const MAX_INLINE_MEDIA_BYTES = 12 * 1024 * 1024;
@@ -87,7 +107,7 @@ export async function generateWithGemini(
   }, 30000, 1);
   if (!res.ok) throw new Error(`Gemini ${res.status}: ${await res.text()}`);
   const json = await res.json();
-  const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+  const text = extractGeminiText(json);
   if (!text) {
     const finishReason = json?.candidates?.[0]?.finishReason;
     if (finishReason && finishReason !== "STOP") {
@@ -114,7 +134,7 @@ export async function geminiText(prompt: string, apiKey?: string | null, tempera
   }, 30000, 1);
   if (!res.ok) throw new Error(`Gemini ${res.status}: ${await res.text()}`);
   const json = await res.json();
-  const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+  const text = extractGeminiText(json);
   if (!text) throw new Error("Gemini 回傳空內容");
-  return String(text).trim();
+  return text.trim();
 }

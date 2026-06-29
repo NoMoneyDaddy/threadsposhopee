@@ -57,16 +57,23 @@ export async function generateVariations(text: string, apiKey?: string | null, n
 
 原文：
 ${clean}`;
-  const raw = await geminiText(prompt, apiKey, 0.9, 800, model);
+  // 1024 tokens：分段排版會多吃 token，太低會截斷掉後面的版本而湊不到 n 個。
+  const raw = await geminiText(prompt, apiKey, 0.9, 1024, model);
   return parseVariations(raw, n);
 }
 
-// 解析 Gemini 回傳：只把「獨立一行的 ===」當分隔符（避免正文內含 === 被誤切），
-// 去空白、濾空、取前 n 條。純函式、可單測。
+// 解析 Gemini 回傳的多版本文字。容忍模型不照「===」格式的常見情況，避免明明回了多版本卻被判不足：
+//   1) 優先用「獨立一行的分隔線」切（=== / --- / *** / ___ 任一，3+ 個；避免正文內含 === 被誤切）。
+//   2) 切不出多段時（模型沒放分隔線），退而用「行首編號／版本標記」（1. / 2) / 版本一：）切。
+// 切完去除行首殘留的編號標記、去空白濾空、取前 n 條。純函式、可單測。
 export function parseVariations(raw: string, n: number): string[] {
-  return raw
-    .split(/^\s*={3,}\s*$/m)
-    .map((s) => s.trim())
+  const bySeparator = raw.split(/^\s*[=*_-]{3,}\s*$/m);
+  const chunks =
+    bySeparator.length >= 2
+      ? bySeparator
+      : raw.split(/\n(?=\s*(?:版本\s*)?(?:\d+|[一二三四五六七八九十])\s*[.)、：:])/m);
+  return chunks
+    .map((s) => s.trim().replace(/^(?:版本\s*)?(?:\d+|[一二三四五六七八九十])\s*[.)、：:]\s*/, "").trim())
     .filter(Boolean)
     .slice(0, n);
 }

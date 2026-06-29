@@ -47,6 +47,6 @@
 - 佇列時段唯一性靠 migration 0008 索引 + `withNextSlot` 重試。
 - 發文佇列用 `app_state` 分布式鎖（`acquirePublishLock`/`releasePublishLock`）序列化，避免 cron 與手動觸發同跑而繞過防封間隔。
 - 遷移檔依序累加（目前到 `supabase/migrations/0053_*`）。檔案多為冪等（`if not exists`／`add column if not exists`／`create or replace`），唯 0001/0003 的 `create policy` 非冪等（勿重跑）。
-- **一律自動遷移**：App 執行期不會自動跑 migration（service-role 走 PostgREST，無法執行 DDL）。所以**每新增一個 migration 檔，當下就要用 Supabase 工具套到正式專案**（`threadsposhopee`，project id `yecnsnyxxxrzcneqqrhx`），不要留給使用者手動跑。migration 皆設計為冪等，重跑安全。
+- **一律自動遷移**：App 執行期不會自動跑 migration（service-role 走 PostgREST，無法執行 DDL）。所以**每新增一個 migration 檔，當下就要用 Supabase 工具套到正式專案**（用 `list_projects` 找到本專案的 project id，勿把 id 寫進 commit），不要留給使用者手動跑。migration 皆設計為冪等，重跑安全。
 - 延遲留言用 `reply_status`（pending→publishing-reply→published/failed）原子認領＋`reclaimStaleReplies`（以 `updated_at` 判逾期）防中斷重複補。
 - 部署設定：go2read 中轉需 Zeabur 加網域 `go2read.link`（與主站 `iwantpo.nomoneydaddy.app` 並存於同一服務）＋環境變數 `NEXT_PUBLIC_SHORT_DOMAIN=https://go2read.link`（同時做 host gating 與短連結網域）。AI 代理人需各使用者自綁 Gemini 金鑰。

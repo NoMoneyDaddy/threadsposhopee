@@ -267,7 +267,14 @@ function DraftCard({
         <div className="space-y-2">
           {/* 與發文頁／素材一致的共用編輯器：主文／留言／多段串文 3/n+／媒體上傳／AI 換句話說／即時預覽。
               分潤連結用卡片下方「🔄 刷新分潤連結」更新，故此處不再有手填連結欄。 */}
-          <PostEditor value={content} onChange={setContent} cloud={cloud} preset={preset} accountLabel={previewAccount?.label} />
+          <PostEditor
+            value={content}
+            onChange={setContent}
+            cloud={cloud}
+            preset={preset}
+            accountLabel={previewAccount?.label}
+            threadContext={{ productName: draft.product_name, affiliateLink: draft.shopee_short_link, sourceText: draft.main_text }}
+          />
           <div className="flex gap-2">
             <button
               disabled={busy === "edit"}

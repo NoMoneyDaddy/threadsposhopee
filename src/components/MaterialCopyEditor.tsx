@@ -79,7 +79,14 @@ export default function MaterialCopyEditor({
 
   return (
     <div className="mt-2 w-full space-y-3 rounded-xl border bg-surface-2 p-3">
-      <PostEditor value={content} onChange={setContent} cloud={cloud} preset={preset} accountLabel={accountLabel} />
+      <PostEditor
+        value={content}
+        onChange={setContent}
+        cloud={cloud}
+        preset={preset}
+        accountLabel={accountLabel}
+        threadContext={{ productName: material.product_name, affiliateLink: material.affiliate_short_link, sourceText: material.main_text }}
+      />
       <div className="flex items-center gap-2">
         <button type="button" onClick={save} disabled={busy} className="rounded-xl bg-brand px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50">
           {busy ? "儲存中…" : "儲存"}

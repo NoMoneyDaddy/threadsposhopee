@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { getApifyCredentials } from "@/lib/store";
-import { listRecentScrapeRuns } from "@/lib/scrape-runs";
+import { listRecentScrapeRuns, getScrapeRun } from "@/lib/scrape-runs";
 import { advanceOwnerRuns } from "@/services/scraper/async-scrape";
 import { getApifyRunLog } from "@/services/scraper/threads";
 
@@ -24,8 +24,8 @@ export async function GET(req: Request) {
     const logRunId = url.searchParams.get("log") ? url.searchParams.get("runId") : null;
     let log: string | undefined;
     if (logRunId) {
-      // 越權防護：log 只給屬於本使用者的 run。
-      const run = runs.find((r) => r.id === logRunId || r.apify_run_id === logRunId);
+      // 越權防護：以 owner 單筆查驗歸屬（不受「最近 20 筆」限制，再舊的 run 也查得到 log）。
+      const run = await getScrapeRun(logRunId, user.id);
       if (run?.apify_run_id) {
         const token = (await getApifyCredentials(user.id))?.token;
         if (token) log = (await getApifyRunLog(run.apify_run_id, token)).slice(-8000); // 取尾段，避免過大

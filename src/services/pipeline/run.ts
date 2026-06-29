@@ -113,6 +113,7 @@ export async function processScrapedPosts(
 ): Promise<PipelineResult> {
   const result = emptyResult(source);
   result.scanned = posts.length;
+  if (posts.length === 0) return result; // 無新貼文：免做 7 次憑證/設定讀取與一次 DB 查詢
   // 子系統憑證一次解析（一律自綁）：Shopee（分潤）、Gemini（AI）、圖床、Sub id 範本。整迴圈重用。
   const shopeeCreds = await ownerShopeeCreds(ownerId);
   const geminiKey = await getGeminiKey(ownerId);

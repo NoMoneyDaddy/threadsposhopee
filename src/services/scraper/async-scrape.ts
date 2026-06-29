@@ -5,7 +5,7 @@ import { log } from "@/lib/logger";
 import { listSources, getApifyCredentials } from "@/lib/store";
 import { startApifyRun, getApifyRunInfo, fetchApifyDatasetPosts, scrapeLatestPosts } from "@/services/scraper/threads";
 import { processScrapedPosts, type ScrapeTarget } from "@/services/pipeline/run";
-import { createScrapeRun, updateScrapeRun, listActiveScrapeRuns, type ScrapeRun } from "@/lib/scrape-runs";
+import { createScrapeRun, updateScrapeRun, listActiveScrapeRuns, listActiveScrapeRunsForOwner, type ScrapeRun } from "@/lib/scrape-runs";
 import type { Source } from "@/lib/types";
 
 function scrapeSpec(source: Source, opts: { after?: string; before?: string }) {
@@ -101,7 +101,7 @@ export async function advanceOwnerRuns(ownerId: string): Promise<void> {
   if (isDemoMode) return;
   const token = (await getApifyCredentials(ownerId))?.token;
   if (!token) return;
-  const active = (await listActiveScrapeRuns(200)).filter((r) => r.owner_id === ownerId);
+  const active = await listActiveScrapeRunsForOwner(ownerId);
   for (const run of active) {
     try {
       await advanceScrapeRun(run, token);

@@ -92,11 +92,30 @@ export async function updateScrapeRun(id: string, patch: Partial<Pick<ScrapeRun,
   if (error) throw error;
 }
 
+// 單筆查詢（以 owner 驗證歸屬）：log 越權防護用，不受「最近 N 筆」限制（再舊也查得到）。
+export async function getScrapeRun(id: string, ownerId: string): Promise<ScrapeRun | null> {
+  if (isDemoMode) return demoRuns.find((r) => r.id === id && r.owner_id === ownerId) ?? null;
+  const sb = getServiceClient()!;
+  const { data, error } = await sb.from("scrape_runs").select("*").eq("id", id).eq("owner_id", ownerId).maybeSingle();
+  if (error) throw error;
+  return (data as ScrapeRun) ?? null;
+}
+
 // owner 最近的 run（前端列表／即時進度）。
 export async function listRecentScrapeRuns(ownerId: string, limit = 20): Promise<ScrapeRun[]> {
   if (isDemoMode) return demoRuns.filter((r) => r.owner_id === ownerId).slice(0, limit);
   const sb = getServiceClient()!;
-  const { data } = await sb.from("scrape_runs").select("*").eq("owner_id", ownerId).order("created_at", { ascending: false }).limit(limit);
+  const { data, error } = await sb.from("scrape_runs").select("*").eq("owner_id", ownerId).order("created_at", { ascending: false }).limit(limit);
+  if (error) throw error;
+  return (data as ScrapeRun[]) ?? [];
+}
+
+// 某 owner 未完成的 run（前端輪詢推進用，DB 層過濾，不受全系統分頁截斷影響）。
+export async function listActiveScrapeRunsForOwner(ownerId: string, limit = 50): Promise<ScrapeRun[]> {
+  if (isDemoMode) return demoRuns.filter((r) => r.owner_id === ownerId && (r.status === "running" || r.status === "ingesting")).slice(0, limit);
+  const sb = getServiceClient()!;
+  const { data, error } = await sb.from("scrape_runs").select("*").eq("owner_id", ownerId).in("status", ["running", "ingesting"]).order("created_at", { ascending: true }).limit(limit);
+  if (error) throw error;
   return (data as ScrapeRun[]) ?? [];
 }
 
@@ -104,6 +123,7 @@ export async function listRecentScrapeRuns(ownerId: string, limit = 20): Promise
 export async function listActiveScrapeRuns(limit = 50): Promise<ScrapeRun[]> {
   if (isDemoMode) return demoRuns.filter((r) => r.status === "running" || r.status === "ingesting").slice(0, limit);
   const sb = getServiceClient()!;
-  const { data } = await sb.from("scrape_runs").select("*").in("status", ["running", "ingesting"]).order("created_at", { ascending: true }).limit(limit);
+  const { data, error } = await sb.from("scrape_runs").select("*").in("status", ["running", "ingesting"]).order("created_at", { ascending: true }).limit(limit);
+  if (error) throw error;
   return (data as ScrapeRun[]) ?? [];
 }

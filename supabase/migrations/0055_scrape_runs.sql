@@ -19,6 +19,10 @@ create table if not exists scrape_runs (
   updated_at timestamptz not null default now()
 );
 
+-- 僅由後端 service-role 存取（PostgREST service key 繞過 RLS）。啟用 RLS 且不設 policy＝
+-- 完全擋掉前端 anon/authenticated key 直接存取（縱深防禦，與其他表一致）。
+alter table scrape_runs enable row level security;
+
 -- owner 最近的 run（前端列表／即時進度）。
 create index if not exists scrape_runs_owner_idx on scrape_runs (owner_id, created_at desc);
 -- 背景 cron 撈「未完成」的 run 來推進（跨 owner）。

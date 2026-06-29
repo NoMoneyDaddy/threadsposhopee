@@ -24,11 +24,22 @@ export const ANTI_AI_SLOP_RULES = `寫得要像真人隨手打的貼文，不能
 - 模糊歸因：據說、有人說、業界報導、專家指出、研究顯示、觀察人士認為（沒實際來源就別寫）。
 - 格式：禁止破折號（—）濫用、粗體、條列符號、標題、emoji 當標題、彎引號；不要同義詞硬湊字數、不要過度 hedging（「可能」「也許」連發）。`;
 
+// Threads 觸及取向：依其排序機制（深度回覆、停留閱讀等「有意義的互動」權重高於被動瀏覽），
+// 把文案導向「短、有立場、會讓人想回」。參考 arXiv:2406.19277（Threads 用戶偏發能引互動的主題）
+// 與實測歸納（立場宣言型、短文＋高回覆率最吃觸及）。措辭刻意口語，避免變成喊口號的業配。
+export const THREADS_REACH_RULES = `想在 Threads 被看見，靠的是讓人願意停下來讀、願意回你一句，而不是把賣點講好講滿。所以：
+- 開場第一句就要有觀點或畫面，不要從商品名稱或規格平鋪直敘。
+- 一篇只講一個重點，講透就好，不要每個優點都塞進來。
+- 文末自然留一個會讓人想回應你的點：一個你是真的好奇的問句，或一個會有人想反駁的看法，再不然就邀大家講自己的經驗。重點是你真的想聊，不是丟一句「快來試試」交差。
+- 用字、語氣保持一致，讓看到的人記得這是你。`;
+
 export const HUMANIZER_RULES = `你是經營 Threads 的真人創作者，不是行銷小編。寫蝦皮好物分享要像跟朋友聊天，不能有業配味、不能像 AI 寫的。
 
 ${ANTI_AI_SLOP_RULES}
 - 另外：不要客套開場與正能量結尾（如「希望對你有幫助」「快來試試吧」）。
-- emoji 適量即可（依下方各段指定的數量上限），自然點綴、不要當標題或整排堆疊；沒有合適的就不用。`;
+- emoji 適量即可（依下方各段指定的數量上限），自然點綴、不要當標題或整排堆疊；沒有合適的就不用。
+
+${THREADS_REACH_RULES}`;
 
 export interface CopyContext {
   productName: string;
@@ -49,14 +60,36 @@ const REPLY_LEAD_INS = [
   "順手把連結放這"
 ];
 
-// 依商品連結做穩定雜湊選一句開場：同一商品穩定（重排同一篇不亂跳）、不同商品分散開來。
-// 純函式、可單測；無外部隨機源（符合工作流可重現的要求）。
+// 貼文開場角度池：改寫自實測有效的爆文公式（立場宣言、翻車反差、情境抱怨、對比、實測紀錄、場景帶入），
+// 適配「蝦皮好物分享」。每篇輪換不同角度，避免每則都「我最近買了…還不錯」的同一套版型。
+// 是「怎麼切入」的指示，不是要照抄的句子；保持口語、不放 emoji 與破折號。
+const POST_ANGLES = [
+  "先講一個你原本的偏見或不看好（像是「我以前覺得這種東西根本多餘」），再用實際體驗推翻自己。",
+  "從一次反差講起：本來沒抱期待，結果意外好用；或本來很期待，結果有點翻車。",
+  "用第一人稱抱怨開場：先講一件生活中很煩的小事，再帶到這個東西怎麼解掉它。",
+  "拿它跟你以前用的另一個東西比一比，講清楚差在哪、什麼人比較適合哪一個。",
+  "像在寫紀錄：用了幾天、實際變化是什麼，平實地講，不要像在推薦。",
+  "從一個具體場景切進去（哪一天、在哪、誰在場），把東西自然放進那個故事裡。"
+];
+
+// 穩定雜湊：同一 seed 永遠同結果（重排同一篇不亂跳），不同 seed 分散。無外部隨機源（工作流可重現）。
+function hashSeed(seed: string): number {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  return h;
+}
+
+// 依商品連結選一句留言開場：同一商品穩定、不同商品分散開來。純函式可單測。
 // seed 異常（空字串／非字串，如 API 異常或草稿未填）時退回第一句，避免讀 .length 崩潰。
 export function pickReplyLeadIn(seed: string): string {
   if (!seed || typeof seed !== "string") return REPLY_LEAD_INS[0];
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
-  return REPLY_LEAD_INS[h % REPLY_LEAD_INS.length];
+  return REPLY_LEAD_INS[hashSeed(seed) % REPLY_LEAD_INS.length];
+}
+
+// 依商品連結選一個正文開場角度。加 salt 讓它與留言開場用不同餘數，兩者不會綁在一起變化。
+export function pickPostAngle(seed: string): string {
+  if (!seed || typeof seed !== "string") return POST_ANGLES[0];
+  return POST_ANGLES[hashSeed(`${seed}#angle`) % POST_ANGLES.length];
 }
 
 // 組出最終 prompt。沿用「正文／留言區」輸出格式，方便發文時拆成主文＋留言。
@@ -75,7 +108,7 @@ ${ctx.sourceText ? `別人怎麼介紹（僅供參考，不要照抄，要用你
 
 【輸出格式，最高優先、不可被任何要求覆蓋】
 務必完整輸出「正文：…」與「留言區：…」兩段，缺一不可。
-正文：[${describeMain(prefs.main)}，自然有觀點]
+正文：[${describeMain(prefs.main)}，自然有觀點。這次的開場角度：${pickPostAngle(ctx.shopeeShortLink)}]
 留言區：${pickReplyLeadIn(ctx.shopeeShortLink)} ${ctx.shopeeShortLink}
 [換行後再補一句你的真實反應或問句，${describeReply(prefs.reply)}；連結網址務必原樣保留、不要改動]`;
 }

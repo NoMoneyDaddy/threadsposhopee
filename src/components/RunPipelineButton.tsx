@@ -30,9 +30,12 @@ export default function RunPipelineButton() {
 
   async function run() {
     setBusy(true);
-    setMsg("抓取中…（依來源數可能需數十秒）");
+    setMsg("抓取中…（會邊抓邊把新素材帶進下方待審區）");
     setError(null);
     setResults(null);
+    // 抓取是同步長流程，但每篇處理完就即時寫進 DB。跑的同時定期刷新，新素材會「邊抓邊出現」在待審區，
+    // 不用等整批跑完（≈ 實時更新）。完成後於 finally 清掉計時器並做最後一次刷新。
+    const tick = setInterval(() => router.refresh(), 4000);
     try {
       const res = await fetch("/api/pipeline/run", { method: "POST" });
       const json = await res.json().catch(() => null);
@@ -42,12 +45,13 @@ export default function RunPipelineButton() {
       const rows: SourceResult[] = Array.isArray(json?.results) ? json.results : [];
       setResults(rows);
       setMsg(summarizePipelineRun(rows).message);
-      router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setMsg(null);
     } finally {
+      clearInterval(tick);
       setBusy(false);
+      router.refresh();
     }
   }
 

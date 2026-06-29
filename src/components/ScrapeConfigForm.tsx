@@ -120,8 +120,9 @@ export default function ScrapeConfigForm({
             type="number"
             min={SCRAPE_POSTS_MIN}
             max={SCRAPE_POSTS_MAX}
-            value={postsLimit}
-            onChange={(e) => setPostsLimit(Number(e.target.value))}
+            // 允許清空重打：空字串時存 NaN 顯示為空（不卡個 0）；存檔時由伺服端 normalizePostsLimit 夾回範圍。
+            value={Number.isNaN(postsLimit) ? "" : postsLimit}
+            onChange={(e) => setPostsLimit(e.target.value === "" ? NaN : Number(e.target.value))}
             className="ml-2 w-20 rounded-xl border px-2 py-1 text-sm"
           />
         </label>

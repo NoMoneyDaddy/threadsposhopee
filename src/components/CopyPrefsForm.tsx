@@ -43,8 +43,9 @@ function SideEditor({
             min={20}
             max={480}
             className={`${num} ml-1`}
-            value={side.maxChars}
-            onChange={(e) => onChange({ ...side, maxChars: Number(e.target.value) })}
+            // 允許清空重打：空字串存 NaN 顯示為空；存檔時由伺服端 normalizeCopyPrefs 夾回 20–480。
+            value={Number.isNaN(side.maxChars) ? "" : side.maxChars}
+            onChange={(e) => onChange({ ...side, maxChars: e.target.value === "" ? NaN : Number(e.target.value) })}
           />
         </label>
         <label className="text-xs text-ink-2">
@@ -55,8 +56,9 @@ function SideEditor({
             min={0}
             max={8}
             className={`${num} ml-1`}
-            value={side.emojiMax}
-            onChange={(e) => onChange({ ...side, emojiMax: Number(e.target.value) })}
+            // 允許清空重打：空字串存 NaN 顯示為空（0 仍可正常輸入）；存檔時伺服端再夾一次。
+            value={Number.isNaN(side.emojiMax) ? "" : side.emojiMax}
+            onChange={(e) => onChange({ ...side, emojiMax: e.target.value === "" ? NaN : Number(e.target.value) })}
           />
         </label>
       </div>

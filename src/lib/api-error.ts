@@ -1,6 +1,18 @@
 import { NextResponse } from "next/server";
 import { log } from "./logger";
 
+// 取可讀錯誤訊息：Error 取 .message；Supabase/PostgrestError 等「帶 message 的物件」也取 .message，
+// 不要 String(物件) 變成 "[object Object]"。供 owner-only 路徑把真實原因（如缺欄位）回給使用者排查。
+export function errMessage(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (e && typeof e === "object") {
+    const obj = e as Record<string, unknown>;
+    if (typeof obj.message === "string") return obj.message;
+    if (typeof obj.error === "string") return obj.error; // 部分套件/API 錯誤格式為 { error: "..." }
+  }
+  return String(e);
+}
+
 // 對外錯誤收斂：原始錯誤（可能含上游/供應商回應、內部 ID、token 片段）只進 log，
 // 回給 client 一律固定文案，避免資訊洩漏。需要特定狀態碼/提示時用 opts 覆寫。
 export function apiError(

@@ -3,6 +3,8 @@ import { getCurrentUser } from "@/lib/auth";
 import { getScrapeConfig, saveScrapeConfig, hasApifyCredentials } from "@/lib/store";
 import { normalizeScrapeKeywords, normalizePostsLimit, normalizeScrapeUsername, normalizeScrapeSort, normalizeScrapeDate } from "@/lib/scrape-config";
 import { isDemoMode } from "@/lib/env";
+import { errMessage } from "@/lib/api-error";
+import { log } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -45,11 +47,12 @@ export async function POST(req: Request) {
         throw new Error("起始日不可晚於結束日");
       }
     } catch (e) {
-      return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 400 });
+      return NextResponse.json({ ok: false, error: errMessage(e) }, { status: 400 });
     }
     const config = await saveScrapeConfig(user.id, { keywords, postsLimit, username, sort, after, before, enabled });
     return NextResponse.json({ ok: true, config });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 500 });
+    log.error("scrape-config 儲存失敗", { err: e });
+    return NextResponse.json({ ok: false, error: errMessage(e) }, { status: 500 });
   }
 }

@@ -1,8 +1,21 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { assembleThread } from "./provider";
+import { assembleThread, generateThreadCopy } from "./provider";
 
 const LINK = "看這 https://s.shopee.tw/abc";
+
+// 自動偵測段數（segments<=0）：demo/無金鑰時給單篇（能一則就一則），不硬拆串文。
+test("generateThreadCopy：自動模式（segments=0）demo 給單篇貼文，無額外串文段", async () => {
+  const r = await generateThreadCopy({ productName: "藍牙耳機", shopeeShortLink: "https://s.shopee.tw/abc" }, null, 0);
+  assert.equal(r.extraSegments.length, 0); // 單篇：只有主文＋留言（放連結），不拆多段
+  assert.ok(r.mainText.includes("藍牙耳機"));
+  assert.match(r.replyText, /shopee\.tw\/abc/);
+});
+
+test("generateThreadCopy：固定段數（segments=3）demo 仍產生多段串文", async () => {
+  const r = await generateThreadCopy({ productName: "藍牙耳機", shopeeShortLink: "https://s.shopee.tw/abc" }, null, 3);
+  assert.equal(r.extraSegments.length, 1); // 主文＋留言＋1 段 = 3 段
+});
 
 test("assembleThread：3 段 → 連結附在最後一段（3/n），主文/留言不含連結", () => {
   const r = assembleThread(["主文 hook", "2/n 重點", "3/n 收尾"], LINK);

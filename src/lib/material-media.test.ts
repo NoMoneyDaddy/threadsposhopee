@@ -1,6 +1,24 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { splitMaterialMedia, mergeToMaterialMedia, sanitizeMaterialMedia } from "./material-media";
+import { splitMaterialMedia, mergeToMaterialMedia, sanitizeMaterialMedia, sanitizeThreadSegments } from "./material-media";
+
+test("sanitizeThreadSegments：取 text＋media(去 slot)、丟空段、最多 10 段", () => {
+  const r = sanitizeThreadSegments([
+    { text: "第三段", media: [{ url: "a.jpg", type: "image", slot: "reply" }] },
+    { text: "  ", media: [] }, // 空段 → 丟棄
+    { text: 123, media: [{ url: "", type: "image" }] }, // text 非字串→null、media 無效→空 → 整段丟
+    { text: null, media: [{ url: "v.mp4", type: "video" }] } // 無文字但有媒體 → 保留
+  ]);
+  assert.deepEqual(r, [
+    { text: "第三段", media: [{ url: "a.jpg", type: "image" }] },
+    { text: null, media: [{ url: "v.mp4", type: "video" }] }
+  ]);
+});
+
+test("sanitizeThreadSegments：非陣列 → 空陣列", () => {
+  assert.deepEqual(sanitizeThreadSegments(null), []);
+  assert.deepEqual(sanitizeThreadSegments("x"), []);
+});
 
 test("sanitizeMaterialMedia：濾無效項、slot 夾 main/reply/both、依 url 去重保序", () => {
   const r = sanitizeMaterialMedia([

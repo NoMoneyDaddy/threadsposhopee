@@ -7,7 +7,7 @@ import { demo } from "./demo-store";
 import { normalizeDraftMedia, normalizeReplyMedia } from "./media";
 import { mergeToMaterialMedia } from "./material-media";
 import { parseShopeeIds } from "@/services/shopee/expand";
-import type { Draft, Material, DraftMedia } from "./types";
+import type { Draft, Material, DraftMedia, ThreadSegment } from "./types";
 
 export async function findMaterial(shopId: string, itemId: string, ownerId: string): Promise<Material | null> {
   if (isDemoMode) {
@@ -110,15 +110,16 @@ export async function updateMaterialMedia(id: string, ownerId: string, media: Dr
   return Boolean(data);
 }
 
-// 編輯素材文案（主文／留言）。多租戶由 owner_id 過濾保證。回傳更新後素材或 null（找不到/無權限）。
+// 編輯素材文案（主文／留言／多段串文）。多租戶由 owner_id 過濾保證。回傳更新後素材或 null（找不到/無權限）。
 export async function updateMaterialContent(
   id: string,
   ownerId: string,
-  patch: { main_text?: string | null; reply_text?: string | null }
+  patch: { main_text?: string | null; reply_text?: string | null; thread_chain?: ThreadSegment[] }
 ): Promise<Material | null> {
   const fields: Record<string, unknown> = {};
   if (patch.main_text !== undefined) fields.main_text = patch.main_text;
   if (patch.reply_text !== undefined) fields.reply_text = patch.reply_text;
+  if (patch.thread_chain !== undefined) fields.thread_chain = patch.thread_chain;
   if (Object.keys(fields).length === 0) return getMaterial(id, ownerId);
   if (isDemoMode) {
     const m = demo.materials.find((x) => x.id === id && x.owner_id === ownerId);

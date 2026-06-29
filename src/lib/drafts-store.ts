@@ -22,6 +22,10 @@ export async function createDraftFromMaterial(
   }
 ): Promise<Draft> {
   const split = splitMaterialMedia(material.media);
+  // 多段串文：素材的 3/n+ 段落（thread_chain）非空時，把「留言(2/n)＋3/n+」串成 draft.thread_chain，
+  // 發布層 effectiveChain 會優先用它（單段或無＝不設，沿用 reply_* 的舊行為）。
+  const extra = Array.isArray(material.thread_chain) ? material.thread_chain : [];
+  const thread_chain = extra.length > 0 ? [{ text: material.reply_text ?? null, media: split.reply }, ...extra] : undefined;
   return createDraft({
     owner_id: opts.owner_id,
     material_id: material.id,
@@ -41,6 +45,7 @@ export async function createDraftFromMaterial(
     reply_media: split.reply,
     main_text: material.main_text,
     reply_text: material.reply_text,
+    ...(thread_chain ? { thread_chain } : {}),
     ai_raw: material.ai_raw,
     status: opts.status,
     scheduled_at: opts.scheduled_at ?? null

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { deleteMaterial, updateMaterialMedia, updateMaterialContent } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
-import { sanitizeMaterialMedia } from "@/lib/material-media";
+import { sanitizeMaterialMedia, sanitizeThreadSegments } from "@/lib/material-media";
 import { errMessage } from "@/lib/api-error";
 import { log } from "@/lib/logger";
 
@@ -24,18 +24,26 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   const hasMedia = Array.isArray(body?.media);
   const hasMain = typeof body?.main_text === "string";
   const hasReply = typeof body?.reply_text === "string";
-  if (!hasMedia && !hasMain && !hasReply) {
-    return NextResponse.json({ ok: false, error: "缺少要更新的欄位（media / main_text / reply_text）" }, { status: 400 });
+  const hasChain = Array.isArray(body?.thread_chain);
+  if (!hasMedia && !hasMain && !hasReply && !hasChain) {
+    return NextResponse.json({ ok: false, error: "缺少要更新的欄位（media / main_text / reply_text / thread_chain）" }, { status: 400 });
   }
-  if ((hasMain && body.main_text.length > MAX_TEXT) || (hasReply && body.reply_text.length > MAX_TEXT)) {
+  const chainTextTooLong =
+    hasChain &&
+    (body.thread_chain as unknown[]).some((seg) => {
+      const t = (seg as { text?: unknown } | null)?.text;
+      return typeof t === "string" && t.length > MAX_TEXT;
+    });
+  if ((hasMain && body.main_text.length > MAX_TEXT) || (hasReply && body.reply_text.length > MAX_TEXT) || chainTextTooLong) {
     return NextResponse.json({ ok: false, error: "文案過長" }, { status: 400 });
   }
 
   try {
-    if (hasMain || hasReply) {
+    if (hasMain || hasReply || hasChain) {
       const updated = await updateMaterialContent(id, user.id, {
         ...(hasMain ? { main_text: body.main_text } : {}),
-        ...(hasReply ? { reply_text: body.reply_text } : {})
+        ...(hasReply ? { reply_text: body.reply_text } : {}),
+        ...(hasChain ? { thread_chain: sanitizeThreadSegments(body.thread_chain) } : {})
       });
       if (!updated) return NextResponse.json({ ok: false, error: "找不到素材或無權限" }, { status: 404 });
     }

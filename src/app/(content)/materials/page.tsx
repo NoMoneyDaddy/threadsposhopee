@@ -51,7 +51,7 @@ export default async function MaterialsPage() {
 
       <MaterialCreateForm cloud={cc?.cloud ?? null} preset={cc?.preset ?? null} />
 
-      <MaterialsExplorer materials={materials} accounts={accounts} itemRev={itemRev} />
+      <MaterialsExplorer materials={materials} accounts={accounts} itemRev={itemRev} cloud={cc?.cloud ?? null} preset={cc?.preset ?? null} />
     </div>
   );
 }

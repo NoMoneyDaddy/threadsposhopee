@@ -72,8 +72,9 @@ export default function PostEditor({
     setGenerating(true);
     setErr(null);
     try {
-      // 把第一個媒體（優先主文，其次留言）當參考圖／影片餵給 AI。
-      const refMedia = value.mainMedia[0] ?? value.replyMedia[0] ?? null;
+      // 參考媒體餵給 AI：有影片優先吃影片（資訊量大），否則退回第一個媒體（主文優先，其次留言）。
+      const allMedia = [...value.mainMedia, ...value.replyMedia];
+      const refMedia = allMedia.find((m) => m.type === "video") ?? allMedia[0] ?? null;
       const res = await fetchWithTimeout(
         "/api/ai/thread",
         {

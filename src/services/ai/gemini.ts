@@ -74,7 +74,8 @@ export async function generateWithGemini(
   }
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model || env.geminiModel}:generateContent?key=${key}`;
-  // 生成無副作用（產文字）→ 429 退避重試安全；放寬逾時 30s（生成較慢）。SSRF 守衛收斂於 fetch 前。
+  // 不對 429 退避重試（attempts=1）：Gemini 免費層是「每分鐘」配額，30–60s 才回補，遠超我們 16s 退避上限，
+  // 重試只會白等數十秒又再 429、還多燒一次配額。直接快速失敗，由呼叫端略過該篇、整批抓取才不會卡很久。
   const res = await fetchWithRetry(assertSafePublicUrl(url).href, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -82,7 +83,7 @@ export async function generateWithGemini(
       contents: [{ role: "user", parts }],
       generationConfig: { temperature, maxOutputTokens: 512 }
     })
-  }, 30000);
+  }, 30000, 1);
   if (!res.ok) throw new Error(`Gemini ${res.status}: ${await res.text()}`);
   const json = await res.json();
   const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -101,6 +102,7 @@ export async function geminiText(prompt: string, apiKey?: string | null, tempera
   const key = apiKey;
   if (!key) throw new Error("無 Gemini 金鑰");
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model || env.geminiModel}:generateContent?key=${key}`;
+  // attempts=1：同上，免費層每分鐘配額不會在退避視窗內回補，重試只是白等。
   const res = await fetchWithRetry(assertSafePublicUrl(url).href, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -108,7 +110,7 @@ export async function geminiText(prompt: string, apiKey?: string | null, tempera
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       generationConfig: { temperature, maxOutputTokens }
     })
-  }, 30000);
+  }, 30000, 1);
   if (!res.ok) throw new Error(`Gemini ${res.status}: ${await res.text()}`);
   const json = await res.json();
   const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;

@@ -22,6 +22,7 @@ import {
   resolveGeminiModel,
   getCopyPrefs,
   getShopeeAffiliateId,
+  getShopeeSubId,
   userOwnsThreadsAccount
 } from "@/lib/store";
 import { getMediaProvider } from "@/services/media/upload";
@@ -72,6 +73,9 @@ export async function runSourcePipeline(
   const geminiKey = await getGeminiKey(ownerId);
   const geminiModel = await resolveGeminiModel(ownerId); // 使用者自選模型（無則 env 預設），整迴圈重用
   const copyPrefs = await getCopyPrefs(ownerId); // 一次取出，整個迴圈重用，避免每篇重查
+  // 使用者設定的分潤 Sub id（範本），整迴圈重用；與手動建立一致。屬選填設定，讀取失敗時降級為 null
+  // 繼續跑（不讓暫時性 DB 錯誤中止整條來源流程），對齊其他選填設定（如圖床）的容錯策略。
+  const customSubId = await getShopeeSubId(ownerId).catch(() => null);
   // 沒綁 Shopee API 時的後備：用 affiliate_id 自組追蹤連結
   const affiliateId = shopeeCreds ? null : await getShopeeAffiliateId(ownerId);
   // 各人自綁圖床（R2 或 Cloudinary，素材進自己雲端）；一次取出整迴圈重用
@@ -153,7 +157,9 @@ export async function runSourcePipeline(
           originalShortLink: post.shopeeLinks[0],
           mediaList: post.media,
           sourceText: post.text,
-          // 關鍵字模式 source_username 可能為空，改用貼文作者當 subId 追蹤標籤
+          // 分潤 Sub id 一律用使用者設定（範本），與手動建立／贊助文一致；不再自動硬塞作者帳號＋itemId。
+          // subIdTag 僅供範本 {account} 變數代換（關鍵字模式 source_username 可能為空，退回貼文作者）。
+          customSubId,
           subIdTag: post.username || source.source_username || "search",
           // 抓素材只取商品 ID／名稱／媒體＋換分潤連結，不在這裡生成文案（不燒 Gemini、抓取才快）。
           // 文案改到「排一篇」轉草稿時才生成（repost 流程；素材無文案會即時補生）。

@@ -89,8 +89,10 @@ export async function buildMaterialForProduct(
     }
   } else if (!isDemoMode && shopeeCreds) {
     try {
-      const subIds = normalizeSubIds([...resolvedSlots, account, input.itemId]);
-      subId = subIds.join(",");
+      // 分潤標記一律＝使用者設定的 Sub id（範本解析後），與設定頁／贊助文一致；不再硬塞來源帳號＋itemId。
+      // 未設＝不帶 sub_id（同設定頁「留空＝不加來源標記」）。要帶帳號／商品請在範本用 {account}/{item}。
+      const subIds = normalizeSubIds(resolvedSlots);
+      subId = subIds.join(",") || null; // 未設＝不帶標記：存 null 而非空字串，保持欄位一致
       shortLink = await generateAffiliateLink(shopeeCreds.appId, shopeeCreds.secret, input.cleanUrl, subIds);
       const info = await getProductInfo(shopeeCreds.appId, shopeeCreds.secret, input.shopId, input.itemId);
       productNameRaw = info.productName;
@@ -99,9 +101,9 @@ export async function buildMaterialForProduct(
       notes.push(`Shopee API 失敗（用原連結）：${e instanceof Error ? e.message : String(e)}`);
     }
   } else if (!isDemoMode && affiliateId) {
-    // 無 Open API，但有 affiliate_id：用官方 an_redir 做法自組追蹤連結（仍可分潤＋subId 分流）
-    const subIds = normalizeSubIds([...resolvedSlots, account, input.itemId]);
-    subId = subIds.join("-");
+    // 無 Open API，但有 affiliate_id：用官方 an_redir 自組追蹤連結。subId 同樣只用使用者設定（範本）。
+    const subIds = normalizeSubIds(resolvedSlots);
+    subId = subIds.join("-") || null; // 未設＝不帶標記：存 null 而非空字串
     shortLink = buildAffiliateRedirectLink(input.cleanUrl, affiliateId, subIds);
     productNameRaw = `商品 ${input.itemId}`;
     notes.push("未綁 Shopee API：用 affiliate_id 自組 an_redir 追蹤連結");

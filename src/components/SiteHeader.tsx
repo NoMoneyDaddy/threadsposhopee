@@ -75,7 +75,7 @@ export default function SiteHeader({
 
           {/* 導覽常駐顯示（不收合）：桌機靠右一列，手機螢幕不夠寬時自動換行 */}
           {user && (
-            <nav className="ml-auto flex flex-wrap items-center gap-0.5 text-sm" aria-label="主導覽">
+            <nav className="ml-auto flex flex-wrap items-center gap-x-0.5 gap-y-1.5 text-sm" aria-label="主導覽">
               {items.map((n) => {
                 const active = isActive(n);
                 return (
@@ -92,7 +92,8 @@ export default function SiteHeader({
                   </Link>
                 );
               })}
-              <div className="ml-1 flex shrink-0 items-center gap-2 border-l border-border pl-2 text-xs text-ink-3">
+              {/* 極窄螢幕：允許使用者資訊自行換行；左邊框/左距僅 sm 以上才加，避免折行時邊框懸空 */}
+              <div className="flex flex-wrap items-center gap-2 text-xs text-ink-3 sm:ml-1 sm:border-l sm:border-border sm:pl-2">
                 {userMeta}
               </div>
             </nav>

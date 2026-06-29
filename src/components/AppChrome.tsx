@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import dynamic from "next/dynamic";
+import TourLaunchButton from "./TourLaunchButton";
 
 // 互動導覽以 dynamic import 延後載入（非首屏關鍵 JS）：在主站外框內常駐掛載事件監聽，
 // 讓任何頁面（含登出狀態的公開「使用說明」頁）按鈕都能喚起導覽；ssr:false 因其純 client 行為。
@@ -33,6 +34,8 @@ export default function AppChrome({
         <div className="mx-auto flex max-w-6xl flex-col items-center gap-2 px-4 py-6 text-center text-xs text-ink-3 sm:flex-row sm:justify-between sm:text-left">
           <p>本服務為自有的第三方發文工具，與 Shopee、Meta／Threads 無任何官方關係或授權。</p>
           <nav className="flex items-center gap-4" aria-label="頁尾">
+            {/* 全站頁尾入口：任何頁面都能一鍵重開互動導覽 */}
+            <TourLaunchButton className="cursor-pointer hover:text-ink">開始導覽</TourLaunchButton>
             <a href="/how-it-works" className="hover:text-ink">使用說明</a>
             <a href="/guide" className="hover:text-ink">金鑰教學</a>
             <a href="/privacy" className="hover:text-ink">隱私權政策</a>

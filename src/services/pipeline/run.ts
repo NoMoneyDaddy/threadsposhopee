@@ -54,7 +54,7 @@ export async function runSourcePipeline(
 ): Promise<PipelineResult> {
   const result: PipelineResult = {
     sourceId: source.id,
-    sourceUsername: source.source_username || (source.search_query ? `🔍 ${source.search_query}` : ""),
+    sourceUsername: source.source_username || (source.search_query ? source.search_query : ""),
     scanned: 0,
     created: 0,
     pending: 0,
@@ -185,8 +185,9 @@ export async function runSourcesForOwner(
   const results: PipelineResult[] = [];
   for (const s of sources) {
     if (opts.deadline && Date.now() > opts.deadline) break; // 時間預算用盡，剩餘下輪再跑
-    // 多租戶越權防護：建草稿前驗證來源綁定的 Threads 帳號確實屬於本人（擋錯綁/污染來源跨租戶寫入）。
-    if (!isDemoMode && !(await userOwnsThreadsAccount(s.threads_account_id, ownerId))) {
+    // 多租戶越權防護：僅「綁了發文帳號」的舊式監看來源需驗證帳號歸屬；關鍵字抓文來源不綁帳號
+    // （threads_account_id 為 null）＝只產待審素材、不發文，故無需此檢查。
+    if (s.threads_account_id && !isDemoMode && !(await userOwnsThreadsAccount(s.threads_account_id, ownerId))) {
       log.warn("來源 Threads 帳號歸屬驗證失敗，略過", { ownerId, sourceId: s.id });
       continue;
     }
@@ -198,7 +199,7 @@ export async function runSourcesForOwner(
       log.error("來源爬取流程失敗", { ownerId, sourceId: s.id, sourceUsername: s.source_username, err: msg });
       results.push({
         sourceId: s.id,
-        sourceUsername: s.source_username || (s.search_query ? `🔍 ${s.search_query}` : ""),
+        sourceUsername: s.source_username || (s.search_query ? s.search_query : ""),
         scanned: 0,
         created: 0,
         pending: 0,

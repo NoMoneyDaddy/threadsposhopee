@@ -20,7 +20,8 @@ export interface ShopeeAccount {
 export interface Source {
   id: string;
   owner_id?: string | null; // 來源歸屬使用者（多租戶過濾＋用對的 Apify 金鑰）
-  threads_account_id: string;
+  // 關鍵字抓文來源（自動抓文）不綁發文帳號＝null：產出只進待審素材，發文帳號之後排程才選。
+  threads_account_id: string | null;
   shopee_account_id?: string | null;
   source_username: string;
   search_query?: string | null; // 有值＝關鍵字搜尋模式；無值＝監看 source_username 帳號

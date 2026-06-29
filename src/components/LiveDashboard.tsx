@@ -361,7 +361,7 @@ export default function LiveDashboard() {
         <span className="mr-1 text-xs font-medium text-ink-2">服務連線</span>
         <Chip label="資料庫" on={Boolean(data.services.supabase)} />
         <Chip label="AI 文案" on={Boolean(data.services.gemini)} />
-        {data.isOwner && <Chip label="自動抓文" on={Boolean(data.services.apify)} />}
+        {data.isOwner && <Chip label="抓文生素材" on={Boolean(data.services.apify)} />}
         <Chip label="蝦皮分潤" on={Boolean(data.services.shopee)} />
         <Chip label="圖片影片空間" on={Boolean(data.services.cloudinary)} />
         <span className="ml-auto flex items-center gap-2 text-xs text-ink-3">

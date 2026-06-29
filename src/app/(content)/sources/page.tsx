@@ -1,9 +1,8 @@
-import { listShopeeAccounts, listSources, listThreadsAccounts, hasApifyCredentials } from "@/lib/store";
+import { getScrapeConfig, hasApifyCredentials } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
 import { isDemoMode } from "@/lib/env";
-import SourceForm from "@/components/SourceForm";
+import ScrapeConfigForm from "@/components/ScrapeConfigForm";
 import RunPipelineButton from "@/components/RunPipelineButton";
-import { DeleteButton, ToggleButton } from "@/components/RowActions";
 
 export const dynamic = "force-dynamic";
 
@@ -25,10 +24,10 @@ export default async function SourcesPage() {
   if (!apify.bound && !isDemoMode) {
     return (
       <div className="space-y-3 rounded-2xl border border-dashed p-10 text-center text-ink-2">
-        <p>自動抓文需要你自己的 Apify 金鑰（抓取靠它，費用也算在你的 Apify 帳號）。</p>
+        <p>抓文生素材需要你自己的 Apify 金鑰（抓取靠它，費用也算在你的 Apify 帳號）。</p>
         <p>
           <a href="/accounts#setup-apify" className="text-brand underline">
-            前往帳號管理綁定 Apify 金鑰 →
+            前往帳號管理綁定 Apify 金鑰
           </a>
         </p>
         <p className="text-xs text-ink-3">
@@ -39,68 +38,24 @@ export default async function SourcesPage() {
     );
   }
 
-  const [sources, accounts, shopee] = await Promise.all([
-    listSources(ownerId),
-    listThreadsAccounts(ownerId),
-    listShopeeAccounts(ownerId)
-  ]);
-  const accLabel = (id: string) => accounts.find((a) => a.id === id)?.label ?? id;
+  const config = await getScrapeConfig(ownerId);
 
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-bold">抓文生素材</h1>
       <p className="text-sm text-ink-2">
-        每個來源 = 監看一個 Threads 帳號或關鍵字。按「立即抓取」時，系統把符合的貼文換成你的分潤連結、
-        產生「素材」入庫（不自動發文）。之後到「素材」頁挑選即可一鍵轉貼文／排程。
+        設定<b>關鍵字</b>，系統會去 Threads 搜含該關鍵字的貼文、把符合的換成你的分潤連結，產生「素材」進<b>待審</b>
+        （不綁發文帳號、不自動發文）。之後到「素材」頁逐筆核准，再挑選一鍵轉貼文／排程。
       </p>
 
+      <ScrapeConfigForm initial={config} />
+
       <div className="rounded-2xl border bg-surface p-4">
-        <div className="mb-1 font-medium">手動抓取</div>
-        <p className="mb-2 text-xs text-ink-3">一次跑你所有「啟用中」的來源，用你自己的 Apify 金鑰（費用算你帳上）。</p>
+        <div className="mb-1 font-medium">立即抓取</div>
+        <p className="mb-2 text-xs text-ink-3">
+          用你自己的 Apify 金鑰跑一次上面所有關鍵字（費用算你帳上）；抓到的素材會進待審，到「素材」頁核准。
+        </p>
         <RunPipelineButton />
-      </div>
-
-      <SourceForm threadsAccounts={accounts} shopeeAccounts={shopee} />
-
-      <div className="overflow-hidden rounded-2xl border bg-surface">
-        <table className="w-full text-sm">
-          <thead className="bg-surface-2 text-left text-ink-2">
-            <tr>
-              <th className="px-4 py-2">來源帳號</th>
-              <th className="px-4 py-2">預設發文帳號</th>
-              <th className="px-4 py-2">每次抓幾篇</th>
-              <th className="px-4 py-2">狀態</th>
-              <th className="px-4 py-2">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sources.map((s) => (
-              <tr key={s.id} className="border-t">
-                <td className="px-4 py-2 font-medium">{s.search_query ? `🔍 ${s.search_query}` : `@${s.source_username}`}</td>
-                <td className="px-4 py-2">{accLabel(s.threads_account_id)}</td>
-                <td className="px-4 py-2">{s.posts_limit} 篇</td>
-                <td className="px-4 py-2">{s.enabled ? "✅ 啟用" : "⏸ 停用"}</td>
-                <td className="px-4 py-2">
-                  <div className="flex items-center gap-3">
-                    <ToggleButton
-                      endpoint={`/api/sources/${s.id}`}
-                      body={{ enabled: !s.enabled }}
-                      label={s.enabled ? "⏸ 停用" : "▶ 啟用"}
-                    />
-                    <DeleteButton endpoint={`/api/sources/${s.id}`} />
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {sources.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-ink-3">
-                  尚無監看來源。用上方表單新增一個來源，再按「立即抓取」即可產生素材到素材庫。
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
       </div>
     </div>
   );

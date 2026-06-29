@@ -41,7 +41,7 @@ export default function ApifyForm({ bound }: { bound: boolean }) {
   return (
     <div className="card p-4">
       <div className="mb-2 flex items-center justify-between">
-        <span className="font-medium">自動抓文（Apify）綁定</span>
+        <span className="font-medium">抓文生素材（Apify）綁定</span>
         {bound ? <span className="badge-success">已綁定</span> : <span className="badge-neutral">未綁定</span>}
       </div>
       <p className="mb-2 text-xs text-ink-2">

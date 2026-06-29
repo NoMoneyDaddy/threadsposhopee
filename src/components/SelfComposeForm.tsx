@@ -241,7 +241,7 @@ export default function SelfComposeForm({
         {(replyText.trim() || replyMedia.length > 0) && (
           <div className="mt-2 flex items-center gap-2">
             <label htmlFor="self-compose-reply-delay" className="text-xs text-ink-2">
-              留言延遲（分，空＝用預設）
+              留言延遲幾分鐘後補上（留空就用預設值）
             </label>
             <input
               id="self-compose-reply-delay"
@@ -353,7 +353,7 @@ export default function SelfComposeForm({
         <button
           onClick={() => submit("queue")}
           disabled={!!busy || !canSubmit}
-          title={blockReason || "自動排進下一個空的每日發文時段（依防封節奏）"}
+          title={blockReason || "自動排進下一個還沒排滿的發文時段，並依防封節奏拉開間隔"}
           className="rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
         >
           {busy === "queue" ? "排入中…" : "加入佇列"}
@@ -361,7 +361,7 @@ export default function SelfComposeForm({
         <button
           onClick={() => submit("publish")}
           disabled={!!busy || !canSubmit}
-          title={blockReason || "略過排程，立刻發布這一篇"}
+          title={blockReason || "不排隊，現在就把這篇發出去"}
           className="rounded-xl border border-brand/40 px-4 py-2 text-sm text-brand hover:bg-orange-50 disabled:opacity-50"
         >
           {busy === "publish" ? "發布中…" : "立即發布"}

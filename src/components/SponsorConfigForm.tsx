@@ -134,14 +134,14 @@ export default function SponsorConfigForm({ initial }: { initial: SponsorConfig 
           disabled={slots.length >= 5}
           className="mt-2 text-sm text-brand hover:underline disabled:cursor-not-allowed disabled:text-ink-3 disabled:no-underline"
         >
-          ＋ 添加辨識參數 Sub id（非必填）（{slots.length}/5）
+          ＋ 再加一格 Sub id（選填，{slots.length}/5）
         </button>
       </div>
       <div className="mb-3 rounded-xl border border-dashed p-3">
         <div className="mb-1 text-sm font-medium">比例制配額</div>
         <p className="mb-2 text-xs text-ink-2">
-          配額＝每帳號當日 <b>max(保底, ⌊自發篇數 ÷ 每幾篇抽1⌋)</b>；當日自發 &lt; 免抽門檻篇數者配額為 0。
-          例（每6抽1／保底1／門檻3）：當日 2 篇→0、3 篇→1、12 篇→2。
+          每個帳號當天抽幾篇，是取「保底篇數」和「當天自己發的篇數除以每幾篇抽一篇」兩者中比較大的那個；
+          當天自己發的篇數還沒到免抽門檻，就不抽。舉例（每 6 篇抽 1、保底 1、門檻 3）：當天發 2 篇抽 0 篇、發 3 篇抽 1 篇、發 12 篇抽 2 篇。
         </p>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           <label className="flex items-center justify-between gap-2 text-sm">

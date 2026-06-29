@@ -124,7 +124,7 @@ export default function PublishPrefsForm({
         <input
           id="pp-slots"
           className="input"
-          placeholder="例如 09:00,12:30,20:00（留空＝用系統預設時段）"
+          placeholder="例如 09:00,12:30,20:00（留空就用系統預設時段）"
           value={slots}
           onChange={(e) => setSlots(e.target.value)}
           aria-label="發文時段"

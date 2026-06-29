@@ -70,7 +70,7 @@ export default function R2Form({
         與 Cloudinary 二擇一（綁了 R2 則優先用 R2）。需 R2 的 <b>Account ID</b>、<b>bucket 名稱</b>、
         一組 <b>R2 API Token</b>（S3 相容的 Access Key ID／Secret），以及 bucket 的<b>公開讀網域</b>
         （r2.dev 或自訂網域）。建議 token 權限限縮到「單一 bucket、Object Read &amp; Write」。
-        留空 key/secret＝沿用既有（只改網域）。詳細步驟見{" "}
+        金鑰兩格留空的話，就沿用你原本綁好的（只更新網域）。詳細步驟見{" "}
         <a href="/guide#r2" className="text-brand underline">金鑰取得教學</a>。
       </p>
       <p className="mb-2 rounded-lg bg-surface-2 p-2 text-xs text-ink-2">

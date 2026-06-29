@@ -60,8 +60,8 @@ export default function ScrapeConfigForm({
     <div className="space-y-3 rounded-2xl border bg-surface p-4">
       <div className="font-medium">抓文設定</div>
       <p className="text-xs text-ink-3">
-        設定多個<b>關鍵字</b>，系統會去 Threads 搜「含該關鍵字的貼文」當素材來源。預設 <code className="rounded bg-surface-2 px-1">s.shopee.tw</code>
-        ＝抓「貼文裡帶蝦皮分潤連結」的貼文。抓到的一律進<b>待審素材</b>，不綁發文帳號、不自動發文。
+        設幾個<b>關鍵字</b>，系統就去 Threads 找含這些字的貼文當素材來源。預設用 <code className="rounded bg-surface-2 px-1">s.shopee.tw</code>，
+        意思是抓那些內文帶蝦皮分潤連結的貼文。抓回來的都先放進<b>待審素材</b>，不會綁發文帳號、也不會自己發出去。
       </p>
 
       <div>
@@ -122,10 +122,10 @@ export default function ScrapeConfigForm({
       </div>
 
       <div>
-        <label className="mb-1 block text-xs text-ink-2">目標帳號（選填，無預設）</label>
+        <label className="mb-1 block text-xs text-ink-2">想盯哪個帳號（選填）</label>
         <input
           className="w-56 rounded-xl border px-3 py-1.5 text-sm"
-          placeholder="例如 shopee_tw（留空＝不限帳號）"
+          placeholder="例如 shopee_tw，留空就搜全部"
           value={username}
           onChange={(e) => setUsername(e.target.value)}
           inputMode="text"
@@ -133,13 +133,13 @@ export default function ScrapeConfigForm({
           autoCorrect="off"
         />
         <p className="mt-1 text-xs text-ink-3">
-          填了就只搜「該帳號」內含上述關鍵字的貼文；留空＝搜全站。僅能用英數字、底線與點（不含 @）。
+          填了就只在這個帳號的貼文裡找上面的關鍵字，留空就是整個 Threads 都搜。帳號只會用到英數字、底線和點，不用加 @。
         </p>
       </div>
 
       <label className="flex cursor-pointer items-center gap-2 text-sm text-ink-2">
         <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} className="h-4 w-4" />
-        啟用（按「立即抓取」時納入這些關鍵字；停用＝暫時略過，本服務無背景自動抓取）
+        啟用後，按「立即抓取」就會跑這些關鍵字；停用的話這次先跳過。系統不會在背景自己偷抓。
       </label>
 
       <div className="flex items-center gap-3">

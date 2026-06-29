@@ -71,14 +71,14 @@ export default function SubIdForm({ initial }: { initial: string | null }) {
     <div className="card p-4">
       <div className="mb-1 font-medium">蝦皮分潤連結自訂來源標記 Sub id（選填）</div>
       <p className="mb-3 text-xs text-ink-2">
-        對齊蝦皮後台的 5 格 Sub id，出現在分潤報表方便分辨來源。<b>僅能含英數與底線</b>、單格上限 50。
-        可用變數（發文時自動代換）：
+        對應蝦皮後台的 5 格 Sub id，會出現在分潤報表上，方便你分辨流量來源。<b>只能用英數和底線</b>，每格最多 50 字。
+        可用變數（發文時會自動代換）：
         {VARS.map((v) => (
           <code key={v} className="ml-1 font-mono">
             {v}
           </code>
         ))}
-        。留空＝不帶來源標記。
+        。留空的話就不加來源標記。
       </p>
 
       <div className="space-y-3">
@@ -135,7 +135,7 @@ export default function SubIdForm({ initial }: { initial: string | null }) {
         disabled={slots.length >= 5}
         className="mt-3 flex items-center gap-1 text-sm text-brand hover:underline disabled:cursor-not-allowed disabled:text-ink-3 disabled:no-underline"
       >
-        ＋ 添加辨識參數 Sub id（非必填）（{slots.length}/5）
+        ＋ 再加一格 Sub id（選填，{slots.length}/5）
       </button>
 
       <div className="mt-3">

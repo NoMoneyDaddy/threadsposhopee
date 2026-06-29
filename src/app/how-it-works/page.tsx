@@ -64,7 +64,7 @@ export default function HowItWorksPage() {
 
       <Section id="principles" title="運作原理（先懂這幾點）">
         <ul className="list-disc space-y-1.5 pl-5 text-sm text-ink [overflow-wrap:anywhere]">
-          <li><b>各綁各的金鑰、彼此不共用</b>：Threads、Gemini、蝦皮、圖床都綁你自己的；機密一律 AES-256 加密存、只在 server 用、不外露。</li>
+          <li><b>每個人綁自己的金鑰，不互相共用</b>：Threads、Gemini、蝦皮、圖床都是綁你自己的；敏感資料一律加密保存，只在伺服器端使用，不會外洩。</li>
           <li><b>只發你核准過的草稿</b>：AI 與爬蟲只會產生「待審」草稿／素材，<b>絕不會自己發文</b>，發布前一定經你核准。</li>
           <li><b>防封節奏</b>：發文會自動拉開間隔、控制每日上限，盡量自然、降低帳號風險。</li>
           <li><b>時區固定台北</b>：所有排程時間與每日上限都以台北時間計算。</li>
@@ -88,7 +88,7 @@ export default function HowItWorksPage() {
 
       <Section id="materials" title="第二步：準備素材">
         <p className="mb-2 text-sm text-ink">
-          <b>素材＝一個商品＋你的分潤連結＋圖片／影片</b>；若已綁定 Gemini，系統會再幫你生成 AI 文案。建立後可重複「排一篇」，不必每次重做。
+          一份素材，就是把<b>一個商品、你的分潤連結，加上圖片或影片</b>包在一起。如果你綁了 Gemini，系統還會順手幫你寫好文案。素材建好之後可以重複「排一篇」，不用每次重弄。
         </p>
         <Steps
           items={[
@@ -139,7 +139,7 @@ export default function HowItWorksPage() {
 
       <Section id="privacy" title="安全與隱私">
         <ul className="list-disc space-y-1.5 pl-5 text-sm text-ink [overflow-wrap:anywhere]">
-          <li>金鑰<b>永不入庫明文</b>：只放環境變數或 AES-256-GCM 加密存資料庫，只在 server 端解密使用。</li>
+          <li>金鑰<b>絕不會以明文存進資料庫</b>：只放在環境變數，或加密後才存資料庫，而且只在伺服器端解密使用。</li>
           <li><b>多租戶隔離</b>：你的素材、草稿、帳號、憑證都只屬於你，其他使用者看不到也用不到。</li>
           <li>對外連線都有安全檢查，避免被導向內部位址或惡意目標。</li>
           <li>細節見 <Link href="/privacy" className="text-brand underline">隱私權政策</Link> 與 <Link href="/terms" className="text-brand underline">服務條款</Link>。</li>

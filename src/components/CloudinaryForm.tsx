@@ -58,7 +58,7 @@ export default function CloudinaryForm({
       <div className="mb-1 font-medium">圖片／影片存放（Cloudinary）</div>
       <p className="mb-2 text-xs text-ink-2">
         綁你自己的 Cloudinary，素材／本機上傳都進你自己的雲端。到 Cloudinary 後台建一個 <b>unsigned</b> upload
-        preset，cloud name 與 preset <b>兩者都要填</b>。<b>本服務不提供共用後備</b>——未綁定則媒體不中轉（發文沿用原始連結），且無法使用本機上傳。{" "}
+        preset，cloud name 和 preset <b>兩個都要填</b>。<b>平台不會幫你代墊空間</b>，沒綁的話媒體就不會幫你轉存（發文會直接用原本的連結），也沒辦法從你電腦上傳檔案。{" "}
         <a href="/guide#cloudinary" className="text-brand underline">完整圖文教學 →</a>
       </p>
       <div className="flex flex-wrap gap-2">

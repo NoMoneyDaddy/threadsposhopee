@@ -64,7 +64,7 @@ export default function SourceForm({
       <div className="font-medium md:col-span-2">新增監看來源</div>
       <input className={input} placeholder="來源 Threads 帳號（@username）" value={form.source_username} onChange={(e) => set("source_username", e.target.value)} />
       <input className={input} placeholder="或：搜尋關鍵字（如「蝦皮 零食」）" value={form.search_query} onChange={(e) => set("search_query", e.target.value)} />
-      <p className="text-xs text-ink-3 md:col-span-2">帳號或關鍵字擇一：填帳號＝監看該帳號新貼文；填關鍵字＝搜尋含該關鍵字的貼文。</p>
+      <p className="text-xs text-ink-3 md:col-span-2">帳號和關鍵字填一個就好：填帳號就會盯著那個帳號的新貼文，填關鍵字就會去找含這個關鍵字的貼文。</p>
       <select className={input} value={form.threads_account_id} onChange={(e) => set("threads_account_id", e.target.value)}>
         {threadsAccounts.map((a) => (
           <option key={a.id} value={a.id}>發文到：{a.label}</option>

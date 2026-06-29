@@ -155,7 +155,7 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
               );
             })}
           </div>
-          <FieldHint>勾選多個領域＝部落客會橫跨這些主題輪流取材。至少選一個。</FieldHint>
+          <FieldHint>選了多個領域，部落客就會輪流從這幾個主題找題材。至少選一個。</FieldHint>
         </div>
         <div>
           <label className="label" htmlFor="ag-source">取材來源</label>

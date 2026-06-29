@@ -96,7 +96,7 @@ export default function CopyPrefsForm({ initial }: { initial: CopyPrefs }) {
   return (
     <div className="card p-4">
       <div className="mb-1 font-medium">AI 文案客製化</div>
-      <p className="mb-3 text-xs text-ink-2">生成貼文時套用的全域偏好。正文與留言可分開設定。</p>
+      <p className="mb-3 text-xs text-ink-2">寫貼文時會套用這些偏好，正文和留言可以分開設定。</p>
 
       <div className="grid gap-3 md:grid-cols-2">
         <SideEditor title="正文" side={prefs.main} onChange={(main) => setPrefs((p) => ({ ...p, main }))} />
@@ -115,13 +115,13 @@ export default function CopyPrefsForm({ initial }: { initial: CopyPrefs }) {
             onChange={(e) => setPrefs((p) => ({ ...p, temperature: Number(e.target.value) }))}
             className="ml-2 w-48 align-middle"
           />
-          <span className="ml-2 text-ink-3">低=穩定，高=發散</span>
+          <span className="ml-2 text-ink-3">調低比較穩定，調高比較天馬行空</span>
         </label>
       </div>
 
       <div className="mt-3">
         <label htmlFor="copy-prefs-custom-prompt" className="text-xs text-ink-2">
-          自訂指示（選填，不可違反輸出格式）
+          想多叮嚀 AI 幾句（選填）
         </label>
         <textarea
           id="copy-prefs-custom-prompt"

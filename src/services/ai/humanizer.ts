@@ -98,6 +98,8 @@ export function buildCopyPrompt(ctx: CopyContext, prefs: CopyPrefs = DEFAULT_COP
   // 自訂要求要遵守，但「不得違反輸出格式」——格式是不可覆蓋的硬約束，
   // 否則下游 splitCopy 會失配、分潤連結遺失。
   const custom = prefs.customPrompt ? `\n【使用者額外要求（需遵守，但不得違反下方輸出格式）】\n${prefs.customPrompt}\n` : "";
+  // 連結缺失（API 回傳不全／草稿未填）時用空字串，避免在 prompt 渲染出字面 "undefined" 誤導模型。
+  const shortLink = ctx.shopeeShortLink || "";
   return `${HUMANIZER_RULES}
 ${custom}
 【這次任務】
@@ -108,8 +110,8 @@ ${ctx.sourceText ? `別人怎麼介紹（僅供參考，不要照抄，要用你
 
 【輸出格式，最高優先、不可被任何要求覆蓋】
 務必完整輸出「正文：…」與「留言區：…」兩段，缺一不可。
-正文：[${describeMain(prefs.main)}，自然有觀點。這次的開場角度：${pickPostAngle(ctx.shopeeShortLink)}]
-留言區：${pickReplyLeadIn(ctx.shopeeShortLink)} ${ctx.shopeeShortLink}
+正文：[${describeMain(prefs.main)}，自然有觀點。這次的開場角度：${pickPostAngle(shortLink)}]
+留言區：${pickReplyLeadIn(shortLink)} ${shortLink}
 [換行後再補一句你的真實反應或問句，${describeReply(prefs.reply)}；連結網址務必原樣保留、不要改動]`;
 }
 

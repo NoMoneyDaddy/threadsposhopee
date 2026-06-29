@@ -38,6 +38,7 @@ export default function PostEditor({
   accountLabel,
   replyDelay,
   onReplyDelayChange,
+  threadContext,
   limit = THREADS_LIMIT
 }: {
   value: PostContent;
@@ -47,6 +48,8 @@ export default function PostEditor({
   accountLabel?: string | null;
   replyDelay?: string;
   onReplyDelayChange?: (v: string) => void;
+  // 有商品情境（素材/草稿）時顯示「AI 生成串文」：依商品名/來源產多段，分潤連結附最後一段。
+  threadContext?: { productName?: string | null; affiliateLink?: string | null; sourceText?: string | null };
   limit?: number;
 }) {
   const set = (patch: Partial<PostContent>) => onChange({ ...value, ...patch });
@@ -54,7 +57,43 @@ export default function PostEditor({
   // 「換個說法」：AI 改寫出多個版本供挑選。
   const [variations, setVariations] = useState<string[]>([]);
   const [rewriting, setRewriting] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const canGenThread = Boolean(threadContext && (threadContext.productName || threadContext.affiliateLink));
+
+  async function genThread() {
+    if (!threadContext) return;
+    setGenerating(true);
+    setErr(null);
+    try {
+      const res = await fetchWithTimeout(
+        "/api/ai/thread",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            productName: threadContext.productName ?? "",
+            affiliateLink: threadContext.affiliateLink ?? "",
+            sourceText: threadContext.sourceText ?? ""
+          })
+        },
+        30000
+      );
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.ok) throw new Error(json?.error || `生成失敗（${res.status}）`);
+      // 只覆寫文字段落，保留既有媒體。
+      onChange({
+        ...value,
+        mainText: typeof json.mainText === "string" ? json.mainText : value.mainText,
+        replyText: typeof json.replyText === "string" ? json.replyText : value.replyText,
+        extraSegments: Array.isArray(json.extraSegments) ? json.extraSegments : value.extraSegments
+      });
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setGenerating(false);
+    }
+  }
   // 正文一變動即讓舊的改寫版本失效，避免點到過期內容。
   useEffect(() => {
     setVariations([]);
@@ -93,15 +132,28 @@ export default function PostEditor({
           placeholder="有什麼新鮮事？直接打字分享…"
         />
         <div className="mt-1 flex items-center justify-between gap-2">
-          <button
-            type="button"
-            onClick={rewrite}
-            disabled={rewriting || !value.mainText.trim()}
-            title={!value.mainText.trim() ? "請先輸入正文" : "用 AI 改寫出幾個不同說法供你挑選"}
-            className="rounded-full border border-brand/40 px-2.5 py-1 text-xs text-brand hover:bg-orange-50 disabled:opacity-50"
-          >
-            {rewriting ? "改寫中…" : "✨ 換個說法"}
-          </button>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {canGenThread && (
+              <button
+                type="button"
+                onClick={genThread}
+                disabled={generating || rewriting}
+                title="依商品自動生成多段串文（主文＋後續），分潤連結會放在最後一段"
+                className="rounded-full border border-brand/40 px-2.5 py-1 text-xs text-brand hover:bg-orange-50 disabled:opacity-50"
+              >
+                {generating ? "生成中…" : "✨ AI 生成串文"}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={rewrite}
+              disabled={rewriting || generating || !value.mainText.trim()}
+              title={!value.mainText.trim() ? "請先輸入正文" : "用 AI 改寫出幾個不同說法供你挑選"}
+              className="rounded-full border border-brand/40 px-2.5 py-1 text-xs text-brand hover:bg-orange-50 disabled:opacity-50"
+            >
+              {rewriting ? "改寫中…" : "✨ 換個說法"}
+            </button>
+          </div>
           <CharCount text={value.mainText} limit={limit} />
         </div>
         {err && <p className="mt-1 text-xs text-danger" role="alert">❌ {err}</p>}

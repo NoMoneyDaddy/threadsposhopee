@@ -133,7 +133,8 @@ export async function buildMaterialForProduct(
   const primaryUploaded = uploadedMedia[0] ?? null;
 
   // 預設媒體用途：第一張圖片「都用」（主文＋留言），其餘只放主文（已明確指定 slot 則尊重）。
-  const mediaWithSlots = applyDefaultSlots(uploadedMedia);
+  // 上傳中轉會重建陣列、丟失原 slot，套預設前先依序還原 inputMedia 的 slot（順序一致）。
+  const mediaWithSlots = applyDefaultSlots(uploadedMedia.map((m, i) => ({ ...m, slot: inputMedia[i]?.slot })));
 
   let mainText: string | null = null;
   let replyText: string | null = null;

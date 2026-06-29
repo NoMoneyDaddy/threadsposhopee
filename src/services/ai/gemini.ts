@@ -115,6 +115,10 @@ export async function generateWithGemini(
     }
     throw new Error("Gemini 回傳空內容（可能被安全過濾器攔截）");
   }
+  // 達輸出上限＝文案被截在半句（thinking 模型尤其常見）。留個 warn 方便診斷、提示調高額度。
+  if (json?.candidates?.[0]?.finishReason === "MAX_TOKENS") {
+    log.warn("Gemini 輸出達 maxOutputTokens 上限被截斷", { maxOutputTokens, model: model || env.geminiModel });
+  }
   return text;
 }
 
@@ -136,5 +140,8 @@ export async function geminiText(prompt: string, apiKey?: string | null, tempera
   const json = await res.json();
   const text = extractGeminiText(json);
   if (!text) throw new Error("Gemini 回傳空內容");
+  if (json?.candidates?.[0]?.finishReason === "MAX_TOKENS") {
+    log.warn("Gemini 輸出達 maxOutputTokens 上限被截斷", { maxOutputTokens, model: model || env.geminiModel });
+  }
   return text.trim();
 }

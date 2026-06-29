@@ -125,14 +125,17 @@ export async function generateThreadCopy(
   const auto = !Number.isFinite(segments) || segments <= 0;
   const n = auto ? 5 : Math.min(5, Math.max(2, Math.floor(segments))); // auto 時 n 當作「最多段數」上限
   const link = input.shopeeShortLink || "";
-  const linkLine = link ? `${pickReplyLeadIn(link)} ${link}` : "";
   if (isDemoMode || !apiKey) {
+    // demo 沒呼叫 AI，引導語用固定句池示意；真實路徑改由 AI 生成（見下方）。
+    const demoLink = link ? `${pickReplyLeadIn(link)} ${link}` : "";
     const demoN = auto ? 1 : n; // 自動模式 demo 給單篇，符合「能一則就一則」
     const demo = Array.from({ length: demoN }, (_, i) =>
       i === 0 ? `${input.productName} 用了一陣子，真心覺得不錯` : `補充第 ${i + 1} 點：實際用起來的小心得`
     );
-    return { ...assembleThread(demo, linkLine), raw: demo.join("\n===\n") };
+    return { ...assembleThread(demo, demoLink), raw: demo.join("\n===\n") };
   }
+  // 真實路徑：AI 自己寫帶出連結的引導語（最後一段），程式只把「原樣網址」接上，AI 不碰網址。
+  const linkLine = link;
   const hasMedia = Boolean(input.mediaUrl) && input.mediaType !== "none";
   // 段數指示：自動模式讓 AI 自己決定要不要拆串文；固定模式照指定段數。
   const segInstruction = auto
@@ -146,7 +149,8 @@ ${segInstruction}規則：
 - 繁體中文、口語、無業配味，每段可獨立成立
 - 每段語氣與用字：${describeMain(prefs.main)}
 - 第 1 段是主文（吸睛開頭、帶出情境），不要放任何網址
-- 若有後續段，每段延伸一個重點／使用心得／情境，也不要放網址（連結由系統自動補在最後一段）
+- 中間若有段落，各延伸一個重點／使用心得／情境，一樣不要放網址
+- 最後務必「另起一段」，用你自己的話寫一句口語、每篇都不同的引導語帶出連結（像跟朋友說「連結放下面」的口吻；不要放網址本身，網址由系統原樣接上）
 - 每段最多 4 行，段與段之間只用「獨立一行的 ===」分隔，不要加編號或標題
 ${hasMedia ? "- 已附上商品的照片／影片，請依畫面實際看到的外觀、顏色、特點來寫，但不要描述「這張圖」這類字眼\n" : ""}
 商品：${input.productName}

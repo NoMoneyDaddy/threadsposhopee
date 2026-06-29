@@ -116,8 +116,8 @@ ${ctx.sourceText ? `別人怎麼介紹（僅供參考，不要照抄，要用你
 【輸出格式，最高優先、不可被任何要求覆蓋】
 務必完整輸出「正文：…」與「留言區：…」兩段，缺一不可。
 正文：[${describeMain(prefs.main)}，自然有觀點。這次的開場角度：${pickPostAngle(shortLink)}]
-留言區：${pickReplyLeadIn(shortLink)} ${shortLink}
-[換行後再補一句你的真實反應或問句，${describeReply(prefs.reply)}；連結網址務必原樣保留、不要改動]`;
+留言區：[用你自己的話、口語地寫一句帶出連結的引導語（每篇都不一樣，不要用罐頭句、不要 emoji），緊接著原樣放上這個連結（網址務必一字不差、不可改動）：${shortLink}]
+[換行後再補一句你的真實反應或問句，${describeReply(prefs.reply)}]`;
 }
 
 // 管理員「預覽 prompt」用的範例情境：用固定範例商品＋使用者偏好組出實際送進模型的 prompt。

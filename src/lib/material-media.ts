@@ -42,6 +42,14 @@ export function mergeToMaterialMedia(
   return out;
 }
 
+// 預設媒體用途：第一張「圖片」同時放主文與留言（都用），其餘只放主文。
+// 若已明確指定任何 reply/both slot（呼叫端有意設定）則原樣返回、不覆寫。純函式可測。
+export function applyDefaultSlots(media: DraftMedia[]): DraftMedia[] {
+  if (media.some((m) => m.slot === "reply" || m.slot === "both")) return media;
+  const firstImageIdx = media.findIndex((m) => m.type === "image");
+  return media.map((m, i) => ({ ...m, slot: i === firstImageIdx ? "both" : "main" }));
+}
+
 // 清洗外部傳入的多段串文（API body）：每段 text 取字串（否則 null）、media 過 sanitize（去 slot），
 // 並濾掉「無文字且無媒體」的空段落、最多 10 段（與發文 MAX_EXTRA_SEGMENTS 一致）。純函式可測。
 export function sanitizeThreadSegments(input: unknown): ThreadSegment[] {

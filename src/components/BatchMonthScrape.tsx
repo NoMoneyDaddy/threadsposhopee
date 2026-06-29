@@ -4,9 +4,9 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { monthsBetween, monthBounds, MAX_BATCH_MONTHS } from "@/lib/month-range";
 
-// 批次逐月抓取：選起訖月份，系統逐月各跑一次 Apify（每月帶該月日期區間），結果都進待審素材。
-// 注意：日期只有舊版 igview 抓取器會吃；新版 automation-lab 會忽略日期（逐月會抓到相同近期貼文）。
-// 每月一個 Apify run（費用算你帳上），上限 MAX_BATCH_MONTHS 個月。逐月序列跑，請保持此頁開著。
+// 批次逐月抓取：選起訖月份，逐月各「啟動」一個背景抓取（每月帶該月日期區間）。
+// 用非同步啟動（/api/scrape/start）：每次立即回、不長連線等待，避免逐月同步長請求被部署代理切斷（NetworkError）。
+// 進度交給下方「背景抓取」面板，完成後自動進待審。注意：日期只有舊版 igview 抓取器會吃。
 export default function BatchMonthScrape() {
   const router = useRouter();
   const [start, setStart] = useState("");
@@ -20,7 +20,8 @@ export default function BatchMonthScrape() {
   // 只要起訖都選了且非忙碌就可按；無效區間（起晚於迄）交給 run() 內驗證並顯示提示（按鈕禁用會讓使用者不知原因）。
   const canRun = !!start && !!end && !busy;
 
-  // 批次序列執行可能跑數分鐘：執行中攔截關頁/重整，避免中途中斷。
+  // 逐月啟動的迴圈仍在前端跑（雖然每月只是快速 POST）；啟動期間攔截關頁/重整，
+  // 避免使用者在「全部月份都啟動完成」前關掉網頁，導致後面月份沒被啟動。啟動完成（busy=false）即可安全關頁。
   useEffect(() => {
     if (!busy) return;
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -38,25 +39,23 @@ export default function BatchMonthScrape() {
     }
     setBusy(true);
     setMsg(null);
-    let done = 0;
-    let totalCreated = 0;
+    let startedRuns = 0;
     try {
       for (let i = 0; i < months.length; i++) {
         const ym = months[i];
         const b = monthBounds(ym)!;
-        setProgress(`第 ${i + 1}/${months.length} 月（${ym}）抓取中…`);
-        const res = await fetch("/api/pipeline/run", {
+        setProgress(`啟動第 ${i + 1}/${months.length} 月（${ym}）…`);
+        // 啟動該月背景抓取（每月帶該月日期區間；force 重抓，不同月份本就是不同貼文，避免被去重擋掉）。
+        const res = await fetch("/api/scrape/start", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          // 逐月帶該月日期區間；force 重抓（不同月份本來就是不同貼文，避免被「已抓過」去重擋掉）。
           body: JSON.stringify({ after: b.after, before: b.before, force: true })
         });
         const json = await res.json().catch(() => null);
-        if (!res.ok || !json?.ok) throw new Error(`${ym}：${json?.error || `HTTP ${res.status}`}（已完成 ${done} 個月）`);
-        done++;
-        for (const r of json.results ?? []) totalCreated += r.created ?? 0;
+        if (!res.ok || !json?.ok) throw new Error(`${ym}：${json?.error || `HTTP ${res.status}`}（已啟動 ${startedRuns} 個）`);
+        startedRuns += (json.runs ?? []).length;
       }
-      setMsg(`✅ 批次完成：${done} 個月、新增 ${totalCreated} 筆待審素材`);
+      setMsg(`✅ 已啟動 ${months.length} 個月、共 ${startedRuns} 個背景抓取。進度見下方「背景抓取」面板，完成後自動進待審。`);
       setProgress(null);
       router.refresh();
     } catch (e) {
@@ -71,15 +70,15 @@ export default function BatchMonthScrape() {
     <div className="rounded-2xl border bg-surface p-4">
       <div className="mb-1 font-medium">批次逐月抓取</div>
       <p className="mb-2 text-xs text-ink-3">
-        選一段月份，系統逐月各跑一次（每月帶該月日期區間），結果都進待審素材。<b>每月一個 Apify run（費用算你帳上）</b>，
-        一次最多 {MAX_BATCH_MONTHS} 個月。日期只有<b>舊版 igview 抓取器</b>會生效，請先到帳號管理切換。
+        選一段月份，逐月各啟動一個<b>背景抓取</b>（每月帶該月日期區間，不卡頁、可長跑）。<b>每月一個 Apify run（費用算你帳上）</b>，
+        一次最多 {MAX_BATCH_MONTHS} 個月。進度見下方「背景抓取」面板，完成後自動進待審。日期只有<b>舊版 igview 抓取器</b>會生效，請先到帳號管理切換。
       </p>
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <input type="month" value={start} onChange={(e) => setStart(e.target.value)} aria-label="起始月份" className="rounded-xl border px-3 py-1.5" />
         <span className="text-ink-3">到</span>
         <input type="month" value={end} onChange={(e) => setEnd(e.target.value)} aria-label="結束月份" className="rounded-xl border px-3 py-1.5" />
         <button onClick={run} disabled={!canRun} className="rounded-xl bg-brand px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50">
-          {busy ? "批次抓取中…" : months.length > 0 ? `開始批次（${months.length} 個月）` : "開始批次"}
+          {busy ? "啟動中…" : months.length > 0 ? `開始批次（${months.length} 個月）` : "開始批次"}
         </button>
       </div>
       {truncated && <p className="mt-1 text-xs text-amber-600">⚠️ 區間超過 {MAX_BATCH_MONTHS} 個月，只會抓前 {MAX_BATCH_MONTHS} 個月（{months[0]}～{months[months.length - 1]}）。</p>}

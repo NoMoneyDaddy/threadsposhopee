@@ -3,7 +3,6 @@ import { getCurrentUser } from "@/lib/auth";
 import { isDemoMode } from "@/lib/env";
 import { getApifyUsage } from "@/services/apify/usage";
 import ScrapeConfigForm from "@/components/ScrapeConfigForm";
-import RunPipelineButton from "@/components/RunPipelineButton";
 import ScrapeRunsPanel from "@/components/ScrapeRunsPanel";
 import BatchMonthScrape from "@/components/BatchMonthScrape";
 
@@ -75,14 +74,6 @@ export default async function SourcesPage() {
       <ScrapeConfigForm initial={config} />
 
       <ScrapeRunsPanel />
-
-      <div className="rounded-2xl border bg-surface p-4">
-        <div className="mb-1 font-medium">快速抓取（同步，≤5 分鐘）</div>
-        <p className="mb-2 text-xs text-ink-3">
-          少量、想立刻拿到結果時用：跑完才回，受 5 分鐘上限。量大或要看進度請用上方「背景抓取」。
-        </p>
-        <RunPipelineButton />
-      </div>
 
       <BatchMonthScrape />
     </div>

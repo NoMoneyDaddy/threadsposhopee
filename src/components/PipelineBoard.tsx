@@ -263,6 +263,8 @@ export default function PipelineBoard({
       {failedIds.length > 0 && <RetryFailedBar failedIds={failedIds} />}
       {err && <p className="text-sm text-danger" role="alert">❌ {err}</p>}
 
+      <p className="text-xs text-ink-3">👉 左右滑動切換欄位：待審素材 → 素材庫 → 草稿 → 已排程 → 已發布 → 需處理</p>
+
       <DndContext
         sensors={sensors}
         onDragStart={(e: DragStartEvent) => setDragStatus((e.active.data.current?.status as DraftStatus) ?? null)}

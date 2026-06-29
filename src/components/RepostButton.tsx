@@ -71,7 +71,7 @@ export default function RepostButton({
       >
         {busy === "draft" ? "…" : "存草稿"}
       </button>
-      <label className="flex items-center gap-1 text-xs text-ink-2" title="用 AI 重寫文案，避免重複措辭被降觸及">
+      <label className="flex items-center gap-1 text-xs text-ink-2" title="用 AI＋你的文案客製化設定重寫，避免重複措辭被降觸及">
         <input type="checkbox" checked={vary} onChange={(e) => setVary(e.target.checked)} disabled={!!busy} />
         重寫文案
       </label>
@@ -79,7 +79,11 @@ export default function RepostButton({
         <input type="checkbox" checked={bestTime} onChange={(e) => setBestTime(e.target.checked)} disabled={!!busy} />
         最佳時段
       </label>
-      {msg && <span className="text-xs text-ink-2">{msg}</span>}
+      {/* 手機沒有 hover tooltip，補一行常駐說明 */}
+      <span className="w-full text-[11px] leading-tight text-ink-3">
+        「重寫文案」＝用 AI 依你的客製化設定重新生成（不勾＝沿用素材現有文案）；「最佳時段」＝進佇列時挑該帳號高觸及時段。
+      </span>
+      {msg && <span className="w-full text-xs text-ink-2">{msg}</span>}
     </div>
   );
 }

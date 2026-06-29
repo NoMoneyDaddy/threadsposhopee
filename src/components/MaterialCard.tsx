@@ -45,8 +45,21 @@ export default function MaterialCard({
         </span>
       </div>
       {m.cloudinary_media_url && m.media_type !== "none" && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={cloudinaryThumb(m.cloudinary_media_url, 600)} alt="" loading="lazy" className="mb-2 h-32 w-full rounded object-cover" />
+        m.media_type === "video" ? (
+          <video
+            src={m.cloudinary_media_url}
+            controls
+            muted
+            playsInline
+            preload="metadata"
+            className="mb-2 h-40 w-full rounded object-cover"
+            // referrerPolicy 不在 React video 型別內但屬性合法：用展開繞過型別檢查，讓防盜連來源也載得到。
+            {...{ referrerPolicy: "no-referrer" }}
+          />
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={cloudinaryThumb(m.cloudinary_media_url, 600)} alt="" loading="lazy" referrerPolicy="no-referrer" className="mb-2 h-40 w-full rounded object-cover" />
+        )
       )}
       {m.main_text ? (
         <div className="whitespace-pre-wrap text-sm text-ink">{m.main_text}</div>

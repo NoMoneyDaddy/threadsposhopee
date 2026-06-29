@@ -506,11 +506,12 @@ export async function listActiveThreadsTokensAll(): Promise<
 > {
   if (isDemoMode) return [];
   const sb = getServiceClient()!;
-  const { data } = await sb
+  const { data, error } = await sb
     .from("threads_accounts")
     .select("id, label, owner_id, access_token_enc")
     .eq("status", "active")
     .not("access_token_enc", "is", null);
+  if (error) throw error; // 查詢失敗勿吞成空陣列（否則每日刷新誤判成「沒帳號要刷」而靜默失效）
   return (data ?? [])
     .map((r) => {
       try {

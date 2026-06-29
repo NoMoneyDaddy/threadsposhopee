@@ -1,6 +1,6 @@
 import { env, isDemoMode } from "@/lib/env";
 import { buildCopyPrompt, splitCopy, pickReplyLeadIn, HUMANIZER_RULES, type CopyContext } from "./humanizer";
-import { DEFAULT_COPY_PREFS, type CopyPrefs } from "./prefs";
+import { DEFAULT_COPY_PREFS, describeMain, type CopyPrefs } from "./prefs";
 import { generateWithGemini, geminiText } from "./gemini";
 import type { ThreadSegment } from "@/lib/types";
 
@@ -45,14 +45,23 @@ export async function generateCopy(
 
 // 把同一段正文改寫成 n 個語氣/開頭不同、意思相同的版本（「換個說法」）。
 // 保留原文的網址/數字/商品名；版本之間以一行「===」分隔。Demo 或無金鑰回示意版本。
-export async function generateVariations(text: string, apiKey?: string | null, n = 3, model?: string | null): Promise<string[]> {
+// prefs：套用使用者客製化（語氣/字數/emoji 取正文設定、自訂指示、溫度），與其他生成路徑一致。
+export async function generateVariations(
+  text: string,
+  apiKey?: string | null,
+  n = 3,
+  model?: string | null,
+  prefs: CopyPrefs = DEFAULT_COPY_PREFS
+): Promise<string[]> {
   const clean = text.trim();
   if (!clean) return [];
   if (isDemoMode || !apiKey) return demoVariations(clean, n);
+  const custom = prefs.customPrompt ? `\n【使用者額外要求（需遵守，但不得違反下方規則）】\n${prefs.customPrompt}\n` : "";
   const prompt = `${HUMANIZER_RULES}
-
+${custom}
 以下是一則 Threads 貼文正文。請改寫成 ${n} 個「語氣或開頭不同、但意思相同」的版本。規則：
 - 繁體中文、口語、無業配味
+- 語氣與字數：${describeMain(prefs.main)}
 - 保留原文出現的任何網址、數字、商品名
 - 不要加版本編號、標題或引號
 - 每個版本之間只用「獨立一行的 ===」分隔
@@ -60,7 +69,7 @@ export async function generateVariations(text: string, apiKey?: string | null, n
 原文：
 ${clean}`;
   // 1024 tokens：分段排版會多吃 token，太低會截斷掉後面的版本而湊不到 n 個。
-  const raw = await geminiText(prompt, apiKey, 0.9, 1024, model);
+  const raw = await geminiText(prompt, apiKey, prefs.temperature, 1024, model);
   return parseVariations(raw, n);
 }
 
@@ -127,10 +136,13 @@ export async function generateThreadCopy(
   const segInstruction = auto
     ? `請視內容多寡自己決定段數（1～5 段）：能用一則貼文講完就只寫一則（段落間適度換行分段，不要硬拆成多則）；內容真的多到一則塞不下，才拆成多則串文逐則發。`
     : `請寫一則「${n} 段的 Threads 串文」（主文＋${n - 1} 段後續），像真人逐則發。`;
+  // 套用使用者客製化（語氣/字數/emoji 取正文設定、自訂指示），與 generateCopy 一致。
+  const custom = prefs.customPrompt ? `\n【使用者額外要求（需遵守，但不得違反下方規則）】\n${prefs.customPrompt}\n` : "";
   const prompt = `${HUMANIZER_RULES}
-
+${custom}
 ${segInstruction}規則：
 - 繁體中文、口語、無業配味，每段可獨立成立
+- 每段語氣與用字：${describeMain(prefs.main)}
 - 第 1 段是主文（吸睛開頭、帶出情境），不要放任何網址
 - 若有後續段，每段延伸一個重點／使用心得／情境，也不要放網址（連結由系統自動補在最後一段）
 - 每段最多 4 行，段與段之間只用「獨立一行的 ===」分隔，不要加編號或標題

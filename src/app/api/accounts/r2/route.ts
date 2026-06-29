@@ -3,7 +3,7 @@ import { log } from "@/lib/logger";
 import { setUserR2, hasUserR2, getUserR2 } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
 import { parseR2Input } from "@/services/media/r2-config";
-import { validateR2 } from "@/services/media/r2";
+import { validateR2, isR2AuthFailureStatus } from "@/services/media/r2";
 
 export const dynamic = "force-dynamic";
 
@@ -54,7 +54,14 @@ export async function POST(req: Request) {
       }
       if (parsed.bucket && vKey && vSecret) {
         const check = await validateR2({ accountId: parsed.accountId, bucket: parsed.bucket, accessKeyId: vKey, secretAccessKey: vSecret });
-        if (!check.ok) return NextResponse.json({ ok: false, error: check.reason }, { status: 400 });
+        // 只在「明確被拒」（金鑰/權限/bucket 錯誤）時擋下；其餘無法確認的狀態（含 R2 對
+        // HeadBucket 偶回的 400、網路/逾時）放行＋記 log——因 PUT 上傳實際可用，不該被驗證卡死。
+        if (!check.ok) {
+          if (isR2AuthFailureStatus(check.status)) {
+            return NextResponse.json({ ok: false, error: check.reason }, { status: 400 });
+          }
+          log.warn("R2 連線驗證無法確認，放行存檔", { status: check.status ?? null, reason: check.reason });
+        }
       }
     }
 

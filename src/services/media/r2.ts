@@ -113,14 +113,24 @@ export function buildS3HeadAuth(opts: {
   return { authorization, signedHeaders };
 }
 
+// R2 連線驗證結果。status 為 HeadBucket 的 HTTP 狀態（網路/逾時類錯誤時 undefined），
+// 供呼叫端區分「明確被拒（401/403/404）擋下存檔」與「無法確認（其餘）放行存檔」。
+export type R2ValidationResult = { ok: true } | { ok: false; reason: string; status?: number };
+
+// HeadBucket 回的這些狀態才視為「憑證/權限/bucket 明確錯誤」，應擋下存檔。
+// 其餘（含部分 R2 對 HeadBucket 回的 400）屬無法確認，由呼叫端放行＋記 log，不卡使用者。
+export function isR2AuthFailureStatus(status: number | undefined): boolean {
+  return status === 401 || status === 403 || status === 404;
+}
+
 // 存檔前驗證 R2 憑證是否可用：對 bucket 發已簽章 HEAD（HeadBucket）。
-// 回 {ok:true} 或 {ok:false, reason}。網路/逾時亦回 false（讓使用者知道沒驗成功）。
+// 回 {ok:true} 或 {ok:false, reason, status?}。網路/逾時無 status（呼叫端會放行存檔）。
 export async function validateR2(creds: {
   accountId: string;
   accessKeyId: string;
   secretAccessKey: string;
   bucket: string;
-}): Promise<{ ok: true } | { ok: false; reason: string }> {
+}): Promise<R2ValidationResult> {
   // 嚴格限制 accountId（英數，與設定頁 ACCOUNT_RE 一致）：防 `/`、`@` 等 authority 字元竄改 host，
   // 把帶簽章的 HEAD 送到非預期主機（SSRF）。assertSafePublicUrl 只擋非公開目標，故這層額外把關。
   if (!R2_ACCOUNT_RE.test(creds.accountId)) return { ok: false, reason: "Cloudflare Account ID 格式不正確" };
@@ -143,7 +153,7 @@ export async function validateR2(creds: {
       { method: "HEAD", headers: { Authorization: authorization, "x-amz-date": amzDate, "x-amz-content-sha256": UNSIGNED } },
       8000
     );
-    return res.ok ? { ok: true } : { ok: false, reason: r2ValidationReason(res.status) };
+    return res.ok ? { ok: true } : { ok: false, reason: r2ValidationReason(res.status), status: res.status };
   } catch (e) {
     return { ok: false, reason: `R2 連線驗證失敗：${e instanceof Error ? e.message : String(e)}` };
   }

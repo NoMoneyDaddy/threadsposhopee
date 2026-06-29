@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { deriveSigningKey, buildS3PutAuth, buildS3HeadAuth, r2ValidationReason } from "./r2";
+import { deriveSigningKey, buildS3PutAuth, buildS3HeadAuth, r2ValidationReason, isR2AuthFailureStatus } from "./r2";
 
 // AWS 官方文件「Examples of how to derive a signing key for Signature Version 4」測試向量：
 // secret=wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY, date=20120215, region=us-east-1, service=iam
@@ -43,6 +43,12 @@ test("r2ValidationReason：依狀態碼給對應訊息", () => {
   assert.match(r2ValidationReason(401), /金鑰無效或無此 bucket 權限/);
   assert.match(r2ValidationReason(404), /找不到 bucket/);
   assert.match(r2ValidationReason(500), /HTTP 500/);
+});
+
+test("isR2AuthFailureStatus：只有 401/403/404 視為明確被拒（其餘放行存檔）", () => {
+  for (const s of [401, 403, 404]) assert.equal(isR2AuthFailureStatus(s), true);
+  for (const s of [200, 400, 429, 500, 503]) assert.equal(isR2AuthFailureStatus(s), false);
+  assert.equal(isR2AuthFailureStatus(undefined), false); // 網路/逾時 → 無 status → 放行
 });
 
 test("buildS3HeadAuth：HeadBucket 簽章格式正確（HEAD 不簽 content-type）", () => {

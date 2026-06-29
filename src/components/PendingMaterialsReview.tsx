@@ -85,7 +85,12 @@ function PendingMaterialCard({
       <p className="truncate font-medium">{m.product_name || `商品 ${m.item_id}`}</p>
       {m.affiliate_short_link && (
         <a href={m.affiliate_short_link} target="_blank" rel="noopener noreferrer" className="block truncate text-xs text-brand hover:underline">
-          {m.affiliate_short_link}
+          你的分潤連結：{m.affiliate_short_link}
+        </a>
+      )}
+      {m.clean_product_url && (
+        <a href={m.clean_product_url} target="_blank" rel="noopener noreferrer" className="block truncate text-xs text-ink-3 hover:underline">
+          原始商品連結：{m.clean_product_url}
         </a>
       )}
       {m.main_text && <p className="mt-1 whitespace-pre-wrap text-xs text-ink-2">{m.main_text}</p>}

@@ -177,8 +177,20 @@ export default function ScrapeConfigForm({
             aria-label="結束日"
             className="rounded-xl border px-3 py-1.5"
           />
+          {(after || before) && (
+            <button
+              type="button"
+              onClick={() => {
+                setAfter("");
+                setBefore("");
+              }}
+              className="rounded-xl border px-3 py-1.5 text-xs text-ink-2 hover:bg-surface-2"
+            >
+              清除日期
+            </button>
+          )}
         </div>
-        <p className="mt-1 text-xs text-ink-3">兩格都留空就不限日期。只想要近期的貼文時再填。</p>
+        <p className="mt-1 text-xs text-ink-3">兩格都留空就不限日期（清不掉時按「清除日期」）。記得按下方「儲存設定」才會生效。</p>
       </div>
 
       <label className="flex cursor-pointer items-center gap-2 text-sm text-ink-2">

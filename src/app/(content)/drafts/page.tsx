@@ -18,6 +18,11 @@ export default async function DraftsPage() {
   const accountMeta = Object.fromEntries(
     accounts.map((a) => [a.id, { label: a.label, displayName: a.display_name ?? null, avatarUrl: a.avatar_url ?? null }])
   );
+  // 未指定發文帳號的草稿，預覽退回第一個帳號的頭像/暱稱（避免空灰圈）；無帳號則 undefined。
+  const firstAccount = accounts[0];
+  const defaultAccount = firstAccount
+    ? { label: firstAccount.label, displayName: firstAccount.display_name ?? null, avatarUrl: firstAccount.avatar_url ?? null }
+    : undefined;
   // 贊助文：啟用且非 owner 時，草稿頁可標示／自選哪一篇為今日贊助文。
   const sponsorCfg = await getSponsorConfig();
   const sponsorEnabled = sponsorCfg.enabled && !!user && !user.isOwner;
@@ -43,6 +48,7 @@ export default async function DraftsPage() {
       <DraftsExplorer
         drafts={drafts}
         accountMeta={accountMeta}
+        defaultAccount={defaultAccount}
         sponsor={{ enabled: sponsorEnabled, pickByAccount }}
       />
     </div>

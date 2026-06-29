@@ -499,6 +499,50 @@ export async function listThreadsTokensToRefresh(
     .filter((x): x is { id: string; label: string; accessToken: string; ownerId: string | null } => x !== null);
 }
 
+// 跨租戶取「全部 active 且有 token」帳號（含解密 token）：給每日頭像/個人檔案刷新 worker 用。
+// 僅 cron 呼叫；實際寫回仍以該列自己的 owner_id 過濾。
+export async function listActiveThreadsTokensAll(): Promise<
+  { id: string; label: string; ownerId: string | null; accessToken: string }[]
+> {
+  if (isDemoMode) return [];
+  const sb = getServiceClient()!;
+  const { data, error } = await sb
+    .from("threads_accounts")
+    .select("id, label, owner_id, access_token_enc")
+    .eq("status", "active")
+    .not("access_token_enc", "is", null);
+  if (error) throw error; // 查詢失敗勿吞成空陣列（否則每日刷新誤判成「沒帳號要刷」而靜默失效）
+  return (data ?? [])
+    .map((r) => {
+      try {
+        return { id: r.id, label: r.label, ownerId: r.owner_id ?? null, accessToken: decrypt(r.access_token_enc) };
+      } catch (e) {
+        log.error("解密 Threads token 失敗（個人檔案刷新）", { accountId: r.id, accountLabel: r.label, err: e });
+        return null;
+      }
+    })
+    .filter((x): x is { id: string; label: string; ownerId: string | null; accessToken: string } => x !== null);
+}
+
+// 只更新個人檔案欄位（顯示名稱／頭像）：頭像 URL 為會過期的簽名連結，每日刷新避免失效。
+// 僅在有值時寫入（抓檔失敗回 undefined 時略過，不清空既有真實資料）。
+export async function updateThreadsAccountProfile(
+  id: string,
+  ownerId: string | null,
+  input: { display_name?: string | null; avatar_url?: string | null }
+): Promise<void> {
+  if (isDemoMode) return;
+  const patch: { display_name?: string | null; avatar_url?: string | null } = {};
+  if (input.display_name !== undefined) patch.display_name = input.display_name;
+  if (input.avatar_url !== undefined) patch.avatar_url = input.avatar_url;
+  if (Object.keys(patch).length === 0) return;
+  const sb = getServiceClient()!;
+  let q = sb.from("threads_accounts").update(patch).eq("id", id);
+  if (ownerId) q = q.eq("owner_id", ownerId);
+  const { error } = await q;
+  if (error) throw error;
+}
+
 // 更新某帳號的長期 token + 到期日（展期後寫回，加密存放）。
 // ownerId 有值時一併過濾（縱深防禦：service-role 繞 RLS，全程帶 owner 較安全）。
 export async function updateThreadsToken(

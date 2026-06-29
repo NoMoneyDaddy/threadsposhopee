@@ -24,6 +24,7 @@ function DraftCard({
   draft,
   dupSimilarity,
   account,
+  fallbackAccount,
   sponsorEnabled = false,
   isSponsorPick = false,
   selectable = false,
@@ -33,12 +34,17 @@ function DraftCard({
   draft: Draft;
   dupSimilarity?: number;
   account?: AccountMeta;
+  // 草稿尚未指定發文帳號時，預覽改用此帳號（通常第一個帳號）的頭像/暱稱，避免空灰圈；
+  // 卡片上方「@帳號」標籤仍只在真的指定帳號時才顯示。
+  fallbackAccount?: AccountMeta;
   sponsorEnabled?: boolean;
   isSponsorPick?: boolean;
   selectable?: boolean;
   selected?: boolean;
   onToggleSelect?: (id: string) => void;
 }) {
+  // 預覽用帳號身分：優先指定帳號，否則退回 fallback（第一個帳號）。
+  const previewAccount = account ?? fallbackAccount;
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -343,9 +349,9 @@ function DraftCard({
       ) : (
         // 預覽素材：仿 Threads 版面呈現正文／媒體（圖或影片）／留言區分潤連結
         <ThreadsPreview
-          accountLabel={account?.label}
-          displayName={account?.displayName}
-          avatarUrl={account?.avatarUrl}
+          accountLabel={previewAccount?.label}
+          displayName={previewAccount?.displayName}
+          avatarUrl={previewAccount?.avatarUrl}
           mainText={mainText}
           replyText={replyText}
           mediaUrl={draft.cloudinary_media_url}

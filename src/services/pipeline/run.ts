@@ -4,7 +4,7 @@
 //   未命中 → 共用 helper 產生素材（換分潤連結＋商品名＋AI 文案＋Cloudinary）
 // 產出止於「素材」入庫：不自動建草稿、不自動排程、不自動發文。
 // 使用者之後到「素材」頁手動挑選素材轉草稿／發文。觸發一律手動（來源頁「立即抓取」按鈕）。
-import { scrapeLatestPosts } from "@/services/scraper/threads";
+import { scrapeLatestPosts, type ScrapedPost } from "@/services/scraper/threads";
 import { expandShopeeLink } from "@/services/shopee/expand";
 import { buildMaterialForProduct } from "@/services/materials/build";
 import { log } from "@/lib/logger";
@@ -57,40 +57,13 @@ export async function runSourcePipeline(
   // after/before：覆寫此次抓取的日期區間（批次逐月用，每月帶不同區間）；未傳則沿用來源儲存的日期。
   opts: { deadline?: number; force?: boolean; after?: string; before?: string } = {}
 ): Promise<PipelineResult> {
-  const result: PipelineResult = {
-    sourceId: source.id,
-    sourceUsername: source.source_username || (source.search_query ? source.search_query : ""),
-    keyword: source.search_query ?? "",
-    scanned: 0,
-    created: 0,
-    pending: 0,
-    skipped: 0,
-    reusedMaterial: 0,
-    materials: [],
-    notes: []
-  };
-
-  // 子系統憑證一次解析（一律自綁）：Apify（爬蟲）、Shopee（分潤）、Gemini（AI）
-  const apify = await getApifyCredentials(ownerId);
-  const shopeeCreds = await ownerShopeeCreds(ownerId);
-  const geminiKey = await getGeminiKey(ownerId);
-  const geminiModel = await resolveGeminiModel(ownerId); // 使用者自選模型（無則 env 預設），整迴圈重用
-  const copyPrefs = await getCopyPrefs(ownerId); // 一次取出，整個迴圈重用，避免每篇重查
-  // 使用者設定的分潤 Sub id（範本），整迴圈重用；與手動建立一致。屬選填設定，讀取失敗時降級為 null
-  // 繼續跑（不讓暫時性 DB 錯誤中止整條來源流程），對齊其他選填設定（如圖床）的容錯策略。
-  const customSubId = await getShopeeSubId(ownerId).catch(() => null);
-  // 沒綁 Shopee API 時的後備：用 affiliate_id 自組追蹤連結
-  const affiliateId = shopeeCreds ? null : await getShopeeAffiliateId(ownerId);
-  // 各人自綁圖床（R2 或 Cloudinary，素材進自己雲端）；一次取出整迴圈重用
-  const mediaProvider = await getMediaProvider(ownerId);
-  // 時間預算守門（爬取前）：scrape 是本流程最慢的外部呼叫（Apify run-sync 自身上限 60s）。
-  // 若剩餘預算已不足以安全跑完一輪 scrape，就不啟動、直接回空結果留待下次，避免打穿 route maxDuration。
-  // 註：mid-scrape abort 受 Apify run timeout 約束，故在「啟動前」判斷剩餘 budget 是最務實的保護點。
+  // 時間預算守門（爬取前）：scrape 是本流程最慢的外部呼叫（同步 run-sync 受自身上限約束）。
+  // 剩餘預算不足以安全跑完一輪 scrape 就略過、留待下次，避免打穿 route maxDuration。
   const SCRAPE_BUDGET_MS = 15000;
   if (opts.deadline && opts.deadline - Date.now() < SCRAPE_BUDGET_MS) {
-    result.notes.push("時間預算不足，這輪略過此來源的爬取（下次再抓）");
-    return result;
+    return { ...emptyResult(source), notes: ["時間預算不足，這輪略過此來源的爬取（下次再抓）"] };
   }
+  const apify = await getApifyCredentials(ownerId);
   // 來源兩種模式：有 search_query → 關鍵字搜尋；否則監看 source_username 帳號。
   // 兩者都填＝在該帳號內搜尋關鍵字（同時帶 searchQuery 與 from）。
   // 日期區間：批次逐月時由 opts 覆寫（每月不同區間），否則沿用來源儲存的日期。
@@ -109,7 +82,52 @@ export async function runSourcePipeline(
         apify
       )
     : await scrapeLatestPosts({ username: source.source_username, after, before }, source.posts_limit, apify);
+  // 抓到後立即處理入庫。與非同步路徑（Apify run 完成後抓 dataset）共用 processScrapedPosts。
+  return processScrapedPosts(source, posts, ownerId, opts);
+}
+
+// 入庫只需來源的這幾個欄位（id 用於去重/標記、search_query/username 用於標籤與 subId 範本）。
+// 非同步路徑用快照重建即可，不必整個 Source。
+export type ScrapeTarget = Pick<Source, "id" | "search_query" | "source_username">;
+
+// 空結果骨架（時間預算不足等早退、或處理前初始化）。
+function emptyResult(source: ScrapeTarget): PipelineResult {
+  return {
+    sourceId: source.id,
+    sourceUsername: source.source_username || (source.search_query ? source.search_query : ""),
+    keyword: source.search_query ?? "",
+    scanned: 0,
+    created: 0,
+    pending: 0,
+    skipped: 0,
+    reusedMaterial: 0,
+    materials: [],
+    notes: []
+  };
+}
+
+// 把抓到的貼文處理成素材（去重→抓蝦皮連結→還原→查素材庫→建/更新待審素材）。
+// 同步（run-sync）與非同步（Apify run 完成後抓 dataset）兩路徑共用＝單一入庫邏輯，避免行為漂移。
+export async function processScrapedPosts(
+  source: ScrapeTarget,
+  posts: ScrapedPost[],
+  ownerId: string,
+  // force=true：忽略「已抓過去重」與「已有有效素材」兩道略過，強制重新處理本來源貼文。
+  opts: { deadline?: number; force?: boolean } = {}
+): Promise<PipelineResult> {
+  const result = emptyResult(source);
   result.scanned = posts.length;
+  if (posts.length === 0) return result; // 無新貼文：免做 7 次憑證/設定讀取與一次 DB 查詢
+  // 子系統憑證一次解析（一律自綁）：Shopee（分潤）、Gemini（AI）、圖床、Sub id 範本。整迴圈重用。
+  const shopeeCreds = await ownerShopeeCreds(ownerId);
+  const geminiKey = await getGeminiKey(ownerId);
+  const geminiModel = await resolveGeminiModel(ownerId);
+  const copyPrefs = await getCopyPrefs(ownerId);
+  // 選填設定讀取失敗降級 null 繼續跑（不讓暫時性 DB 錯誤中止整條流程）。
+  const customSubId = await getShopeeSubId(ownerId).catch(() => null);
+  const affiliateId = shopeeCreds ? null : await getShopeeAffiliateId(ownerId);
+  const mediaProvider = await getMediaProvider(ownerId);
+
   // 一次預載本來源已處理的貼文 id（取代逐篇 isPostProcessed 查詢，消除 N+1）
   const processedIds = await listProcessedPostIds(
     source.id,

@@ -4,6 +4,7 @@ import { isDemoMode } from "@/lib/env";
 import { getApifyUsage } from "@/services/apify/usage";
 import ScrapeConfigForm from "@/components/ScrapeConfigForm";
 import RunPipelineButton from "@/components/RunPipelineButton";
+import ScrapeRunsPanel from "@/components/ScrapeRunsPanel";
 import BatchMonthScrape from "@/components/BatchMonthScrape";
 
 export const dynamic = "force-dynamic";
@@ -73,10 +74,12 @@ export default async function SourcesPage() {
 
       <ScrapeConfigForm initial={config} />
 
+      <ScrapeRunsPanel />
+
       <div className="rounded-2xl border bg-surface p-4">
-        <div className="mb-1 font-medium">立即抓取</div>
+        <div className="mb-1 font-medium">快速抓取（同步，≤5 分鐘）</div>
         <p className="mb-2 text-xs text-ink-3">
-          用你自己的 Apify 金鑰跑一次上面所有關鍵字（費用算你帳上）；抓到的素材會進待審，到「素材」頁核准。
+          少量、想立刻拿到結果時用：跑完才回，受 5 分鐘上限。量大或要看進度請用上方「背景抓取」。
         </p>
         <RunPipelineButton />
       </div>

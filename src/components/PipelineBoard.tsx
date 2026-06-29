@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   DndContext,
-  PointerSensor,
+  MouseSensor,
   TouchSensor,
   useSensor,
   useSensors,
@@ -136,13 +136,26 @@ export default function PipelineBoard({
   const [err, setErr] = useState<string | null>(null);
 
   // 滑鼠需移動 8px 才算拖曳（否則點按鈕/編輯不會誤觸）；觸控長按 200ms 啟動（手機可拖）。
+  // MouseSensor（滑鼠）與 TouchSensor（觸控）分流：避免單一 PointerSensor 在手機上搶走捲動手勢。
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } })
   );
 
-  // 後端帶回新資料即清除樂觀覆寫，避免殘留蓋掉真實狀態。
-  useEffect(() => setOverrides({}), [drafts]);
+  // 後端帶回新資料時，只清除「實際狀態已與樂觀狀態一致」的覆寫，保留其他仍進行中的拖放，避免閃爍/彈回。
+  useEffect(() => {
+    setOverrides((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const d of drafts) {
+        if (next[d.id] === d.status) {
+          delete next[d.id];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [drafts]);
 
   const effStatus = (d: Draft): DraftStatus => overrides[d.id] ?? d.status;
   const groups = useMemo(() => {

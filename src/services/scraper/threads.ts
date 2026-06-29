@@ -238,8 +238,9 @@ export async function scrapeLatestPosts(
   // - maxItems：限制計費／回傳筆數，與 input 的 maxPosts 對齊當雙重保險。
   // 逾時地板：指定帳號（profile/posts 模式）較慢——光載入個人頁就常花 30s+，60s 容易在抓到貼文前就逾時
   // 而空手而回 → 帳號模式地板拉到 120s；關鍵字搜尋維持 60s 快回。仍隨 maxPosts 放大、夾在端點 290s 上限內。
-  const timeoutFloor = spec.username?.trim() ? 120 : 60;
-  const RUN_TIMEOUT_SEC = Math.min(290, Math.max(timeoutFloor, Math.ceil(body.maxPosts * 0.3)));
+  // 直接看已正規化的 body（與實際送出 payload 同步）：新 actor mode:posts、或舊 actor 帶 from＝帳號模式。
+  const profileMode = ("mode" in body && body.mode === "posts") || ("from" in body && Boolean(body.from));
+  const RUN_TIMEOUT_SEC = Math.min(290, Math.max(profileMode ? 120 : 60, Math.ceil(body.maxPosts * 0.3)));
   const params = new URLSearchParams({
     token,
     timeout: String(RUN_TIMEOUT_SEC),

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Material, DraftMedia } from "@/lib/types";
+import type { Material, DraftMedia, ThreadsAccount } from "@/lib/types";
 import { cloudinaryThumb } from "@/lib/img";
 import { normalizeDraftMedia } from "@/lib/media";
 
@@ -46,11 +46,13 @@ function MediaThumb({ m }: { m: DraftMedia }) {
 function PendingMaterialCard({
   m,
   busy,
+  canSchedule,
   onAct
 }: {
   m: Material;
   busy: boolean;
-  onAct: (id: string, kind: "approve" | "discard") => void;
+  canSchedule: boolean;
+  onAct: (id: string, kind: "approve" | "discard" | "approveSchedule") => void;
 }) {
   const [media, setMedia] = useState<DraftMedia[]>(() => normalizeDraftMedia(m).map((x) => ({ ...x, slot: x.slot ?? "main" })));
   const [slotErr, setSlotErr] = useState<string | null>(null);
@@ -127,11 +129,22 @@ function PendingMaterialCard({
           type="button"
           onClick={() => onAct(m.id, "approve")}
           disabled={busy || saving}
-          title={saving ? "媒體用途儲存中…" : undefined}
+          title={saving ? "媒體用途儲存中…" : "只入庫，之後再到素材庫排程"}
           className="rounded-xl bg-brand px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
         >
           {busy ? "處理中…" : "✅ 入庫"}
         </button>
+        {canSchedule && (
+          <button
+            type="button"
+            onClick={() => onAct(m.id, "approveSchedule")}
+            disabled={busy || saving}
+            title="入庫並直接排進下一個空時段（省去再到素材庫排一篇）"
+            className="rounded-xl border border-brand/50 px-3 py-1.5 text-sm font-medium text-brand hover:bg-orange-50 disabled:opacity-50"
+          >
+            {busy ? "處理中…" : "✅ 核准並排程"}
+          </button>
+        )}
         <button
           type="button"
           onClick={() => onAct(m.id, "discard")}
@@ -147,25 +160,48 @@ function PendingMaterialCard({
 
 // 爬蟲產出的「待審素材」逐筆審核：預覽全部媒體＋標記用途，再 ✅ 入庫（核准）或 ❌ 丟棄（刪除）。
 // 入庫 → POST /api/materials/[id]/intake；丟棄 → DELETE /api/materials/[id]；媒體用途 → PATCH /api/materials/[id]。
-export default function PendingMaterialsReview({ items }: { items: Material[] }) {
+export default function PendingMaterialsReview({ items, accounts = [] }: { items: Material[]; accounts?: ThreadsAccount[] }) {
   const router = useRouter();
   // 用 Set 追蹤每筆獨立的處理中狀態：避免快速連點多筆時，單一 busyId 互相覆蓋造成按鈕提早解禁（race）。
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
   // 成功處理過的 id：在 router.refresh() 帶回新資料前先本地隱藏，避免舊卡片仍可點而對同一筆重複送出。
   const [doneIds, setDoneIds] = useState<Set<string>>(new Set());
   const [err, setErr] = useState<string | null>(null);
+  const [accId, setAccId] = useState(accounts[0]?.id ?? "");
+  const canSchedule = accounts.length > 0;
 
-  async function act(id: string, kind: "approve" | "discard") {
+  async function act(id: string, kind: "approve" | "discard" | "approveSchedule") {
     setBusyIds((prev) => new Set(prev).add(id));
     setErr(null);
     try {
-      const res =
-        kind === "approve"
-          ? await fetch(`/api/materials/${id}/intake`, { method: "POST" })
-          : await fetch(`/api/materials/${id}`, { method: "DELETE" });
-      const json = await res.json().catch(() => null);
-      if (!res.ok || !json?.ok) {
-        throw new Error(typeof json?.error === "string" && json.error ? json.error : `操作失敗（HTTP ${res.status}）`);
+      if (kind === "discard") {
+        const res = await fetch(`/api/materials/${id}`, { method: "DELETE" });
+        const json = await res.json().catch(() => null);
+        if (!res.ok || !json?.ok) throw new Error(typeof json?.error === "string" && json.error ? json.error : `操作失敗（HTTP ${res.status}）`);
+      } else {
+        // 入庫（核准）
+        const res = await fetch(`/api/materials/${id}/intake`, { method: "POST" });
+        const json = await res.json().catch(() => null);
+        if (!res.ok || !json?.ok) throw new Error(typeof json?.error === "string" && json.error ? json.error : `入庫失敗（HTTP ${res.status}）`);
+        // 核准並排程：入庫後直接排進下一個空時段（省去再到素材庫「再排一篇」）。
+        // 入庫已成功（DB 已是 approved），故排程失敗也要把此筆標記完成＋刷新，避免重複入庫；
+        // 失敗訊息照樣拋出提示使用者（素材已在庫，可到素材庫手動排程）。
+        if (kind === "approveSchedule") {
+          try {
+            if (!accId) throw new Error("沒有可用的發文帳號");
+            const r2 = await fetch("/api/materials/repost", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ material_id: id, threads_account_id: accId, action: "queue" })
+            });
+            const j2 = await r2.json().catch(() => null);
+            if (!r2.ok || !j2?.ok) throw new Error(typeof j2?.error === "string" && j2.error ? j2.error : `已入庫，但排程失敗（HTTP ${r2.status}）；可到素材庫手動排程`);
+          } catch (scheduleErr) {
+            setDoneIds((prev) => new Set(prev).add(id));
+            router.refresh();
+            throw scheduleErr;
+          }
+        }
       }
       setDoneIds((prev) => new Set(prev).add(id)); // 成功 → 立即隱藏該筆，刷新前不可再操作
       router.refresh();
@@ -190,11 +226,21 @@ export default function PendingMaterialsReview({ items }: { items: Material[] })
         <span className="rounded-full bg-amber-200 px-2 py-0.5 text-xs text-amber-800">{visible.length}</span>
       </div>
       <p className="text-sm text-ink-2">
-        爬蟲抓到的素材（已換好你的分潤連結＋AI 文案）。先看一下媒體、標好每張要放主文還是留言，逐筆確認後才會入庫，入庫的才能排程發文。
+        爬蟲抓到的素材（已換好你的分潤連結）。先看一下媒體、標好每張要放主文還是留言，逐筆確認後才會入庫，入庫的才能排程發文。
       </p>
+      {accounts.length > 1 && (
+        <label className="flex items-center gap-2 text-xs text-ink-2">
+          排程到帳號：
+          <select className="rounded border px-2 py-1 text-xs" value={accId} onChange={(e) => setAccId(e.target.value)}>
+            {accounts.map((a) => (
+              <option key={a.id} value={a.id}>{a.label}</option>
+            ))}
+          </select>
+        </label>
+      )}
       <div className="space-y-3">
         {visible.map((m) => (
-          <PendingMaterialCard key={m.id} m={m} busy={busyIds.has(m.id)} onAct={act} />
+          <PendingMaterialCard key={m.id} m={m} busy={busyIds.has(m.id)} canSchedule={canSchedule} onAct={act} />
         ))}
       </div>
       {err && <p className="text-xs text-danger" role="alert">{err}</p>}

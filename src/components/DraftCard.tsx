@@ -141,13 +141,14 @@ function DraftCard({
       });
       const json = await res.json();
       if (!json.ok) throw new Error(json.error);
-      if ((action === "regenerate" || action === "edit") && json.draft) {
+      if ((action === "regenerate" || action === "edit" || action === "refresh-link") && json.draft) {
         setMainText(json.draft.main_text ?? "");
         setReplyText(json.draft.reply_text ?? "");
         setShopeeLink(json.draft.shopee_short_link ?? "");
         setMediaSlots(slotsFromDraft(json.draft));
       }
       if (action === "edit") setEditing(false);
+      if (action === "refresh-link") setMsg("已更新分潤連結（文內舊連結也一併換新）");
       if (action === "shorten") {
         const skipped = typeof json.skipped === "number" ? json.skipped : 0;
         setMsg(`已轉換 ${json.shortened} 個連結${skipped > 0 ? `（另有 ${skipped} 個超過上限未處理）` : ""}`);
@@ -458,6 +459,16 @@ function DraftCard({
           >
             {busy === "shorten" ? "轉換中…" : "套用短連結"}
           </button>
+          {draft.clean_product_url && (
+            <button
+              disabled={!!busy}
+              onClick={() => call("refresh-link")}
+              className="rounded border px-3 py-1 text-xs hover:bg-surface-2 disabled:opacity-50"
+              title="用目前的 Shopee 金鑰與 Sub id 設定重產分潤連結，並把文內舊連結換成新的"
+            >
+              {busy === "refresh-link" ? "刷新中…" : "🔄 刷新分潤連結"}
+            </button>
+          )}
           <button
             disabled={!!busy}
             onClick={() => call("regenerate")}

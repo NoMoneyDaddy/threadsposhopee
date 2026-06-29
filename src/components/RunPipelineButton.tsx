@@ -27,6 +27,7 @@ export default function RunPipelineButton() {
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<SourceResult[] | null>(null);
+  const [force, setForce] = useState(false);
 
   async function run() {
     setBusy(true);
@@ -37,7 +38,11 @@ export default function RunPipelineButton() {
     // 不用等整批跑完（≈ 實時更新）。完成後於 finally 清掉計時器並做最後一次刷新。
     const tick = setInterval(() => router.refresh(), 4000);
     try {
-      const res = await fetch("/api/pipeline/run", { method: "POST" });
+      const res = await fetch("/api/pipeline/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ force })
+      });
       const json = await res.json().catch(() => null);
       if (!res.ok || !json?.ok) {
         throw new Error(typeof json?.error === "string" && json.error ? json.error : `抓取失敗（HTTP ${res.status}）`);
@@ -64,6 +69,10 @@ export default function RunPipelineButton() {
         <button onClick={run} disabled={busy} className="btn btn-brand">
           {busy ? "抓取中…" : "立即抓取"}
         </button>
+        <label className="flex items-center gap-1 text-sm text-ink-2" title="忽略「已抓過」與「已有素材」，把來源貼文整批重抓一次（改設定／換 actor 後用）">
+          <input type="checkbox" checked={force} onChange={(e) => setForce(e.target.checked)} disabled={busy} />
+          強制重抓（忽略已抓過）
+        </label>
         {msg && <span className="text-sm text-ink-2" role="status" aria-live="polite">{busy ? msg : `✅ ${msg}`}</span>}
         {error && <span className="text-sm text-rose-600" role="alert">❌ {error}</span>}
       </div>

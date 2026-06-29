@@ -38,6 +38,7 @@ export {
   listPendingMaterials,
   approveMaterialIntake,
   updateMaterialMedia,
+  updateMaterialContent,
   createMaterial,
   saveDraftToMaterial,
   deleteMaterial,

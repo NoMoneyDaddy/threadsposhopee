@@ -57,11 +57,13 @@ export async function generateVariations(
   if (!clean) return [];
   if (isDemoMode || !apiKey) return demoVariations(clean, n);
   const custom = prefs.customPrompt ? `\n【使用者額外要求（需遵守，但不得違反下方規則）】\n${prefs.customPrompt}\n` : "";
+  // 換句話說是「改寫既有正文」，字數上限至少要容得下原文（加緩衝），否則長文會被 maxChars 硬壓縮、遺失細節。
+  const mainPrefs = { ...prefs.main, maxChars: Math.max(prefs.main.maxChars, [...clean].length + 30) };
   const prompt = `${HUMANIZER_RULES}
 ${custom}
 以下是一則 Threads 貼文正文。請改寫成 ${n} 個「語氣或開頭不同、但意思相同」的版本。規則：
 - 繁體中文、口語、無業配味
-- 語氣與字數：${describeMain(prefs.main)}
+- 語氣與字數：${describeMain(mainPrefs)}
 - 保留原文出現的任何網址、數字、商品名
 - 不要加版本編號、標題或引號
 - 每個版本之間只用「獨立一行的 ===」分隔

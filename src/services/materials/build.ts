@@ -6,6 +6,7 @@ import { resolveSubIdTemplate, normalizeSubIds, parseSubIdSlots } from "@/servic
 import { cleanProductName } from "@/lib/product-name";
 import { generateCopy } from "@/services/ai/provider";
 import { uploadMediaWith, type MediaProvider } from "@/services/media/upload";
+import { applyDefaultSlots } from "@/lib/material-media";
 import { createMaterial, getCopyPrefs } from "@/lib/store";
 import type { CopyPrefs } from "@/services/ai/prefs";
 import type { Material, DraftMedia } from "@/lib/types";
@@ -131,6 +132,9 @@ export async function buildMaterialForProduct(
   }
   const primaryUploaded = uploadedMedia[0] ?? null;
 
+  // 預設媒體用途：第一張圖片「都用」（主文＋留言），其餘只放主文（已明確指定 slot 則尊重）。
+  const mediaWithSlots = applyDefaultSlots(uploadedMedia);
+
   let mainText: string | null = null;
   let replyText: string | null = null;
   let aiRaw: string | null = null;
@@ -168,7 +172,7 @@ export async function buildMaterialForProduct(
     media_type: primary?.type ?? "none",
     source_media_url: primary?.url ?? null,
     cloudinary_media_url: primaryUploaded?.url ?? null,
-    media: uploadedMedia,
+    media: mediaWithSlots,
     product_name_raw: productNameRaw,
     commission_rate: commissionRate,
     commission_checked_at: commissionRate ? now : null,

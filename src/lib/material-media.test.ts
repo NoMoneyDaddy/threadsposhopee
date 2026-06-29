@@ -1,6 +1,41 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { splitMaterialMedia, mergeToMaterialMedia, sanitizeMaterialMedia, sanitizeThreadSegments } from "./material-media";
+import { splitMaterialMedia, mergeToMaterialMedia, sanitizeMaterialMedia, sanitizeThreadSegments, applyDefaultSlots } from "./material-media";
+
+test("applyDefaultSlots：第一張圖預設 both、其餘 main", () => {
+  const out = applyDefaultSlots([
+    { url: "a", type: "image" },
+    { url: "b", type: "image" },
+    { url: "c", type: "video" }
+  ]);
+  assert.deepEqual(out, [
+    { url: "a", type: "image", slot: "both" },
+    { url: "b", type: "image", slot: "main" },
+    { url: "c", type: "video", slot: "main" }
+  ]);
+});
+
+test("applyDefaultSlots：第一個是影片時，第一張圖才標 both", () => {
+  const out = applyDefaultSlots([
+    { url: "v", type: "video" },
+    { url: "i", type: "image" }
+  ]);
+  assert.equal(out[0].slot, "main");
+  assert.equal(out[1].slot, "both");
+});
+
+test("applyDefaultSlots：已明確指定 slot 則原樣不覆寫", () => {
+  const input = [
+    { url: "a", type: "image" as const, slot: "reply" as const },
+    { url: "b", type: "image" as const }
+  ];
+  assert.equal(applyDefaultSlots(input), input);
+});
+
+test("applyDefaultSlots：無圖片（純影片）→ 全部 main", () => {
+  const out = applyDefaultSlots([{ url: "v", type: "video" }]);
+  assert.equal(out[0].slot, "main");
+});
 
 test("sanitizeThreadSegments：取 text＋media(去 slot)、丟空段、最多 10 段", () => {
   const r = sanitizeThreadSegments([

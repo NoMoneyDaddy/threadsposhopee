@@ -145,13 +145,27 @@ async function buildCreation(
 
 async function publishContainer(userId: string, token: string, creationId: string): Promise<string> {
   const params = new URLSearchParams({ access_token: token, creation_id: creationId });
-  const res = await fetchThreadsPost(`${GRAPH}/${userId}/threads_publish`, { method: "POST", body: params });
-  if (!res.ok) throw new Error(`發布失敗 ${res.status}: ${await res.text()}`);
-  // 2xx 但回應缺 id：貼文「可能已發出」卻拿不到 id → 視為不確定（呼叫端標 needs_verification），
-  // 不可當成功（會謊報 published 且無 postId 可補留言/去重），也不可當 failed（會被重發雙貼）。
-  const id = (await res.json().catch(() => null))?.id;
-  if (!id) throw new Error("發布回應缺少貼文 id（可能已發出）");
-  return id;
+  // Threads 容器建立後偶有「最終一致性」延遲：剛建好就 publish，可能回 code 24 / subcode 4279009
+  // 「資源不存在（媒體找不到）」。此錯誤代表容器尚未就緒、貼文「必定還沒發出」→ 短退避重試是安全的
+  // （不會造成雙貼）。純文字/留言容器無 status 可輪詢（needWait=false），故在此用重試補上就緒等待。
+  let lastErr = "發布失敗";
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const res = await fetchThreadsPost(`${GRAPH}/${userId}/threads_publish`, { method: "POST", body: params });
+    if (res.ok) {
+      // 2xx 但回應缺 id：貼文「可能已發出」卻拿不到 id → 視為不確定（呼叫端標 needs_verification），
+      // 不可當成功（會謊報 published 且無 postId 可補留言/去重），也不可當 failed（會被重發雙貼）。
+      const id = (await res.json().catch(() => null))?.id;
+      if (!id) throw new Error("發布回應缺少貼文 id（可能已發出）");
+      return id;
+    }
+    const body = await res.text();
+    lastErr = `發布失敗 ${res.status}: ${body}`;
+    // 僅在「容器尚未就緒/找不到」才重試（必定未發出 → 安全）；其他錯誤立即拋出。
+    const notReady = res.status === 400 && /"code":\s*24|4279009|does not exist/i.test(body);
+    if (!notReady || attempt === 3) throw new Error(lastErr);
+    await new Promise((r) => setTimeout(r, 3000)); // 等容器就緒再重試
+  }
+  throw new Error(lastErr);
 }
 
 // 在指定主貼文下發一則留言（串文 2/2，放分潤連結＋可選媒體），回傳留言貼文 id。

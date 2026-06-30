@@ -258,6 +258,8 @@ export default function LiveDashboard() {
 
   const load = useCallback(async () => {
     if (loadingRef.current) return; // 同時間只允許一個請求，避免重複並行
+    // 分頁切到背景時不輪詢：省下每 30s 的 /api/dashboard（多查詢＋外部 API）負載；回到前景再補抓。
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
     loadingRef.current = true;
     setLoading(true);
     try {
@@ -277,7 +279,15 @@ export default function LiveDashboard() {
   useEffect(() => {
     load();
     const t = setInterval(load, REFRESH_MS);
-    return () => clearInterval(t);
+    // 回到前景立即補抓一次（不必等下一個 30s 週期），讓久置後切回時資料即時刷新。
+    const onVisible = () => {
+      if (document.visibilityState === "visible") load();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [load]);
 
   if (!data && !err) return <div className="text-sm text-ink-3">載入中…</div>;

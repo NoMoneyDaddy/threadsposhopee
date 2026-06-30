@@ -54,43 +54,38 @@ export async function GET() {
     ai_provider: env.aiProvider
   };
 
-  const stats = await getDashboardStats(ownerId);
-
-  // Threads 額度查每個登入者自己的帳號；Cloudinary 用量吃使用者自綁的完整金鑰（沒綁回 null）。
-  let threadsQuota: { label: string; used: number; limit: number }[] = [];
-  let cloudinary = null;
-  {
-    const [creds, usage] = await Promise.all([
-      listActiveThreadsCredentials(ownerId).catch(() => []),
-      getCloudinaryUsage(cloudFull).catch(() => null)
-    ]);
-    cloudinary = usage;
-    threadsQuota = (
-      await Promise.all(
-        creds.map(async (c) => {
-          const lim = await getPublishingLimit(c.threadsUserId, c.accessToken);
-          return lim ? { label: c.label, used: lim.used, limit: lim.limit } : null;
-        })
-      )
-    ).filter((x): x is { label: string; used: number; limit: number } => x !== null);
-  }
-
-  const lastCronAt = await getHeartbeat().catch(() => null);
-  const publishPaused = await isPublishPaused().catch(() => false);
-
-  // 帳號健康分：每個 Threads 帳號的狀態＋token 到期彙整成單一等級（問題優先排序）。
-  const accountsHealth: AccountHealth[] = sortByHealth(
-    (await listThreadsAccounts(ownerId).catch(() => [])).map((a) => accountHealth(a))
-  );
-
-  // 發文進度/ETA：排隊中的草稿預計何時發（含塞車提示）。取前 20 筆即可。
-  // 失敗不擋整個儀表板，但記 log 以利診斷（不靜默吞）。
-  const publishPlan = (
-    await getPublishPlan(ownerId).catch((e) => {
+  // 以下各查詢彼此獨立、都只吃 ownerId（或已備好的 cloudFull），一次併發避免逐一往返累加延遲
+  // （此端點每 30s 被輪詢一次，序列化延遲會被重複付出）。各自 catch 降級不擋整個儀表板；
+  // getDashboardStats 維持原行為（不 catch，失敗即整體 500）。
+  const [stats, creds, cloudinary, lastCronAt, publishPaused, accountsRaw, publishPlanRaw] = await Promise.all([
+    getDashboardStats(ownerId),
+    listActiveThreadsCredentials(ownerId).catch(() => []),
+    getCloudinaryUsage(cloudFull).catch(() => null),
+    getHeartbeat().catch(() => null),
+    isPublishPaused().catch(() => false),
+    listThreadsAccounts(ownerId).catch(() => []),
+    getPublishPlan(ownerId).catch((e) => {
+      // 失敗不擋整個儀表板，但記 log 以利診斷（不靜默吞）。
       log.error("getPublishPlan 失敗", { ownerId, err: e });
       return [];
     })
-  ).slice(0, 20);
+  ]);
+
+  // Threads 額度查每個登入者自己的帳號（依 creds 的第二波 fan-out）。
+  const threadsQuota = (
+    await Promise.all(
+      creds.map(async (c) => {
+        const lim = await getPublishingLimit(c.threadsUserId, c.accessToken);
+        return lim ? { label: c.label, used: lim.used, limit: lim.limit } : null;
+      })
+    )
+  ).filter((x): x is { label: string; used: number; limit: number } => x !== null);
+
+  // 帳號健康分：每個 Threads 帳號的狀態＋token 到期彙整成單一等級（問題優先排序）。
+  const accountsHealth: AccountHealth[] = sortByHealth(accountsRaw.map((a) => accountHealth(a)));
+
+  // 發文進度/ETA：排隊中的草稿預計何時發（含塞車提示）。取前 20 筆即可。
+  const publishPlan = publishPlanRaw.slice(0, 20);
 
   // 金鑰自綁狀態（提示用）。一律看每人自綁，不再用 env 後備：
   // - Apify（爬蟲）只有 owner 需要；member 不適用 → 視為 OK 不嘮叨。

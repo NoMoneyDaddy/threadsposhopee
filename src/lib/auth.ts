@@ -1,4 +1,11 @@
+import * as React from "react";
 import { cookies } from "next/headers";
+
+// React 的「每請求」去重 cache 只在 Next server 端的 react-server build 提供；
+// 純 Node（單元測試以 tsx 載入的 react）沒有 cache → 退回 identity（不去重，行為仍正確）。
+// 簽名保留各呼叫端的參數與回傳型別（未來帶參數的函式也能共用此去重），不用 any。
+const cache: <A extends unknown[], R>(fn: (...args: A) => R) => (...args: A) => R =
+  (React.cache as typeof cache | undefined) ?? ((fn) => fn);
 import { getSessionClient } from "@/lib/supabase/clients";
 import { log } from "@/lib/logger";
 import { getServiceClient } from "@/lib/supabase/server";
@@ -46,7 +53,9 @@ export async function getRealUser(): Promise<AppUser | null> {
 // 取得目前作用中的使用者（未登入回 null）。Demo 模式視為 owner（本機開發）。
 // 管理者若設了 view-as cookie，會以「該成員身分」回傳（id/email 換成成員的），
 // 使資料層（皆以 user.id 當 owner_id 過濾）自動切到該成員視角（唯讀由 middleware 把關寫入）。
-export async function getCurrentUser(): Promise<AppUser | null> {
+// 用 React cache 做「每請求」去重：layout 與 page 同一次 render 各呼叫一次，
+// 否則 sb.auth.getUser()（Supabase Auth 網路往返）會被打兩次。cache 僅在單次 request 內有效。
+export const getCurrentUser = cache(async function getCurrentUser(): Promise<AppUser | null> {
   const real = await getRealUser();
   if (!real) return null;
   // 非平台管理者：一律忽略 view-as cookie（防偽造 cookie 越權看他人資料）。
@@ -71,7 +80,7 @@ export async function getCurrentUser(): Promise<AppUser | null> {
     log.error("getCurrentUser view-as 解析失敗", { err: err instanceof Error ? err.message : String(err) });
     return real;
   }
-}
+});
 
 // 列出所有平台使用者（管理者「切換成員視角」下拉用）。僅供 owner-only 路由呼叫。
 export async function listAllUsers(): Promise<{ id: string; email: string | null }[]> {

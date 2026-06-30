@@ -58,6 +58,15 @@ export function stripLeadingPreamble(text: string): string {
 // 留言內的網址 token：只吃合法 URL 字元（不含中文、空白、括號），避免把網址後面緊貼的中文一起吞掉。
 const URL_TOKEN_RE = /https?:\/\/[A-Za-z0-9\-._~:/?#@!$&'*+,;=%]+/g;
 
+// 移除 AI 自產的網址與 [連結]/(URL) 佔位符。分潤連結一律由程式原樣附上，段落內不該留任何網址，
+// 否則會出現「AI 放的原始商品頁 + 程式附的分潤連結」兩條連結。純函式。
+function stripAiUrls(text: string): string {
+  return text
+    .replace(URL_TOKEN_RE, "")
+    .replace(/[[(（【]\s*(連結|網址|連接|link|url)\s*[)）\]】]/gi, "")
+    .replace(/[ \t]+$/gm, "");
+}
+
 // 確保留言含「原樣」分潤連結，且不含被 AI 竄改的網址或佔位符。純函式可測。
 // 精準比對（非子字串）：reply 內「有且只有」與原連結完全相等的網址才算正確，
 // 避免 link?x=1／link4／link/ 等被加料的網址用 includes() 矇混過關。
@@ -67,10 +76,7 @@ export function ensureExactLink(reply: string, link: string): string {
   if (!link) return reply;
   const urls = reply.match(URL_TOKEN_RE) ?? [];
   if (urls.length > 0 && urls.every((u) => u === link)) return reply;
-  const cleaned = reply
-    .replace(URL_TOKEN_RE, "") // 移除 AI 自己生的網址（可能被竄改，不可信）
-    .replace(/[[(（【]\s*(連結|網址|連接|link|url)\s*[)）\]】]/gi, "") // 移除佔位符 [連結]/(URL) 等
-    .replace(/[ \t]+$/gm, "");
+  const cleaned = stripAiUrls(reply); // 移除 AI 自產網址（可能被竄改）與 [連結]/(URL) 佔位符
   const lines = cleaned.split("\n");
   const idx = lines.findIndex((l) => l.trim() !== "");
   if (idx === -1) return link; // 沒有任何引導語 → 至少回連結（上游另有防裸連結降級）
@@ -151,7 +157,8 @@ export function parseThreadSegments(raw: string, n: number): string[] {
 // 規則：第 1 段＝主文、第 2 段＝留言(2/n)、其餘＝3/n+；linkLine（含連結的整行）接到最後一段。
 // 至少保證有「留言」一段可放連結（AI 只回 1 段時補一個空留言段）。
 export function assembleThread(texts: string[], linkLine: string): { mainText: string; replyText: string; extraSegments: ThreadSegment[] } {
-  const segs = texts.map((t) => t.trim()).filter(Boolean);
+  // 先清掉各段內 AI 自產的網址/佔位符（連結只由 linkLine 附上），避免 AI 放原始商品頁造成雙連結。
+  const segs = texts.map((t) => stripAiUrls(t).trim()).filter(Boolean);
   const mainText = segs[0] ?? "";
   const follows = segs.slice(1);
   if (follows.length === 0) follows.push(""); // 確保有一段留言可放連結

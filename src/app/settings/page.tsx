@@ -53,9 +53,13 @@ export default async function SettingsPage() {
 
       {notifyPrefs && <NotifyPrefsForm initial={notifyPrefs} />}
 
-      {publishPrefs && <PublishPrefsForm initial={publishPrefs} />}
-
-      {repostLimits && <RepostLimitsForm initial={repostLimits} />}
+      {(publishPrefs || repostLimits) && (
+        <section className="space-y-4">
+          <h2 className="text-sm font-semibold text-ink-2">發文策略（節奏與重發上限）</h2>
+          {publishPrefs && <PublishPrefsForm initial={publishPrefs} />}
+          {repostLimits && <RepostLimitsForm initial={repostLimits} />}
+        </section>
+      )}
 
       <CopyPrefsForm initial={copyPrefs} />
 

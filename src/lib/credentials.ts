@@ -392,6 +392,42 @@ export function normalizeBioHandle(input: string | null | undefined): string | n
   return /^[a-z0-9_-]{3,30}$/.test(h) ? h : null;
 }
 
+// ── 會員平台暱稱（display_name）：站內顯示用名稱（header／貢獻排行榜），可含中文與空白。
+// 與 bio_handle（公開 link-in-bio 代稱、僅英數）不同。
+// 正規化：移除控制字元、壓縮連續空白、去頭尾空白、依「字元（code point）」上限 24（避免切壞表情符號）；
+// 空字串視為清除（null）。
+export function normalizeDisplayName(input: string | null | undefined): string | null {
+  const cleaned = (input ?? "")
+    .replace(/[\u0000-\u001f\u007f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const sliced = Array.from(cleaned).slice(0, 24).join("");
+  return sliced.length > 0 ? sliced : null;
+}
+
+export async function getDisplayName(ownerId: string): Promise<string | null> {
+  if (isDemoMode) return null;
+  const sb = getServiceClient();
+  if (!sb) return null;
+  const { data, error } = await sb.from("profiles").select("display_name").eq("id", ownerId).maybeSingle();
+  if (error) {
+    // 不擋頁面：暱稱只是顯示用，讀取失敗（含欄位未遷移）記警告並退回 null（顯示 email）。
+    log.warn("讀取會員暱稱失敗", { ownerId, err: error.message });
+    return null;
+  }
+  return data?.display_name ?? null;
+}
+
+// 設定／清除暱稱（傳 null 或空字串＝清除）。寫入前一律過 normalizeDisplayName。
+export async function setDisplayName(ownerId: string, name: string | null): Promise<string | null> {
+  const clean = normalizeDisplayName(name);
+  if (isDemoMode) return clean;
+  const sb = getServiceClient()!;
+  const { error } = await sb.from("profiles").upsert({ id: ownerId, display_name: clean }, { onConflict: "id" });
+  if (error) throw new Error(`儲存暱稱失敗：${error.message}`);
+  return clean;
+}
+
 export async function getBioSettings(ownerId: string): Promise<{ handle: string | null; title: string | null }> {
   if (isDemoMode) return { handle: null, title: null };
   const sb = getServiceClient()!;
@@ -435,13 +471,15 @@ export async function getPublishPrefs(ownerId: string): Promise<PublishPrefs> {
   const fallback: PublishPrefs = {
     slots: env.publishSlots.length ? env.publishSlots : ["09:00", "12:30", "20:00"],
     minGapMinutes: env.publishMinGapMinutes,
-    maxPerDay: env.publishMaxPerDay
+    maxPerDay: env.publishMaxPerDay,
+    replyDelayMinMinutes: env.replyDelayFloorMinutes,
+    replyDelayJitterMinutes: env.replyDelayJitterMinutes
   };
   if (isDemoMode) return fallback;
   const sb = getServiceClient()!;
   const { data } = await sb
     .from("profiles")
-    .select("publish_slots, publish_min_gap_minutes, publish_max_per_day")
+    .select("publish_slots, publish_min_gap_minutes, publish_max_per_day, publish_reply_delay_min, publish_reply_delay_jitter")
     .eq("id", ownerId)
     .maybeSingle();
   if (!data) return fallback;
@@ -449,13 +487,16 @@ export async function getPublishPrefs(ownerId: string): Promise<PublishPrefs> {
   return {
     slots: slots.length ? slots : fallback.slots,
     minGapMinutes: data.publish_min_gap_minutes ?? fallback.minGapMinutes,
-    maxPerDay: data.publish_max_per_day ?? fallback.maxPerDay
+    maxPerDay: data.publish_max_per_day ?? fallback.maxPerDay,
+    // NULL＝沿用 env 預設；0＝顯式「立即/無抖動」（?? 正確保留 0）
+    replyDelayMinMinutes: data.publish_reply_delay_min ?? fallback.replyDelayMinMinutes,
+    replyDelayJitterMinutes: data.publish_reply_delay_jitter ?? fallback.replyDelayJitterMinutes
   };
 }
 
 export async function setPublishPrefs(
   ownerId: string,
-  prefs: { slots: string[]; minGapMinutes: number | null; maxPerDay: number | null }
+  prefs: { slots: string[]; minGapMinutes: number | null; maxPerDay: number | null; replyDelayMin: number | null; replyDelayJitter: number | null }
 ): Promise<void> {
   if (isDemoMode) return;
   const sb = getServiceClient()!;
@@ -464,7 +505,9 @@ export async function setPublishPrefs(
       id: ownerId,
       publish_slots: prefs.slots.length ? prefs.slots.join(",") : null,
       publish_min_gap_minutes: prefs.minGapMinutes,
-      publish_max_per_day: prefs.maxPerDay
+      publish_max_per_day: prefs.maxPerDay,
+      publish_reply_delay_min: prefs.replyDelayMin,
+      publish_reply_delay_jitter: prefs.replyDelayJitter
     },
     { onConflict: "id" }
   );
@@ -473,17 +516,18 @@ export async function setPublishPrefs(
 
 // ── 每位使用者「同素材重複發文上限」（0／NULL＝不限）──────
 export async function getRepostLimits(ownerId: string): Promise<RepostLimits> {
-  if (isDemoMode) return { perAccount: 0, total: 0 };
+  if (isDemoMode) return { perAccount: 0, total: 0, evergreenDays: 0 };
   const sb = getServiceClient()!;
   const { data, error } = await sb
     .from("profiles")
-    .select("repost_max_per_account, repost_max_total")
+    .select("repost_max_per_account, repost_max_total, evergreen_interval_days")
     .eq("id", ownerId)
     .maybeSingle();
   if (error) throw new Error(`讀取重發上限失敗：${error.message}`);
   return {
     perAccount: data?.repost_max_per_account ?? 0,
-    total: data?.repost_max_total ?? 0
+    total: data?.repost_max_total ?? 0,
+    evergreenDays: data?.evergreen_interval_days ?? 0
   };
 }
 
@@ -495,7 +539,9 @@ export async function setRepostLimits(ownerId: string, limits: RepostLimits): Pr
       id: ownerId,
       // 0 視為不限 → 存 NULL，語意一致
       repost_max_per_account: limits.perAccount > 0 ? limits.perAccount : null,
-      repost_max_total: limits.total > 0 ? limits.total : null
+      repost_max_total: limits.total > 0 ? limits.total : null,
+      // 0 視為「用系統預設」→ 存 NULL
+      evergreen_interval_days: limits.evergreenDays > 0 ? limits.evergreenDays : null
     },
     { onConflict: "id" }
   );

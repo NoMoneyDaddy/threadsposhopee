@@ -127,6 +127,27 @@ export async function clearAccountCircuit(accountId: string): Promise<void> {
   if (error) throw new Error(`解除斷路器失敗：${error.message}`);
 }
 
+// 原子「每週期只跑一次」守門（讓 /api/cron/all 任何頻率都安全：即使每分鐘跑，每日/週/月任務也只執行一次）。
+// stamp 須隨週期單調遞增（用 UTC 日期字串 YYYY-MM-DD；月任務當天 date=1，週任務當天 dow=1，皆每occurrence一次）。
+// CAS：UPDATE ... WHERE value < stamp 取列鎖，只有「本週期尚未跑過」才搶得到並寫入 stamp。
+// 回傳 true＝本次搶到（該執行）；false＝本週期已被其他輪次執行過（略過）。demo 模式永遠 true。
+export async function claimCronOnce(key: string, stamp: string): Promise<boolean> {
+  if (isDemoMode) return true;
+  const sb = getServiceClient()!;
+  const fullKey = `cron_once:${key}`;
+  const nowIso = new Date().toISOString();
+  // 先確保列存在（初值空字串 < 任何 stamp，可立即搶）；已存在則不覆蓋。
+  await sb.from("app_state").upsert({ key: fullKey, value: "", updated_at: nowIso }, { onConflict: "key", ignoreDuplicates: true });
+  const { data } = await sb
+    .from("app_state")
+    .update({ value: stamp, updated_at: nowIso })
+    .eq("key", fullKey)
+    .lt("value", stamp)
+    .select("key")
+    .maybeSingle();
+  return Boolean(data);
+}
+
 export async function getHeartbeat(): Promise<string | null> {
   if (isDemoMode) return demoHeartbeat;
   const sb = getServiceClient()!;

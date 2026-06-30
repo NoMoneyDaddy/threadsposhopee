@@ -49,7 +49,6 @@ export default async function InsightsPage({
     // Threads 貼文互動數據（每人自己的帳號；逐篇查 insights，失敗則優雅降級不擋頁）
     isDemoMode ? Promise.resolve(null) : getEngagementCached(user.id, 15).catch(() => null)
   ]);
-  const maxDay = Math.max(1, ...data.byDay.map((d) => d.count));
   const { revenue, revenueErr } = revResult;
 
   return (
@@ -121,27 +120,14 @@ export default async function InsightsPage({
       )}
 
       <section className="card p-5">
-        <h2 className="section-title mb-3">每日發布量</h2>
+        <h2 className="section-title mb-1">每日發布量</h2>
+        <p className="mb-3 text-xs text-ink-3">每天發出幾篇貼文（長條越高發越多）。</p>
         {data.byDay.length === 0 ? (
           <p className="text-sm text-ink-2">
             這段期間還沒有已發布的貼文。到「工作台」核准草稿或手動發文後，這裡就會出現每日發布量。
           </p>
         ) : (
-          <div className="flex items-end gap-1" style={{ height: 120 }}>
-            {data.byDay.map((d) => (
-              // 手機無 hover，故每根長條上方常駐顯示數字，並補 aria-label 供螢幕報讀者。
-              <div
-                key={d.date}
-                className="flex flex-1 flex-col items-center justify-end gap-1"
-                role="img"
-                aria-label={`${d.date}：${d.count} 篇`}
-              >
-                <span className="text-[10px] tabular-nums text-ink-2">{d.count}</span>
-                <div className="w-full rounded-t bg-brand" style={{ height: `${(d.count / maxDay) * 100}%` }} />
-                <span className="text-[10px] text-ink-3">{d.date}</span>
-              </div>
-            ))}
-          </div>
+          <DayBars rows={data.byDay.map((d) => ({ date: d.date, value: d.count }))} color="bg-brand" fmt={(v) => `${v} 篇`} />
         )}
       </section>
 
@@ -298,8 +284,48 @@ function money(n: number) {
   return `NT$ ${n.toLocaleString("zh-TW", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+// 每日趨勢迷你長條圖：細長條填滿寬度（min-w-0 flex-1 才能在窄螢幕收縮、不被日期標籤撐爆溢出），
+// 數值不逐根常駐（會擠爆＋溢出），改 hover title／aria-label；X 軸只標頭尾日期，一眼看出區間趨勢。
+function DayBars({ rows, color, fmt }: { rows: { date: string; value: number }[]; color: string; fmt: (v: number) => string }) {
+  if (rows.length === 0) return null;
+  const max = Math.max(1, ...rows.map((r) => r.value));
+  const first = rows[0].date;
+  const last = rows[rows.length - 1].date;
+  return (
+    <div>
+      <div className="flex items-end gap-px" style={{ height: 96 }}>
+        {rows.map((r) => (
+          <div
+            key={r.date}
+            className="min-w-0 flex-1"
+            role="img"
+            aria-label={`${r.date}：${fmt(r.value)}`}
+            title={`${r.date}：${fmt(r.value)}`}
+          >
+            <div className={`w-full rounded-t ${color}`} style={{ height: `${(r.value / max) * 100}%` }} />
+          </div>
+        ))}
+      </div>
+      <div className="mt-1 flex justify-between text-[10px] text-ink-3">
+        <span>{first}</span>
+        {last !== first && <span>{last}</span>}
+      </div>
+    </div>
+  );
+}
+
+// Shopee 分潤轉換狀態英文 → 繁中（未知狀態原樣顯示）。
+const REVENUE_STATUS_ZH: Record<string, string> = {
+  pending: "待結算",
+  completed: "已結算",
+  cancelled: "已取消",
+  canceled: "已取消"
+};
+function revenueStatusZh(s: string): string {
+  return REVENUE_STATUS_ZH[s.trim().toLowerCase()] ?? s;
+}
+
 function RevenueSection({ r }: { r: AffiliateRevenue }) {
-  const maxDay = Math.max(1, ...r.byDay.map((d) => d.commission));
   return (
     <div className="space-y-4">
       <section className="rounded-2xl border bg-surface p-5">
@@ -313,26 +339,15 @@ function RevenueSection({ r }: { r: AffiliateRevenue }) {
         </div>
         <div className="mt-3 flex flex-wrap gap-2 text-xs">
           {r.byStatus.map((s) => (
-            <span key={s.status} className="rounded-xl bg-surface-2 px-2 py-1 text-ink-2">
-              {s.status}：{s.count} 筆 / {money(s.commission)}
+            <span key={s.status} className="rounded-xl bg-surface-2 px-2 py-1 text-ink-2" title={s.status}>
+              {revenueStatusZh(s.status)}：{s.count} 筆 / {money(s.commission)}
             </span>
           ))}
         </div>
         {r.byDay.length > 0 && (
-          <div className="mt-4 flex items-end gap-1" style={{ height: 100 }}>
-            {r.byDay.map((d) => (
-              // 金額過長不適合每根都印，改用 aria-label 讓螢幕報讀者讀到（hover title 仍保留供桌機）。
-              <div
-                key={d.date}
-                className="flex flex-1 flex-col items-center justify-end gap-1"
-                title={`${d.date}：${money(d.commission)}`}
-                role="img"
-                aria-label={`${d.date}：${money(d.commission)}`}
-              >
-                <div className="w-full rounded-t bg-green-500" style={{ height: `${(d.commission / maxDay) * 100}%` }} />
-                <span className="text-[10px] text-ink-3">{d.date.slice(5)}</span>
-              </div>
-            ))}
+          <div className="mt-4">
+            <div className="mb-1 text-xs text-ink-3">每日佣金（長條越高當日佣金越多）</div>
+            <DayBars rows={r.byDay.map((d) => ({ date: d.date.slice(5), value: d.commission }))} color="bg-green-500" fmt={money} />
           </div>
         )}
       </section>

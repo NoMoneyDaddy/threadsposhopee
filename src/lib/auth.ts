@@ -25,6 +25,8 @@ export interface AppUser {
   isPlatformOwner: boolean;
   // 正在以哪位成員視角檢視（email；null=沒有切換）。
   viewingAsEmail?: string | null;
+  // 會員平台暱稱（站內顯示用，header 優先於 email 顯示）；未設回 null。
+  displayName?: string | null;
 }
 
 function baseUser(user: User): { id: string; email: string | null; isOwner: boolean } {
@@ -55,7 +57,26 @@ export async function getRealUser(): Promise<AppUser | null> {
 // 使資料層（皆以 user.id 當 owner_id 過濾）自動切到該成員視角（唯讀由 middleware 把關寫入）。
 // 用 React cache 做「每請求」去重：layout 與 page 同一次 render 各呼叫一次，
 // 否則 sb.auth.getUser()（Supabase Auth 網路往返）會被打兩次。cache 僅在單次 request 內有效。
+// 取暱稱（best-effort）：display_name 只是顯示用，查詢失敗一律回 null（顯示 email），不擋整頁。
+async function fetchDisplayName(id: string): Promise<string | null> {
+  if (isDemoMode || !id) return null;
+  const sb = getServiceClient();
+  if (!sb) return null;
+  try {
+    const { data } = await sb.from("profiles").select("display_name").eq("id", id).maybeSingle();
+    return (data?.display_name as string | null | undefined) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export const getCurrentUser = cache(async function getCurrentUser(): Promise<AppUser | null> {
+  const u = await resolveActiveUser();
+  if (!u) return null;
+  return { ...u, displayName: await fetchDisplayName(u.id) };
+});
+
+async function resolveActiveUser(): Promise<AppUser | null> {
   const real = await getRealUser();
   if (!real) return null;
   // 非平台管理者：一律忽略 view-as cookie（防偽造 cookie 越權看他人資料）。
@@ -80,7 +101,7 @@ export const getCurrentUser = cache(async function getCurrentUser(): Promise<App
     log.error("getCurrentUser view-as 解析失敗", { err: err instanceof Error ? err.message : String(err) });
     return real;
   }
-});
+}
 
 // 列出所有平台使用者（管理者「切換成員視角」下拉用）。僅供 owner-only 路由呼叫。
 export async function listAllUsers(): Promise<{ id: string; email: string | null }[]> {

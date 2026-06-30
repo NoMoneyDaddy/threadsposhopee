@@ -14,7 +14,7 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}));
     const n = normalizeRepostLimitsInput(body);
     if (!n.ok) return NextResponse.json({ ok: false, error: n.error }, { status: 400 });
-    await setRepostLimits(user.id, { perAccount: n.perAccount, total: n.total });
+    await setRepostLimits(user.id, { perAccount: n.perAccount, total: n.total, evergreenDays: n.evergreenDays });
     return NextResponse.json({ ok: true });
   } catch (e) {
     log.error("儲存重發上限失敗", { err: e });

@@ -95,6 +95,17 @@ export function circuitOpen(failuresThisRun: number, limit: number): boolean {
   return Number.isFinite(limit) && limit > 0 && failuresThisRun >= limit;
 }
 
+// 把「可發時間（eta）」對齊到排程器（cron）的下一個執行點：背景 worker 只在 cron 醒來那一刻送出，
+// 故實際送出時間 = 不早於 eta 的下一個 cron tick。以 lastCronMs 為相位錨、每 intervalMs 一次推算，
+// 讓儀表板的預計時間更貼近實際送出（消除「顯示可發時間、實際晚一個 cron 週期」的落差）。
+// 無有效 lastCronMs／interval（排程未啟用或無心跳）→ 無法推算相位，原樣回傳 eta（不亂猜）。
+export function projectToCronTick(etaMs: number, lastCronMs: number | null, intervalMs: number): number {
+  if (lastCronMs == null || !Number.isFinite(lastCronMs) || !(intervalMs > 0)) return etaMs;
+  const k = Math.ceil((etaMs - lastCronMs) / intervalMs);
+  const tick = lastCronMs + Math.max(1, k) * intervalMs; // eta<=上次心跳（已逾期）也排到下一輪
+  return Math.max(etaMs, tick);
+}
+
 // 新帳號暖機：前 warmupDays 天內，每日發文上限自 1 線性遞增到 maxPerDay，降低新號被封風險。
 // warmupDays<=0 或帳號已滿暖機期 → 回 maxPerDay（不限制）。ageDays = 帳號建立至今天數。
 export function warmupDailyCap(maxPerDay: number, warmupDays: number, ageDays: number): number {

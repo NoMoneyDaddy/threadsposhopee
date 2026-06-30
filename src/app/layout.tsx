@@ -12,6 +12,7 @@ import AppChrome from "@/components/AppChrome";
 import ViewAsBar from "@/components/ViewAsBar";
 import PwaRegister from "@/components/PwaRegister";
 import SessionSync from "@/components/SessionSync";
+import NicknamePrompt from "@/components/NicknamePrompt";
 
 // Google AdSense（選用）：設了 NEXT_PUBLIC_ADSENSE_CLIENT（ca-pub-…）才啟用。
 // 驗證走 google-adsense-account meta；載入器只在有設定時插入。建議只在公開頁放廣告單元。
@@ -72,8 +73,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         {user?.isPlatformOwner && <ViewAsBar viewingAsEmail={user.viewingAsEmail ?? null} />}
         <AppChrome
           autoTour={Boolean(user) && !isDemoMode}
-          header={<SiteHeader user={user ? { email: user.email, isOwner: user.isOwner } : null} isDemo={isDemoMode} />}
+          header={<SiteHeader user={user ? { email: user.email, isOwner: user.isOwner, displayName: user.displayName ?? null } : null} isDemo={isDemoMode} />}
         >
+          {user && !user.displayName && !isDemoMode && <NicknamePrompt />}
           {children}
         </AppChrome>
         <PwaRegister />

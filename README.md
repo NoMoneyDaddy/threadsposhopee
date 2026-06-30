@@ -49,7 +49,7 @@ npm run pipeline:demo
 
 ## 上線設定
 
-1. 建 Supabase 專案，**依序**跑 `supabase/migrations/` 下所有 SQL（`0001_init.sql` → `0052_material_intake.sql`，依檔名數字順序全跑）
+1. 建 Supabase 專案，**依序**跑 `supabase/migrations/` 下所有 SQL（`0001_init.sql` 起，依檔名數字順序全跑到最新一個）
 2. 填環境變數（Supabase、`APP_ENCRYPTION_KEY`、`OWNER_EMAIL`、Apify、Shopee、Gemini、Cloudinary、`CRON_SECRET`；Threads 選填 `THREADS_APP_SECRET`／`THREADS_SCOPES`，用於把手動貼的短效 token 自動換長效）
 3. 部署（擇一）：
 
@@ -59,12 +59,20 @@ npm run pipeline:demo
 ### B. Zeabur（推薦給已有 Zeabur 帳號者）
 1. Zeabur → New Service → Git，選此 repo。Zeabur 會**自動偵測 Next.js**（免 Dockerfile），自動 `next build` / `next start`。
 2. 在該服務的 **Variables** 填上所有環境變數（同 `.env.example`）。
-3. 排程（**全傻瓜：只要一條**）：`vercel.json` 在 Zeabur 不生效，改開**一個** Zeabur Cron Job，每 15 分打總排程即可——它會自己跑爬取＋發布已核准的草稿，並在每天 03 點展期 token、每週一 04 點健檢連結：
-   ```bash
-   curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<你的網域>/api/cron/all
-   ```
-   - `CRON_SECRET` 呼叫端與伺服器端要一致；生產環境若沒設，端點會回 500 擋掉（安全保護）。
-   - 進階：仍保留 `/api/cron`、`/api/cron/publish`、`/api/cron/refresh-tokens`、`/api/cron/check-links` 可各自獨立排程。
+3. 排程（**零設定**）：常駐部署（`next start`）內建排程器（`src/instrumentation.ts`）會自動每
+   `INTERNAL_SCHEDULER_MINUTES` 分鐘（預設 15）自呼 `/api/cron/all`，**不需要在 Zeabur 開任何 Cron Job**
+   （Zeabur 也沒有原生 cron 面板）。上線即全自動跑爬取＋發布已核准草稿，並於每天 03 點展期 token、
+   每週一 04 點健檢連結。儀表板的「自動駕駛運轉中」心跳即由此而來。
+   - **調整頻率**：在 Variables 設 `INTERNAL_SCHEDULER_MINUTES=2`（每 2 分；要更即時可設 `1`）。
+     建議一併設 `PUBLISH_CRON_INTERVAL_MINUTES`＝同值，讓儀表板「下次發文倒數／預計時間」對齊。
+     改完 **Redeploy** 生效。每日/週/月任務以原子守門（`claimCronOnce`）保證一天一次，故任何頻率都安全。
+   - 注意實際發文頻率受**防封間隔**（每帳號預設 4 小時）主宰，把排程調密只縮短「到點後多久送出」的延遲，
+     不會讓單帳號發更密。
+   - `CRON_SECRET` 內建排程會自動帶上；外部若要另打端點，呼叫端與伺服器端要一致（生產未設則端點回 500 擋掉）。
+   - **serverless（如 Vercel）不常駐** → 內建排程不適用：設 `INTERNAL_SCHEDULER=false` 關閉，改用外部 cron
+     打 `/api/cron/all`（Vercel 已由 `vercel.json` 每 15 分代勞）。
+   - 進階：仍保留 `/api/cron`、`/api/cron/publish`（可 `?shards=N&shard=i` 分片並行）、`/api/cron/refresh-tokens`、
+     `/api/cron/check-links` 可各自獨立排程。
 
 ### 連 Threads 發文帳號（手動貼 token）
 > OAuth 一鍵流程已移除：對外開放需通過 Meta App Review／商業驗證。現以手動貼 access token 綁定。

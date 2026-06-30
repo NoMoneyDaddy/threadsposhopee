@@ -150,7 +150,7 @@ export default async function AdminPage() {
                   <span className="flex items-center gap-2">
                     <span className="w-6 tabular-nums text-ink-3">#{i + 1}</span>
                     <span>{b.emoji}</span>
-                    <span className="text-ink">{c.bio_handle ? `@${c.bio_handle}` : "（未公開代稱）"}</span>
+                    <span className="text-ink" translate="no">{c.display_name || (c.bio_handle ? `@${c.bio_handle}` : "（未設暱稱）")}</span>
                   </span>
                   <span className="tabular-nums text-ink-2">{c.score}</span>
                 </li>

@@ -11,7 +11,7 @@ export default function BulkDraftBar({ draftIds }: { draftIds: string[] }) {
 
   if (draftIds.length === 0) return null;
 
-  async function run(action: "approve" | "queue" | "reject" | "delete", label: string) {
+  async function run(action: "approve" | "queue" | "reject" | "delete" | "distribute" | "distribute_pending", label: string) {
     if ((action === "delete" || action === "reject") && !confirm(`確定要${label} ${draftIds.length} 則待審草稿？`)) return;
     setBusy(action);
     setMsg(null);
@@ -23,7 +23,11 @@ export default function BulkDraftBar({ draftIds }: { draftIds: string[] }) {
       });
       const json = await res.json();
       if (!json.ok) throw new Error(json.error);
-      setMsg(`✅ 已${label} ${json.done} 則${json.errors?.length ? `（${json.errors.length} 則失敗）` : ""}`);
+      const extra =
+        action === "distribute" || action === "distribute_pending"
+          ? `到 ${json.accounts} 個帳號${json.usedBest ? "（依成效最佳時段）" : "（依預設時段）"}`
+          : "";
+      setMsg(`✅ 已${label}${extra} ${json.done} 則${json.errors?.length ? `（${json.errors.length} 則失敗）` : ""}`);
       router.refresh();
     } catch (e) {
       setMsg(`❌ ${e instanceof Error ? e.message : String(e)}`);
@@ -45,6 +49,22 @@ export default function BulkDraftBar({ draftIds }: { draftIds: string[] }) {
         className="rounded-xl border border-brand/40 px-3 py-1.5 text-sm text-brand hover:bg-orange-50 disabled:opacity-50"
       >
         全部加入佇列
+      </button>
+      <button
+        disabled={!!busy}
+        onClick={() => run("distribute", "分派")}
+        title="把選取的草稿平均分派到各啟用帳號，並依成效最佳時段自動錯開排程（直接核准排入佇列）"
+        className="rounded-xl border border-brand/40 px-3 py-1.5 text-sm text-brand hover:bg-orange-50 disabled:opacity-50"
+      >
+        分派到各帳號並排程
+      </button>
+      <button
+        disabled={!!busy}
+        onClick={() => run("distribute_pending", "分派")}
+        title="同上，但保留待審：只先分好帳號與預定時間，核准後才會依此時間發"
+        className={btn}
+      >
+        分派（保留待審）
       </button>
       <button disabled={!!busy} onClick={() => run("reject", "退回")} className={btn}>
         全部退回

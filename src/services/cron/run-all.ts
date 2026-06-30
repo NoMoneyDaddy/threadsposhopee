@@ -15,7 +15,7 @@ import { pollActiveScrapeRuns } from "@/services/scraper/async-scrape";
 import { cleanupExpiredBindTokens } from "@/lib/telegram-bind";
 import { getOwnerUserId } from "@/lib/auth";
 import { env } from "@/lib/env";
-import { setHeartbeat, getUserTelegramChatId } from "@/lib/store";
+import { setHeartbeat, getUserTelegramChatId, claimCronOnce } from "@/lib/store";
 import { isPushConfigured } from "@/lib/push";
 import { listPushSubscriptions } from "@/lib/push-store";
 import { log } from "@/lib/logger";
@@ -24,10 +24,18 @@ import { log } from "@/lib/logger";
 // 每輪：爬取 + 發文佇列 + 贊助補發/驗證；每天 03:xx 展期 token、每週一 04:xx 健檢、每天 09:00 摘要。
 export async function runCronAll(now: Date = new Date()): Promise<Record<string, unknown>> {
   const h = now.getUTCHours();
-  const min = now.getUTCMinutes();
   const dow = now.getUTCDay(); // 0=日, 1=一
   const out: Record<string, unknown> = { ranAt: now.toISOString() };
   const alerts: string[] = [];
+
+  // 「每日/週/月只跑一次」守門：不再依賴「cron 約每 15 分」的 min<15 窗口，改用原子 claim，
+  // 讓本排程在任何頻率（甚至每分鐘）都安全——同一 UTC 日內第一次進到該時段的輪次才執行，其餘略過。
+  // stamp 用 UTC 日期（YYYY-MM-DD，單調遞增）；各任務在各自時段（h/dow/date）內僅 claim 成功一次。
+  const dayStamp = now.toISOString().slice(0, 10);
+  const onceDaily = (key: string, fn: () => Promise<unknown>) => async () => {
+    if (!(await claimCronOnce(key, dayStamp))) return { skipped: "本週期已執行" };
+    return fn();
+  };
 
   // 用逐步 try/catch，單一步驟失敗不影響其他步驟
   // 註：自動抓文已改為「純手動」——爬蟲只在使用者於來源頁按「立即抓取」時觸發（/api/pipeline/run），
@@ -64,27 +72,27 @@ export async function runCronAll(now: Date = new Date()): Promise<Record<string,
       run: () => pollActiveScrapeRuns()
     }
   ];
-  // 每天展期一次（03:00–03:14 視窗，避免每 15 分重複）
-  if (h === 3 && min < 15) {
-    steps.push({ key: "refreshTokens", run: refreshExpiringTokens, warn: (r) => (r?.failed ? `⚠️ Token 展期 ${r.failed} 個失敗` : null) });
+  // 每天展期一次（UTC 03 時；onceDaily 保證該日只跑一次，與 cron 頻率無關）
+  if (h === 3) {
+    steps.push({ key: "refreshTokens", run: onceDaily("refreshTokens", refreshExpiringTokens), warn: (r) => (r?.failed ? `⚠️ Token 展期 ${r.failed} 個失敗` : null) });
     // 每日刷新各帳號頭像／顯示名稱：Threads 頭像 URL 是會過期的簽名連結，重抓寫回避免失效（草稿預覽/帳號頁變灰圈）。
-    steps.push({ key: "refreshProfiles", run: refreshThreadsProfiles, warn: (r) => (r?.failed ? `⚠️ 頭像刷新 ${r.failed} 個失敗` : null) });
+    steps.push({ key: "refreshProfiles", run: onceDaily("refreshProfiles", refreshThreadsProfiles), warn: (r) => (r?.failed ? `⚠️ 頭像刷新 ${r.failed} 個失敗` : null) });
     // 順手清掉過期未消費的 Telegram 綁定碼（10 分鐘 TTL，殘留量極小，每日清即可）。
-    steps.push({ key: "cleanupBindTokens", run: cleanupExpiredBindTokens });
+    steps.push({ key: "cleanupBindTokens", run: onceDaily("cleanupBindTokens", cleanupExpiredBindTokens) });
   }
-  // 每週一健檢一次（04:00–04:14）
-  if (dow === 1 && h === 4 && min < 15) {
+  // 每週一健檢一次（UTC 04 時）
+  if (dow === 1 && h === 4) {
     steps.push({
       key: "checkLinks",
-      run: async () => checkAffiliateLinks(await getOwnerUserId()),
+      run: onceDaily("checkLinks", async () => checkAffiliateLinks(await getOwnerUserId())),
       warn: (r) => (r?.revived || r?.dead ? `🔗 連結重產 ${r.revived ?? 0}、仍失效 ${r.dead ?? 0}` : null)
     });
   }
-  // 常青內容回收：每天一次（台北 13:00 = UTC 05:00–05:14），把到期的常青素材重排成待審草稿。
-  if (h === 5 && min < 15) {
+  // 常青內容回收：每天一次（台北 13:00 = UTC 05 時），把到期的常青素材重排成待審草稿。
+  if (h === 5) {
     steps.push({
       key: "evergreen",
-      run: runEvergreen,
+      run: onceDaily("evergreen", runEvergreen),
       warn: (r) => (r?.created ? `♻️ 常青回收新增 ${r.created} 篇草稿（待審）` : null)
     });
   }
@@ -105,21 +113,21 @@ export async function runCronAll(now: Date = new Date()): Promise<Record<string,
     return { sent: true, via: personalSink ? "personal" : "global" };
   };
 
-  // 每日成效摘要（台北 09:00 = UTC 01:00–01:14）。
-  if (h === 1 && min < 15) {
-    steps.push({ key: "dailyDigest", run: () => runDigest("daily_digest", buildDailyDigest) });
+  // 每日成效摘要（台北 09:00 = UTC 01 時；onceDaily 保證一天一封，不論 cron 頻率）。
+  if (h === 1) {
+    steps.push({ key: "dailyDigest", run: onceDaily("dailyDigest", () => runDigest("daily_digest", buildDailyDigest)) });
   }
-  // 每週收益週報：廣播給所有有綁通知通道的會員，各收自己的數據（每週一台北 10:00 = UTC 02:00–02:14）。
-  if (dow === 1 && h === 2 && min < 15) {
+  // 每週收益週報：廣播給所有有綁通知通道的會員，各收自己的數據（每週一台北 10:00 = UTC 02 時）。
+  if (dow === 1 && h === 2) {
     steps.push({
       key: "weeklyDigest",
-      run: broadcastWeeklyDigests,
+      run: onceDaily("weeklyDigest", broadcastWeeklyDigests),
       warn: (r) => (r?.sent ? `📈 已發送 ${r.sent} 份會員週報` : null)
     });
   }
-  // 每月績效摘要（每月 1 日台北 10:30 = UTC 02:30–02:44）。
-  if (now.getUTCDate() === 1 && h === 2 && min >= 30 && min < 45) {
-    steps.push({ key: "monthlyDigest", run: () => runDigest("monthly_digest", () => buildPeriodicDigest("本月", 30)) });
+  // 每月績效摘要（每月 1 日台北 10:00 = UTC 02 時；與週報同時段但各自 onceDaily 守門，互不重複）。
+  if (now.getUTCDate() === 1 && h === 2) {
+    steps.push({ key: "monthlyDigest", run: onceDaily("monthlyDigest", () => runDigest("monthly_digest", () => buildPeriodicDigest("本月", 30))) });
   }
 
   for (const s of steps) {

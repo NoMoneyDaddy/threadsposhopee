@@ -1,6 +1,8 @@
 import PipelineBoard from "@/components/PipelineBoard";
+import AccountsOverview, { type AccountOverviewRow } from "@/components/AccountsOverview";
 import { listDrafts, listMaterials, listPendingMaterials, listThreadsAccounts, getPublishPlan } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
+import { taipeiDateStr } from "@/lib/streak";
 import { isDemoMode } from "@/lib/env";
 import { getMediaProvider } from "@/services/media/upload";
 import { getSponsorConfig, getSponsorPickMap } from "@/lib/sponsor";
@@ -25,6 +27,27 @@ export default async function PipelinePage() {
   ]);
   const cc = provider.kind === "cloudinary" ? provider.creds : null;
   const publishPlan = Object.fromEntries(plan.map((r) => [r.id, { etaIso: r.etaIso, reason: r.reason }]));
+
+  // 帳號總覽（多帳號才顯示）：各帳號待審／已排／今日已發 + 下一篇預計時間。
+  const today = taipeiDateStr(Date.now());
+  const accountsOverview: AccountOverviewRow[] = accounts.map((a) => {
+    const mine = drafts.filter((d) => d.threads_account_id === a.id);
+    const nextEtaIso =
+      mine
+        .filter((d) => d.status === "approved")
+        .map((d) => publishPlan[d.id]?.etaIso)
+        .filter((x): x is string => Boolean(x))
+        .sort((x, y) => x.localeCompare(y))[0] ?? null;
+    return {
+      id: a.id,
+      label: a.label,
+      displayName: a.display_name ?? null,
+      pending: mine.filter((d) => d.status === "draft").length,
+      approved: mine.filter((d) => d.status === "approved").length,
+      publishedToday: mine.filter((d) => d.status === "published" && d.published_at && taipeiDateStr(Date.parse(d.published_at)) === today).length,
+      nextEtaIso
+    };
+  });
 
   // 排序：先把「還沒文案」的素材置頂（方便優先補文案編輯），同組內再依成效（賺錢素材排前）。
   let itemRev: Record<string, ItemRevenue> = {};
@@ -58,6 +81,7 @@ export default async function PipelinePage() {
       <p className="text-sm text-ink-2">
         一條龍管理：待審素材逐筆入庫 → 素材庫「再排一篇」→ 草稿審核 → 排程發布。每欄卡片上的按鈕即是下一步動作。
       </p>
+      <AccountsOverview rows={accountsOverview} />
       <PipelineBoard
         pending={pending}
         materials={materials}

@@ -19,12 +19,14 @@ const GRID_TIMES = Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2,
 export default function PublishPrefsForm({
   initial
 }: {
-  initial: { slots: string[]; minGapMinutes: number; maxPerDay: number };
+  initial: { slots: string[]; minGapMinutes: number; maxPerDay: number; replyDelayMinMinutes: number; replyDelayJitterMinutes: number };
 }) {
   const router = useRouter();
   const [slots, setSlots] = useState(initial.slots.join(","));
   const [gap, setGap] = useState(String(initial.minGapMinutes));
   const [maxPerDay, setMaxPerDay] = useState(String(initial.maxPerDay));
+  const [replyDelay, setReplyDelay] = useState(String(initial.replyDelayMinMinutes));
+  const [replyJitter, setReplyJitter] = useState(String(initial.replyDelayJitterMinutes));
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -49,7 +51,7 @@ export default function PublishPrefsForm({
       const res = await fetch("/api/accounts/publish-prefs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slots, minGapMinutes: gap, maxPerDay })
+        body: JSON.stringify({ slots, minGapMinutes: gap, maxPerDay, replyDelayMin: replyDelay, replyDelayJitter: replyJitter })
       });
       const json = await res.json();
       if (!json.ok) throw new Error(json.error);
@@ -188,6 +190,39 @@ export default function PublishPrefsForm({
           </div>
           <p className="mt-1 text-xs text-ink-3">Threads 硬上限 250；防封建議 8–15。</p>
         </div>
+      </div>
+
+      {/* ④ 留言（分潤連結）延遲 */}
+      <div className="mt-4 border-t border-border pt-4">
+        <label className="block text-sm font-medium text-ink">④ 留言（分潤連結）延遲</label>
+        <p className="mb-1.5 text-xs text-ink-3">
+          主文發出後隔多久才補留言（串文 2/n 的分潤連結），避免「秒留言」的固定行為被偵測。0＝立即補。
+        </p>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-ink-3">保底</span>
+            <input
+              className="input w-24"
+              inputMode="numeric"
+              value={replyDelay}
+              onChange={(e) => /^\d*$/.test(e.target.value) && setReplyDelay(e.target.value)}
+              aria-label="留言延遲保底（分）"
+            />
+            <span className="text-xs text-ink-3">分</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-ink-3">隨機抖動上限</span>
+            <input
+              className="input w-24"
+              inputMode="numeric"
+              value={replyJitter}
+              onChange={(e) => /^\d*$/.test(e.target.value) && setReplyJitter(e.target.value)}
+              aria-label="留言延遲抖動上限（分）"
+            />
+            <span className="text-xs text-ink-3">分</span>
+          </div>
+        </div>
+        <p className="mt-1 text-xs text-ink-3">實際延遲＝保底＋0～抖動之間的隨機值（每篇固定但彼此不同）。留空＝沿用系統預設。</p>
       </div>
 
       <div className="mt-4 flex items-center gap-3">

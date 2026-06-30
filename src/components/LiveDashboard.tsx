@@ -76,26 +76,64 @@ function PublishPlan({ rows }: { rows: DashboardData["publishPlan"] }) {
           </span>
         )}
       </div>
-      <table className="w-full text-sm">
-        <thead className="sr-only">
-          <tr>
-            <th>帳號</th>
-            <th>商品</th>
-            <th>狀態</th>
-            <th>預計時間</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.id} className="flex items-center gap-2">
-              <td className="w-20 shrink-0 truncate text-ink-2 sm:w-24">{r.accountLabel}</td>
-              <td className="min-w-0 flex-1 truncate text-ink">{r.productName ?? "（草稿）"}</td>
-              <td className="hidden shrink-0 text-xs text-ink-3 sm:block sm:max-w-[12rem] sm:truncate">{r.reason}</td>
-              <td className="w-24 shrink-0 text-right text-xs tabular-nums text-ink-2 sm:w-28">{fmt(r.etaIso)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {/* 用 flex 區塊而非 <table>：display:table 不吃 flex 子項的收縮，長品名/帳號會把整列撐爆視窗（行動版溢出）。 */}
+      <div className="w-full text-sm" role="list" aria-label="發文排隊進度">
+        {rows.map((r) => (
+          <div key={r.id} role="listitem" className="flex items-center gap-2 py-0.5">
+            <span className="w-20 shrink-0 truncate text-ink-2 sm:w-24">{r.accountLabel}</span>
+            <span className="min-w-0 flex-1 truncate text-ink">{r.productName ?? "（草稿）"}</span>
+            <span className="hidden shrink-0 text-xs text-ink-3 sm:block sm:max-w-[12rem] sm:truncate">{r.reason}</span>
+            <span className="w-24 shrink-0 text-right text-xs tabular-nums text-ink-2 sm:w-28">{fmt(r.etaIso)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// 倒數文字（純函式可測思路）：毫秒差→「N 天 N 時／N 時 N 分／N 分 N 秒／N 秒」。<=0 視為即將發出。
+function fmtCountdown(ms: number): string {
+  if (ms <= 0) return "即將發出";
+  const sec = Math.floor(ms / 1000);
+  const d = Math.floor(sec / 86400);
+  const h = Math.floor((sec % 86400) / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  if (d > 0) return `${d} 天 ${h} 小時`;
+  if (h > 0) return `${h} 小時 ${m} 分`;
+  if (m > 0) return `${m} 分 ${s} 秒`;
+  return `${s} 秒`;
+}
+
+// 下次自動發文倒數：取排隊中「預計時間最近」的一篇，client 端每秒遞減。
+// 僅用 client 時間（useEffect 後才設 nowMs），避免 SSR/hydration 不一致；暫停或無排隊時不顯示。
+function NextPublishCountdown({ rows, paused }: { rows: DashboardData["publishPlan"]; paused?: boolean }) {
+  const [nowMs, setNowMs] = useState<number | null>(null);
+  useEffect(() => {
+    setNowMs(Date.now());
+    const t = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  // etaIso 為 null 代表該帳號非啟用（暫停/異常，不會發）→ 不納入倒數。
+  const etas = (rows ?? [])
+    .filter((r) => r.etaIso)
+    .map((r) => ({ ...r, ms: Date.parse(r.etaIso as string) }))
+    .filter((r) => Number.isFinite(r.ms))
+    .sort((a, b) => a.ms - b.ms);
+  if (paused || etas.length === 0 || nowMs === null) return null;
+  const next = etas[0];
+  const remain = next.ms - nowMs;
+  const when = new Date(next.ms).toLocaleString("zh-TW", { timeZone: "Asia/Taipei", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  return (
+    <div className="card flex items-center gap-3 p-4">
+      <span className="text-2xl" aria-hidden>⏱️</span>
+      <div className="min-w-0 flex-1">
+        <div className="text-xs text-ink-2">下次自動發文倒數</div>
+        <div className="stat-num text-2xl tabular-nums text-brand" role="timer" aria-live="off">{fmtCountdown(remain)}</div>
+        <div className="truncate text-xs text-ink-3">
+          {remain <= 0 ? "已排隊，下一輪排程即送出" : `預計 ${when}`}・{next.productName ?? "下一篇"}（{next.accountLabel}）
+        </div>
+      </div>
     </div>
   );
 }
@@ -328,6 +366,7 @@ export default function LiveDashboard() {
   return (
     <div className="space-y-6">
       <Autopilot lastCronAt={data.lastCronAt} demo={data.demo} isOwner={data.isOwner} />
+      <NextPublishCountdown rows={data.publishPlan} paused={data.publishPaused} />
       {data.publishPaused && (
         <div className="flex items-center gap-2 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
           <span className="h-2 w-2 rounded-full bg-red-500" />

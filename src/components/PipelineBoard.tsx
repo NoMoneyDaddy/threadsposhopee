@@ -158,6 +158,7 @@ export default function PipelineBoard({
   // 欄位排序偏好（使用者可在欄頭切換）；存 localStorage 跨工作階段記住。
   const [scheduledSort, setScheduledSort] = useState<"near" | "far">("near"); // near＝最接近發布在上
   const [publishedSort, setPublishedSort] = useState<"new" | "old">("new"); // new＝最新發布在上
+  const [accountFilter, setAccountFilter] = useState<string>("all"); // 多帳號：只看某帳號的草稿欄；"all"＝全部
   useEffect(() => {
     try {
       const s = localStorage.getItem("pipeline:sort");
@@ -204,6 +205,8 @@ export default function PipelineBoard({
   const groups = useMemo(() => {
     const g = { drafts: [] as Draft[], scheduled: [] as Draft[], published: [] as Draft[], attention: [] as Draft[] };
     for (const d of drafts) {
+      // 帳號檢視：只看選定帳號的草稿（"all"＝全部）。素材/待審欄不受影響（尚未綁帳號）。
+      if (accountFilter !== "all" && d.threads_account_id !== accountFilter) continue;
       const s = overrides[d.id] ?? d.status;
       if (s === "draft") g.drafts.push(d);
       else if (isScheduledLike(s)) g.scheduled.push(d);
@@ -225,7 +228,7 @@ export default function PipelineBoard({
     const attnRank: Record<string, number> = { needs_verification: 0, failed: 1, rejected: 2 };
     g.attention.sort((a, b) => (attnRank[overrides[a.id] ?? a.status] ?? 9) - (attnRank[overrides[b.id] ?? b.status] ?? 9));
     return g;
-  }, [drafts, overrides, scheduledSort, publishedSort]);
+  }, [drafts, overrides, scheduledSort, publishedSort, accountFilter]);
 
   async function onDragEnd(e: DragEndEvent) {
     setDragStatus(null);
@@ -344,6 +347,39 @@ export default function PipelineBoard({
         <p className="text-sm text-emerald-600" role="status" aria-live="polite">
           ✅ {note}
         </p>
+      )}
+
+      {accounts.length > 1 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 text-xs text-ink-3">帳號檢視：</span>
+          <button
+            type="button"
+            onClick={() => setAccountFilter("all")}
+            aria-pressed={accountFilter === "all"}
+            className={
+              "shrink-0 rounded-full px-3 py-1 text-xs " +
+              (accountFilter === "all" ? "bg-ink text-bg" : "bg-surface-2 text-ink-2 hover:bg-neutral-200")
+            }
+          >
+            全部
+          </button>
+          {accounts.map((a) => (
+            <button
+              key={a.id}
+              type="button"
+              onClick={() => setAccountFilter(a.id)}
+              aria-pressed={accountFilter === a.id}
+              title={a.label}
+              translate="no"
+              className={
+                "max-w-[10rem] shrink-0 truncate rounded-full px-3 py-1 text-xs " +
+                (accountFilter === a.id ? "bg-ink text-bg" : "bg-surface-2 text-ink-2 hover:bg-neutral-200")
+              }
+            >
+              {a.display_name || a.label}
+            </button>
+          ))}
+        </div>
       )}
 
       <p className="text-xs text-ink-3">👉 左右滑動切換欄位：待審素材 → 素材庫 → 草稿 → 已排程 → 已發布 → 需處理</p>

@@ -14,7 +14,7 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}));
     const n = normalizePublishPrefsInput(body);
     if (!n.ok) return NextResponse.json({ ok: false, error: n.error }, { status: 400 });
-    await setPublishPrefs(user.id, { slots: n.slots, minGapMinutes: n.minGapMinutes, maxPerDay: n.maxPerDay });
+    await setPublishPrefs(user.id, { slots: n.slots, minGapMinutes: n.minGapMinutes, maxPerDay: n.maxPerDay, replyDelayMin: n.replyDelayMin, replyDelayJitter: n.replyDelayJitter });
     return NextResponse.json({ ok: true });
   } catch (e) {
     log.error("儲存發文節奏失敗", { err: e });

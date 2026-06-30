@@ -31,3 +31,20 @@ test("normalizePublishPrefsInput: 驗證界線", () => {
   assert.equal(empty.ok, true);
   if (empty.ok) assert.equal(empty.minGapMinutes, null);
 });
+
+test("normalizePublishPrefsInput: 留言延遲——0 合法、空白＝null、負/超界/小數擋下", () => {
+  const r = normalizePublishPrefsInput({ replyDelayMin: "30", replyDelayJitter: "0" });
+  assert.equal(r.ok, true);
+  if (r.ok) {
+    assert.equal(r.replyDelayMin, 30);
+    assert.equal(r.replyDelayJitter, 0); // 0＝顯式無抖動，非 null
+  }
+  const empty = normalizePublishPrefsInput({});
+  if (empty.ok) {
+    assert.equal(empty.replyDelayMin, null); // 空白＝沿用預設
+    assert.equal(empty.replyDelayJitter, null);
+  }
+  assert.equal(normalizePublishPrefsInput({ replyDelayMin: "-1" }).ok, false);
+  assert.equal(normalizePublishPrefsInput({ replyDelayJitter: "1441" }).ok, false);
+  assert.equal(normalizePublishPrefsInput({ replyDelayMin: "2.5" }).ok, false);
+});

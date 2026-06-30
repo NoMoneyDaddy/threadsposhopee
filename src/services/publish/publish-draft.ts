@@ -1,4 +1,4 @@
-import { getThreadsCredentials, updateDraftStatus } from "@/lib/store";
+import { getThreadsCredentials, updateDraftStatus, getPublishPrefs } from "@/lib/store";
 import { publishToThreads } from "@/services/threads/publish";
 import { normalizeDraftMedia, normalizeReplyMedia } from "@/lib/media";
 import { replyDelayMinutes } from "@/services/publish/reply-timing";
@@ -21,9 +21,15 @@ export async function publishDraftNow(draft: Draft, ownerId: string): Promise<{ 
     // 主文之後要補發的段落（多段串文 thread_chain，或向後相容的單則 reply_*）。
     const chain = allInMain ? [] : effectiveChain(draft);
     const hasReply = chain.length > 0;
-    // 留言延遲：>0 表示主文先發、留言之後由 cron 補（防「秒留言」固定行為）
+    // 留言延遲：>0 表示主文先發、留言之後由 cron 補（防「秒留言」固定行為）。用該使用者自訂保底/抖動（未設沿用 env）。
+    const pp = hasReply ? await getPublishPrefs(ownerId).catch(() => null) : null;
     const replyDelay = hasReply
-      ? replyDelayMinutes(draft.id, env.replyDelayFloorMinutes, env.replyDelayJitterMinutes, draft.reply_delay_minutes)
+      ? replyDelayMinutes(
+          draft.id,
+          pp?.replyDelayMinMinutes ?? env.replyDelayFloorMinutes,
+          pp?.replyDelayJitterMinutes ?? env.replyDelayJitterMinutes,
+          draft.reply_delay_minutes
+        )
       : 0;
     // 多段串文一律交給 worker 依序補（避免一次爆發＋需要游標進度）；單則沿用「delay 0 即時補」捷徑。
     const deferReply = hasReply && (hasThreadChain(draft) || replyDelay > 0);

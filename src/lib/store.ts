@@ -5,7 +5,8 @@ import { getServiceClient } from "./supabase/server";
 import { env, isDemoMode } from "./env";
 import type { Draft } from "./types";
 import { DEFAULT_COPY_PREFS, normalizeCopyPrefs, type CopyPrefs } from "@/services/ai/prefs";
-import { planAccountQueue } from "@/services/publish/cadence";
+import { planAccountQueue, projectToCronTick } from "@/services/publish/cadence";
+import { getHeartbeat as readHeartbeat } from "./app-state"; // 本地呼叫（line ~18 的同名為 re-export，不建立本地綁定）
 import { demo } from "./demo-store";
 import { listThreadsAccounts } from "./accounts-store"; // getPublishPlan 內部用（re-export 不綁本地名）
 
@@ -23,7 +24,8 @@ export {
   getCachedJson,
   setCachedJson,
   acquirePublishLock,
-  releasePublishLock
+  releasePublishLock,
+  claimCronOnce
 } from "./app-state";
 
 // Telegram deeplink 綁定碼（app_state 一次性 token）已拆到 ./telegram-bind；
@@ -189,6 +191,9 @@ export {
   getBioSettings,
   setBioSettings,
   normalizeBioHandle,
+  getDisplayName,
+  setDisplayName,
+  normalizeDisplayName,
   getSponsorRewardMode,
   setSponsorRewardMode,
   type SponsorRewardMode
@@ -359,12 +364,26 @@ async function listApprovedDraftsForPlan(ownerId: string, limit = 200): Promise<
 // 發文進度/ETA（給使用者看「排隊中／下次預計幾點／塞車」）。
 // 乾跑佇列節奏：依帳號分組，套用保底+抖動間隔與每日上限，算出每篇預計發文時間。
 export async function getPublishPlan(ownerId: string): Promise<PublishPlanRow[]> {
-  const [drafts, accounts] = await Promise.all([listApprovedDraftsForPlan(ownerId), listThreadsAccounts(ownerId)]);
+  // 一併抓排程心跳：把可發時間對齊到下一個 cron tick，讓預計時間貼近實際送出（worker 只在 cron 醒來時送）。
+  const [drafts, accounts, lastCronAt] = await Promise.all([
+    listApprovedDraftsForPlan(ownerId),
+    listThreadsAccounts(ownerId),
+    readHeartbeat().catch(() => null)
+  ]);
   const labelOf = new Map(accounts.map((a) => [a.id, a.label] as const));
   // 多租戶：只規劃 owner 自己擁有的帳號（即使草稿異常引用他人帳號也不跨租戶讀狀態）
   const approved = drafts.filter((d) => d.threads_account_id && labelOf.has(d.threads_account_id));
   if (approved.length === 0) return [];
   const now = Date.now();
+  const lastCronMs = lastCronAt ? Date.parse(lastCronAt) : null;
+  const cronIntervalMs = env.cronIntervalMinutes * 60_000;
+  // 把 planAccountQueue 算出的「可發時間」對齊到下一個 cron tick（null＝帳號非啟用，維持 null）。
+  const toCronAlignedIso = (iso: string | null): string | null => {
+    if (!iso) return null;
+    const ms = Date.parse(iso);
+    if (!Number.isFinite(ms)) return iso;
+    return new Date(projectToCronTick(ms, lastCronMs, cronIntervalMs)).toISOString();
+  };
 
   // 依帳號分組，組內依 created_at 排序（與發文 worker 的處理順序一致）
   const byAccount = new Map<string, Draft[]>();
@@ -408,7 +427,7 @@ export async function getPublishPlan(ownerId: string): Promise<PublishPlanRow[]>
         id: d.id,
         productName: d.product_name ?? null,
         accountLabel: labelOf.get(accId) ?? "帳號",
-        etaIso: p?.etaIso ?? null,
+        etaIso: toCronAlignedIso(p?.etaIso ?? null),
         reason: p?.reason ?? "排隊中"
       });
     }

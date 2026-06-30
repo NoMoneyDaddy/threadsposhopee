@@ -55,12 +55,31 @@
   html {
     -webkit-text-size-adjust: 100%;
     text-rendering: optimizeLegibility;
+    /* 防止零星水平溢出（長 URL/token、寬列）把行動版版面撐得比視窗寬，
+       造成雙指縮放/平移時版面「跑掉」、頁面被瀏覽器整體縮小。
+       用 clip（非 hidden）：不建立捲動容器，故不影響 sticky 頁首與看板內層 overflow-x-auto 捲動。 */
+    overflow-x: clip;
   }
   body {
     @apply bg-bg text-ink antialiased;
+    /* 長字串（分潤連結/subId 等）斷行，不撐破版面 */
+    overflow-wrap: break-word;
     font-family:
       -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
       "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+  }
+  /* 手機端表單控件字級至少 16px：iOS Safari 對 <16px 的輸入框聚焦時會自動放大頁面，
+     且之後不會自動還原，造成「縮放體驗不佳」。桌機維持原設計（text-sm/text-xs）。
+     仍允許使用者主動縮放（未鎖 user-scalable / maximum-scale）。 */
+  @media (max-width: 639.98px) {
+    input:not([type="checkbox"]):not([type="radio"]),
+    select,
+    textarea {
+      /* !important：覆蓋 Tailwind utilities 層的 text-sm/text-xs（utilities 層級高於 base，
+         否則此規則對帶 text-xs 的 select/textarea 無效，iOS 仍會聚焦放大）。
+         斷點 639.98px 與 Tailwind sm(min-640) 完美銜接，避免剛好 640px 時兩者衝突。 */
+      font-size: 16px !important;
+    }
   }
   h1, h2, h3, h4 {
     @apply tracking-tight text-ink;

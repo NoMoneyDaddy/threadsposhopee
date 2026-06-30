@@ -84,6 +84,11 @@ export async function POST(req: Request) {
     const mainText = typeof body.main_text === "string" ? body.main_text : draft.main_text;
     const replyText = typeof body.reply_text === "string" ? body.reply_text : draft.reply_text;
     const patch: Partial<Draft> = { main_text: mainText, reply_text: replyText };
+    // 留言延遲（分）：null＝清除回全域預設；數字夾在 0..1440。其餘型別忽略（不動原值）。
+    if (body.reply_delay_minutes === null) patch.reply_delay_minutes = null;
+    else if (typeof body.reply_delay_minutes === "number" && Number.isFinite(body.reply_delay_minutes)) {
+      patch.reply_delay_minutes = Math.min(1440, Math.max(0, Math.round(body.reply_delay_minutes)));
+    }
     // 媒體指派（主文 media／留言 reply_media）：只接受形狀正確的既有媒體項（url+type）。
     const sanitizeMedia = (arr: unknown): { url: string; type: "image" | "video" }[] =>
       Array.isArray(arr)

@@ -172,6 +172,10 @@ export default function PipelineBoard({
       else if (isPublished(s)) g.published.push(d);
       else if (needsAttention(s)) g.attention.push(d);
     }
+    // 已排程：最接近發文時間（scheduled_at 最早）的排最上方；未排時間者沉底。
+    g.scheduled.sort((a, b) => (a.scheduled_at ?? "9999").localeCompare(b.scheduled_at ?? "9999"));
+    // 已發布：最新發出的（published_at 最晚）排最上方；無時間者沉底。
+    g.published.sort((a, b) => (b.published_at ?? "").localeCompare(a.published_at ?? ""));
     return g;
   }, [drafts, overrides]);
 

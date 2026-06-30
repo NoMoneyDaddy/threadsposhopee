@@ -92,7 +92,7 @@ export default async function SharedPage() {
         <EmptyState
           icon="🤝"
           title="共享庫目前沒有商品"
-          hint="到「素材」把賺錢的商品按「分享到共享庫」，大家都能用自己的金鑰匯入；你被匯入越多、貢獻越高。"
+          hint="到「素材」把賺錢的商品按「分享到共享庫」，大家都能用自己的蝦皮金鑰匯入（分潤算各自的）；你被匯入越多、貢獻越高。"
         />
       ) : (
         <div className="grid gap-4 md:grid-cols-2">

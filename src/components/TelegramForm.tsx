@@ -139,7 +139,7 @@ export default function TelegramForm({ bound, botConfigured }: { bound: boolean;
             disabled={!!busy || !botConfigured || !chatId.trim()}
             className="btn btn-brand shrink-0"
           >
-            {busy === "bind" ? "連結中…" : bound ? "更新" : "連結並測試"}
+            {busy === "bind" ? "綁定中…" : bound ? "更新" : "綁定並測試"}
           </button>
         </div>
         <p className="mt-1 text-[11px] text-ink-2">取得 chat_id：在 Telegram 對本 bot 按 <code>/start</code>，bot 會回覆你的 Chat ID。</p>

@@ -62,7 +62,7 @@ export default function ShopeeAccountForm({ bound = null }: { bound?: ShopeeAcco
             </div>
           )}
           <div className="mt-1">
-            <DeleteButton endpoint={`/api/accounts/shopee/${bound.id}`} label="解除綁定" confirm="確定解除 Shopee 分潤綁定？" />
+            <DeleteButton endpoint={`/api/accounts/shopee/${bound.id}`} label="解除綁定" confirm="確定解除 Shopee 分潤綁定？解除後將無法產生新的分潤連結（已發出的連結仍有效）。此動作無法復原。" />
           </div>
         </div>
       )}

@@ -41,7 +41,7 @@ export default async function SettingsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">設定</h1>
-        <p className="text-sm text-ink-2">發文節奏、重發上限、文案風格與各種通知都在這裡。</p>
+        <p className="text-sm text-ink-2">發文節奏、重發上限、文案風格與各種通知都在這裡。連接帳號與綁定金鑰請到 <Link href="/accounts" className="text-brand underline">帳號管理</Link>。</p>
       </div>
 
       <div id="setup-notify" className="scroll-mt-24 space-y-4">

@@ -8,7 +8,7 @@ export type NavItem = { href: string; label: string; match?: string[]; ownerOnly
 // 六大頁資訊架構（依使用流程排序、白話命名）。「文章管理」整併發文/草稿/AI部落客/素材/自動抓文。
 const NAV: NavItem[] = [
   { href: "/", label: "儀表板" },
-  { href: "/pipeline", label: "文章管理", match: ["/pipeline", "/drafts", "/compose", "/agents", "/materials", "/sources", "/shared", "/calendar"] },
+  { href: "/pipeline", label: "工作台", match: ["/pipeline", "/drafts", "/compose", "/agents", "/materials", "/sources", "/shared", "/calendar"] },
   { href: "/links", label: "轉址服務" },
   { href: "/insights", label: "成效分析" },
   { href: "/accounts", label: "帳號管理" },

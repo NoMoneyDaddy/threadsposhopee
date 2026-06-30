@@ -44,9 +44,16 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">儀表板</h1>
-        <p className="text-sm text-ink-2">即時連動各服務，每 30 秒自動更新</p>
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h1 className="text-2xl font-bold">儀表板</h1>
+          <p className="text-sm text-ink-2">即時連動各服務，每 30 秒自動更新</p>
+        </div>
+        {user && (
+          <a href="/pipeline" className="btn btn-brand whitespace-nowrap">
+            ▶ 去工作台發文
+          </a>
+        )}
       </div>
 
       {steps.length > 0 && <SetupGuide steps={steps} />}

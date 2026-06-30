@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { getGeminiKey, resolveGeminiModel, getCopyPrefs } from "@/lib/store";
 import { generateVariations } from "@/services/ai/provider";
+import { geminiErrorMessage } from "@/services/ai/gemini";
 import { isDemoMode } from "@/lib/env";
 import { apiError } from "@/lib/api-error";
 
@@ -38,6 +39,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, variations });
   } catch (e) {
     // 收斂對外錯誤：詳細記 server 端，回固定訊息（避免外洩上游/供應商回應）。
-    return apiError("AI 換句話說失敗", e, { clientMessage: "改寫失敗，請稍後再試" });
+    return apiError("AI 換句話說失敗", e, { clientMessage: geminiErrorMessage(e, "改寫失敗，請稍後再試") });
   }
 }

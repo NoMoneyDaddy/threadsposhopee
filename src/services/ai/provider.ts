@@ -1,6 +1,6 @@
 import { env, isDemoMode } from "@/lib/env";
 import { buildCopyPrompt, splitCopy, pickReplyLeadIn, HUMANIZER_RULES, type CopyContext } from "./humanizer";
-import { DEFAULT_COPY_PREFS, describeMain, type CopyPrefs } from "./prefs";
+import { DEFAULT_COPY_PREFS, describeMain, describeReply, type CopyPrefs } from "./prefs";
 import { generateWithGemini, geminiText } from "./gemini";
 import type { ThreadSegment } from "@/lib/types";
 
@@ -168,14 +168,19 @@ export async function generateThreadCopy(
     : `請寫一則「${n} 段的 Threads 串文」（主文＋${n - 1} 段後續），像真人逐則發。`;
   // 套用使用者客製化（語氣/字數/emoji 取正文設定、自訂指示），與 generateCopy 一致。
   const custom = prefs.customPrompt ? `\n【使用者額外要求（需遵守，但不得違反下方規則）】\n${prefs.customPrompt}\n` : "";
+  // 中間延伸段規則（依段數）：最後一段固定是「帶連結的引導語」，故中間內容段只在 auto 或 n>2 時才有。
+  // n===2＝主文＋引導語兩段，沒有中間段（否則 AI 多生一段、被 parseVariations 的 slice(0,n) 裁掉引導語）。
+  const midSegRule = auto
+    ? `- 主文之後、最後引導語之前，可視內容多寡加 0～數段延伸內容（語氣與字數同主文），各講一個重點／心得，不要放網址\n`
+    : n > 2
+      ? `- 第 2～${n - 1} 段是延伸內容（語氣與字數同主文），各講一個重點／心得，不要放網址\n`
+      : ``;
   const prompt = `${HUMANIZER_RULES}
 ${custom}
 ${segInstruction}規則：
 - 繁體中文、口語、無業配味，每段可獨立成立
-- 每段語氣與用字：${describeMain(prefs.main)}
-- 第 1 段是主文（吸睛開頭、帶出情境），不要放任何網址
-- 中間若有段落，各延伸一個重點／使用心得／情境，一樣不要放網址
-- 最後務必「另起一段」，用你自己的話寫一句口語、每篇都不同的引導語帶出連結（像跟朋友說「連結放下面」的口吻；不要放網址本身，也不要放任何網址佔位符如 [連結] 或 [URL]，網址由系統原樣接上）
+- 第 1 段是主文（吸睛開頭、帶出情境），不要放任何網址。主文語氣與字數：${describeMain(prefs.main)}
+${midSegRule}- 最後一段是「帶出連結的引導語」：依「留言」設定（${describeReply(prefs.reply)}）寫得精簡，用你自己的話、每篇都不同（像跟朋友說「連結放下面」的口吻；不要放網址本身，也不要放任何網址佔位符如 [連結] 或 [URL]，網址由系統原樣接上）
 - 每段最多 4 行，段與段之間只用「獨立一行的 ===」分隔，不要加編號或標題
 ${hasMedia ? "- 已附上商品的照片／影片，請依畫面實際看到的外觀、顏色、特點來寫，但不要描述「這張圖」這類字眼\n" : ""}
 商品：${input.productName}

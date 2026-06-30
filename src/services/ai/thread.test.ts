@@ -1,6 +1,35 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { assembleThread, generateThreadCopy, ensureExactLink } from "./provider";
+import { assembleThread, generateThreadCopy, ensureExactLink, stripLeadingPreamble } from "./provider";
+
+test("stripLeadingPreamble：去掉開頭的回話/前言段，保留實際內容", () => {
+  const r = stripLeadingPreamble("收到！這是一篇 Threads 貼文，沒有業配感。\n\n早上起床看到這飯糰模具…");
+  assert.equal(r, "早上起床看到這飯糰模具…");
+});
+
+test("stripLeadingPreamble：以下是… 也去掉", () => {
+  assert.equal(stripLeadingPreamble("以下是為你寫的貼文：\n真心推薦這款"), "真心推薦這款");
+});
+
+test("stripLeadingPreamble：正常開頭不誤刪（含易誤傷的真人開頭）", () => {
+  const normal = "早上起床看到這飯糰模具，超實用\n\n壓一下就成形";
+  assert.equal(stripLeadingPreamble(normal), normal);
+  // 真人開頭以這些詞起頭但非前言 → 不可誤刪
+  assert.equal(stripLeadingPreamble("收到商品了，真的很開心！\n這款真的很棒"), "收到商品了，真的很開心！\n這款真的很棒");
+  assert.equal(stripLeadingPreamble("好的工具帶你上天堂！\n這款剪刀超省力"), "好的工具帶你上天堂！\n這款剪刀超省力");
+  assert.equal(stripLeadingPreamble("了解自己的需求很重要。\n這款耳機適合通勤"), "了解自己的需求很重要。\n這款耳機適合通勤");
+  assert.equal(stripLeadingPreamble("希望這款商品大家會喜歡！\n真的超好用"), "希望這款商品大家會喜歡！\n真的超好用");
+});
+
+test("stripLeadingPreamble：純語助詞 + 含 AI 關鍵字的前言才去", () => {
+  assert.equal(stripLeadingPreamble("收到！\n真心推薦這款"), "真心推薦這款"); // 純「收到！」一行
+  assert.equal(stripLeadingPreamble("好的，這是為你撰寫的文案：\n真心推薦"), "真心推薦"); // 含「撰寫/文案」
+  assert.equal(stripLeadingPreamble("以下是我的真實心得：\n用了兩週"), "以下是我的真實心得：\n用了兩週"); // 無 AI 關鍵字 → 不刪
+});
+
+test("stripLeadingPreamble：整段都是前言時不吃成空字串", () => {
+  assert.equal(stripLeadingPreamble("收到！"), "收到！");
+});
 
 const SHORT = "https://s.shopee.tw/abc123";
 

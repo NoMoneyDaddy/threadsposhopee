@@ -44,7 +44,9 @@ import { sponsorQuota } from "@/services/publish/sponsor-quota";
 import { resolveSponsorOwnerCreds, buildSponsorLinkForAccount, cleanProductUrlFromDraft } from "@/services/sponsor/link";
 import { log } from "@/lib/logger";
 import { normalizeDraftMedia, normalizeReplyMedia } from "@/lib/media";
-import { shardOf, circuitOpen, nextPacingSkipReason } from "@/services/publish/cadence";
+import { shardOf, circuitOpen, nextPacingSkipReason, reachAdjustedPacing } from "@/services/publish/cadence";
+import { getEngagementCached } from "@/services/threads/engagement";
+import { detectReachDrop } from "@/services/threads/reach";
 import { replyDelayMinutes } from "@/services/publish/reply-timing";
 import { effectiveChain, chainStepAt, hasThreadChain } from "@/services/publish/thread-chain";
 import { sendAlert, sendUserAlert } from "@/lib/notify";
@@ -131,6 +133,8 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
   > = {};
   // 每位使用者自訂發文節奏（min gap／每日上限）本輪快取（依 owner）。
   const pacingPrefsCache: Record<string, { slots: string[]; minGapMinutes: number; maxPerDay: number }> = {};
+  // 觸及自動調速：本輪快取各 owner 是否「近期觸及驟降」（detectReachDrop），是則放慢其節奏。
+  const reachSlowByOwner: Record<string, boolean> = {};
   // 商品冷卻：記住本輪已發過的商品（跨帳號），避免同輪／DB 尚未可見時重複放行。
   const cooldownHours = env.productCooldownHours;
   const publishedProductsThisRun = new Set<string>();
@@ -202,6 +206,24 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
       }));
     }
     const pp = pacingPrefsCache[ownerKey];
+    // 觸及自動調速：偵測 owner 近期觸及驟降（依 owner 快取一次）→ 放慢該 owner 節奏（間隔×／每日上限÷）。
+    // 安全方向（只會更慢）；成效查詢失敗或樣本不足 → 視為無驟降，不影響正常發文。factor=1 即關閉、不查。
+    if (!(ownerKey in reachSlowByOwner)) {
+      reachSlowByOwner[ownerKey] =
+        ownerKey && env.publishReachSlowdownFactor > 1
+          ? await getEngagementCached(ownerKey)
+              .then((e) => detectReachDrop(e.posts).hasSignal)
+              .catch(() => false)
+          : false;
+      if (reachSlowByOwner[ownerKey]) {
+        log.info("觸及偏低，自動放慢發文節奏", { ownerId: ownerKey, factor: env.publishReachSlowdownFactor });
+      }
+    }
+    const eff = reachAdjustedPacing(
+      { minGapMinutes: pp.minGapMinutes, maxPerDay: pp.maxPerDay },
+      reachSlowByOwner[ownerKey],
+      env.publishReachSlowdownFactor
+    );
     // 同步節奏守衛（斷路器→批次→每日上限含暖機→最小間隔含抖動）抽成純函式，集中且可單測。
     const pacingSkip = nextPacingSkipReason({
       failuresThisRun: failuresThisRun[accId] ?? 0,
@@ -209,11 +231,11 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
       doneThisRun,
       batchPerRun: env.publishBatchPerRun,
       publishedLast24h: state.publishedLast24h,
-      maxPerDay: pp.maxPerDay,
+      maxPerDay: eff.maxPerDay,
       warmupDays: env.accountWarmupDays,
       createdAt: state.createdAt,
       lastPublishedAt: state.lastPublishedAt,
-      minGapMinutes: pp.minGapMinutes,
+      minGapMinutes: eff.minGapMinutes,
       gapJitterMinutes: env.publishGapJitterMinutes,
       accountId: accId,
       now: Date.now()

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { gapJitterMinutes, effectiveGapMinutes, planAccountQueue, shardOf, circuitOpen, nextPacingSkipReason } from "./cadence";
+import { gapJitterMinutes, effectiveGapMinutes, planAccountQueue, shardOf, circuitOpen, nextPacingSkipReason, reachAdjustedPacing } from "./cadence";
 
 const NOW = Date.parse("2026-06-20T00:00:00Z");
 const basePacing = {
@@ -198,4 +198,20 @@ test("排程時間晚於間隔 → 用排程時間", () => {
   });
   assert.equal(plan[0].etaIso, sched);
   assert.equal(plan[0].reason, "已排程");
+});
+
+test("reachAdjustedPacing：觸及驟降 → 間隔加倍、每日上限減半（至少 1）", () => {
+  assert.deepEqual(reachAdjustedPacing({ minGapMinutes: 240, maxPerDay: 5 }, true, 2), { minGapMinutes: 480, maxPerDay: 2 });
+});
+
+test("reachAdjustedPacing：無驟降 → 原值不變", () => {
+  assert.deepEqual(reachAdjustedPacing({ minGapMinutes: 240, maxPerDay: 5 }, false, 2), { minGapMinutes: 240, maxPerDay: 5 });
+});
+
+test("reachAdjustedPacing：factor<=1（關閉）→ 原值不變", () => {
+  assert.deepEqual(reachAdjustedPacing({ minGapMinutes: 240, maxPerDay: 5 }, true, 1), { minGapMinutes: 240, maxPerDay: 5 });
+});
+
+test("reachAdjustedPacing：每日上限至少 1（不會被除成 0）", () => {
+  assert.deepEqual(reachAdjustedPacing({ minGapMinutes: 120, maxPerDay: 1 }, true, 3), { minGapMinutes: 360, maxPerDay: 1 });
 });

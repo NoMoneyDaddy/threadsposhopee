@@ -324,6 +324,8 @@ export default function PipelineBoard({
         >
           {creatingMaterial ? "✕ 收起" : "＋ 建立素材"}
         </button>
+        {/* 分隔：左側為「新建」動作，右側為「批次/維護」動作，避免維護鈕和主要建立 CTA 混在一起 */}
+        <span className="mx-1 hidden h-6 w-px self-center bg-border sm:block" aria-hidden="true" />
         <BulkRepostButton threadsAccounts={accounts} />
         <CheckLinksButton />
       </div>

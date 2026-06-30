@@ -34,7 +34,15 @@ export default function CheckLinksButton() {
       >
         {busy ? "檢查中…" : "立即檢查連結"}
       </button>
-      {msg && <span className="text-xs text-ink-2">{msg}</span>}
+      {msg && (
+        <span
+          className={"text-xs " + (msg.startsWith("❌") ? "text-red-600" : "text-ink-2")}
+          role={msg.startsWith("❌") ? "alert" : "status"}
+          aria-live="polite"
+        >
+          {msg}
+        </span>
+      )}
     </div>
   );
 }

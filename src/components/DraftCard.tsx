@@ -384,14 +384,16 @@ function DraftCard({
       )}
 
       <div className="mt-2 flex items-center gap-2">
-        <a
-          href={draft.shopee_short_link ?? "#"}
-          target="_blank"
-          rel="noreferrer"
-          className="min-w-0 truncate text-xs text-brand hover:underline"
-        >
-          {draft.shopee_short_link}
-        </a>
+        {draft.shopee_short_link && (
+          <a
+            href={draft.shopee_short_link}
+            target="_blank"
+            rel="noreferrer"
+            className="min-w-0 truncate text-xs text-brand hover:underline"
+          >
+            {draft.shopee_short_link}
+          </a>
+        )}
         {formatCommissionRate(draft.commission_rate) && (
           <span className="shrink-0 rounded bg-surface-2 px-1.5 py-0.5 text-[10px] text-ink-2" title="建立時的分潤率（會隨時間變動）">
             分潤 {formatCommissionRate(draft.commission_rate)}
@@ -452,27 +454,51 @@ function DraftCard({
 
       {!done && draft.status !== "needs_verification" && !editing && (
         <div className="mt-3 flex flex-wrap gap-2">
-          <button
-            disabled={!!busy}
-            onClick={() => {
-              // 立即對外發布、不可收回 → 加發布前確認（與刪除/退回一致地保護不可逆動作）。
-              if (confirm(`立即發布到 @${account?.label ?? "此帳號"} 嗎？會馬上對外發布，發布後無法收回。`)) call("publish");
-            }}
-            className="rounded bg-brand px-3 py-2 text-xs text-white hover:opacity-90 disabled:opacity-50"
-          >
-            {busy === "publish" ? "發布中…" : "核准並發布"}
-          </button>
-          {(draft.status === "failed" || draft.status === "publishing") && (
+          {/* 主要動作：草稿→「核准排程」（與看板拖放一致，安全進佇列、依防封節奏發）；失敗/卡住→「重試」。
+              「立即發布」屬不可逆動作，降為次要（outline）並保留確認。 */}
+          {draft.status === "failed" || draft.status === "publishing" ? (
             <button
               disabled={!!busy}
               onClick={() => call("retry")}
-              className="rounded border border-amber-300 px-3 py-2 text-xs text-amber-700 hover:bg-amber-50 disabled:opacity-50"
+              className="rounded bg-brand px-3 py-2 text-xs text-white hover:opacity-90 disabled:opacity-50"
             >
               {busy === "retry" ? "重置中…" : "重試（重排）"}
+            </button>
+          ) : draft.status === "draft" ? (
+            <button
+              disabled={!!busy}
+              onClick={() => call("approve")}
+              title="核准並排入發布佇列，依防封節奏自動發（不立即發出）"
+              className="rounded bg-brand px-3 py-2 text-xs text-white hover:opacity-90 disabled:opacity-50"
+            >
+              {busy === "approve" ? "排程中…" : "核准排程"}
+            </button>
+          ) : null}
+          {(draft.status === "draft" || draft.status === "approved") && (
+            <button
+              disabled={!!busy}
+              onClick={() => {
+                // 立即對外發布、不可收回 → 保留發布前確認。
+                if (confirm(`立即發布到 @${account?.label ?? "此帳號"} 嗎？會馬上對外發布，發布後無法收回。`)) call("publish");
+              }}
+              title="跳過佇列、現在就發（不可收回）"
+              className="rounded border border-brand/50 px-3 py-2 text-xs text-brand hover:bg-orange-50 disabled:opacity-50"
+            >
+              {busy === "publish" ? "發布中…" : "立即發布"}
             </button>
           )}
           <button disabled={!!busy} onClick={() => { setContent(draftToContent(draft)); setEditing(true); }} className="rounded border px-3 py-2 text-xs hover:bg-surface-2">
             編輯
+          </button>
+          {/* 退回是核心分流動作（→需處理），提到常駐層、不再埋在「更多」；加確認避免誤觸。 */}
+          <button
+            disabled={!!busy}
+            onClick={() => {
+              if (confirm("確定退回這則草稿？會移到「需處理」，不再自動發布。")) call("reject");
+            }}
+            className="rounded border px-3 py-2 text-xs text-ink-2 hover:bg-surface-2 disabled:opacity-50"
+          >
+            {busy === "reject" ? "處理中…" : "退回"}
           </button>
           <button
             type="button"
@@ -525,9 +551,8 @@ function DraftCard({
               >
                 {busy === "save-as-material" ? "存中…" : "存成素材"}
               </button>
-              <button disabled={!!busy} onClick={() => call("reject")} className="rounded border px-3 py-2 text-xs text-ink-2 hover:bg-surface-2">
-                退回
-              </button>
+              {/* 換行分隔：危險動作（刪除）獨立一列，與上方生成/工具類動作分開 */}
+              <span className="w-full" aria-hidden="true" />
               <button
                 disabled={!!busy}
                 onClick={() => {
@@ -593,6 +618,7 @@ function DraftCard({
             type="datetime-local"
             className="rounded border px-2 py-1"
             value={schedTime}
+            min={toLocalInput(new Date().toISOString())}
             onChange={(e) => setSchedTime(e.target.value)}
             disabled={!!busy}
           />
@@ -603,6 +629,10 @@ function DraftCard({
               if (Number.isNaN(t.getTime())) {
                 setMsgOk(false); // 否則前一次成功留下的 msgOk=true 會讓此錯誤顯示成綠色
                 return setMsg("時間格式錯誤");
+              }
+              if (t.getTime() < Date.now()) {
+                setMsgOk(false);
+                return setMsg("排程時間需在未來");
               }
               call("reschedule", { scheduled_at: t.toISOString() });
             }}

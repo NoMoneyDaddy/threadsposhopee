@@ -132,7 +132,7 @@ function PendingMaterialCard({
           title={saving ? "媒體用途儲存中…" : "只入庫，之後再到素材庫排程"}
           className="rounded-xl bg-brand px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
         >
-          {busy ? "處理中…" : "✅ 入庫"}
+          {busy ? "處理中…" : "✅ 只入庫"}
         </button>
         {canSchedule && (
           <button

@@ -55,7 +55,10 @@ export default function CloudinaryForm({
 
   return (
     <div className="card p-4">
-      <div className="mb-1 font-medium">圖片／影片存放（Cloudinary）</div>
+      <div className="mb-1 flex flex-wrap items-center gap-2 font-medium">
+        圖片／影片存放（Cloudinary）
+        {initialCloud ? <span className="badge-success">已綁定</span> : <span className="badge-neutral">未綁定</span>}
+      </div>
       <p className="mb-2 text-xs text-ink-2">
         綁你自己的 Cloudinary，素材／本機上傳都進你自己的雲端。到 Cloudinary 後台建一個 <b>unsigned</b> upload
         preset，cloud name 和 preset <b>兩個都要填</b>。<b>平台不會幫你代墊空間</b>，沒綁的話媒體就不會幫你轉存（發文會直接用原本的連結），也沒辦法從你電腦上傳檔案。{" "}

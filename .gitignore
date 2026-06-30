@@ -40,6 +40,17 @@ yarn-error.log*
 # agent-reach / mcporter 本機產生的設定（勿入庫）
 config/mcporter.json
 # 本機 agent 工具（skills CLI / mobbin-search 安裝產物，非專案程式碼，勿入庫）
+# .claude/skills/* 多為指向 .agents/ 的符號連結（內容已 gitignore），入庫會變壞鏈結；
+# 第一方 skill（ponytail*）為實體目錄，照常入庫。
 /.agents/
 /.claude/skills/mobbin-search
+/.claude/skills/brainstorming
+/.claude/skills/code-review-expert
+/.claude/skills/playwright-best-practices
+/.claude/skills/receiving-code-review
+/.claude/skills/requesting-code-review
+/.claude/skills/using-git-worktrees
+/.claude/skills/vercel-react-best-practices
+/.claude/skills/web-quality-audit
+/.claude/skills/webapp-testing
 /skills-lock.json

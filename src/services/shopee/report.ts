@@ -3,6 +3,7 @@
 import { callShopeeGql } from "@/services/shopee/gql";
 import { normalizeSubId } from "@/services/shopee/subid";
 import { getCachedJson, setCachedJson, getShopeeCredentials } from "@/lib/store";
+import { log } from "@/lib/logger";
 
 // 各使用者自綁的 Shopee 分潤 Open API 金鑰（解密後）。分潤收益一律吃「自己的」金鑰。
 export type ShopeeCreds = { appId: string; secret: string };
@@ -223,8 +224,11 @@ export async function getItemRevenueMap(ownerId: string, days = 30): Promise<Rec
   const creds = await getShopeeCredentials(ownerId).catch(() => null);
   if (!creds) return {};
   const end = Math.floor(Date.now() / 1000);
+  // prod 量測：只在快取失效（冷取）時記真實 Shopee API 耗時，評估是否需做差量快取。低噪音（每 owner 約 6h 一次）。
+  const t0 = Date.now();
   const { nodes } = await fetchConversions({ appId: creds.appId, secret: creds.secret }, end - days * 86400, end);
   const map = aggregateItemRevenue(nodes);
   await setCachedJson(key, map).catch(() => {});
+  log.info("perf:getItemRevenueMap 冷取", { days, ms: Date.now() - t0, items: Object.keys(map).length });
   return map;
 }

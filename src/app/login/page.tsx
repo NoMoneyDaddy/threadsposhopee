@@ -23,7 +23,7 @@ export default function LoginPage({ searchParams }: { searchParams: { next?: str
         <p className="mt-3 text-sm text-ink-2">把商品分潤連結，自動排程發文。</p>
       </div>
       <div className="card-p">
-        <LoginForm next={searchParams.next ?? "/"} />
+        <LoginForm next={searchParams.next ?? "/pipeline"} />
       </div>
       <p className="mt-5 text-center text-xs text-ink-3">多帳號 · 排程 · AI 文案 · 防封節奏</p>
     </div>

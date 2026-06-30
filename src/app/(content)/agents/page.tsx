@@ -1,14 +1,16 @@
 import { getCurrentUser } from "@/lib/auth";
+import { redirect } from "next/navigation";
 import { listAiAgents } from "@/lib/agents-store";
 import { listThreadsAccounts } from "@/lib/accounts-store";
 import AgentManager from "@/components/AgentManager";
 
 export const dynamic = "force-dynamic";
 
-// AI 部落客：人格×領域，定時抓新聞→改寫→草稿（預設待審；可設免審直接排程）。
+// AI 部落客：人格×領域，定時抓新聞→改寫→草稿（預設待審；可設免審直接排程）。僅管理員可見。
 export default async function AgentsPage() {
   const user = await getCurrentUser();
   if (!user) return <div className="text-center text-sm text-red-500">請先登入。</div>;
+  if (!user.isOwner) redirect("/"); // 僅管理員可用 AI 部落客
   const [agents, accounts] = await Promise.all([
     listAiAgents(user.id).catch(() => []),
     listThreadsAccounts(user.id).catch(() => [])

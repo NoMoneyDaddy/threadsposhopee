@@ -1,7 +1,7 @@
 // AI 代理人執行：抓來源（RSS）→ 去重 → 依人格改寫 → 建草稿（待人工核准）。
 // 重用 owner 自綁 Gemini 金鑰、text-similarity 去重、drafts 建立、（選）go2read 短連結。
 import { createHash } from "node:crypto";
-import { geminiText } from "@/services/ai/gemini";
+import { geminiText, geminiWebSearchSources } from "@/services/ai/gemini";
 import { ANTI_AI_SLOP_RULES } from "@/services/ai/humanizer";
 import { fetchRssItems, type RssItem } from "@/services/ai/rss";
 import { getGeminiKey, resolveGeminiModel } from "@/lib/credentials";
@@ -122,11 +122,45 @@ async function fetchThreadsSearchItems(agent: AiAgent): Promise<RssItem[]> {
   return [];
 }
 
-// 抓來源項目。source_mode="threads_search"＝Threads 關鍵字搜尋；其餘＝RSS（空 feeds 用領域預設 Google News RSS）。
+// 依連結去重（保序）。純小工具。
+function dedupeByLink(items: RssItem[]): RssItem[] {
+  const seen = new Set<string>();
+  return items.filter((it) => {
+    const key = it.link.trim();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+// AI 上網搜尋取材（Google 搜尋接地）：用 owner Gemini 即時搜全網（各大媒體/自媒體/官方），多查詢聚合去重。
+// 無金鑰/接地無結果回 []（呼叫端降級到 RSS）。
+const MAX_WEB_SEARCH_QUERIES = 3;
+async function fetchWebSearchItems(agent: AiAgent, geminiKey: string | null, model: string | null): Promise<RssItem[]> {
+  if (!geminiKey) return [];
+  const queries = searchQueriesForAgent(agent).slice(0, MAX_WEB_SEARCH_QUERIES);
+  const all: RssItem[] = [];
+  for (const q of queries) {
+    try {
+      const found = await geminiWebSearchSources(q, geminiKey, model, 8);
+      for (const f of found) all.push({ title: f.title, link: f.link, description: "", pubDate: null });
+    } catch (e) {
+      log.warn("AI 上網搜尋取材失敗", { agentId: agent.id, query: q, err: e instanceof Error ? e.message : String(e) });
+    }
+  }
+  return dedupeByLink(all);
+}
+
+// 抓來源項目。source_mode：threads_search＝Threads 關鍵字搜尋；web_search＝AI 上網搜尋（接地）；其餘＝RSS。
 // 多領域/多關鍵字聚合：跨 feed 收集 → 依連結去重 → 依發布時間新→舊排序（趨勢＝最新鮮的當日題材優先），確保有東西可寫。
 const MAX_AGENT_FEEDS = 12; // 聚合來源上限（每條 feed 一次 HTTP；避免多領域×多關鍵字爆量拖長 cron）
-async function fetchItems(agent: AiAgent): Promise<RssItem[]> {
+async function fetchItems(agent: AiAgent, geminiKey: string | null, model: string | null): Promise<RssItem[]> {
   if (agent.source_mode === "threads_search") return fetchThreadsSearchItems(agent);
+  // AI 上網搜尋：接地有結果就用；無結果（金鑰/額度/模型不支援）降級到 RSS 聚合，確保仍有題材。
+  if (agent.source_mode === "web_search") {
+    const web = await fetchWebSearchItems(agent, geminiKey, model);
+    if (web.length) return web;
+  }
   let feeds: string[] = [];
   if (agent.rss_feeds.length) {
     feeds = agent.rss_feeds;
@@ -147,13 +181,7 @@ async function fetchItems(agent: AiAgent): Promise<RssItem[]> {
   const all: RssItem[] = [];
   for (const f of feeds) all.push(...(await fetchRssItems(f)));
   // 依連結去重（Google News 跨查詢常重複同篇），再依發布時間新→舊排序（趨勢優先）。
-  const seen = new Set<string>();
-  const deduped = all.filter((it) => {
-    const key = it.link.trim();
-    if (!key || seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  const deduped = dedupeByLink(all);
   const ts = (d: string | null) => {
     const n = d ? Date.parse(d) : NaN;
     return Number.isNaN(n) ? 0 : n; // 無/壞 pubDate 沉底
@@ -175,11 +203,12 @@ export async function runAgentOnce(agent: AiAgent, geminiKey: string): Promise<A
     return { ok: false, reason: "發文帳號不屬於此使用者" };
   }
 
-  const items = await fetchItems(agent);
+  const geminiModel = await resolveGeminiModel(agent.owner_id); // 使用者自選模型（無則 env 預設）
+  // web_search 取材需用 owner Gemini 金鑰＋模型（接地搜尋）；RSS/threads_search 不會用到。
+  const items = await fetchItems(agent, geminiKey, geminiModel);
   if (!items.length) return { ok: false, reason: "來源無項目" };
 
   const recentTitles = await recentSeenTitles(agent.id, SEEN_WINDOW_MS);
-  const geminiModel = await resolveGeminiModel(agent.owner_id); // 使用者自選模型（無則 env 預設）
 
   for (const item of items) {
     const hash = sourceHash(item.link);

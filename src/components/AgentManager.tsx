@@ -32,7 +32,7 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
   const router = useRouter();
   const [name, setName] = useState("");
   const [domains, setDomains] = useState<string[]>([AI_DOMAINS[0].id]);
-  const [sourceMode, setSourceMode] = useState<"rss" | "threads_search">("rss");
+  const [sourceMode, setSourceMode] = useState<"rss" | "threads_search" | "web_search">("rss");
   const [searchQuery, setSearchQuery] = useState("");
   const [tone, setTone] = useState("");
   const [customTone, setCustomTone] = useState(false);
@@ -64,7 +64,7 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
     setEditingId(a.id);
     setName(a.name);
     setDomains(a.domains?.length ? a.domains : [a.domain]);
-    setSourceMode(a.source_mode === "threads_search" ? "threads_search" : "rss");
+    setSourceMode(a.source_mode === "threads_search" || a.source_mode === "web_search" ? a.source_mode : "rss");
     setSearchQuery(a.search_query ?? "");
     setTone(a.tone ?? "");
     setCustomTone(Boolean(a.tone) && !TONE_PRESETS.includes(a.tone));
@@ -197,18 +197,24 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
             id="ag-source"
             className="input"
             value={sourceMode}
-            onChange={(e) => setSourceMode(e.target.value === "threads_search" ? "threads_search" : "rss")}
+            onChange={(e) => {
+              const v = e.target.value;
+              setSourceMode(v === "threads_search" || v === "web_search" ? v : "rss");
+            }}
           >
             <option value="rss">Google News（依領域/關鍵字抓新聞）</option>
+            <option value="web_search">AI 上網搜尋（Gemini 接地全網：各大媒體/自媒體/官方）</option>
             <option value="threads_search">Threads 關鍵字搜尋（抓熱門公開貼文選題）</option>
           </select>
           <FieldHint>
             {sourceMode === "threads_search"
               ? "用你綁定的 Threads 帳號搜尋熱門公開貼文當素材（需該帳號已授權關鍵字搜尋權限）。查詢詞用下方關鍵字，留空則用領域名稱。"
-              : "從 Google News 依領域或自訂關鍵字抓新聞當素材。"}
+              : sourceMode === "web_search"
+                ? "用你的 Gemini 金鑰即時上網搜尋（Google 接地），涵蓋各大新聞媒體、自媒體與官方網站公開資訊；查詢詞用下方關鍵字，留空則用領域名稱。接地無結果會自動退回 Google News。"
+                : "從 Google News 依領域或自訂關鍵字抓新聞當素材。"}
           </FieldHint>
         </div>
-        {(domains.includes("custom") || sourceMode === "threads_search") && (
+        {(domains.includes("custom") || sourceMode === "threads_search" || sourceMode === "web_search") && (
           <div>
             <label className="label" htmlFor="ag-q">
               {domains.includes("custom") ? "自訂主題關鍵字（必填）" : "搜尋關鍵字（選填，留空用領域名稱）"}

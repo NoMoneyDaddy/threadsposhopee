@@ -11,6 +11,7 @@ export const dynamic = "force-dynamic";
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ ok: false, error: "請先登入" }, { status: 401 });
+  if (!user.isOwner) return NextResponse.json({ ok: false, error: "僅管理員可使用 AI 部落客" }, { status: 403 });
   const body = (await req.json().catch(() => ({}))) || {};
   const patch: Record<string, unknown> = {};
   if (typeof body.enabled === "boolean") patch.enabled = body.enabled;
@@ -31,7 +32,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     patch.domains = domains;
     patch.domain = domains[0];
   }
-  if (body.source_mode !== undefined) patch.source_mode = body.source_mode === "threads_search" ? "threads_search" : "rss";
+  if (body.source_mode !== undefined)
+    patch.source_mode = body.source_mode === "threads_search" || body.source_mode === "web_search" ? body.source_mode : "rss";
   if (typeof body.search_query === "string") patch.search_query = body.search_query.trim().slice(0, 100);
 
   // 發文帳號：null＝取消指定；給字串需驗證歸屬（多租戶，不落跨租戶/不存在 id）。
@@ -77,6 +79,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ ok: false, error: "請先登入" }, { status: 401 });
+  if (!user.isOwner) return NextResponse.json({ ok: false, error: "僅管理員可使用 AI 部落客" }, { status: 403 });
   await deleteAiAgent(params.id, user.id);
   return NextResponse.json({ ok: true });
 }

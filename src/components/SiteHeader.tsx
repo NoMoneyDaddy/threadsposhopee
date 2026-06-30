@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import LiveClock from "@/components/LiveClock";
 
 export type NavItem = { href: string; label: string; match?: string[]; ownerOnly?: boolean };
 
@@ -95,6 +96,7 @@ export default function SiteHeader({
               })}
               {/* 極窄螢幕：允許使用者資訊自行換行；左邊框/左距僅 sm 以上才加，避免折行時邊框懸空 */}
               <div className="flex flex-wrap items-center gap-2 text-xs text-ink-3 sm:ml-1 sm:border-l sm:border-border sm:pl-2">
+                <LiveClock />
                 {userMeta}
               </div>
             </nav>

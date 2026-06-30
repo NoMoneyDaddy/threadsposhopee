@@ -324,7 +324,7 @@ export default function LiveDashboard() {
       )}
       {d.drafts.draft > 0 && (
         <Link
-          href="/drafts"
+          href="/pipeline"
           className="flex items-center gap-3 rounded-2xl border-l-4 border-brand bg-orange-50 p-4 transition-colors hover:bg-orange-100"
         >
           <span className="text-xl" aria-hidden="true">📝</span>
@@ -353,17 +353,17 @@ export default function LiveDashboard() {
               </Link>
             )}
             {invalidMaterials > 0 && (
-              <Link href="/materials" className="underline hover:opacity-80">
+              <Link href="/pipeline" className="underline hover:opacity-80">
                 {invalidMaterials} 個素材連結失效（可重產）
               </Link>
             )}
             {d.drafts.failed > 0 && (
-              <Link href="/drafts" className="underline hover:opacity-80">
+              <Link href="/pipeline" className="underline hover:opacity-80">
                 {d.drafts.failed} 則草稿發布失敗（可重試）
               </Link>
             )}
             {needsVerification > 0 && (
-              <Link href="/drafts" className="font-medium text-orange-700 underline hover:opacity-80">
+              <Link href="/pipeline" className="font-medium text-orange-700 underline hover:opacity-80">
                 {needsVerification} 則發布待確認（可能已發出，請盡快確認）
               </Link>
             )}

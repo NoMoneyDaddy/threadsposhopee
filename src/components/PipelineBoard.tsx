@@ -78,6 +78,7 @@ function Column({
   droppable,
   active,
   headerExtra,
+  emptyHint,
   children
 }: {
   id: string;
@@ -88,6 +89,7 @@ function Column({
   droppable: boolean;
   active: boolean; // 拖曳中且此欄為合法目標 → 高亮
   headerExtra?: React.ReactNode; // 欄頭右側控制（如排序下拉）
+  emptyHint?: string; // 空欄時的新手引導（取代「（沒有項目）」）
   children: React.ReactNode;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id, disabled: !droppable });
@@ -107,7 +109,11 @@ function Column({
           active ? (isOver ? "bg-brand/10 ring-2 ring-brand" : "ring-1 ring-brand/40") : ""
         }`}
       >
-        {count === 0 ? <p className="py-6 text-center text-xs text-ink-3">（沒有項目）</p> : children}
+        {count === 0 ? (
+          <p className="px-2 py-6 text-center text-xs leading-relaxed text-ink-3">{emptyHint ?? "（沒有項目）"}</p>
+        ) : (
+          children
+        )}
       </div>
     </section>
   );
@@ -143,6 +149,8 @@ export default function PipelineBoard({
   const [overrides, setOverrides] = useState<Record<string, DraftStatus>>({});
   const [dragStatus, setDragStatus] = useState<DraftStatus | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  // 拖放成功後的提示：明確告知做了什麼、卡片移到哪、如何回復（拖放無原生 undo，給可達的回復路徑）。
+  const [note, setNote] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set()); // 草稿批次選取
   // 欄位排序偏好（使用者可在欄頭切換）；存 localStorage 跨工作階段記住。
   const [scheduledSort, setScheduledSort] = useState<"near" | "far">("near"); // near＝最接近發布在上
@@ -225,6 +233,7 @@ export default function PipelineBoard({
     const plan = resolveDrop(status, col);
     if (!plan) return; // 非合法目標：彈回，不動作
     setErr(null);
+    setNote(null);
     setOverrides((prev) => ({ ...prev, [id]: plan.next })); // 樂觀移動
     try {
       const res = await fetch("/api/drafts/action", {
@@ -234,6 +243,12 @@ export default function PipelineBoard({
       });
       const json = await res.json().catch(() => null);
       if (!res.ok || !json?.ok) throw new Error(typeof json?.error === "string" ? json.error : `操作失敗（HTTP ${res.status}）`);
+      // 成功回饋：拖放沒有原生 undo，故明確說明結果與可達的回復方式（核准未立即發布，仍可退回/改時間）。
+      setNote(
+        plan.action === "reject"
+          ? "已退回到「需處理」欄（可在該卡重試或刪除）。"
+          : "已核准排入「已排程」佇列（尚未立即發布；可在該卡『退回』或『改時間』回復）。"
+      );
       router.refresh();
     } catch (e2) {
       setOverrides((prev) => {
@@ -319,6 +334,11 @@ export default function PipelineBoard({
       {failedIds.length > 0 && <RetryFailedBar failedIds={failedIds} />}
       {selectedDraftIds.length > 0 && <BulkDraftBar draftIds={selectedDraftIds} />}
       {err && <p className="text-sm text-danger" role="alert">❌ {err}</p>}
+      {note && (
+        <p className="text-sm text-emerald-600" role="status" aria-live="polite">
+          ✅ {note}
+        </p>
+      )}
 
       <p className="text-xs text-ink-3">👉 左右滑動切換欄位：待審素材 → 素材庫 → 草稿 → 已排程 → 已發布 → 需處理</p>
 
@@ -329,17 +349,44 @@ export default function PipelineBoard({
         onDragEnd={onDragEnd}
       >
         <div className="flex gap-4 overflow-x-auto pb-4">
-          <Column id="pending" title="🔎 待審素材" hint="爬蟲抓回、已換好分潤連結，逐筆審核入庫" count={pending.length} accent="text-amber-700" droppable={false} active={false}>
+          <Column
+            id="pending"
+            title="🔎 待審素材"
+            hint="爬蟲抓回、已換好分潤連結，逐筆審核入庫"
+            count={pending.length}
+            accent="text-amber-700"
+            droppable={false}
+            active={false}
+            emptyHint="目前沒有待審素材。設定爬蟲監看來源後，抓回的貼文會先到這裡等你審核。"
+          >
             <PendingMaterialsReview items={pending} accounts={accounts} />
           </Column>
 
-          <Column id="materials" title="🧺 素材庫" hint="已入庫、可重複再排一篇（不重燒 token）" count={materials.length} accent="" droppable={false} active={false}>
+          <Column
+            id="materials"
+            title="🧺 素材庫"
+            hint="已入庫、可重複再排一篇（不重燒 token）"
+            count={materials.length}
+            accent=""
+            droppable={false}
+            active={false}
+            emptyHint="素材庫是空的。先到「待審素材」核准入庫，或用上方「＋ 建立素材」貼一個蝦皮連結。"
+          >
             {materials.map((m) => (
               <MaterialCard key={m.id} m={m} accounts={accounts} revenue={itemRev[m.item_id]} cloud={cloud} preset={preset} />
             ))}
           </Column>
 
-          <Column id="draft" title="📝 草稿" hint="AI 文案待審：勾選可批次核准，或拖到「已排程」即核准" count={groups.drafts.length} accent="" droppable={false} active={false}>
+          <Column
+            id="draft"
+            title="📝 草稿"
+            hint="AI 文案待審：勾選可批次處理，或拖到「已排程」＝核准排程（不立即發）"
+            count={groups.drafts.length}
+            accent=""
+            droppable={false}
+            active={false}
+            emptyHint="還沒有待審草稿。從「素材庫」某張卡按「再排一篇」，產生的草稿會出現在這裡。"
+          >
             {groups.drafts.map((d) => renderDraft(d, true, true))}
           </Column>
 
@@ -351,6 +398,7 @@ export default function PipelineBoard({
             accent=""
             droppable
             active={validTarget("scheduled")}
+            emptyHint="尚無排程中的草稿。核准草稿後會排入佇列，依防封節奏自動發布。"
             headerExtra={
               <select
                 className="rounded border bg-surface px-1 py-0.5 text-[11px] text-ink-2"
@@ -375,6 +423,7 @@ export default function PipelineBoard({
             accent="text-green-700"
             droppable={false}
             active={false}
+            emptyHint="還沒有已發布的貼文。發布後會顯示在這裡（含延遲留言補發狀態）。"
             headerExtra={
               <select
                 className="rounded border bg-surface px-1 py-0.5 text-[11px] text-ink-2"
@@ -391,7 +440,16 @@ export default function PipelineBoard({
             {groups.published.map((d) => renderDraft(d, false))}
           </Column>
 
-          <Column id="attention" title="⚠️ 需處理" hint="失敗／待確認／已退回；拖入＝退回" count={groups.attention.length} accent="text-red-700" droppable active={validTarget("attention")}>
+          <Column
+            id="attention"
+            title="⚠️ 需處理"
+            hint="失敗／待確認／已退回；拖入＝退回"
+            count={groups.attention.length}
+            accent="text-red-700"
+            droppable
+            active={validTarget("attention")}
+            emptyHint="沒有需要處理的項目 👍"
+          >
             {groups.attention.map((d) => renderDraft(d, true))}
           </Column>
         </div>

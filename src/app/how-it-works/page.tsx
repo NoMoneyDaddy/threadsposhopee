@@ -107,13 +107,13 @@ export default function HowItWorksPage() {
       <Section id="publish" title="第三～四步：核准 → 排程 → 發布">
         <Steps
           items={[
-            <>在<Link href="/materials" className="text-brand underline">素材</Link>對某商品按「排一篇」，產生<b>待審草稿</b>。</>,
-            <>到<Link href="/drafts" className="text-brand underline">文章管理</Link>檢視／微調草稿，<b>核准</b>後才進發文佇列（也可改排程時間）。</>,
+            <>在<Link href="/pipeline" className="text-brand underline">工作台</Link>的素材庫對某商品按「再排一篇」，產生<b>待審草稿</b>。</>,
+            <>在<Link href="/pipeline" className="text-brand underline">工作台</Link>檢視／微調草稿，<b>核准</b>後才進發文佇列（也可改排程時間）。</>,
             <>系統依<b>防封節奏</b>自動發到你的 Threads 帳號。</>,
             <>分潤連結可放在<b>留言</b>、並稍微延後補上，降低連結影響觸及的風險。</>
           ]}
         />
-        <Note>文章管理整併了發文、草稿、AI 部落客與素材。</Note>
+        <Note>工作台整併了發文、草稿、AI 部落客與素材。</Note>
       </Section>
 
       <Section id="redirect" title="自有短連結（轉址服務）" badge="選用">
@@ -126,7 +126,7 @@ export default function HowItWorksPage() {
       <Section id="agent" title="AI 部落客代理人" badge="進階·選用">
         <p className="text-sm text-ink [overflow-wrap:anywhere]">
           設定「人格 × 領域」後，代理人每天自動抓當日新聞、用<b>你自己的 Gemini</b> 改寫成貼文，
-          產出<b>待審草稿</b>（一樣需人工核准）。在文章管理內設定與檢視。
+          產出<b>待審草稿</b>（一樣需人工核准）。在工作台內設定與檢視。
         </p>
       </Section>
 

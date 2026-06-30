@@ -7,6 +7,7 @@ import { detectReachDrop } from "@/services/threads/reach";
 import { getCurrentUser } from "@/lib/auth";
 import { isDemoMode } from "@/lib/env";
 import { INSIGHTS_PERIODS as PERIODS, resolveInsightsRange } from "@/lib/insights-range";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -122,12 +123,19 @@ export default async function InsightsPage({
         <h2 className="section-title mb-3">每日發布量</h2>
         {data.byDay.length === 0 ? (
           <p className="text-sm text-ink-2">
-            這段期間還沒有已發布的貼文。到「文章管理」核准草稿或手動發文後，這裡就會出現每日發布量。
+            這段期間還沒有已發布的貼文。到「工作台」核准草稿或手動發文後，這裡就會出現每日發布量。
           </p>
         ) : (
           <div className="flex items-end gap-1" style={{ height: 120 }}>
             {data.byDay.map((d) => (
-              <div key={d.date} className="flex flex-1 flex-col items-center justify-end gap-1" title={`${d.date}：${d.count} 篇`}>
+              // 手機無 hover，故每根長條上方常駐顯示數字，並補 aria-label 供螢幕報讀者。
+              <div
+                key={d.date}
+                className="flex flex-1 flex-col items-center justify-end gap-1"
+                role="img"
+                aria-label={`${d.date}：${d.count} 篇`}
+              >
+                <span className="text-[10px] tabular-nums text-ink-2">{d.count}</span>
                 <div className="w-full rounded-t bg-brand" style={{ height: `${(d.count / maxDay) * 100}%` }} />
                 <span className="text-[10px] text-ink-3">{d.date}</span>
               </div>
@@ -273,6 +281,14 @@ function BestTimesSection({ e }: { e: EngagementSummary }) {
         <TimeRank title="時段（每日）" rows={best.byHour} />
         <TimeRank title="星期" rows={best.byWeekday} />
       </div>
+      {/* 把分析接回行動：到工作台再排一篇時勾「最佳時段」即自動套用，避免使用者得自己記時間回去手排。 */}
+      <p className="mt-3 text-xs text-ink-3">
+        想自動套用？到{" "}
+        <Link href="/pipeline" className="text-brand underline hover:opacity-80">
+          工作台
+        </Link>{" "}
+        從素材「再排一篇」時勾選「最佳時段」，系統會自動挑這些高觸及時段排程。
+      </p>
     </section>
   );
 }
@@ -304,7 +320,14 @@ function RevenueSection({ r }: { r: AffiliateRevenue }) {
         {r.byDay.length > 0 && (
           <div className="mt-4 flex items-end gap-1" style={{ height: 100 }}>
             {r.byDay.map((d) => (
-              <div key={d.date} className="flex flex-1 flex-col items-center justify-end gap-1" title={`${d.date}：${money(d.commission)}`}>
+              // 金額過長不適合每根都印，改用 aria-label 讓螢幕報讀者讀到（hover title 仍保留供桌機）。
+              <div
+                key={d.date}
+                className="flex flex-1 flex-col items-center justify-end gap-1"
+                title={`${d.date}：${money(d.commission)}`}
+                role="img"
+                aria-label={`${d.date}：${money(d.commission)}`}
+              >
                 <div className="w-full rounded-t bg-green-500" style={{ height: `${(d.commission / maxDay) * 100}%` }} />
                 <span className="text-[10px] text-ink-3">{d.date.slice(5)}</span>
               </div>

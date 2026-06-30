@@ -1,6 +1,6 @@
 import { env, isDemoMode } from "@/lib/env";
 import { buildCopyPrompt, splitCopy, pickReplyLeadIn, HUMANIZER_RULES, type CopyContext } from "./humanizer";
-import { DEFAULT_COPY_PREFS, describeMain, type CopyPrefs } from "./prefs";
+import { DEFAULT_COPY_PREFS, describeMain, describeReply, type CopyPrefs } from "./prefs";
 import { generateWithGemini, geminiText } from "./gemini";
 import type { ThreadSegment } from "@/lib/types";
 
@@ -172,10 +172,9 @@ export async function generateThreadCopy(
 ${custom}
 ${segInstruction}規則：
 - 繁體中文、口語、無業配味，每段可獨立成立
-- 每段語氣與用字：${describeMain(prefs.main)}
-- 第 1 段是主文（吸睛開頭、帶出情境），不要放任何網址
-- 中間若有段落，各延伸一個重點／使用心得／情境，一樣不要放網址
-- 最後務必「另起一段」，用你自己的話寫一句口語、每篇都不同的引導語帶出連結（像跟朋友說「連結放下面」的口吻；不要放網址本身，也不要放任何網址佔位符如 [連結] 或 [URL]，網址由系統原樣接上）
+- 第 1 段是主文（吸睛開頭、帶出情境），不要放任何網址。主文語氣與字數：${describeMain(prefs.main)}
+- 第 2 段起（留言／後續串文）語氣與字數：${describeReply(prefs.reply)}；各延伸一個重點／心得／情境，一樣不要放網址
+- 最後務必「另起一段」，用你自己的話寫一句口語、每篇都不同的引導語帶出連結（像跟朋友說「連結放下面」的口吻，依上面「留言」的字數與語氣，要精簡；不要放網址本身，也不要放任何網址佔位符如 [連結] 或 [URL]，網址由系統原樣接上）
 - 每段最多 4 行，段與段之間只用「獨立一行的 ===」分隔，不要加編號或標題
 ${hasMedia ? "- 已附上商品的照片／影片，請依畫面實際看到的外觀、顏色、特點來寫，但不要描述「這張圖」這類字眼\n" : ""}
 商品：${input.productName}

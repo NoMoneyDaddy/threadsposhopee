@@ -39,6 +39,7 @@ export default function SelfComposeForm({
 }) {
   const router = useRouter();
   const [content, setContent] = useState<PostContent>(emptyPostContent());
+  const [postMode, setPostMode] = useState<"split" | "all_in_main">("split"); // all_in_main＝留言＋連結併入主文、單篇發布
   const [replyDelay, setReplyDelay] = useState(""); // 留言延遲（分），空=用全域預設
   const [accountId, setAccountId] = useState(threadsAccounts[0]?.id ?? "");
   const [scheduledAt, setScheduledAt] = useState("");
@@ -136,6 +137,7 @@ export default function SelfComposeForm({
             media: mainMedia,
             reply_media: replyMedia,
             thread_chain: extraSegments,
+            post_mode: postMode,
             action,
             scheduled_at: scheduledAt ? parseTaipeiDateTimeLocal(scheduledAt).toISOString() : null
           })
@@ -157,6 +159,7 @@ export default function SelfComposeForm({
               : "✅ 已存草稿";
       setMsg(done);
       setContent(emptyPostContent());
+      setPostMode("split");
       setReplyDelay("");
       localStorage.removeItem(COMPOSE_DRAFT_KEY);
       router.refresh();
@@ -177,6 +180,8 @@ export default function SelfComposeForm({
         accountLabel={threadsAccounts.find((a) => a.id === (accountId || threadsAccounts[0]?.id))?.label}
         replyDelay={replyDelay}
         onReplyDelayChange={setReplyDelay}
+        postMode={postMode}
+        onPostModeChange={setPostMode}
         onAutosave={autosave}
       />
 

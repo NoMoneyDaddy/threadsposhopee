@@ -41,7 +41,9 @@ export default function PostEditor({
   threadContext,
   onAutosave,
   autosaveDelayMs = 1500,
-  limit = THREADS_LIMIT
+  limit = THREADS_LIMIT,
+  postMode,
+  onPostModeChange
 }: {
   value: PostContent;
   onChange: (next: PostContent) => void;
@@ -57,7 +59,11 @@ export default function PostEditor({
   onAutosave?: (value: PostContent, signal?: AbortSignal) => Promise<void>;
   autosaveDelayMs?: number;
   limit?: number;
+  // 發文版面：all_in_main＝把留言＋連結併入主文、單篇發布（不另發留言）。未傳 onPostModeChange 即不顯示此開關。
+  postMode?: "split" | "all_in_main" | null;
+  onPostModeChange?: (m: "split" | "all_in_main") => void;
 }) {
+  const allInMain = postMode === "all_in_main";
   const set = (patch: Partial<PostContent>) => onChange({ ...value, ...patch });
 
   // 「換個說法」：AI 改寫出多個版本供挑選。
@@ -239,17 +245,23 @@ export default function PostEditor({
 
       <div>
         <label className="mb-1 block text-sm font-medium text-ink">留言（串文 2/2，選填）</label>
+        {onPostModeChange && (
+          <label className="mb-2 flex items-start gap-2 text-xs text-ink-2" title="勾選＝單篇發布：留言內容與媒體（含分潤連結）併進主文，不另外發留言">
+            <input type="checkbox" className="mt-0.5" checked={allInMain} onChange={(e) => onPostModeChange(e.target.checked ? "all_in_main" : "split")} />
+            <span>不發留言，把留言＋分潤連結併入主文（單篇發布）</span>
+          </label>
+        )}
         <textarea
           className={inputCls + " text-xs"}
           rows={2}
           value={value.replyText}
           onChange={(e) => set({ replyText: e.target.value })}
-          placeholder="留言區（選填，例如分潤連結）"
+          placeholder={allInMain ? "（此內容會併入主文一起發，不另外發留言）" : "留言區（選填，例如分潤連結）"}
         />
         <div className="mt-2">
-          <MediaPicker items={value.replyMedia} onChange={(m) => set({ replyMedia: typeof m === "function" ? m(value.replyMedia) : m })} cloud={cloud} preset={preset} hint="留言也可加多張照片／影片" />
+          <MediaPicker items={value.replyMedia} onChange={(m) => set({ replyMedia: typeof m === "function" ? m(value.replyMedia) : m })} cloud={cloud} preset={preset} hint={allInMain ? "這些媒體會併入主文一起發" : "留言也可加多張照片／影片"} />
         </div>
-        {onReplyDelayChange && (value.replyText.trim() || value.replyMedia.length > 0) && (
+        {!allInMain && onReplyDelayChange && (value.replyText.trim() || value.replyMedia.length > 0) && (
           <div className="mt-2 flex items-center gap-2">
             <label className="text-xs text-ink-2">留言延遲幾分鐘後補上（留空就用預設值）</label>
             <input
@@ -324,10 +336,10 @@ export default function PostEditor({
 
       <ThreadsPreview
         accountLabel={accountLabel ?? undefined}
-        mainText={value.mainText}
-        replyText={value.replyText}
-        media={value.mainMedia}
-        replyMedia={value.replyMedia}
+        mainText={allInMain ? [value.mainText, value.replyText].map((s) => s.trim()).filter(Boolean).join("\n\n") : value.mainText}
+        replyText={allInMain ? "" : value.replyText}
+        media={allInMain ? [...value.mainMedia, ...value.replyMedia] : value.mainMedia}
+        replyMedia={allInMain ? [] : value.replyMedia}
         extraSegments={value.extraSegments}
       />
     </div>

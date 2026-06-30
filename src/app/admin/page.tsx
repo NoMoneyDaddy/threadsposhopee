@@ -192,6 +192,7 @@ export default async function AdminPage() {
                   <div className="text-xs text-ink-3">
                     匯入 {m.import_count}・收藏 {m.favorite_count}
                     {m.review_status === "removed" && <span className="ml-1 text-warn">・已下架</span>}
+                    {m.affiliate_valid === false && <span className="ml-1 text-warn" title="連結健檢判定失效，已自動暫時從共享庫下架；連結復活後自動恢復">・🔗 連結失效（暫時下架）</span>}
                   </div>
                 </div>
                 <ReviewButton id={m.id} status={m.review_status} />

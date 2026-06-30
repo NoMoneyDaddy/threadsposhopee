@@ -17,6 +17,7 @@ function row(id: string, shop: string, item: string, importCount: number): Share
     import_count: importCount,
     favorite_count: 0,
     review_status: "approved",
+    affiliate_valid: true,
     created_at: "2026-06-22T00:00:00Z"
   };
 }

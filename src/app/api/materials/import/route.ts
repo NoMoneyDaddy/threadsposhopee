@@ -22,7 +22,8 @@ export async function POST(req: Request) {
 
     const shared = await getSharedMaterial(id);
     if (!shared || !shared.clean_product_url) {
-      return NextResponse.json({ ok: false, error: "找不到共享商品" }, { status: 404 });
+      // 已下架或連結失效（健檢判定後暫時下架）皆會查不到 → 一併以此訊息回覆。
+      return NextResponse.json({ ok: false, error: "找不到共享商品（可能已下架或連結失效）" }, { status: 404 });
     }
     if (shared.owner_id === user.id) {
       return NextResponse.json({ ok: false, error: "這是你自己分享的商品，無需匯入" }, { status: 400 });

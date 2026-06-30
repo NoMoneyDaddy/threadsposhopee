@@ -56,7 +56,7 @@ export default function BulkDraftBar({ draftIds }: { draftIds: string[] }) {
       >
         全部刪除
       </button>
-      {msg && <span className="text-sm text-ink-2">{msg}</span>}
+      {msg && <span className="text-sm text-ink-2" role="status" aria-live="polite">{msg}</span>}
     </div>
   );
 }

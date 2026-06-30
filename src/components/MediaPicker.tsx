@@ -66,13 +66,13 @@ export default function MediaPicker({
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={cloudinaryThumb(m.url, 160)} alt="" className="h-16 w-16 rounded-lg border object-cover" />
               ) : (
-                <video src={m.url} className="h-16 w-16 rounded-lg border object-cover" />
+                <video src={m.url} aria-label={`第 ${i + 1} 個媒體（影片）預覽`} muted playsInline className="h-16 w-16 rounded-lg border object-cover" />
               )}
               <button
                 type="button"
                 onClick={() => removeAt(i)}
                 aria-label={`移除第 ${i + 1} 個媒體`}
-                className="absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full bg-black/70 text-[10px] text-white hover:bg-black"
+                className="absolute -right-1 -top-1 grid h-6 w-6 place-items-center rounded-full bg-black/70 text-xs text-white hover:bg-black"
               >
                 ✕
               </button>

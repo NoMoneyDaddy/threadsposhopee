@@ -62,6 +62,16 @@
       -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
       "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
   }
+  /* 手機端表單控件字級至少 16px：iOS Safari 對 <16px 的輸入框聚焦時會自動放大頁面，
+     且之後不會自動還原，造成「縮放體驗不佳」。桌機維持原設計（text-sm/text-xs）。
+     仍允許使用者主動縮放（未鎖 user-scalable / maximum-scale）。 */
+  @media (max-width: 640px) {
+    input:not([type="checkbox"]):not([type="radio"]),
+    select,
+    textarea {
+      font-size: 16px;
+    }
+  }
   h1, h2, h3, h4 {
     @apply tracking-tight text-ink;
     letter-spacing: -0.018em;

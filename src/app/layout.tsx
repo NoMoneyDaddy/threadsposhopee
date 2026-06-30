@@ -41,7 +41,10 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#6366f1"
+  themeColor: "#6366f1",
+  // 明確指定行動裝置視窗（不依賴框架預設）；不鎖 maximum-scale／user-scalable，保留使用者主動縮放（a11y）。
+  width: "device-width",
+  initialScale: 1
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {

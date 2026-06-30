@@ -109,10 +109,13 @@ export default async function SharedPage() {
                     <span className="shrink-0 rounded bg-surface-2 px-2 py-0.5 text-xs text-ink-2">被匯入 {m.import_count}</span>
                   )}
                 </div>
-                {m.cloudinary_media_url && m.media_type !== "none" && (
+                {m.cloudinary_media_url && m.media_type === "video" ? (
+                  // 影片用 <video>（塞進 <img> 會變空白）；顯示首幀當預覽。
+                  <video src={m.cloudinary_media_url} muted playsInline preload="metadata" className="mb-2 h-32 w-full rounded object-cover" {...{ referrerPolicy: "no-referrer" }} />
+                ) : m.cloudinary_media_url && m.media_type === "image" ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={cloudinaryThumb(m.cloudinary_media_url, 600)} alt="" loading="lazy" className="mb-2 h-32 w-full rounded object-cover" />
-                )}
+                  <img src={cloudinaryThumb(m.cloudinary_media_url, 600)} alt="" loading="lazy" referrerPolicy="no-referrer" className="mb-2 h-32 w-full rounded object-cover" />
+                ) : null}
                 {m.main_text ? (
                   <div className="whitespace-pre-wrap text-sm text-ink">{m.main_text}</div>
                 ) : (

@@ -5,6 +5,22 @@ import { nextOpenSlot, nextOpenSlotAtHours } from "./slots";
 // 固定基準時間：2026-06-18T01:00:00Z = 台北 09:00。預設時段 09:00/12:30/20:00。
 const base = Date.parse("2026-06-18T01:00:00Z");
 
+test("nextOpenSlot：套防封最小間隔 → 跳過離已占用太近的時段（顯示＝實際可發）", () => {
+  const at8 = Date.parse("2026-06-18T00:00:00Z"); // 台北 08:00
+  const taken = new Set(["2026-06-18T01:00:00.000Z"]); // 台北 09:00 已占用
+  // 無 pacing：12:30（04:30Z）可選
+  assert.equal(nextOpenSlot(taken, at8), "2026-06-18T04:30:00.000Z");
+  // gap 240 分：12:30 離 09:00 僅 210 分 → 跳過，改選 20:00（12:00Z）
+  assert.equal(nextOpenSlot(taken, at8, 30, undefined, { gapMinutes: 240 }), "2026-06-18T12:00:00.000Z");
+});
+
+test("nextOpenSlot：套每日上限 → 當日已滿跳次日第一格", () => {
+  const at8 = Date.parse("2026-06-18T00:00:00Z");
+  const taken = new Set(["2026-06-18T01:00:00.000Z", "2026-06-18T04:30:00.000Z"]); // 今天台北已占 2 格
+  // maxPerDay 2：今天已滿 → 跳次日 09:00（隔天 01:00Z）
+  assert.equal(nextOpenSlot(taken, at8, 30, undefined, { maxPerDay: 2 }), "2026-06-19T01:00:00.000Z");
+});
+
 test("nextOpenSlotAtHours：依最佳時段整點挑下一個未來空檔（台北 20:00 = 12:00Z）", () => {
   // 台北 09:00 當下；最佳時段排序 [20, 9, 13] → 今天 20:00 仍在未來、最高優先
   const iso = nextOpenSlotAtHours(new Set(), [20, 9, 13], base);

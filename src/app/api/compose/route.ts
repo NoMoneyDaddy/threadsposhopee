@@ -285,7 +285,8 @@ export async function POST(req: Request) {
       // 自動排進下一個空時段（使用者自訂時段優先）；併發撞格時 withNextSlot 會重算重試
       const prefs = await getPublishPrefs(user.id).catch(() => null);
       const slots = prefs?.slots;
-      draft = await withNextSlot(user.id, (slot) => make(slot), 5, (taken) => nextOpenSlot(taken, Date.now(), 30, slots));
+      const pacing = { gapMinutes: prefs?.minGapMinutes, maxPerDay: prefs?.maxPerDay };
+      draft = await withNextSlot(user.id, (slot) => make(slot), 5, (taken) => nextOpenSlot(taken, Date.now(), 30, slots, pacing));
       if (!draft) return NextResponse.json({ ok: false, error: "未來 30 天的時段都排滿了" }, { status: 409 });
       queuedSlot = draft.scheduled_at ?? null;
     } else if (action === "schedule") {

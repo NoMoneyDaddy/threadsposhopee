@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { log } from "@/lib/logger";
-import { getMaterial, createDraftFromMaterial, updateDraft, getGeminiKey, resolveGeminiModel, getCopyPrefs, userOwnsThreadsAccount, getRepostLimits, countMaterialReposts } from "@/lib/store";
+import { getMaterial, createDraftFromMaterial, updateDraft, getGeminiKey, resolveGeminiModel, getCopyPrefs, userOwnsThreadsAccount, getRepostLimits, countMaterialReposts, getPublishPrefs } from "@/lib/store";
 import { exceedsRepostLimit } from "@/lib/repost-limits";
-import { withNextSlot, nextOpenSlotAtHours } from "@/services/publish/slots";
+import { withNextSlot, nextOpenSlot, nextOpenSlotAtHours } from "@/services/publish/slots";
 import { getBestHours } from "@/services/threads/engagement";
 import { generateCopy } from "@/services/ai/provider";
 import { getCurrentUser } from "@/lib/auth";
@@ -81,7 +81,12 @@ export async function POST(req: Request) {
     if (action === "queue") {
       // bestTime=true 且有足夠成效資料 → 依最佳時段排程；否則用預設 PUBLISH_SLOTS。
       const hours = body.bestTime === true ? await getBestHours(ownerId) : [];
-      const pick = hours.length ? (taken: Set<string>) => nextOpenSlotAtHours(taken, hours) : undefined;
+      // 挑時段套防封節奏（最小間隔／每日上限），與發文層一致，避免顯示時間被順延。
+      const prefs = await getPublishPrefs(ownerId).catch(() => null);
+      const pacing = { gapMinutes: prefs?.minGapMinutes, maxPerDay: prefs?.maxPerDay };
+      const pick = hours.length
+        ? (taken: Set<string>) => nextOpenSlotAtHours(taken, hours, Date.now(), 30, pacing)
+        : (taken: Set<string>) => nextOpenSlot(taken, Date.now(), 30, prefs?.slots, pacing);
       draft = await withNextSlot(
         ownerId,
         (slot) =>

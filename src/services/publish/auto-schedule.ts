@@ -11,10 +11,14 @@ export async function autoScheduleApproved(
 ): Promise<Draft | null> {
   // 讀取發文偏好失敗時回 null（讓上游退回待審草稿），不冒險用系統預設時段把內容免審直發出去。
   let slots: string[] | undefined;
+  let pacing: { gapMinutes?: number; maxPerDay?: number } | undefined;
   try {
-    slots = (await getPublishPrefs(ownerId))?.slots;
+    const prefs = await getPublishPrefs(ownerId);
+    slots = prefs?.slots;
+    pacing = { gapMinutes: prefs?.minGapMinutes, maxPerDay: prefs?.maxPerDay };
   } catch {
     return null;
   }
-  return withNextSlot(ownerId, (slot) => create(slot), 5, (taken) => nextOpenSlot(taken, Date.now(), 30, slots));
+  // 挑時段套防封節奏 → 排出來的時間就是發文層真正會發的時間（顯示＝實際）。
+  return withNextSlot(ownerId, (slot) => create(slot), 5, (taken) => nextOpenSlot(taken, Date.now(), 30, slots, pacing));
 }

@@ -1,19 +1,25 @@
-// 可供使用者自選的 Gemini 文案模型清單＋免費層額度概估。純資料/純函式，可單測。
-// 免費層每日請求上限（freeRpd）會隨 Google 政策變動，這裡為「概估」，UI 一律標示「以官方為準」並附連結。
+// 可供使用者自選的 Gemini 文案模型清單。純資料/純函式，可單測。
+// 刻意「不寫死每日次數」：Google 免費層額度近期多次大幅調降、各模型差很多（實測 2.5-flash 曾僅 20 次/日），
+// 寫具體數字只會誤導。改用相對級距（高/中/低），確切值一律導去官方額度頁。
 export interface GeminiModelInfo {
   id: string;
+  /** 簡短名（用於「平台預設」標示，不含括號說明）。 */
+  short: string;
   label: string;
-  /** 免費層每日請求上限（RPD）概估；實際以 Google AI Studio 為準。 */
-  freeRpd: number;
+  /** 免費層額度相對級距：高 > 中 > 低。確切每日上限隨 Google 政策變動，以官方為準。 */
+  freeTier: "高" | "中" | "低";
   note: string;
 }
 
-// 由便宜到貴排序。涵蓋目前常見、確定多模態的 2.5 系列。
+// 由免費額度多到少排序。涵蓋目前常見、確定多模態的 2.5 系列。
 export const GEMINI_MODELS: GeminiModelInfo[] = [
-  { id: "gemini-2.5-flash-lite", label: "2.5 Flash-Lite（最省，預設）", freeRpd: 1000, note: "多模態最便宜、速度最快，短文案夠用" },
-  { id: "gemini-2.5-flash", label: "2.5 Flash（品質較高）", freeRpd: 250, note: "文案品質較好，較貴、免費額度較少" },
-  { id: "gemini-2.5-pro", label: "2.5 Pro（最高品質）", freeRpd: 100, note: "最強但最慢、免費額度最少" }
+  { id: "gemini-2.5-flash-lite", short: "2.5 Flash-Lite", label: "2.5 Flash-Lite（最省）", freeTier: "高", note: "多模態最便宜、速度最快，短文案夠用" },
+  { id: "gemini-2.5-flash", short: "2.5 Flash", label: "2.5 Flash（品質較高）", freeTier: "中", note: "文案品質較好，但免費每日額度明顯較少、較貴" },
+  { id: "gemini-2.5-pro", short: "2.5 Pro", label: "2.5 Pro（最高品質）", freeTier: "低", note: "最強但最慢，免費額度最少（近期多已轉付費）" }
 ];
+
+// 免費級距排序權重（高>中>低），供 UI 與測試判斷遞減。
+export const FREE_TIER_RANK: Record<GeminiModelInfo["freeTier"], number> = { 高: 3, 中: 2, 低: 1 };
 
 export const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-lite";
 
@@ -37,10 +43,4 @@ export function normalizeModelInput(raw: unknown): string | null | undefined {
   const m = raw.trim();
   if (!m) return null; // 純空白＝清除
   return isAllowedGeminiModel(m) ? m : undefined;
-}
-
-// 免費層每日「約可生成幾篇」：每篇文案約 1 次 AI 呼叫，故 ≈ freeRpd。純函式（之後若每篇多次呼叫可改係數）。
-export function estimatedPostsPerDay(freeRpd: number, callsPerPost = 1): number {
-  if (!Number.isFinite(freeRpd) || !Number.isFinite(callsPerPost) || freeRpd <= 0 || callsPerPost <= 0) return 0;
-  return Math.floor(freeRpd / callsPerPost);
 }

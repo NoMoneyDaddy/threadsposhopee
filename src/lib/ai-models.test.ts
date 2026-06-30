@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { GEMINI_MODELS, DEFAULT_GEMINI_MODEL, isAllowedGeminiModel, geminiModelInfo, estimatedPostsPerDay, normalizeModelInput } from "./ai-models";
+import { GEMINI_MODELS, DEFAULT_GEMINI_MODEL, FREE_TIER_RANK, isAllowedGeminiModel, geminiModelInfo, normalizeModelInput } from "./ai-models";
 
 test("normalizeModelInput：null/空字串=清除；白名單字串=設定；缺/型別錯誤/非白名單=非法(undefined)", () => {
   assert.equal(normalizeModelInput(null), null); // 明確清除
@@ -26,20 +26,11 @@ test("預設模型在白名單內", () => {
   assert.ok(geminiModelInfo(DEFAULT_GEMINI_MODEL));
 });
 
-test("estimatedPostsPerDay：每篇 1 次呼叫＝約等於 RPD；異常值回 0", () => {
-  assert.equal(estimatedPostsPerDay(1000), 1000);
-  assert.equal(estimatedPostsPerDay(250, 1), 250);
-  assert.equal(estimatedPostsPerDay(100, 2), 50); // 每篇 2 次呼叫
-  assert.equal(estimatedPostsPerDay(0), 0);
-  assert.equal(estimatedPostsPerDay(-5), 0);
-  // callsPerPost 為 NaN/Infinity 也要回 0（不可變 NaN）
-  assert.equal(estimatedPostsPerDay(100, Number.NaN), 0);
-  assert.equal(estimatedPostsPerDay(100, Number.POSITIVE_INFINITY), 0);
-});
-
-test("GEMINI_MODELS：由便宜到貴（免費額度遞減），且預設為最省那個", () => {
+test("GEMINI_MODELS：免費額度由多到少（高→低），預設為最省那個，且不寫死具體次數", () => {
   assert.equal(GEMINI_MODELS[0].id, DEFAULT_GEMINI_MODEL);
   for (let i = 1; i < GEMINI_MODELS.length; i++) {
-    assert.ok(GEMINI_MODELS[i].freeRpd <= GEMINI_MODELS[i - 1].freeRpd);
+    assert.ok(FREE_TIER_RANK[GEMINI_MODELS[i].freeTier] <= FREE_TIER_RANK[GEMINI_MODELS[i - 1].freeTier]);
   }
+  // 避免回頭塞具體每日次數（會隨 Google 政策過時、誤導使用者選到低額度模型）
+  for (const m of GEMINI_MODELS) assert.equal(typeof (m as unknown as Record<string, unknown>).freeRpd, "undefined");
 });

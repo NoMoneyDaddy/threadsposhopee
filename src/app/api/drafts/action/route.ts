@@ -331,5 +331,23 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   }
 
+  // 取消補留言：把排隊中／失敗的留言停掉，不再補發（reply_status→none、清除到期時間）。避免不想要的補發或重貼。
+  if (action === "cancel-reply") {
+    if (draft.reply_status !== "pending" && draft.reply_status !== "failed") {
+      return NextResponse.json({ ok: false, error: "目前沒有可取消的補留言" }, { status: 400 });
+    }
+    await updateDraftStatus(id, draft.status, { reply_status: "none", reply_due_at: null }, user.id);
+    return NextResponse.json({ ok: true });
+  }
+
+  // 標示為「已補發」：留言其實已發在 Threads 上（自動讀回沒比中時），手動標記消除假失敗、避免重貼。
+  if (action === "mark-reply-done") {
+    if (draft.reply_status !== "pending" && draft.reply_status !== "failed") {
+      return NextResponse.json({ ok: false, error: "目前狀態無需標示" }, { status: 400 });
+    }
+    await updateDraftStatus(id, draft.status, { reply_status: "published", reply_due_at: null }, user.id);
+    return NextResponse.json({ ok: true });
+  }
+
   return NextResponse.json({ ok: false, error: "未知動作" }, { status: 400 });
 }

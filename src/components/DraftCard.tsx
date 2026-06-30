@@ -691,7 +691,16 @@ function DraftCard({
       )}
 
       {showReply && rs === "pending" && (
-        <p className="mt-2 rounded bg-amber-50 p-2 text-xs text-amber-700">🕒 留言補發排隊中（預計 {fmtEta(draft.reply_due_at)}）</p>
+        <div className="mt-2 rounded bg-amber-50 p-2 text-xs text-amber-700">
+          <p>🕒 留言補發排隊中（預計 {fmtEta(draft.reply_due_at)}）</p>
+          <button
+            disabled={!!busy}
+            onClick={() => call("cancel-reply")}
+            className="mt-1.5 rounded border border-amber-300 px-3 py-1 text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+          >
+            {busy === "cancel-reply" ? "取消中…" : "取消補留言"}
+          </button>
+        </div>
       )}
       {showReply && rs === "publishing-reply" && (
         <p className="mt-2 rounded bg-amber-50 p-2 text-xs text-amber-700">⏳ 留言補發中…</p>
@@ -702,13 +711,30 @@ function DraftCard({
       {showReply && rs === "failed" && (
         <div className="mt-2 rounded bg-red-50 p-2 text-xs text-red-600">
           <p>⚠️ 留言補發失敗{draft.error ? `：${draft.error}` : ""}</p>
-          <button
-            disabled={!!busy}
-            onClick={() => call("retry-reply")}
-            className="mt-1.5 rounded border border-amber-300 px-3 py-1 text-amber-700 hover:bg-amber-50 disabled:opacity-50"
-          >
-            {busy === "retry-reply" ? "重排中…" : "重試補留言"}
-          </button>
+          <p className="mt-1 text-[11px] text-ink-3">若留言其實已發在貼文下，按「已發過了」消除提示（不會重貼）。</p>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            <button
+              disabled={!!busy}
+              onClick={() => call("retry-reply")}
+              className="rounded border border-amber-300 px-3 py-1 text-amber-700 hover:bg-amber-50 disabled:opacity-50"
+            >
+              {busy === "retry-reply" ? "重排中…" : "重試補留言"}
+            </button>
+            <button
+              disabled={!!busy}
+              onClick={() => call("mark-reply-done")}
+              className="rounded border border-emerald-300 px-3 py-1 text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+            >
+              {busy === "mark-reply-done" ? "處理中…" : "已發過了（標為完成）"}
+            </button>
+            <button
+              disabled={!!busy}
+              onClick={() => call("cancel-reply")}
+              className="rounded border border-border px-3 py-1 text-ink-2 hover:bg-surface-2 disabled:opacity-50"
+            >
+              {busy === "cancel-reply" ? "取消中…" : "取消補發"}
+            </button>
+          </div>
         </div>
       )}
       {msg && (

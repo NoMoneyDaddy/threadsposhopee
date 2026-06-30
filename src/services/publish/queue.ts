@@ -157,6 +157,21 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
   const sponsorOwnerCreds =
     sponsorCfg.enabled && !isDemoMode && sponsorOwnerId ? await resolveSponsorOwnerCreds(sponsorOwnerId).catch(() => null) : null;
 
+  // 觸及自動調速：本輪「先並行」預抓各 owner 的觸及驟降訊號，避免在發文主迴圈內逐一序列 await
+  // 在快取失效時累積耗時、吃掉 50s 預算而截斷本輪。factor=1（關閉）則完全不查；失敗/樣本不足視為無驟降。
+  if (env.publishReachSlowdownFactor > 1) {
+    const owners = Array.from(new Set(drafts.map((d) => d.owner_id).filter((o): o is string => Boolean(o))));
+    await Promise.all(
+      owners.map(async (o) => {
+        const hasSignal = await getEngagementCached(o)
+          .then((e) => detectReachDrop(e.posts).hasSignal)
+          .catch(() => false);
+        reachSlowByOwner[o] = hasSignal;
+        if (hasSignal) log.info("觸及偏低，自動放慢發文節奏", { ownerId: o, factor: env.publishReachSlowdownFactor });
+      })
+    );
+  }
+
   for (const draft of drafts) {
     // 接近 maxDuration(60s) 上限就停手，避免草稿卡在 publishing 狀態，留待下次排程
     if (Date.now() - startTime > 50000) break;
@@ -206,22 +221,10 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
       }));
     }
     const pp = pacingPrefsCache[ownerKey];
-    // 觸及自動調速：偵測 owner 近期觸及驟降（依 owner 快取一次）→ 放慢該 owner 節奏（間隔×／每日上限÷）。
-    // 安全方向（只會更慢）；成效查詢失敗或樣本不足 → 視為無驟降，不影響正常發文。factor=1 即關閉、不查。
-    if (!(ownerKey in reachSlowByOwner)) {
-      reachSlowByOwner[ownerKey] =
-        ownerKey && env.publishReachSlowdownFactor > 1
-          ? await getEngagementCached(ownerKey)
-              .then((e) => detectReachDrop(e.posts).hasSignal)
-              .catch(() => false)
-          : false;
-      if (reachSlowByOwner[ownerKey]) {
-        log.info("觸及偏低，自動放慢發文節奏", { ownerId: ownerKey, factor: env.publishReachSlowdownFactor });
-      }
-    }
+    // 觸及自動調速：用本輪預抓的 owner 驟降訊號放慢節奏（間隔×／每日上限÷）。安全方向（只會更慢）。
     const eff = reachAdjustedPacing(
       { minGapMinutes: pp.minGapMinutes, maxPerDay: pp.maxPerDay },
-      reachSlowByOwner[ownerKey],
+      reachSlowByOwner[ownerKey] ?? false,
       env.publishReachSlowdownFactor
     );
     // 同步節奏守衛（斷路器→批次→每日上限含暖機→最小間隔含抖動）抽成純函式，集中且可單測。

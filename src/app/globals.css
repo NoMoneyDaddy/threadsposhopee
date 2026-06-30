@@ -71,11 +71,14 @@
   /* 手機端表單控件字級至少 16px：iOS Safari 對 <16px 的輸入框聚焦時會自動放大頁面，
      且之後不會自動還原，造成「縮放體驗不佳」。桌機維持原設計（text-sm/text-xs）。
      仍允許使用者主動縮放（未鎖 user-scalable / maximum-scale）。 */
-  @media (max-width: 640px) {
+  @media (max-width: 639.98px) {
     input:not([type="checkbox"]):not([type="radio"]),
     select,
     textarea {
-      font-size: 16px;
+      /* !important：覆蓋 Tailwind utilities 層的 text-sm/text-xs（utilities 層級高於 base，
+         否則此規則對帶 text-xs 的 select/textarea 無效，iOS 仍會聚焦放大）。
+         斷點 639.98px 與 Tailwind sm(min-640) 完美銜接，避免剛好 640px 時兩者衝突。 */
+      font-size: 16px !important;
     }
   }
   h1, h2, h3, h4 {

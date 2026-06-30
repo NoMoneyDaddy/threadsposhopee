@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Material, DraftMedia, ThreadsAccount } from "@/lib/types";
-import { cloudinaryThumb } from "@/lib/img";
+import { cloudinaryThumb, videoFirstFrameSrc } from "@/lib/img";
 import { normalizeDraftMedia } from "@/lib/media";
 
 const SLOT_OPTS: { v: NonNullable<DraftMedia["slot"]>; label: string }[] = [
@@ -20,7 +20,7 @@ function MediaThumb({ m }: { m: DraftMedia }) {
         // referrerPolicy 不在 React 的 video 型別內，但屬性本身合法且新版瀏覽器支援；
         // 用 ref 直接設 DOM 屬性，讓防盜連的來源影片也載得到（與圖片一致）。
         ref={(el) => el?.setAttribute("referrerpolicy", "no-referrer")}
-        src={m.url}
+        src={videoFirstFrameSrc(m.url)}
         controls
         muted
         playsInline

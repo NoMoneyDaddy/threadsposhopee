@@ -6,7 +6,7 @@ import MaterialCopyEditor from "@/components/MaterialCopyEditor";
 import EvergreenToggle from "@/components/EvergreenToggle";
 import ShareToggle from "@/components/ShareToggle";
 import { DeleteButton } from "@/components/RowActions";
-import { cloudinaryThumb } from "@/lib/img";
+import { cloudinaryThumb, videoFirstFrameSrc } from "@/lib/img";
 import type { Material, ThreadsAccount } from "@/lib/types";
 import type { ItemRevenue } from "@/services/shopee/report";
 
@@ -47,7 +47,7 @@ export default function MaterialCard({
       {m.cloudinary_media_url && m.media_type !== "none" && (
         m.media_type === "video" ? (
           <video
-            src={m.cloudinary_media_url}
+            src={videoFirstFrameSrc(m.cloudinary_media_url)}
             controls
             muted
             playsInline

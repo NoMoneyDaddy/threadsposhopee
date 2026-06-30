@@ -1,6 +1,17 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cloudinaryThumb } from "./img";
+import { cloudinaryThumb, videoFirstFrameSrc } from "./img";
+
+test("videoFirstFrameSrc：附加 #t=0.001 強制首幀", () => {
+  assert.equal(videoFirstFrameSrc("https://r2.dev/threads/abc.mp4"), "https://r2.dev/threads/abc.mp4#t=0.001");
+});
+
+test("videoFirstFrameSrc：已含 fragment 則原樣；空值回空字串", () => {
+  assert.equal(videoFirstFrameSrc("https://r2.dev/a.mp4#t=5"), "https://r2.dev/a.mp4#t=5");
+  assert.equal(videoFirstFrameSrc(""), "");
+  assert.equal(videoFirstFrameSrc(null), "");
+  assert.equal(videoFirstFrameSrc(undefined), "");
+});
 
 test("cloudinaryThumb：插入 transform（含版本段）", () => {
   assert.equal(

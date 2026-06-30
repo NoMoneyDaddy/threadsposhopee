@@ -13,3 +13,11 @@ export function cloudinaryThumb(url: string | null | undefined, width: number): 
   if (isTransform) return url;
   return `${url.slice(0, i + marker.length)}f_auto,q_auto,w_${width}/${after}`;
 }
+
+// 影片預覽首幀：在 URL 後加媒體時間片段 #t=0.001，強制 iOS/Safari 等行動端瀏覽器定位到起點並渲染首幀，
+// 否則只設 preload=metadata 常顯示黑屏/空白。已含 fragment（#）則原樣返回，避免破壞既有片段。純函式可測。
+export function videoFirstFrameSrc(url: string | null | undefined): string {
+  if (!url) return "";
+  return url.includes("#") ? url : `${url}#t=0.001`;
+}
+

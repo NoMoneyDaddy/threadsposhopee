@@ -98,7 +98,7 @@ export default async function AccountsPage() {
               const exp = tokenExpiryState(a.token_expires_at);
               const badge = threadsTokenBadge(a.token_expires_at);
               return (
-                <div key={a.id} className="rounded-2xl border bg-surface p-4">
+                <div key={a.id} className="min-w-0 rounded-2xl border bg-surface p-4">
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex min-w-0 items-center gap-2">
                       {a.avatar_url ? (

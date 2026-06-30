@@ -76,26 +76,17 @@ function PublishPlan({ rows }: { rows: DashboardData["publishPlan"] }) {
           </span>
         )}
       </div>
-      <table className="w-full text-sm">
-        <thead className="sr-only">
-          <tr>
-            <th>帳號</th>
-            <th>商品</th>
-            <th>狀態</th>
-            <th>預計時間</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.id} className="flex items-center gap-2">
-              <td className="w-20 shrink-0 truncate text-ink-2 sm:w-24">{r.accountLabel}</td>
-              <td className="min-w-0 flex-1 truncate text-ink">{r.productName ?? "（草稿）"}</td>
-              <td className="hidden shrink-0 text-xs text-ink-3 sm:block sm:max-w-[12rem] sm:truncate">{r.reason}</td>
-              <td className="w-24 shrink-0 text-right text-xs tabular-nums text-ink-2 sm:w-28">{fmt(r.etaIso)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {/* 用 flex 區塊而非 <table>：display:table 不吃 flex 子項的收縮，長品名/帳號會把整列撐爆視窗（行動版溢出）。 */}
+      <div className="w-full text-sm" role="list" aria-label="發文排隊進度">
+        {rows.map((r) => (
+          <div key={r.id} role="listitem" className="flex items-center gap-2 py-0.5">
+            <span className="w-20 shrink-0 truncate text-ink-2 sm:w-24">{r.accountLabel}</span>
+            <span className="min-w-0 flex-1 truncate text-ink">{r.productName ?? "（草稿）"}</span>
+            <span className="hidden shrink-0 text-xs text-ink-3 sm:block sm:max-w-[12rem] sm:truncate">{r.reason}</span>
+            <span className="w-24 shrink-0 text-right text-xs tabular-nums text-ink-2 sm:w-28">{fmt(r.etaIso)}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

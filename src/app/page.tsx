@@ -4,8 +4,7 @@ import HotProductsRadar from "@/components/HotProductsRadar";
 import AchievementsCard from "@/components/AchievementsCard";
 import { getCurrentUser } from "@/lib/auth";
 import { getSetupSteps } from "@/lib/setup-status";
-import { getPublishInsights, getFeatureFlags, listHotProducts, getContributionScore, listPublishedDates, countPublished, getHeartbeat, type SharedMaterial } from "@/lib/store";
-import { cronHeartbeatStatus } from "@/lib/cron-status";
+import { getPublishInsights, getFeatureFlags, listHotProducts, getContributionScore, listPublishedDates, countPublished, type SharedMaterial } from "@/lib/store";
 import { computeStreak, taipeiDateStr, achievementsFor } from "@/lib/streak";
 import { log } from "@/lib/logger";
 
@@ -15,22 +14,19 @@ export default async function DashboardPage() {
   const user = await getCurrentUser();
   // 同一次 render 統一取一個時間戳，避免多次 Date.now() 在跨午夜（台北）等邊界產生前後不一致，並利於測試。
   const now = Date.now();
-  // 這四項彼此獨立、都只吃 user／user.id，併發查避免在首頁串接多個 Supabase 往返。
+  // 這三項彼此獨立、都只吃 user／user.id，併發查避免在首頁串接多個 Supabase 往返。
   // 各自 catch 降級（任一失敗不擋頁；getSetupSteps 另記真正失敗的相依以利排查）。
-  const [steps, weekly, heartbeat, flags] = user
+  // 排程心跳改由 LiveDashboard 的 Autopilot（即時更新）單一顯示，避免儀表板重複出現同一狀態。
+  const [steps, weekly, flags] = user
     ? await Promise.all([
         getSetupSteps(user).catch((err) => {
           log.error("getSetupSteps 失敗", { err: err instanceof Error ? err.message : String(err) });
           return [];
         }),
         getPublishInsights(user.id, { startMs: now - 7 * 86400_000, endMs: now }).catch(() => null),
-        getHeartbeat().catch(() => null),
         getFeatureFlags().catch(() => null)
       ])
-    : [[] as Awaited<ReturnType<typeof getSetupSteps>>, null, null, null];
-
-  // 自動駕駛（排程器心跳）：讓使用者一眼確認「排程到了會自動發」——直接回應「排程時間到沒發」的疑慮。
-  const cron = user ? cronHeartbeatStatus(heartbeat, now) : null;
+    : [[] as Awaited<ReturnType<typeof getSetupSteps>>, null, null];
 
   // 選品雷達（全站熱門共享商品；共享庫開啟才顯示）＋ 成就/連續發文。
   let hot: SharedMaterial[] = [];
@@ -61,12 +57,6 @@ export default async function DashboardPage() {
           </a>
         )}
       </div>
-
-      {cron && (
-        <p className={`text-xs ${cron.tone}`} role="status" aria-live="polite" title="自動發文靠排程器定時執行；若顯示停了，排程時間到也不會自動發">
-          {cron.text}
-        </p>
-      )}
 
       {steps.length > 0 && <SetupGuide steps={steps} />}
 

@@ -44,7 +44,7 @@ export default function BulkRepostButton({ threadsAccounts }: { threadsAccounts:
     <div className="flex flex-wrap items-center gap-2">
       {threadsAccounts.length > 1 && (
         <select
-          className="rounded border px-2 py-1 text-sm"
+          className="min-w-0 max-w-[12rem] rounded border px-2 py-1 text-sm"
           value={accId}
           onChange={(e) => setAccId(e.target.value)}
           aria-label="選擇發文帳號"

@@ -162,7 +162,7 @@ export default function DraftsExplorer({
         </div>
         {accountOptions.length >= 2 && (
           <select
-            className="ml-auto rounded-xl border px-3 py-1.5 text-sm"
+            className="ml-auto min-w-0 max-w-[12rem] rounded-xl border px-3 py-1.5 text-sm"
             value={account}
             onChange={(e) => setAccount(e.target.value)}
             aria-label="依發文帳號篩選"

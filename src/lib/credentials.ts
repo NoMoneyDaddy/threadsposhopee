@@ -509,17 +509,18 @@ export async function setPublishPrefs(
 
 // ── 每位使用者「同素材重複發文上限」（0／NULL＝不限）──────
 export async function getRepostLimits(ownerId: string): Promise<RepostLimits> {
-  if (isDemoMode) return { perAccount: 0, total: 0 };
+  if (isDemoMode) return { perAccount: 0, total: 0, evergreenDays: 0 };
   const sb = getServiceClient()!;
   const { data, error } = await sb
     .from("profiles")
-    .select("repost_max_per_account, repost_max_total")
+    .select("repost_max_per_account, repost_max_total, evergreen_interval_days")
     .eq("id", ownerId)
     .maybeSingle();
   if (error) throw new Error(`讀取重發上限失敗：${error.message}`);
   return {
     perAccount: data?.repost_max_per_account ?? 0,
-    total: data?.repost_max_total ?? 0
+    total: data?.repost_max_total ?? 0,
+    evergreenDays: data?.evergreen_interval_days ?? 0
   };
 }
 
@@ -531,7 +532,9 @@ export async function setRepostLimits(ownerId: string, limits: RepostLimits): Pr
       id: ownerId,
       // 0 視為不限 → 存 NULL，語意一致
       repost_max_per_account: limits.perAccount > 0 ? limits.perAccount : null,
-      repost_max_total: limits.total > 0 ? limits.total : null
+      repost_max_total: limits.total > 0 ? limits.total : null,
+      // 0 視為「用系統預設」→ 存 NULL
+      evergreen_interval_days: limits.evergreenDays > 0 ? limits.evergreenDays : null
     },
     { onConflict: "id" }
   );

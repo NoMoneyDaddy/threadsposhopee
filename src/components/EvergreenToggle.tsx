@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-// 素材卡上的「常青回收」開關：開啟後系統每約 14 天自動把這個素材重排成待審草稿（仍人工核准），
-// 重用既有連結/文案、不重燒 token。爆款好物可自動重炒。
+// 素材卡上的「常青回收」開關：開啟後系統每隔一段時間（預設 14 天，可在「設定」自訂間隔）
+// 自動把這個素材重排成待審草稿（仍人工核准），重用既有連結/文案、不重燒 token。爆款好物可自動重炒。
 export default function EvergreenToggle({ materialId, initial }: { materialId: string; initial: boolean }) {
   const router = useRouter();
   const [on, setOn] = useState(initial);

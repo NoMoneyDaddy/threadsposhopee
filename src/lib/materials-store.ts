@@ -238,18 +238,13 @@ export async function setMaterialEvergreen(id: string, ownerId: string, on: bool
 }
 
 // 背景 worker：跨租戶取「常青且到期」的有效素材（含 owner_id）。僅 cron 呼叫；建草稿時仍以該列 owner_id 為準。
-export async function listEvergreenDueAll(minDays: number, limit = 20): Promise<Material[]> {
+// defaultDays：未自設間隔的 owner 沿用的系統預設（EVERGREEN_MIN_DAYS）。
+// 每列依該 owner 的 evergreen_interval_days 判斷是否到期（用 RPC，因 PostgREST 無法表達每列不同的時間間隔）。
+export async function listEvergreenDueAll(defaultDays: number, limit = 20): Promise<Material[]> {
   if (isDemoMode) return [];
   const sb = getServiceClient()!;
-  const cutoff = new Date(Date.now() - minDays * 86400_000).toISOString();
-  const { data } = await sb
-    .from("materials")
-    .select("*")
-    .eq("evergreen", true)
-    .eq("affiliate_valid", true)
-    .or(`evergreen_last_at.is.null,evergreen_last_at.lt.${cutoff}`)
-    .order("evergreen_last_at", { ascending: true, nullsFirst: true })
-    .limit(limit);
+  const { data, error } = await sb.rpc("list_evergreen_due", { p_default_days: defaultDays, p_limit: limit });
+  if (error) throw new Error(`列出常青到期素材失敗：${error.message}`);
   return (data ?? []) as Material[];
 }
 

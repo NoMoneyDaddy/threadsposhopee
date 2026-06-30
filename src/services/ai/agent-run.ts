@@ -13,6 +13,7 @@ import { autoScheduleApproved } from "@/services/publish/auto-schedule";
 import { userOwnsThreadsAccount, getThreadsCredentials, listThreadsAccountTokens } from "@/lib/store";
 import { keywordSearch } from "@/services/threads/search";
 import { createRedirectLink } from "@/lib/redirect-store";
+import { splitForThreads, THREADS_TEXT_LIMIT } from "@/lib/thread-split";
 import {
   listEnabledAiAgentsAll,
   hasSeen,
@@ -191,7 +192,12 @@ export async function runAgentOnce(agent: AiAgent, geminiKey: string): Promise<A
       // 補全為絕對網址：貼文會發到 Threads，相對路徑會失效。未設短網域時退回原始來源連結（仍為絕對網址）。
       if (code) sourceUrl = buildShortSourceUrl(code, process.env.NEXT_PUBLIC_SHORT_DOMAIN, item.link);
     }
-    const mainText = `${body}\n\n📎 來源：${sourceUrl}`;
+    // 正文＋來源連結；若超過 Threads 單則上限（500），自動切成多段串文（1/n 為主文，其餘進 thread_chain）。
+    // 避免「正文超過 500 字會發布失敗」，並讓長文以串文呈現。
+    const fullText = `${body}\n\n📎 來源：${sourceUrl}`;
+    const segments = splitForThreads(fullText, THREADS_TEXT_LIMIT);
+    const mainText = segments[0] ?? fullText;
+    const threadChain = segments.length > 1 ? segments.slice(1).map((text) => ({ text })) : undefined;
 
     // 預設：待人工核准。小編開啟「免審直接排程」時自動排進下一個空時段並標記已核准；無空檔則退回待審保底。
     const makeDraft = (status: "draft" | "approved", scheduled_at: string | null) =>
@@ -200,6 +206,7 @@ export async function runAgentOnce(agent: AiAgent, geminiKey: string): Promise<A
         threads_account_id: agent.threads_account_id,
         main_text: mainText,
         reply_text: null,
+        ...(threadChain ? { thread_chain: threadChain } : {}),
         status,
         scheduled_at,
         source_agent_id: agent.id

@@ -4,7 +4,8 @@ import HotProductsRadar from "@/components/HotProductsRadar";
 import AchievementsCard from "@/components/AchievementsCard";
 import { getCurrentUser } from "@/lib/auth";
 import { getSetupSteps } from "@/lib/setup-status";
-import { getPublishInsights, getFeatureFlags, listHotProducts, getContributionScore, listPublishedDates, countPublished, type SharedMaterial } from "@/lib/store";
+import { getPublishInsights, getFeatureFlags, listHotProducts, getContributionScore, listPublishedDates, countPublished, getHeartbeat, type SharedMaterial } from "@/lib/store";
+import { cronHeartbeatStatus } from "@/lib/cron-status";
 import { computeStreak, taipeiDateStr, achievementsFor } from "@/lib/streak";
 import { log } from "@/lib/logger";
 
@@ -24,6 +25,9 @@ export default async function DashboardPage() {
   const weekly = user
     ? await getPublishInsights(user.id, { startMs: Date.now() - 7 * 86400_000, endMs: Date.now() }).catch(() => null)
     : null;
+
+  // 自動駕駛（排程器心跳）：讓使用者一眼確認「排程到了會自動發」——直接回應「排程時間到沒發」的疑慮。
+  const cron = user ? cronHeartbeatStatus(await getHeartbeat().catch(() => null), Date.now()) : null;
 
   // 選品雷達（全站熱門共享商品；共享庫開啟才顯示）＋ 成就/連續發文。
   let hot: SharedMaterial[] = [];
@@ -55,6 +59,12 @@ export default async function DashboardPage() {
           </a>
         )}
       </div>
+
+      {cron && (
+        <p className={`text-xs ${cron.tone}`} role="status" aria-live="polite" title="自動發文靠排程器定時執行；若顯示停了，排程時間到也不會自動發">
+          {cron.text}
+        </p>
+      )}
 
       {steps.length > 0 && <SetupGuide steps={steps} />}
 

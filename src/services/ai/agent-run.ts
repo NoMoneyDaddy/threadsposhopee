@@ -123,6 +123,8 @@ async function fetchThreadsSearchItems(agent: AiAgent): Promise<RssItem[]> {
 }
 
 // 抓來源項目。source_mode="threads_search"＝Threads 關鍵字搜尋；其餘＝RSS（空 feeds 用領域預設 Google News RSS）。
+// 多領域/多關鍵字聚合：跨 feed 收集 → 依連結去重 → 依發布時間新→舊排序（趨勢＝最新鮮的當日題材優先），確保有東西可寫。
+const MAX_AGENT_FEEDS = 12; // 聚合來源上限（每條 feed 一次 HTTP；避免多領域×多關鍵字爆量拖長 cron）
 async function fetchItems(agent: AiAgent): Promise<RssItem[]> {
   if (agent.source_mode === "threads_search") return fetchThreadsSearchItems(agent);
   let feeds: string[] = [];
@@ -130,7 +132,7 @@ async function fetchItems(agent: AiAgent): Promise<RssItem[]> {
     feeds = agent.rss_feeds;
   } else {
     for (const id of resolveDomainIds(agent)) {
-      // 自訂主題用 search_query 組查詢（其 keyword 為空）；其餘用領域預設 Google News RSS。
+      // 自訂主題用 search_query 組查詢（其 keyword 為空）；其餘用領域預設 Google News RSS（多關鍵字）。
       if (id === "custom") {
         if (agent.search_query.trim()) feeds.push(googleNewsRss(agent.search_query.trim()));
       } else {
@@ -140,12 +142,24 @@ async function fetchItems(agent: AiAgent): Promise<RssItem[]> {
     // 完全沒有有效領域但有自訂關鍵字時的保底。
     if (!feeds.length && agent.search_query.trim()) feeds.push(googleNewsRss(agent.search_query.trim()));
   }
+  // 多領域時交錯各 feed（不讓單一領域佔滿），再截上限，避免偏食與過量請求。
+  feeds = Array.from(new Set(feeds)).slice(0, MAX_AGENT_FEEDS);
   const all: RssItem[] = [];
-  for (const f of feeds) {
-    all.push(...(await fetchRssItems(f)));
-    if (all.length >= 30) break;
-  }
-  return all;
+  for (const f of feeds) all.push(...(await fetchRssItems(f)));
+  // 依連結去重（Google News 跨查詢常重複同篇），再依發布時間新→舊排序（趨勢優先）。
+  const seen = new Set<string>();
+  const deduped = all.filter((it) => {
+    const key = it.link.trim();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  const ts = (d: string | null) => {
+    const n = d ? Date.parse(d) : NaN;
+    return Number.isNaN(n) ? 0 : n; // 無/壞 pubDate 沉底
+  };
+  deduped.sort((a, b) => ts(b.pubDate) - ts(a.pubDate));
+  return deduped.slice(0, 60);
 }
 
 export interface AgentRunResult {

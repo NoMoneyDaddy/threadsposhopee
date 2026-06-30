@@ -45,10 +45,11 @@ export async function generateCopy(
   return { mainText: stripLeadingPreamble(mainText), replyText: ensureExactLink(replyText, input.shopeeShortLink || ""), raw };
 }
 
-// 去掉開頭那種「回話/前言」句（如「收到！這是一篇貼文…」「以下是為你生成的…」），只有後面還有實際內容時才去。
-// 收緊比對避免誤刪真人開頭：收到/好的/沒問題/了解 需「純語助詞行」或行內含 AI 關鍵字（貼文/文案/撰寫/生成/指令/要求/任務）；
-// 以下是／這是一篇 需含 AI 關鍵字；希望 僅限「希望符合…需求／希望對你…有幫助」。純函式可測。
-const PREAMBLE_RE = /^\s*(?:(?:收到|好的|沒問題|了解)[！!，,：:。\s]*(?:[^\n]*?(?:貼文|文案|撰寫|生成|指令|要求|任務)[^\n]*)?|以下(?:是|為)[^\n]*?(?:貼文|文案|撰寫|生成|指令|要求|任務)[^\n]*|這(?:是|則)一?[篇則][^\n]*?(?:貼文|文案|分享|介紹|說明)[^\n]*|希望(?:符合|對你)[^\n]*?(?:需求|有幫助)[^\n]*)\n+/;
+// 去掉開頭那種「回話/前言」句（如「收到！這是一篇貼文…」「好，這就來幫你寫一篇…」「以下是為你生成的…」），只有後面還有實際內容時才去。
+// 收緊比對避免誤刪真人開頭：
+//   1) 純語助詞自成一行（收到！／好的，／沒問題～）；2) 行內含「幫你寫／為你寫／這就來／撰寫…」等寫作動作；
+//   3) 以下是／這是一篇＋AI 關鍵字（貼文/文案/分享…）。純函式可測。
+const PREAMBLE_RE = /^\s*(?:(?:收到|好的|好喔|沒問題|了解|OK|ok)[！!。，,：:～~\s]*\n+|[^\n]*?(?:幫[你您](?:寫|撰寫|產生|生成|準備)|為[你您](?:寫|撰寫|準備)|這就(?:來|幫)|馬上(?:幫|為)[你您]|立刻(?:幫|為)[你您])[^\n]*\n+|[^\n]*?(?:以下(?:是|為)|底下(?:是|為)|這(?:是|則)一?[篇則])[^\n]*?(?:貼文|文案|分享|介紹|說明)[^\n]*\n+)/;
 export function stripLeadingPreamble(text: string): string {
   const stripped = text.replace(PREAMBLE_RE, "").trimStart();
   return stripped.length > 0 ? stripped : text;
@@ -129,6 +130,23 @@ function demoVariations(text: string, n: number): string[] {
   return Array.from({ length: n }, (_, i) => `（示意版本 ${i + 1}）${text}`);
 }
 
+// 解析串文段落：靠「段號標記」精準擷取，丟掉標記外的前言/結語（比事後 regex 去前言更穩）。
+// 規範格式：每段以行首段號標記 [1]／【1】／1. 開頭。有標記時只取各標記之後的內容，標記前的任何前言一律丟棄；
+// 沒有標記才退回 parseVariations（=== 舊格式）相容。去標記、去空白、取前 n 段。純函式可測。
+export function parseThreadSegments(raw: string, n: number): string[] {
+  const MARKER = /^[ \t]*[\[【][ \t]*\d+[ \t]*[\]】][ \t]*/m;
+  if (MARKER.test(raw)) {
+    const parts = raw.split(MARKER);
+    // parts[0]＝第一個段號標記之前的內容（前言），丟掉。
+    return parts
+      .slice(1)
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .slice(0, n);
+  }
+  return parseVariations(raw, n);
+}
+
 // 把 AI 產生的多段文字（純文字、無連結）組成串文，並把分潤連結附到「最後一段」。純函式、可測。
 // 規則：第 1 段＝主文、第 2 段＝留言(2/n)、其餘＝3/n+；linkLine（含連結的整行）接到最後一段。
 // 至少保證有「留言」一段可放連結（AI 只回 1 段時補一個空留言段）。
@@ -190,7 +208,10 @@ ${segInstruction}規則：
 - 繁體中文、口語、無業配味，每段可獨立成立
 - 第 1 段是主文（吸睛開頭、帶出情境），不要放任何網址。主文語氣與字數：${describeMain(prefs.main)}
 ${midSegRule}- 最後一段是「帶出連結的引導語」：依「留言」設定（${describeReply(prefs.reply)}）寫得精簡，用你自己的話、每篇都不同（像跟朋友說「連結放下面」的口吻；不要放網址本身，也不要放任何網址佔位符如 [連結] 或 [URL]，網址由系統原樣接上）
-- 每段最多 4 行，段與段之間只用「獨立一行的 ===」分隔，不要加編號或標題
+- 每段最多 4 行
+【輸出格式，務必嚴格遵守】每段最前面標上段號 [1] [2] [3]…（中括號＋數字），之後緊接該段內容。除了「段號＋貼文內容」之外，不要輸出任何開場白、說明、結語或前言（例如「好，這就來幫你寫…」）。範例：
+[1] 主文…
+[2] 延伸內容或引導語…
 ${hasMedia ? "- 已附上商品的照片／影片，請依畫面實際看到的外觀、顏色、特點來寫，但不要描述「這張圖」這類字眼\n" : ""}
 商品：${input.productName}
 ${input.sourceText ? `參考內容：${input.sourceText}` : ""}`;
@@ -199,7 +220,7 @@ ${input.sourceText ? `參考內容：${input.sourceText}` : ""}`;
   const raw = hasMedia
     ? await generateWithGemini(prompt, input.mediaUrl ?? null, input.mediaType === "video" ? "video" : "image", apiKey, prefs.temperature ?? 0.8, model, 2048)
     : await geminiText(prompt, apiKey, prefs.temperature ?? 0.8, 2048, model);
-  const texts = parseVariations(raw, n);
+  const texts = parseThreadSegments(raw, n);
   // 防裸連結（防封）：AI 若沒寫引導段、只回 1 段，linkLine 會變成孤零零的裸網址。
   // 此時降級補上固定引導句，確保留言一定有引導語在連結前。
   const finalLinkLine = link && texts.length <= 1 ? `${pickReplyLeadIn(link)} ${link}` : linkLine;

@@ -132,12 +132,15 @@ export function buildCopyPromptPreview(prefs: CopyPrefs = DEFAULT_COPY_PREFS): s
   return buildCopyPrompt(PREVIEW_CTX, prefs);
 }
 
-// 把 AI 輸出拆成正文 / 留言（對應 n8n「🎬準備媒體資料」的 split 邏輯）
+// 把 AI 輸出拆成正文 / 留言（對應 n8n「🎬準備媒體資料」的 split 邏輯）。
+// 靠「正文：／留言區：」標記精準擷取：從「正文：」標記之後才算主文，標記前若有前言（如「好，這就來幫你寫…」）一律丟棄。
 export function splitCopy(raw: string): { mainText: string; replyText: string } {
   // 容忍 LLM 常見輸出差異：全形/半形冒號（：/:）皆可（後綴空格由 trim 處理）。
-  // 否則一旦模型輸出半形冒號就失配，分潤連結（留言區）會遺失或被併入正文。
   const parts = raw.split(/留言區[：:]/);
-  const mainText = (parts[0] ?? "").replace(/^正文[：:]/, "").trim();
+  const head = parts[0] ?? "";
+  // 取「正文：」標記之後的內容；找不到標記才退回整段（向後相容）。標記前的任何前言都被丟掉。
+  const idx = head.search(/正文[：:]/);
+  const mainText = (idx >= 0 ? head.slice(idx).replace(/^正文[：:]/, "") : head).trim();
   const replyText = (parts[1] ?? "有問題歡迎私訊！").trim();
   return { mainText, replyText };
 }

@@ -139,6 +139,13 @@ test("assembleThread：主文+留言 → 連結在留言（最後一段＝2/n）
   assert.match(r.replyText, /留言[\s\S]*shopee\.tw\/abc/);
 });
 
+test("assembleThread：AI 在段落內自塞原始商品連結 → 清掉，只留程式附的分潤連結（不出現雙連結）", () => {
+  const r = assembleThread(["主文", "這真的解決了我的困擾。\nhttps://shopee.tw/product/xxxxxxx"], LINK);
+  assert.ok(!r.replyText.includes("shopee.tw/product"), "AI 自塞的原始商品連結要被清掉");
+  assert.equal((r.replyText.match(/https?:\/\/\S+/g) ?? []).length, 1, "留言只能有一條連結");
+  assert.match(r.replyText, /shopee\.tw\/abc/); // 程式附的分潤連結
+});
+
 test("assembleThread：無連結時不附連結行", () => {
   const r = assembleThread(["主文", "留言"], "");
   assert.equal(r.replyText, "留言");

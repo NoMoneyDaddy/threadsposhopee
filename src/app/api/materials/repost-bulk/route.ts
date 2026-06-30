@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { listMaterials, createDraftFromMaterial, userOwnsThreadsAccount, getRepostLimits, countMaterialReposts } from "@/lib/store";
+import { listMaterials, createDraftFromMaterial, userOwnsThreadsAccount, getRepostLimits, countMaterialReposts, getPublishPrefs } from "@/lib/store";
 import { exceedsRepostLimit } from "@/lib/repost-limits";
-import { withNextSlot, nextOpenSlotAtHours } from "@/services/publish/slots";
+import { withNextSlot, nextOpenSlot, nextOpenSlotAtHours } from "@/services/publish/slots";
 import { getBestHours } from "@/services/threads/engagement";
 import { getCurrentUser } from "@/lib/auth";
 
@@ -36,7 +36,12 @@ export async function POST(req: Request) {
   // bestTime=true 且有足夠成效資料 → 整批改排在「最佳發文時段」整點；否則用預設 PUBLISH_SLOTS。
   // 成效（getBestHours）只算一次，避免迴圈內逐筆重打 Threads insights API。
   const hours = body.bestTime === true ? await getBestHours(user.id) : [];
-  const pick = hours.length ? (taken: Set<string>) => nextOpenSlotAtHours(taken, hours) : undefined;
+  // 挑時段套防封節奏（最小間隔／每日上限），與發文層一致，避免顯示時間被順延。
+  const prefs = await getPublishPrefs(user.id).catch(() => null);
+  const pacing = { gapMinutes: prefs?.minGapMinutes, maxPerDay: prefs?.maxPerDay };
+  const pick = hours.length
+    ? (taken: Set<string>) => nextOpenSlotAtHours(taken, hours, Date.now(), 30, pacing)
+    : (taken: Set<string>) => nextOpenSlot(taken, Date.now(), 30, prefs?.slots, pacing);
 
   // 重複發文上限（0＝不限）：逐筆檢查該素材於此帳號是否已達上限，達標則略過不排。
   const limits = await getRepostLimits(user.id);

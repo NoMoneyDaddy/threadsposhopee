@@ -76,6 +76,7 @@ function Column({
   accent,
   droppable,
   active,
+  headerExtra,
   children
 }: {
   id: string;
@@ -85,6 +86,7 @@ function Column({
   accent: string;
   droppable: boolean;
   active: boolean; // 拖曳中且此欄為合法目標 → 高亮
+  headerExtra?: React.ReactNode; // 欄頭右側控制（如排序下拉）
   children: React.ReactNode;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id, disabled: !droppable });
@@ -94,6 +96,7 @@ function Column({
         <div className="flex items-center gap-2">
           <h2 className="text-sm font-semibold text-ink">{title}</h2>
           <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs text-ink-2">{count}</span>
+          {headerExtra && <span className="ml-auto">{headerExtra}</span>}
         </div>
         <p className="mt-0.5 text-[11px] leading-tight text-ink-3">{hint}</p>
       </header>
@@ -139,6 +142,28 @@ export default function PipelineBoard({
   const [overrides, setOverrides] = useState<Record<string, DraftStatus>>({});
   const [dragStatus, setDragStatus] = useState<DraftStatus | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  // 欄位排序偏好（使用者可在欄頭切換）；存 localStorage 跨工作階段記住。
+  const [scheduledSort, setScheduledSort] = useState<"near" | "far">("near"); // near＝最接近發布在上
+  const [publishedSort, setPublishedSort] = useState<"new" | "old">("new"); // new＝最新發布在上
+  useEffect(() => {
+    try {
+      const s = localStorage.getItem("pipeline:sort");
+      if (s) {
+        const o = JSON.parse(s) as { scheduled?: string; published?: string };
+        if (o.scheduled === "near" || o.scheduled === "far") setScheduledSort(o.scheduled);
+        if (o.published === "new" || o.published === "old") setPublishedSort(o.published);
+      }
+    } catch {
+      /* 壞資料忽略 */
+    }
+  }, []);
+  useEffect(() => {
+    try {
+      localStorage.setItem("pipeline:sort", JSON.stringify({ scheduled: scheduledSort, published: publishedSort }));
+    } catch {
+      /* 隱私模式等寫入失敗忽略 */
+    }
+  }, [scheduledSort, publishedSort]);
 
   // 滑鼠需移動 8px 才算拖曳（否則點按鈕/編輯不會誤觸）；觸控長按 200ms 啟動（手機可拖）。
   // MouseSensor（滑鼠）與 TouchSensor（觸控）分流：避免單一 PointerSensor 在手機上搶走捲動手勢。
@@ -172,12 +197,19 @@ export default function PipelineBoard({
       else if (isPublished(s)) g.published.push(d);
       else if (needsAttention(s)) g.attention.push(d);
     }
-    // 已排程：最接近發文時間（scheduled_at 最早）的排最上方；未排時間者沉底。
-    g.scheduled.sort((a, b) => (a.scheduled_at ?? "9999").localeCompare(b.scheduled_at ?? "9999"));
-    // 已發布：最新發出的（published_at 最晚）排最上方；無時間者沉底。
-    g.published.sort((a, b) => (b.published_at ?? "").localeCompare(a.published_at ?? ""));
+    // 無時間者一律沉底（不論升降序）；有時間者再依使用者偏好升/降排。
+    const byTime = (a?: string | null, b?: string | null, desc = false) => {
+      if (!a !== !b) return a ? -1 : 1; // 其一為空 → 空的沉底
+      if (!a && !b) return 0;
+      const cmp = (a as string).localeCompare(b as string);
+      return desc ? -cmp : cmp;
+    };
+    // 已排程：near＝最接近發文時間在上、far＝最遠在上。
+    g.scheduled.sort((a, b) => byTime(a.scheduled_at, b.scheduled_at, scheduledSort === "far"));
+    // 已發布：new＝最新發布在上、old＝最早在上。
+    g.published.sort((a, b) => byTime(a.published_at, b.published_at, publishedSort === "new"));
     return g;
-  }, [drafts, overrides]);
+  }, [drafts, overrides, scheduledSort, publishedSort]);
 
   async function onDragEnd(e: DragEndEvent) {
     setDragStatus(null);
@@ -290,11 +322,51 @@ export default function PipelineBoard({
             {groups.drafts.map((d) => renderDraft(d, true))}
           </Column>
 
-          <Column id="scheduled" title="📅 已排程" hint="已核准、排進佇列等發布；拖入＝核准/重試" count={groups.scheduled.length} accent="" droppable active={validTarget("scheduled")}>
+          <Column
+            id="scheduled"
+            title="📅 已排程"
+            hint="已核准、排進佇列等發布；拖入＝核准/重試"
+            count={groups.scheduled.length}
+            accent=""
+            droppable
+            active={validTarget("scheduled")}
+            headerExtra={
+              <select
+                className="rounded border bg-surface px-1 py-0.5 text-[11px] text-ink-2"
+                value={scheduledSort}
+                onChange={(e) => setScheduledSort(e.target.value as "near" | "far")}
+                aria-label="已排程排序"
+                title="排序方式"
+              >
+                <option value="near">最接近發布</option>
+                <option value="far">最晚發布</option>
+              </select>
+            }
+          >
             {groups.scheduled.map((d) => renderDraft(d, true))}
           </Column>
 
-          <Column id="published" title="✅ 已發布" hint="已發出（含延遲留言補發）" count={groups.published.length} accent="text-green-700" droppable={false} active={false}>
+          <Column
+            id="published"
+            title="✅ 已發布"
+            hint="已發出（含延遲留言補發）"
+            count={groups.published.length}
+            accent="text-green-700"
+            droppable={false}
+            active={false}
+            headerExtra={
+              <select
+                className="rounded border bg-surface px-1 py-0.5 text-[11px] text-ink-2"
+                value={publishedSort}
+                onChange={(e) => setPublishedSort(e.target.value as "new" | "old")}
+                aria-label="已發布排序"
+                title="排序方式"
+              >
+                <option value="new">最新發布</option>
+                <option value="old">最早發布</option>
+              </select>
+            }
+          >
             {groups.published.map((d) => renderDraft(d, false))}
           </Column>
 

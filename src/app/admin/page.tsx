@@ -5,7 +5,7 @@ import { contributionBadge } from "@/lib/roles";
 import { isDemoMode } from "@/lib/env";
 import { cronHeartbeatStatus } from "@/lib/cron-status";
 import { tokenExpiryState } from "@/lib/token-expiry";
-import { cloudinaryThumb } from "@/lib/img";
+import { cloudinaryThumb, videoFirstFrameSrc } from "@/lib/img";
 import { log } from "@/lib/logger";
 import FeatureFlagsForm from "@/components/FeatureFlagsForm";
 import RoleGrantForm from "@/components/RoleGrantForm";
@@ -170,8 +170,20 @@ export default async function AdminPage() {
             {queue.map((m) => (
               <div key={m.id} className="flex items-center gap-3 py-2">
                 {m.cloudinary_media_url && m.media_type !== "none" && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={cloudinaryThumb(m.cloudinary_media_url, 80)} alt="" loading="lazy" className="h-12 w-12 shrink-0 rounded object-cover" />
+                  m.media_type === "video" ? (
+                    // 影片用 <video> 帶首幀預覽；用 <img> 載影片網址會是空白破圖。referrerPolicy 讓防盜連來源也載得到。
+                    <video
+                      src={videoFirstFrameSrc(m.cloudinary_media_url)}
+                      muted
+                      playsInline
+                      preload="metadata"
+                      className="h-12 w-12 shrink-0 rounded object-cover"
+                      {...{ referrerPolicy: "no-referrer" }}
+                    />
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={cloudinaryThumb(m.cloudinary_media_url, 80)} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-12 w-12 shrink-0 rounded object-cover" />
+                  )
                 )}
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-medium text-ink">{m.product_name ?? "（商品）"}</div>

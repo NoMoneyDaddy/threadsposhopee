@@ -10,6 +10,10 @@ test("parseThreadSegments：【n】全形與多行內容都支援", () => {
   assert.deepEqual(parseThreadSegments("【1】第一段\n還有第二行\n【2】收尾", 3), ["第一段\n還有第二行", "收尾"]);
 });
 
+test("parseThreadSegments：純數字標記 1.／1、／1) 也支援", () => {
+  assert.deepEqual(parseThreadSegments("1. 第一段\n2、第二段\n3) 第三段", 3), ["第一段", "第二段", "第三段"]);
+});
+
 test("parseThreadSegments：沒有段號標記 → 退回 === 切分（相容）", () => {
   assert.deepEqual(parseThreadSegments("甲\n===\n乙", 3), ["甲", "乙"]);
 });

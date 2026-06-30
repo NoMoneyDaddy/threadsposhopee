@@ -49,7 +49,7 @@ export async function generateCopy(
 // 收緊比對避免誤刪真人開頭：
 //   1) 純語助詞自成一行（收到！／好的，／沒問題～）；2) 行內含「幫你寫／為你寫／這就來／撰寫…」等寫作動作；
 //   3) 以下是／這是一篇＋AI 關鍵字（貼文/文案/分享…）。純函式可測。
-const PREAMBLE_RE = /^\s*(?:(?:收到|好的|好喔|沒問題|了解|OK|ok)[！!。，,：:～~\s]*\n+|[^\n]*?(?:幫[你您](?:寫|撰寫|產生|生成|準備)|為[你您](?:寫|撰寫|準備)|這就(?:來|幫)|馬上(?:幫|為)[你您]|立刻(?:幫|為)[你您])[^\n]*\n+|[^\n]*?(?:以下(?:是|為)|底下(?:是|為)|這(?:是|則)一?[篇則])[^\n]*?(?:貼文|文案|分享|介紹|說明)[^\n]*\n+)/;
+const PREAMBLE_RE = /^\s*(?:(?:收到|好的|好喔|沒問題|了解|OK|ok)[！!。，,：:～~\s]*\n+|[^\n]*?(?:幫[你您](?:寫|撰寫|產生|生成|準備)|為[你您](?:寫|撰寫|準備)|這就(?:來|幫)|馬上(?:幫|為)[你您]|立刻(?:幫|為)[你您])[^\n]*?(?:貼文|文案|撰寫|生成|指令|要求|任務)[^\n]*\n+|[^\n]*?(?:以下(?:是|為)|底下(?:是|為)|這(?:是|則)一?[篇則])[^\n]*?(?:貼文|文案|分享|介紹|說明)[^\n]*\n+)/;
 export function stripLeadingPreamble(text: string): string {
   const stripped = text.replace(PREAMBLE_RE, "").trimStart();
   return stripped.length > 0 ? stripped : text;
@@ -130,11 +130,11 @@ function demoVariations(text: string, n: number): string[] {
   return Array.from({ length: n }, (_, i) => `（示意版本 ${i + 1}）${text}`);
 }
 
-// 解析串文段落：靠「段號標記」精準擷取，丟掉標記外的前言/結語（比事後 regex 去前言更穩）。
-// 規範格式：每段以行首段號標記 [1]／【1】／1. 開頭。有標記時只取各標記之後的內容，標記前的任何前言一律丟棄；
+// 解析串文段落：靠「段號標記」精準擷取，丟掉第一個標記前的前言（比事後 regex 去前言更穩）。
+// 規範格式：每段以行首段號標記 [1]／【1】／1.／1、／1) 開頭。有標記時只取各標記之後的內容，第一個標記前的前言一律丟棄；
 // 沒有標記才退回 parseVariations（=== 舊格式）相容。去標記、去空白、取前 n 段。純函式可測。
 export function parseThreadSegments(raw: string, n: number): string[] {
-  const MARKER = /^[ \t]*[\[【][ \t]*\d+[ \t]*[\]】][ \t]*/m;
+  const MARKER = /^[ \t]*(?:[\[【][ \t]*\d+[ \t]*[\]】]|\d+[.、)])[ \t]*/m;
   if (MARKER.test(raw)) {
     const parts = raw.split(MARKER);
     // parts[0]＝第一個段號標記之前的內容（前言），丟掉。

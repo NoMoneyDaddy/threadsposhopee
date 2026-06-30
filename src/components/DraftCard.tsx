@@ -360,8 +360,8 @@ function DraftCard({
       )}
 
       {isLowRelevance(draft.product_name, mainText) && (
-        <div className="mt-2 rounded bg-amber-50 p-2 text-xs text-amber-700" role="alert">
-          ⚠️ 商品與文案相關性偏低，內容與帶的商品可能不符（易被判誤導／降觸及）。發布前請確認文案有提到這個商品。
+        <div className="mt-2 rounded bg-surface-2 p-2 text-xs text-ink-2" role="status">
+          💡 小提醒：文案好像比較少提到這個商品，發布前順手帶一句，讀者比較不會搞混、觸及也更穩。
         </div>
       )}
 

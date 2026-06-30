@@ -60,7 +60,7 @@ export default function RepostButton({
       <button
         onClick={() => repost("queue")}
         disabled={!!busy}
-        className="rounded border border-brand/40 px-3 py-1 text-xs text-brand hover:bg-orange-50 disabled:opacity-50"
+        className="rounded bg-brand px-3 py-1 text-xs text-white hover:opacity-90 disabled:opacity-50"
       >
         {busy === "queue" ? "…" : "再排一篇（進佇列）"}
       </button>

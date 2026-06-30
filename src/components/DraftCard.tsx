@@ -77,6 +77,8 @@ function DraftCard({
   const [content, setContent] = useState<PostContent>(() => draftToContent(draft));
   // 留言延遲（分）：逐則覆寫，空＝用全域預設。與發文頁一致由 <PostEditor> 顯示輸入。
   const [replyDelay, setReplyDelay] = useState(draft.reply_delay_minutes != null ? String(draft.reply_delay_minutes) : "");
+  // 次要動作收進「更多」：避免卡片一次塞太多按鈕（主要：核准發布／編輯／重試常駐）。
+  const [showMore, setShowMore] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [compliance, setCompliance] = useState<{ risk: string; advice: string } | null>(null);
   const [variants, setVariants] = useState<{ mainText: string; replyText: string }[] | null>(null);
@@ -431,58 +433,70 @@ function DraftCard({
             編輯
           </button>
           <button
-            disabled={!!busy}
-            onClick={() => call("shorten")}
-            className="rounded border px-3 py-1 text-xs hover:bg-surface-2 disabled:opacity-50"
-            title="把文章裡的連結換成你的短連結（可順便附分潤）"
+            type="button"
+            onClick={() => setShowMore((v) => !v)}
+            aria-expanded={showMore}
+            className="rounded border px-3 py-1 text-xs text-ink-2 hover:bg-surface-2"
           >
-            {busy === "shorten" ? "轉換中…" : "套用短連結"}
+            {showMore ? "收起" : "⋯ 更多"}
           </button>
-          {draft.clean_product_url && (
-            <button
-              disabled={!!busy}
-              onClick={() => call("refresh-link")}
-              className="rounded border px-3 py-1 text-xs hover:bg-surface-2 disabled:opacity-50"
-              title="用目前的 Shopee 金鑰與 Sub id 設定重產分潤連結，並把文內舊連結換成新的"
-            >
-              {busy === "refresh-link" ? "刷新中…" : "🔄 刷新分潤連結"}
-            </button>
+          {showMore && (
+            <>
+              <button
+                disabled={!!busy}
+                onClick={() => call("shorten")}
+                className="rounded border px-3 py-1 text-xs hover:bg-surface-2 disabled:opacity-50"
+                title="把文章裡的連結換成你的短連結（可順便附分潤）"
+              >
+                {busy === "shorten" ? "轉換中…" : "套用短連結"}
+              </button>
+              {draft.clean_product_url && (
+                <button
+                  disabled={!!busy}
+                  onClick={() => call("refresh-link")}
+                  className="rounded border px-3 py-1 text-xs hover:bg-surface-2 disabled:opacity-50"
+                  title="用目前的 Shopee 金鑰與 Sub id 設定重產分潤連結，並把文內舊連結換成新的"
+                >
+                  {busy === "refresh-link" ? "刷新中…" : "🔄 刷新分潤連結"}
+                </button>
+              )}
+              <button
+                disabled={!!busy}
+                onClick={() => call("regenerate")}
+                className="rounded border px-3 py-1 text-xs hover:bg-surface-2 disabled:opacity-50"
+              >
+                {busy === "regenerate" ? "重寫中…" : "AI 重寫"}
+              </button>
+              <button
+                disabled={!!busy}
+                onClick={genVariants}
+                title="一次產生多個文案版本，挑一個套用（A/B）"
+                className="rounded border px-3 py-1 text-xs hover:bg-surface-2 disabled:opacity-50"
+              >
+                {busy === "variants" ? "產生中…" : "AI 多版本"}
+              </button>
+              <button
+                disabled={!!busy}
+                onClick={() => call("save-as-material")}
+                title="把這篇的文案＋媒體（主文／留言指派一起）存回素材庫，之後可重排"
+                className="rounded border px-3 py-1 text-xs hover:bg-surface-2 disabled:opacity-50"
+              >
+                {busy === "save-as-material" ? "存中…" : "存成素材"}
+              </button>
+              <button disabled={!!busy} onClick={() => call("reject")} className="rounded border px-3 py-1 text-xs text-ink-2 hover:bg-surface-2">
+                退回
+              </button>
+              <button
+                disabled={!!busy}
+                onClick={() => {
+                  if (confirm("確定刪除這則草稿？此動作無法復原。")) call("delete");
+                }}
+                className="rounded border border-red-200 px-3 py-1 text-xs text-red-500 hover:bg-red-50"
+              >
+                刪除
+              </button>
+            </>
           )}
-          <button
-            disabled={!!busy}
-            onClick={() => call("regenerate")}
-            className="rounded border px-3 py-1 text-xs hover:bg-surface-2 disabled:opacity-50"
-          >
-            {busy === "regenerate" ? "重寫中…" : "AI 重寫"}
-          </button>
-          <button
-            disabled={!!busy}
-            onClick={genVariants}
-            title="一次產生多個文案版本，挑一個套用（A/B）"
-            className="rounded border px-3 py-1 text-xs hover:bg-surface-2 disabled:opacity-50"
-          >
-            {busy === "variants" ? "產生中…" : "AI 多版本"}
-          </button>
-          <button
-            disabled={!!busy}
-            onClick={() => call("save-as-material")}
-            title="把這篇的文案＋媒體（主文／留言指派一起）存回素材庫，之後可重排"
-            className="rounded border px-3 py-1 text-xs hover:bg-surface-2 disabled:opacity-50"
-          >
-            {busy === "save-as-material" ? "存中…" : "存成素材"}
-          </button>
-          <button disabled={!!busy} onClick={() => call("reject")} className="rounded border px-3 py-1 text-xs text-ink-2 hover:bg-surface-2">
-            退回
-          </button>
-          <button
-            disabled={!!busy}
-            onClick={() => {
-              if (confirm("確定刪除這則草稿？此動作無法復原。")) call("delete");
-            }}
-            className="rounded border border-red-200 px-3 py-1 text-xs text-red-500 hover:bg-red-50"
-          >
-            刪除
-          </button>
         </div>
       )}
 

@@ -9,6 +9,7 @@ import { normalizeDraftMedia, normalizeReplyMedia, isQualifiedMediaSet } from "@
 import { formatCommissionRate } from "@/lib/product-name";
 import { checkThreadsContent, THREADS_MAX_HASHTAGS } from "@/lib/threads-content";
 import { isLowRelevance } from "@/lib/relevance";
+import { explainError } from "@/lib/error-explain";
 
 // 草稿狀態 → 中文徽章標籤＋色票（避免在 UI 直接印英文 status，並用顏色輔助辨識狀態）。
 const STATUS_LABELS: Record<string, string> = {
@@ -660,7 +661,10 @@ function DraftCard({
       )}
 
       {draft.status === "failed" && draft.error && (
-        <p className="mt-2 rounded bg-red-50 p-2 text-xs text-red-600">發布失敗：{draft.error}</p>
+        <div className="mt-2 rounded bg-red-50 p-2 text-xs text-red-600">
+          <p>發布失敗：{draft.error}</p>
+          {explainError(draft.error) && <p className="mt-1 text-[11px] text-ink-3">💡 {explainError(draft.error)}</p>}
+        </div>
       )}
 
       {draft.status === "needs_verification" && !editing && (
@@ -711,6 +715,7 @@ function DraftCard({
       {showReply && rs === "failed" && (
         <div className="mt-2 rounded bg-red-50 p-2 text-xs text-red-600">
           <p>⚠️ 留言補發失敗{draft.error ? `：${draft.error}` : ""}</p>
+          {draft.error && explainError(draft.error) && <p className="mt-1 text-[11px] text-ink-3">💡 {explainError(draft.error)}</p>}
           <p className="mt-1 text-[11px] text-ink-3">若留言其實已發在貼文下，按「已發過了」消除提示（不會重貼）。</p>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             <button

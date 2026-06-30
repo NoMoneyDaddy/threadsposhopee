@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { getGeminiKey, resolveGeminiModel, getCopyPrefs } from "@/lib/store";
 import { generateThreadCopy } from "@/services/ai/provider";
+import { geminiErrorMessage } from "@/services/ai/gemini";
 import { isDemoMode } from "@/lib/env";
 import { apiError } from "@/lib/api-error";
 
@@ -47,6 +48,6 @@ export async function POST(req: Request) {
     );
     return NextResponse.json({ ok: true, mainText: t.mainText, replyText: t.replyText, extraSegments: t.extraSegments });
   } catch (e) {
-    return apiError("AI 生成串文失敗", e, { clientMessage: "生成失敗，請稍後再試" });
+    return apiError("AI 生成串文失敗", e, { clientMessage: geminiErrorMessage(e, "生成失敗，請稍後再試") });
   }
 }

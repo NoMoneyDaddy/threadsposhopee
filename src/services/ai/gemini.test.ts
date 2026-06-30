@@ -1,6 +1,16 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { extractGeminiText, buildGenerationConfig } from "./gemini";
+import { extractGeminiText, buildGenerationConfig, geminiErrorMessage } from "./gemini";
+
+test("geminiErrorMessage：依錯誤類型給具體可行提示，否則回 fallback", () => {
+  const fb = "生成失敗，請稍後再試";
+  assert.match(geminiErrorMessage(new Error("Gemini 429: RESOURCE_EXHAUSTED quota"), fb), /配額/);
+  assert.match(geminiErrorMessage(new Error("Gemini 400: API key not valid. API_KEY_INVALID"), fb), /金鑰/);
+  assert.match(geminiErrorMessage(new Error("Gemini 生成中止，原因: SAFETY"), fb), /安全過濾/);
+  assert.match(geminiErrorMessage(new Error("無 Gemini 金鑰"), fb), /綁定/);
+  assert.match(geminiErrorMessage(new Error("Gemini 生成中止，原因: MAX_TOKENS"), fb), /截斷/);
+  assert.equal(geminiErrorMessage(new Error("某個未知錯誤"), fb), fb);
+});
 
 test("2.5 flash／flash-lite 關閉思考（thinkingBudget:0），避免思考吃掉輸出額度", () => {
   assert.deepEqual(buildGenerationConfig(0.9, 1024, "gemini-2.5-flash"), { temperature: 0.9, maxOutputTokens: 1024, thinkingConfig: { thinkingBudget: 0 } });

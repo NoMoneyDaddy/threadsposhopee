@@ -42,6 +42,7 @@ export interface AccountMeta {
 function DraftCard({
   draft,
   dupSimilarity,
+  plan,
   account,
   fallbackAccount,
   sponsorEnabled = false,
@@ -54,6 +55,8 @@ function DraftCard({
 }: {
   draft: Draft;
   dupSimilarity?: number;
+  // 已排程草稿的預計自動發文時間＋原因（間隔等待／每日上限…）；讓使用者知道何時會發、為何還沒發。
+  plan?: { etaIso: string | null; reason: string };
   account?: AccountMeta;
   // 草稿尚未指定發文帳號時，預覽改用此帳號（通常第一個帳號）的頭像/暱稱，避免空灰圈；
   // 卡片上方「@帳號」標籤仍只在真的指定帳號時才顯示。
@@ -612,6 +615,14 @@ function DraftCard({
             </div>
           ))}
         </div>
+      )}
+
+      {/* 已排程草稿：顯示「預計自動發文時間＋原因」，回答「為什麼還沒自動發」（多半是防封間隔等待／每日上限）。 */}
+      {draft.status === "approved" && plan && !editing && (
+        <p className="mt-2 rounded bg-surface-2 p-2 text-xs text-ink-2" role="status">
+          ⏳ 預計自動發文：{plan.etaIso ? fmtEta(plan.etaIso) : "—"}
+          {plan.reason ? `（${plan.reason}）` : ""}
+        </p>
       )}
 
       {/* 佇列中草稿可改排程時間（手動微調發布時段）：做成明顯小區塊，不埋在卡片最底 */}

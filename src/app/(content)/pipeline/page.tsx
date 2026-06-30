@@ -1,5 +1,5 @@
 import PipelineBoard from "@/components/PipelineBoard";
-import { listDrafts, listMaterials, listPendingMaterials, listThreadsAccounts } from "@/lib/store";
+import { listDrafts, listMaterials, listPendingMaterials, listThreadsAccounts, getPublishPlan } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
 import { isDemoMode } from "@/lib/env";
 import { getMediaProvider } from "@/services/media/upload";
@@ -13,14 +13,18 @@ export const dynamic = "force-dynamic";
 export default async function PipelinePage() {
   const user = await getCurrentUser();
   const ownerId = user?.id ?? "demo-user";
-  const [drafts, materialsRaw, pending, accounts, provider] = await Promise.all([
+  const [drafts, materialsRaw, pending, accounts, provider, plan] = await Promise.all([
     listDrafts(ownerId),
     listMaterials(ownerId),
     listPendingMaterials(ownerId),
     listThreadsAccounts(ownerId),
-    user ? getMediaProvider(ownerId) : Promise.resolve({ kind: "none" as const })
+    user ? getMediaProvider(ownerId) : Promise.resolve({ kind: "none" as const }),
+    // 已排程草稿的「預計自動發文時間＋原因」（間隔等待／每日上限…）：讓使用者一眼看到何時會發、為何還沒發。
+    // getPublishPlan/listApprovedDraftsForPlan/getAccountPublishState 皆已支援 demo，故 demo 也載入。
+    user || isDemoMode ? getPublishPlan(ownerId).catch(() => []) : Promise.resolve([])
   ]);
   const cc = provider.kind === "cloudinary" ? provider.creds : null;
+  const publishPlan = Object.fromEntries(plan.map((r) => [r.id, { etaIso: r.etaIso, reason: r.reason }]));
 
   // 排序：先把「還沒文案」的素材置頂（方便優先補文案編輯），同組內再依成效（賺錢素材排前）。
   let itemRev: Record<string, ItemRevenue> = {};
@@ -63,6 +67,7 @@ export default async function PipelinePage() {
         accountMeta={accountMeta}
         defaultAccount={defaultAccount}
         sponsor={{ enabled: sponsorEnabled, pickByAccount }}
+        publishPlan={publishPlan}
         cloud={cc?.cloud ?? null}
         preset={cc?.preset ?? null}
       />

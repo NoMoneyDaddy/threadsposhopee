@@ -38,6 +38,8 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
   const [autoPublish, setAutoPublish] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  // 列表區（立即跑一篇）的提示獨立於建立表單，避免顯示在「建立部落客」按鈕下方（不直覺）。
+  const [runMsg, setRunMsg] = useState<string | null>(null);
 
   async function api(url: string, method: string, body?: unknown) {
     const res = await fetch(url, {
@@ -112,9 +114,9 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
   }
   async function runNow(a: Agent) {
     setBusy(a.id);
-    setMsg(null);
+    setRunMsg(null);
     const r = await api("/api/agents/run", "POST", { id: a.id }).catch(() => ({ ok: false, error: "失敗" }));
-    setMsg(r.ok ? "✅ 已產生 1 篇（依部落客設定進待審草稿或自動排程）。" : `⚠️ ${r.error}`);
+    setRunMsg(r.ok ? "✅ 已產生 1 篇（依部落客設定進待審草稿或自動排程）。" : `⚠️ ${r.error}`);
     router.refresh();
     setBusy(null);
   }
@@ -277,7 +279,22 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
       </form>
 
       <section className="rounded-2xl border bg-surface p-5">
-        <h2 className="section-title mb-3">我的部落客</h2>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="section-title">我的部落客</h2>
+          {/* 產出去向＋編輯入口：部落客產文進工作台的待審草稿，在那裡用編輯器修改、核准或排程。 */}
+          <a href="/pipeline" className="text-sm text-brand hover:underline">前往工作台編輯產出 →</a>
+        </div>
+        <p className="mb-3 text-xs text-ink-3">
+          部落客產出的貼文會進「工作台」的待審草稿，可在工作台用編輯器修改文案、核准或排程（開「免審直發」則自動排程）。
+        </p>
+        {runMsg && (
+          <p className={"mb-3 text-sm " + (runMsg.startsWith("✅") ? "text-ink-2" : "text-danger")} role="status" aria-live="polite">
+            {runMsg}
+            {runMsg.startsWith("✅") && (
+              <a href="/pipeline" className="ml-1 text-brand hover:underline">去工作台查看/編輯 →</a>
+            )}
+          </p>
+        )}
         {agents.length === 0 ? (
           <p className="text-sm text-ink-3">還沒有部落客。建立後可「立即跑一篇」或開啟每日自動產文（預設進草稿待審）。</p>
         ) : (

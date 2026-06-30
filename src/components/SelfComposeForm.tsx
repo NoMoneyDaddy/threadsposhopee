@@ -39,6 +39,7 @@ export default function SelfComposeForm({
 }) {
   const router = useRouter();
   const [content, setContent] = useState<PostContent>(emptyPostContent());
+  const [postMode, setPostMode] = useState<"split" | "all_in_main">("split"); // all_in_main＝留言＋連結併入主文、單篇發布
   const [replyDelay, setReplyDelay] = useState(""); // 留言延遲（分），空=用全域預設
   const [accountId, setAccountId] = useState(threadsAccounts[0]?.id ?? "");
   const [scheduledAt, setScheduledAt] = useState("");
@@ -78,17 +79,27 @@ export default function SelfComposeForm({
     }
     // 正文與留言（＝串文 2/2）在 Threads 都有 500 字上限；非草稿先擋，避免發布時才失敗
     if (action !== "draft") {
-      if ([...mainText].length > THREADS_LIMIT) {
-        setMsg(`正文超過 ${THREADS_LIMIT} 字上限，請先精簡`);
-        return;
-      }
-      if ([...replyText].length > THREADS_LIMIT) {
-        setMsg(`留言區超過 ${THREADS_LIMIT} 字上限，請先精簡`);
-        return;
-      }
-      if (extraSegments.some((s) => [...(s.text ?? "")].length > THREADS_LIMIT)) {
-        setMsg(`有串文段落超過 ${THREADS_LIMIT} 字上限，請先精簡`);
-        return;
+      if (postMode === "all_in_main") {
+        // 單篇發布：留言會併入主文，須驗「合併後」總字數（與發布層 [主文,留言].join("\n\n") 一致），
+        // 否則各自 <500 但合併 >500 會在發到 Threads 時才失敗。
+        const combined = [mainText, replyText].map((s) => s.trim()).filter(Boolean).join("\n\n");
+        if ([...combined].length > THREADS_LIMIT) {
+          setMsg(`合併後的主文超過 ${THREADS_LIMIT} 字上限，請先精簡`);
+          return;
+        }
+      } else {
+        if ([...mainText].length > THREADS_LIMIT) {
+          setMsg(`正文超過 ${THREADS_LIMIT} 字上限，請先精簡`);
+          return;
+        }
+        if ([...replyText].length > THREADS_LIMIT) {
+          setMsg(`留言區超過 ${THREADS_LIMIT} 字上限，請先精簡`);
+          return;
+        }
+        if (extraSegments.some((s) => [...(s.text ?? "")].length > THREADS_LIMIT)) {
+          setMsg(`有串文段落超過 ${THREADS_LIMIT} 字上限，請先精簡`);
+          return;
+        }
       }
     }
     // 串文段落須有內容（文字或媒體），避免送出空段落
@@ -136,6 +147,7 @@ export default function SelfComposeForm({
             media: mainMedia,
             reply_media: replyMedia,
             thread_chain: extraSegments,
+            post_mode: postMode,
             action,
             scheduled_at: scheduledAt ? parseTaipeiDateTimeLocal(scheduledAt).toISOString() : null
           })
@@ -157,6 +169,7 @@ export default function SelfComposeForm({
               : "✅ 已存草稿";
       setMsg(done);
       setContent(emptyPostContent());
+      setPostMode("split");
       setReplyDelay("");
       localStorage.removeItem(COMPOSE_DRAFT_KEY);
       router.refresh();
@@ -177,6 +190,8 @@ export default function SelfComposeForm({
         accountLabel={threadsAccounts.find((a) => a.id === (accountId || threadsAccounts[0]?.id))?.label}
         replyDelay={replyDelay}
         onReplyDelayChange={setReplyDelay}
+        postMode={postMode}
+        onPostModeChange={setPostMode}
         onAutosave={autosave}
       />
 

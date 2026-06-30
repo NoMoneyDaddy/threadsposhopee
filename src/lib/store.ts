@@ -24,7 +24,8 @@ export {
   getCachedJson,
   setCachedJson,
   acquirePublishLock,
-  releasePublishLock
+  releasePublishLock,
+  claimCronOnce
 } from "./app-state";
 
 // Telegram deeplink 綁定碼（app_state 一次性 token）已拆到 ./telegram-bind；

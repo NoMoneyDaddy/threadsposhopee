@@ -24,12 +24,33 @@ const ADSENSE_CLIENT = process.env.NEXT_PUBLIC_ADSENSE_CLIENT || "";
 const ANALYTICS_SRC = process.env.NEXT_PUBLIC_ANALYTICS_SRC || "";
 const ANALYTICS_ID = process.env.NEXT_PUBLIC_ANALYTICS_ID || "";
 
+// 對外網址（OG/分享預覽用絕對網址）：可用 NEXT_PUBLIC_SITE_URL 覆寫，未設沿用正式網域。
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://iwantpo.nomoneydaddy.app";
+const SITE_DESC = "多帳號社群排程發文工具：自動排程、AI 生成文案、蝦皮分潤連結管理、防封節奏，一站搞定分潤內容。";
+
 export const metadata: Metadata = {
-  title: "IwantPo 控制台",
-  description: "多帳號社群排程發文工具 — 自動排程、AI 文案、分潤連結管理、防封節奏",
+  metadataBase: new URL(SITE_URL),
+  // 首頁標題完整、好讀；子頁套用「頁名 · IwantPo」模板。
+  title: { default: "IwantPo · 多帳號社群排程・AI 文案・分潤管理", template: "%s · IwantPo" },
+  description: SITE_DESC,
+  applicationName: "IwantPo",
   manifest: "/manifest.webmanifest",
   icons: { icon: "/icon.svg", apple: "/icon.svg" },
   appleWebApp: { capable: true, statusBarStyle: "default", title: "IwantPo" },
+  // 分享到 Threads／FB／LINE 等的連結預覽（og:image 由 app/opengraph-image 自動產生 1200×630）。
+  openGraph: {
+    type: "website",
+    locale: "zh_TW",
+    url: "/",
+    siteName: "IwantPo",
+    title: "IwantPo · 多帳號社群排程・AI 文案・分潤管理",
+    description: SITE_DESC
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "IwantPo · 多帳號社群排程・AI 文案・分潤管理",
+    description: SITE_DESC
+  },
   // 關閉行動裝置（iOS/Android）對 email／電話／地址／日期的自動偵測，
   // 否則畫面上的 email（header、view-as 列、管理面板）等會被加上可點的虛線框。
   formatDetection: { telephone: false, date: false, address: false, email: false },

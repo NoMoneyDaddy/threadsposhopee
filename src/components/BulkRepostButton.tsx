@@ -42,7 +42,12 @@ export default function BulkRepostButton({ threadsAccounts }: { threadsAccounts:
   return (
     <div className="flex flex-wrap items-center gap-2">
       {threadsAccounts.length > 1 && (
-        <select className="rounded border px-2 py-1 text-sm" value={accId} onChange={(e) => setAccId(e.target.value)}>
+        <select
+          className="rounded border px-2 py-1 text-sm"
+          value={accId}
+          onChange={(e) => setAccId(e.target.value)}
+          aria-label="選擇發文帳號"
+        >
           {threadsAccounts.map((a) => (
             <option key={a.id} value={a.id}>
               {a.label}
@@ -61,7 +66,15 @@ export default function BulkRepostButton({ threadsAccounts }: { threadsAccounts:
       >
         {busy ? "排入中…" : "全部再排（常青回收）"}
       </button>
-      {msg && <span className="text-xs text-ink-2">{msg}</span>}
+      {msg && (
+        <span
+          className={"text-xs " + (msg.startsWith("❌") ? "text-red-600" : "text-ink-2")}
+          role={msg.startsWith("❌") ? "alert" : "status"}
+          aria-live="polite"
+        >
+          {msg}
+        </span>
+      )}
     </div>
   );
 }

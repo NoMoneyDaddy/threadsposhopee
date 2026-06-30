@@ -30,6 +30,8 @@ export default function PublishControlPanel({
 
   async function toggle() {
     const next = !paused;
+    // 緊急暫停影響全帳號自動發文 → 加確認（恢復不需確認）。
+    if (next && !confirm("緊急暫停會讓所有自動發文（cron 與「立即跑一輪」）整批跳過；草稿頁手動單篇發布不受影響。確定暫停？")) return;
     setBusy(true);
     setMsg(null);
     try {
@@ -84,7 +86,15 @@ export default function PublishControlPanel({
       </div>
 
       <div className={`text-sm ${cron.tone}`}>{cron.text}</div>
-      {msg && <div className="text-sm text-ink-2">{msg}</div>}
+      {msg && (
+        <div
+          className={"text-sm " + (msg.startsWith("❌") ? "text-red-600" : "text-emerald-600")}
+          role={msg.startsWith("❌") ? "alert" : "status"}
+          aria-live="polite"
+        >
+          {msg}
+        </div>
+      )}
     </div>
   );
 }

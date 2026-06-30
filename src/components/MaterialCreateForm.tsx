@@ -22,6 +22,19 @@ export default function MaterialCreateForm({
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    // 客端先擋明顯非蝦皮連結，省一次往返、也讓錯誤即時（後端仍會再驗）。
+    const trimmed = url.trim();
+    let okHost = false;
+    try {
+      const h = new URL(trimmed).hostname.toLowerCase();
+      okHost = h === "shope.ee" || h === "shp.ee" || /(^|\.)shopee\./.test(h);
+    } catch {
+      okHost = false;
+    }
+    if (!okHost) {
+      setMsg("❌ 請貼有效的蝦皮商品連結（shopee.tw / s.shopee.tw / shope.ee / shp.ee）");
+      return;
+    }
     setBusy(true);
     setMsg(null);
     try {
@@ -29,7 +42,7 @@ export default function MaterialCreateForm({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          shopee_url: url,
+          shopee_url: trimmed,
           generate_copy: withCopy,
           media
         })
@@ -50,11 +63,13 @@ export default function MaterialCreateForm({
   const input = "w-full rounded-xl border px-3 py-2 text-sm";
   return (
     <form onSubmit={submit} className="space-y-2 rounded-2xl border bg-surface p-4">
-      <div className="font-medium">手動建立素材</div>
+      <h3 className="font-medium">手動建立素材</h3>
       <div>
-        <label className="mb-1 block text-xs text-ink-2">蝦皮商品連結（必填）</label>
+        <label htmlFor="material-url" className="mb-1 block text-xs text-ink-2">蝦皮商品連結（必填）</label>
         <input
+          id="material-url"
           className={input}
+          type="url"
           placeholder="蝦皮連結（s.shopee.tw/... 或 shopee.tw/product/...）"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
@@ -74,7 +89,15 @@ export default function MaterialCreateForm({
         <button disabled={busy} className="rounded-xl bg-brand px-4 py-2 text-sm text-white disabled:opacity-50">
           {busy ? "建立中…" : "建立素材"}
         </button>
-        {msg && <span className="text-sm text-ink-2">{msg}</span>}
+        {msg && (
+          <span
+            className={"text-sm " + (msg.startsWith("❌") ? "text-red-600" : "text-emerald-600")}
+            role={msg.startsWith("❌") ? "alert" : "status"}
+            aria-live="polite"
+          >
+            {msg}
+          </span>
+        )}
       </div>
     </form>
   );

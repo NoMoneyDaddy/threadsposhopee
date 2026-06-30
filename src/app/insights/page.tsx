@@ -64,6 +64,7 @@ export default async function InsightsPage({
             <a
               key={p.days}
               href={`/insights?days=${p.days}`}
+              aria-current={p.days === days ? "page" : undefined}
               className={`rounded-full px-3 py-1 text-xs ${
                 p.days === days ? "bg-brand text-white" : "bg-surface-2 text-ink-2 hover:bg-neutral-200"
               }`}
@@ -82,7 +83,7 @@ export default async function InsightsPage({
 
       {revenue && <RevenueSection r={revenue} />}
       {revenueErr && (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700" role="alert">
           分潤收益讀取失敗：{revenueErr}
         </div>
       )}

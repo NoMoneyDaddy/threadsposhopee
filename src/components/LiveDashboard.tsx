@@ -159,7 +159,7 @@ function RunQueueButton({ onDone }: { onDone: () => void }) {
     }
   }
   return (
-    <div className="flex items-center gap-2" role="status" aria-live="polite">
+    <div className="flex items-center gap-2">
       <button
         onClick={run}
         disabled={busy}
@@ -168,7 +168,15 @@ function RunQueueButton({ onDone }: { onDone: () => void }) {
       >
         {busy ? "發送中…" : "⚡ 立即發送排隊貼文"}
       </button>
-      {msg && <span className="text-xs text-ink-2">{msg}</span>}
+      {msg && (
+        <span
+          className={"text-xs " + (msg.startsWith("❌") ? "text-red-600" : "text-ink-2")}
+          role={msg.startsWith("❌") ? "alert" : "status"}
+          aria-live="polite"
+        >
+          {msg}
+        </span>
+      )}
     </div>
   );
 }
@@ -179,6 +187,8 @@ function PauseToggle({ paused, onDone }: { paused: boolean; onDone: () => void }
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   async function toggle() {
+    // 暫停是影響全帳號的急停 → 加確認（恢復不需確認）。
+    if (!paused && !confirm("暫停會讓所有自動發文（cron 與「立即跑一輪」）整批跳過；手動單篇不受影響。確定暫停？")) return;
     setBusy(true);
     setMsg(null);
     try {
@@ -197,7 +207,7 @@ function PauseToggle({ paused, onDone }: { paused: boolean; onDone: () => void }
     }
   }
   return (
-    <div className="flex items-center gap-2" role="status" aria-live="polite">
+    <div className="flex items-center gap-2">
       <button
         onClick={toggle}
         disabled={busy}
@@ -210,7 +220,15 @@ function PauseToggle({ paused, onDone }: { paused: boolean; onDone: () => void }
       >
         {busy ? "處理中…" : paused ? "▶️ 恢復自動發文" : "⏸️ 暫停自動發文"}
       </button>
-      {msg && <span className="text-xs text-ink-2">{msg}</span>}
+      {msg && (
+        <span
+          className={"text-xs " + (msg.startsWith("❌") ? "text-red-600" : "text-ink-2")}
+          role={msg.startsWith("❌") ? "alert" : "status"}
+          aria-live="polite"
+        >
+          {msg}
+        </span>
+      )}
     </div>
   );
 }

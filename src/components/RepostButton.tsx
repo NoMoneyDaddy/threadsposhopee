@@ -20,7 +20,7 @@ export default function RepostButton({
 
   async function repost(action: "draft" | "queue") {
     if (!accId) {
-      setMsg("請先建立 Threads 帳號");
+      setMsg("❌ 請先建立 Threads 帳號");
       return;
     }
     setBusy(action);
@@ -53,7 +53,12 @@ export default function RepostButton({
   return (
     <div className="flex flex-wrap items-center gap-2">
       {threadsAccounts.length > 1 && (
-        <select className="rounded border px-2 py-1 text-xs" value={accId} onChange={(e) => setAccId(e.target.value)}>
+        <select
+          className="rounded border px-2 py-1 text-xs"
+          value={accId}
+          onChange={(e) => setAccId(e.target.value)}
+          aria-label="發到哪個帳號"
+        >
           {threadsAccounts.map((a) => (
             <option key={a.id} value={a.id}>
               {a.label}
@@ -66,14 +71,14 @@ export default function RepostButton({
         disabled={!!busy}
         className="rounded bg-brand px-3 py-2 text-xs text-white hover:opacity-90 disabled:opacity-50"
       >
-        {busy === "queue" ? "…" : "再排一篇（進佇列）"}
+        {busy === "queue" ? "排程中…" : "再排一篇（進佇列）"}
       </button>
       <button
         onClick={() => repost("draft")}
         disabled={!!busy}
         className="rounded border px-3 py-2 text-xs text-ink-2 hover:bg-surface-2 disabled:opacity-50"
       >
-        {busy === "draft" ? "…" : "存草稿"}
+        {busy === "draft" ? "存草稿中…" : "存草稿"}
       </button>
       <label className="flex items-center gap-1 text-xs text-ink-2" title="用 AI＋你的文案客製化設定重寫，避免重複措辭被降觸及">
         <input type="checkbox" checked={vary} onChange={(e) => setVary(e.target.checked)} disabled={!!busy} />
@@ -88,7 +93,11 @@ export default function RepostButton({
         「重寫文案」＝用 AI 依你的客製化設定重新生成（不勾＝沿用素材現有文案）；「最佳時段」＝進佇列時挑該帳號高觸及時段。
       </span>
       {msg && (
-        <span className="w-full text-xs text-ink-2" role="status" aria-live="polite">
+        <span
+          className={"w-full text-xs " + (msg.startsWith("❌") ? "text-red-600" : "text-ink-2")}
+          role={msg.startsWith("❌") ? "alert" : "status"}
+          aria-live="polite"
+        >
           {msg}
         </span>
       )}

@@ -88,6 +88,10 @@ export async function fetchSafePublicUrl(
 
 // 驗證 URL 可安全對外 fetch；不合法則丟出錯誤。
 export function assertSafePublicUrl(raw: string): URL {
+  // 長度上限：擋超長 URL（記憶體濫用／DB 欄位溢出）；2048 為常見上限，正常網址遠低於此。
+  if (typeof raw !== "string" || raw.length > 2048) {
+    throw new Error("URL 過長或型別不合法");
+  }
   let url: URL;
   try {
     url = new URL(raw);

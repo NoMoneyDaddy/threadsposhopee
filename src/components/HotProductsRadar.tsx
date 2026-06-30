@@ -23,16 +23,19 @@ export default function HotProductsRadar({ items, viewerId }: { items: SharedMat
               {m.cloudinary_media_url && m.media_type === "video" ? (
                 // 影片不能塞進 <img>（會變空白方塊）；用 <video> 顯示首幀當縮圖。
                 <video
-                  src={m.cloudinary_media_url}
+                  // #t=0.001：強制 iOS/Safari 定位到起點並渲染首幀當縮圖（只設 preload=metadata 在行動端常黑屏）。
+                  // <video> 原生不支援 referrerPolicy（無效屬性），故不加。
+                  src={`${m.cloudinary_media_url}#t=0.001`}
                   muted
                   playsInline
                   preload="metadata"
+                  aria-hidden="true"
+                  tabIndex={-1}
                   className="h-11 w-11 shrink-0 rounded object-cover"
-                  {...{ referrerPolicy: "no-referrer" }}
                 />
               ) : m.cloudinary_media_url && m.media_type === "image" ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={cloudinaryThumb(m.cloudinary_media_url, 96)} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-11 w-11 shrink-0 rounded object-cover" />
+                <img src={cloudinaryThumb(m.cloudinary_media_url, 96)} alt="" role="presentation" loading="lazy" referrerPolicy="no-referrer" className="h-11 w-11 shrink-0 rounded object-cover" />
               ) : (
                 <span className="grid h-11 w-11 shrink-0 place-items-center rounded bg-surface-2 text-ink-3">🛒</span>
               )}

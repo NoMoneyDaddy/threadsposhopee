@@ -110,11 +110,11 @@ export default async function SharedPage() {
                   )}
                 </div>
                 {m.cloudinary_media_url && m.media_type === "video" ? (
-                  // 影片用 <video>（塞進 <img> 會變空白）；顯示首幀當預覽。
-                  <video src={m.cloudinary_media_url} muted playsInline preload="metadata" className="mb-2 h-32 w-full rounded object-cover" {...{ referrerPolicy: "no-referrer" }} />
+                  // 影片用 <video>（塞進 <img> 會變空白）；顯示首幀當預覽。靜音無聲、純預覽 → 對輔助技術標為裝飾。
+                  <video src={`${m.cloudinary_media_url}#t=0.001`} muted playsInline preload="metadata" aria-hidden="true" tabIndex={-1} className="mb-2 h-32 w-full rounded object-cover" />
                 ) : m.cloudinary_media_url && m.media_type === "image" ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={cloudinaryThumb(m.cloudinary_media_url, 600)} alt="" loading="lazy" referrerPolicy="no-referrer" className="mb-2 h-32 w-full rounded object-cover" />
+                  <img src={cloudinaryThumb(m.cloudinary_media_url, 600)} alt="" role="presentation" loading="lazy" referrerPolicy="no-referrer" className="mb-2 h-32 w-full rounded object-cover" />
                 ) : null}
                 {m.main_text ? (
                   <div className="whitespace-pre-wrap text-sm text-ink">{m.main_text}</div>

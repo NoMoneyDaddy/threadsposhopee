@@ -1,4 +1,12 @@
 // 集中讀取環境變數，並判斷是否進入 Demo 模式（缺金鑰時用 fixtures 跑）。
+
+// 解析整數環境變數並夾到 [min,max]：非有限數（未設／"abc"／空字串）回 fallback，避免外部輸入污染。
+function clampInt(raw: string | undefined, fallback: number, min: number, max: number): number {
+  const n = parseInt(raw ?? "", 10);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
+}
+
 export const env = {
   supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
   supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "",
@@ -42,6 +50,10 @@ export const env = {
   publishGapJitterMinutes: parseInt(process.env.PUBLISH_GAP_JITTER_MINUTES || "0", 10), // 保底之上的隨機抖動上限（分），防固定節奏
   publishMaxPerDay: parseInt(process.env.PUBLISH_MAX_PER_DAY || "5", 10), // 每帳號每 24h 上限（遠低於 Threads 250）
   publishBatchPerRun: parseInt(process.env.PUBLISH_BATCH_PER_RUN || "1", 10), // 每次 cron 每帳號最多發幾篇
+  // 觸及自動調速：偵測到該帳號 owner 近期觸及驟降（detectReachDrop）時，自動放慢發文——
+  // 最小間隔 ×factor、每日上限 ÷factor（至少 1）。1 = 關閉（向後相容）。預設 2（間隔加倍、量減半）。
+  // 顯式驗證外部輸入：非有限數/<1 一律夾到 1（關閉，安全），上限夾到 10（避免極端值近乎永久暫停）。
+  publishReachSlowdownFactor: clampInt(process.env.PUBLISH_REACH_SLOWDOWN, 2, 1, 10),
   // 商品冷卻期（小時）：同一分潤商品在此時間內已（跨任一帳號）發過就先不發，防同品狂洗。
   // 0 = 關閉（向後相容）。發文佇列自動跳過、待冷卻過後下輪再發。
   productCooldownHours: parseInt(process.env.PRODUCT_COOLDOWN_HOURS || "0", 10),

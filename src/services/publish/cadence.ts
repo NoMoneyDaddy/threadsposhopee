@@ -103,6 +103,20 @@ export function warmupDailyCap(maxPerDay: number, warmupDays: number, ageDays: n
   return Math.max(1, Math.min(maxPerDay, Math.ceil(maxPerDay * frac)));
 }
 
+// 觸及自動調速：偵測到該帳號近期觸及驟降時放慢節奏——最小間隔 ×factor、每日上限 ÷factor（至少 1）。
+// reachDrop=false 或 factor<=1（關閉）回原值。純函式可測。
+export function reachAdjustedPacing(
+  base: { minGapMinutes: number; maxPerDay: number },
+  reachDrop: boolean,
+  factor: number
+): { minGapMinutes: number; maxPerDay: number } {
+  if (!reachDrop || !Number.isFinite(factor) || factor <= 1) return base;
+  return {
+    minGapMinutes: Math.round(base.minGapMinutes * factor),
+    maxPerDay: Math.max(1, Math.floor(base.maxPerDay / factor))
+  };
+}
+
 export interface PacingInput {
   failuresThisRun: number; // 本輪該帳號已累積失敗數
   failureLimit: number; // 斷路器上限（0=關）

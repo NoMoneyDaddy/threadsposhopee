@@ -10,6 +10,26 @@ import { formatCommissionRate } from "@/lib/product-name";
 import { checkThreadsContent, THREADS_MAX_HASHTAGS } from "@/lib/threads-content";
 import { isLowRelevance } from "@/lib/relevance";
 
+// 草稿狀態 → 中文徽章標籤＋色票（避免在 UI 直接印英文 status，並用顏色輔助辨識狀態）。
+const STATUS_LABELS: Record<string, string> = {
+  pending: "待審",
+  approved: "已排程",
+  publishing: "發布中",
+  published: "已發布",
+  failed: "發布失敗",
+  rejected: "已退回",
+  needs_verification: "待確認"
+};
+const STATUS_TONES: Record<string, string> = {
+  pending: "bg-surface-2 text-ink-2",
+  approved: "bg-blue-50 text-blue-700",
+  publishing: "bg-amber-50 text-amber-700",
+  published: "bg-emerald-50 text-emerald-700",
+  failed: "bg-red-50 text-red-600",
+  rejected: "bg-surface-2 text-ink-3",
+  needs_verification: "bg-orange-50 text-orange-800"
+};
+
 // memo：草稿列表（最多 100 張）在搜尋/篩選 re-render 時，只重繪 props 變動的卡片。
 // 需搭配 DraftsExplorer 以 useCallback 穩定 onToggleSelect，否則 memo 失效。
 // 草稿要發到的 Threads 帳號身分（供卡片標籤＋原生預覽顯示真實頭像/暱稱）。
@@ -80,6 +100,8 @@ function DraftCard({
   // 次要動作收進「更多」：避免卡片一次塞太多按鈕（主要：核准發布／編輯／重試常駐）。
   const [showMore, setShowMore] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  // 訊息語意：成功（綠／role=status）vs 失敗（紅／role=alert）。預設失敗，成功路徑顯式設 true。
+  const [msgOk, setMsgOk] = useState(false);
   const [compliance, setCompliance] = useState<{ risk: string; advice: string } | null>(null);
   const [variants, setVariants] = useState<{ mainText: string; replyText: string }[] | null>(null);
 
@@ -87,6 +109,7 @@ function DraftCard({
   async function genVariants() {
     setBusy("variants");
     setMsg(null);
+    setMsgOk(false);
     setVariants(null);
     try {
       const res = await fetch("/api/drafts/action", {
@@ -107,6 +130,7 @@ function DraftCard({
   async function runCompliance() {
     setBusy("compliance");
     setMsg(null);
+    setMsgOk(false);
     setCompliance(null);
     try {
       const res = await fetch("/api/drafts/compliance", {
@@ -146,6 +170,7 @@ function DraftCard({
   async function call(action: string, extra: Record<string, unknown> = {}) {
     setBusy(action);
     setMsg(null);
+    setMsgOk(false);
     try {
       const res = await fetch("/api/drafts/action", {
         method: "POST",
@@ -160,12 +185,19 @@ function DraftCard({
         setContent(draftToContent(json.draft));
       }
       if (action === "edit") setEditing(false);
-      if (action === "refresh-link") setMsg("已更新分潤連結（文內舊連結也一併換新）");
+      if (action === "refresh-link") {
+        setMsg("已更新分潤連結（文內舊連結也一併換新）");
+        setMsgOk(true);
+      }
       if (action === "shorten") {
         const skipped = typeof json.skipped === "number" ? json.skipped : 0;
         setMsg(`已轉換 ${json.shortened} 個連結${skipped > 0 ? `（另有 ${skipped} 個超過上限未處理）` : ""}`);
+        setMsgOk(true);
       }
-      if (action === "save-as-material") setMsg("已存成素材，可到素材頁重排（媒體含主文／留言指派）");
+      if (action === "save-as-material") {
+        setMsg("已存成素材，可到素材頁重排（媒體含主文／留言指派）");
+        setMsgOk(true);
+      }
       router.refresh();
     } catch (e) {
       setMsg(e instanceof Error ? e.message : String(e));
@@ -217,6 +249,7 @@ function DraftCard({
   async function toggleSponsor() {
     setBusy("sponsor");
     setMsg(null);
+    setMsgOk(false);
     try {
       const res = await fetch("/api/drafts/action", {
         method: "POST",
@@ -270,7 +303,13 @@ function DraftCard({
               全主文
             </span>
           )}
-          <span className="rounded bg-surface-2 px-2 py-0.5 text-xs text-ink-2">{draft.status}</span>
+          <span
+            className={"rounded px-2 py-0.5 text-xs " + (STATUS_TONES[draft.status] ?? "bg-surface-2 text-ink-2")}
+            title={draft.status === "approved" && draft.scheduled_at ? `預計發布：${fmtEta(draft.scheduled_at)}` : undefined}
+          >
+            {STATUS_LABELS[draft.status] ?? draft.status}
+            {draft.status === "approved" && draft.scheduled_at ? ` · ${fmtEta(draft.scheduled_at)}` : ""}
+          </span>
         </span>
       </div>
 
@@ -319,11 +358,11 @@ function DraftCard({
                       : []
                 })
               }
-              className="rounded bg-brand px-3 py-1 text-xs text-white disabled:opacity-50"
+              className="rounded bg-brand px-3 py-2 text-xs text-white disabled:opacity-50"
             >
               {busy === "edit" ? "儲存中…" : "儲存"}
             </button>
-            <button onClick={() => { setContent(draftToContent(draft)); setEditing(false); }} className="rounded border px-3 py-1 text-xs">
+            <button onClick={() => { setContent(draftToContent(draft)); setEditing(false); }} className="rounded border px-3 py-2 text-xs">
               取消
             </button>
           </div>
@@ -415,8 +454,11 @@ function DraftCard({
         <div className="mt-3 flex flex-wrap gap-2">
           <button
             disabled={!!busy}
-            onClick={() => call("publish")}
-            className="rounded bg-brand px-3 py-1 text-xs text-white hover:opacity-90 disabled:opacity-50"
+            onClick={() => {
+              // 立即對外發布、不可收回 → 加發布前確認（與刪除/退回一致地保護不可逆動作）。
+              if (confirm(`立即發布到 @${account?.label ?? "此帳號"} 嗎？會馬上對外發布，發布後無法收回。`)) call("publish");
+            }}
+            className="rounded bg-brand px-3 py-2 text-xs text-white hover:opacity-90 disabled:opacity-50"
           >
             {busy === "publish" ? "發布中…" : "核准並發布"}
           </button>
@@ -424,19 +466,19 @@ function DraftCard({
             <button
               disabled={!!busy}
               onClick={() => call("retry")}
-              className="rounded border border-amber-300 px-3 py-1 text-xs text-amber-700 hover:bg-amber-50 disabled:opacity-50"
+              className="rounded border border-amber-300 px-3 py-2 text-xs text-amber-700 hover:bg-amber-50 disabled:opacity-50"
             >
               {busy === "retry" ? "重置中…" : "重試（重排）"}
             </button>
           )}
-          <button disabled={!!busy} onClick={() => { setContent(draftToContent(draft)); setEditing(true); }} className="rounded border px-3 py-1 text-xs hover:bg-surface-2">
+          <button disabled={!!busy} onClick={() => { setContent(draftToContent(draft)); setEditing(true); }} className="rounded border px-3 py-2 text-xs hover:bg-surface-2">
             編輯
           </button>
           <button
             type="button"
             onClick={() => setShowMore((v) => !v)}
             aria-expanded={showMore}
-            className="rounded border px-3 py-1 text-xs text-ink-2 hover:bg-surface-2"
+            className="rounded border px-3 py-2 text-xs text-ink-2 hover:bg-surface-2"
           >
             {showMore ? "收起" : "⋯ 更多"}
           </button>
@@ -445,7 +487,7 @@ function DraftCard({
               <button
                 disabled={!!busy}
                 onClick={() => call("shorten")}
-                className="rounded border px-3 py-1 text-xs hover:bg-surface-2 disabled:opacity-50"
+                className="rounded border px-3 py-2 text-xs hover:bg-surface-2 disabled:opacity-50"
                 title="把文章裡的連結換成你的短連結（可順便附分潤）"
               >
                 {busy === "shorten" ? "轉換中…" : "套用短連結"}
@@ -454,7 +496,7 @@ function DraftCard({
                 <button
                   disabled={!!busy}
                   onClick={() => call("refresh-link")}
-                  className="rounded border px-3 py-1 text-xs hover:bg-surface-2 disabled:opacity-50"
+                  className="rounded border px-3 py-2 text-xs hover:bg-surface-2 disabled:opacity-50"
                   title="用目前的 Shopee 金鑰與 Sub id 設定重產分潤連結，並把文內舊連結換成新的"
                 >
                   {busy === "refresh-link" ? "刷新中…" : "🔄 刷新分潤連結"}
@@ -463,7 +505,7 @@ function DraftCard({
               <button
                 disabled={!!busy}
                 onClick={() => call("regenerate")}
-                className="rounded border px-3 py-1 text-xs hover:bg-surface-2 disabled:opacity-50"
+                className="rounded border px-3 py-2 text-xs hover:bg-surface-2 disabled:opacity-50"
               >
                 {busy === "regenerate" ? "重寫中…" : "AI 重寫"}
               </button>
@@ -471,7 +513,7 @@ function DraftCard({
                 disabled={!!busy}
                 onClick={genVariants}
                 title="一次產生多個文案版本，挑一個套用（A/B）"
-                className="rounded border px-3 py-1 text-xs hover:bg-surface-2 disabled:opacity-50"
+                className="rounded border px-3 py-2 text-xs hover:bg-surface-2 disabled:opacity-50"
               >
                 {busy === "variants" ? "產生中…" : "AI 多版本"}
               </button>
@@ -479,11 +521,11 @@ function DraftCard({
                 disabled={!!busy}
                 onClick={() => call("save-as-material")}
                 title="把這篇的文案＋媒體（主文／留言指派一起）存回素材庫，之後可重排"
-                className="rounded border px-3 py-1 text-xs hover:bg-surface-2 disabled:opacity-50"
+                className="rounded border px-3 py-2 text-xs hover:bg-surface-2 disabled:opacity-50"
               >
                 {busy === "save-as-material" ? "存中…" : "存成素材"}
               </button>
-              <button disabled={!!busy} onClick={() => call("reject")} className="rounded border px-3 py-1 text-xs text-ink-2 hover:bg-surface-2">
+              <button disabled={!!busy} onClick={() => call("reject")} className="rounded border px-3 py-2 text-xs text-ink-2 hover:bg-surface-2">
                 退回
               </button>
               <button
@@ -491,7 +533,7 @@ function DraftCard({
                 onClick={() => {
                   if (confirm("確定刪除這則草稿？此動作無法復原。")) call("delete");
                 }}
-                className="rounded border border-red-200 px-3 py-1 text-xs text-red-500 hover:bg-red-50"
+                className="rounded border border-red-200 px-3 py-2 text-xs text-red-500 hover:bg-red-50"
               >
                 刪除
               </button>
@@ -507,7 +549,7 @@ function DraftCard({
             disabled={!!busy}
             onClick={() => call("save-as-material")}
             title="把這篇的文案＋媒體（主文／留言指派一起）存回素材庫，之後可重排"
-            className="rounded border px-3 py-1 text-xs hover:bg-surface-2 disabled:opacity-50"
+            className="rounded border px-3 py-2 text-xs hover:bg-surface-2 disabled:opacity-50"
           >
             {busy === "save-as-material" ? "存中…" : "存成素材"}
           </button>
@@ -620,7 +662,15 @@ function DraftCard({
           </button>
         </div>
       )}
-      {msg && <p className="mt-2 text-xs text-red-500">❌ {msg}</p>}
+      {msg && (
+        <p
+          className={"mt-2 text-xs " + (msgOk ? "text-emerald-600" : "text-red-500")}
+          role={msgOk ? "status" : "alert"}
+          aria-live="polite"
+        >
+          {msgOk ? "✅" : "❌"} {msg}
+        </p>
+      )}
     </div>
   );
 }

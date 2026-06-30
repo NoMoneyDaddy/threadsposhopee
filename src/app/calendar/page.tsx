@@ -49,9 +49,9 @@ export default async function CalendarPage() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="text-2xl font-bold">內容行事曆</h1>
-          <p className="text-sm text-ink-2">已排程與已發布的貼文一覽。要改時間或審核，請到草稿頁。</p>
+          <p className="text-sm text-ink-2">已排程與已發布的貼文一覽。要改時間或審核，請到工作台。</p>
         </div>
-        <Link href="/drafts" className="btn btn-outline btn-sm">回草稿管理</Link>
+        <Link href="/pipeline" className="btn btn-outline btn-sm">回工作台</Link>
       </div>
       <CalendarView items={items} />
     </div>

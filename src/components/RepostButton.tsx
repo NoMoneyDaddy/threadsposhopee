@@ -36,7 +36,11 @@ export default function RepostButton({
       const slot = json.scheduledAt
         ? new Date(json.scheduledAt).toLocaleString("zh-TW", { timeZone: "Asia/Taipei", dateStyle: "short", timeStyle: "short" })
         : "";
-      const base = action === "queue" ? `✅ 已排入佇列（${slot}）` : "✅ 已產生草稿";
+      // 指向結果所在欄位：新草稿會出現在另一欄（手機需橫向滑），明說去哪看避免「動作完成但結果在視野外」。
+      const base =
+        action === "queue"
+          ? `✅ 已排入佇列（${slot}），請看右側「已排程」欄`
+          : "✅ 已產生草稿，請看「草稿」欄";
       setMsg(json.note ? `${base}；${json.note}` : base);
       router.refresh();
     } catch (e) {
@@ -60,14 +64,14 @@ export default function RepostButton({
       <button
         onClick={() => repost("queue")}
         disabled={!!busy}
-        className="rounded bg-brand px-3 py-1 text-xs text-white hover:opacity-90 disabled:opacity-50"
+        className="rounded bg-brand px-3 py-2 text-xs text-white hover:opacity-90 disabled:opacity-50"
       >
         {busy === "queue" ? "…" : "再排一篇（進佇列）"}
       </button>
       <button
         onClick={() => repost("draft")}
         disabled={!!busy}
-        className="rounded border px-3 py-1 text-xs text-ink-2 hover:bg-surface-2 disabled:opacity-50"
+        className="rounded border px-3 py-2 text-xs text-ink-2 hover:bg-surface-2 disabled:opacity-50"
       >
         {busy === "draft" ? "…" : "存草稿"}
       </button>
@@ -83,7 +87,11 @@ export default function RepostButton({
       <span className="w-full text-[11px] leading-tight text-ink-3">
         「重寫文案」＝用 AI 依你的客製化設定重新生成（不勾＝沿用素材現有文案）；「最佳時段」＝進佇列時挑該帳號高觸及時段。
       </span>
-      {msg && <span className="w-full text-xs text-ink-2">{msg}</span>}
+      {msg && (
+        <span className="w-full text-xs text-ink-2" role="status" aria-live="polite">
+          {msg}
+        </span>
+      )}
     </div>
   );
 }

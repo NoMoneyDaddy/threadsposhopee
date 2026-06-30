@@ -114,7 +114,7 @@ export default function CalendarView({ items }: { items: CalItem[] }) {
                   return (
                     <Link
                       key={it.id}
-                      href="/drafts"
+                      href="/pipeline"
                       title={`${t}${it.accountLabel ? ` · @${it.accountLabel}` : ""}｜${it.title}`}
                       className={`block truncate rounded border px-1 py-0.5 text-[11px] leading-tight ${statusClass(it.status)}`}
                     >
@@ -123,7 +123,7 @@ export default function CalendarView({ items }: { items: CalItem[] }) {
                   );
                 })}
                 {dayItems.length > 3 && (
-                  <Link href="/drafts" className="px-1 text-[11px] text-ink-3 hover:underline">
+                  <Link href="/pipeline" className="px-1 text-[11px] text-ink-3 hover:underline">
                     +{dayItems.length - 3} 則
                   </Link>
                 )}

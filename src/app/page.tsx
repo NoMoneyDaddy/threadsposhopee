@@ -13,28 +13,28 @@ export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const user = await getCurrentUser();
-  // 設定引導卡：任一狀態查詢失敗也不該 500 整個首頁（與下方其他查詢一致用 catch 降級）。
-  const steps = user
-    ? await getSetupSteps(user).catch((err) => {
-        // 記錄真正失敗的相依（哪個狀態查詢拋錯），以便排查；UI 降級為不顯示設定卡。
-        log.error("getSetupSteps 失敗", { err: err instanceof Error ? err.message : String(err) });
-        return [];
-      })
-    : [];
-  // 本週概覽（近 7 天，每人自己的發布資料）；失敗則略過不擋頁。
-  const weekly = user
-    ? await getPublishInsights(user.id, { startMs: Date.now() - 7 * 86400_000, endMs: Date.now() }).catch(() => null)
-    : null;
+  // 這四項彼此獨立、都只吃 user／user.id，併發查避免在首頁串接多個 Supabase 往返。
+  // 各自 catch 降級（任一失敗不擋頁；getSetupSteps 另記真正失敗的相依以利排查）。
+  const [steps, weekly, heartbeat, flags] = user
+    ? await Promise.all([
+        getSetupSteps(user).catch((err) => {
+          log.error("getSetupSteps 失敗", { err: err instanceof Error ? err.message : String(err) });
+          return [];
+        }),
+        getPublishInsights(user.id, { startMs: Date.now() - 7 * 86400_000, endMs: Date.now() }).catch(() => null),
+        getHeartbeat().catch(() => null),
+        getFeatureFlags().catch(() => null)
+      ])
+    : [[] as Awaited<ReturnType<typeof getSetupSteps>>, null, null, null];
 
   // 自動駕駛（排程器心跳）：讓使用者一眼確認「排程到了會自動發」——直接回應「排程時間到沒發」的疑慮。
-  const cron = user ? cronHeartbeatStatus(await getHeartbeat().catch(() => null), Date.now()) : null;
+  const cron = user ? cronHeartbeatStatus(heartbeat, Date.now()) : null;
 
   // 選品雷達（全站熱門共享商品；共享庫開啟才顯示）＋ 成就/連續發文。
   let hot: SharedMaterial[] = [];
   let streak = 0;
   let achievements = achievementsFor({ published: 0, contribution: 0, streak: 0 });
   if (user) {
-    const flags = await getFeatureFlags().catch(() => null);
     const [h, contribution, pubDates, publishedCount] = await Promise.all([
       flags?.shared ? listHotProducts(8).catch(() => []) : Promise.resolve([]),
       getContributionScore(user.id).catch(() => 0),

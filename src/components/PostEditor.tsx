@@ -216,6 +216,15 @@ export default function PostEditor({
           </div>
           <CharCount text={value.mainText} limit={limit} />
         </div>
+        {/* 就地捷徑：AI 生成靠 Gemini 金鑰＋文案偏好；直接在這裡跳到對應設定，免去翻好幾層再回來。 */}
+        {canGenThread && (
+          <p className="mt-1 text-[11px] text-ink-3">
+            AI 生成用你的 Gemini 金鑰：
+            <a href="/accounts#setup-gemini" className="text-brand hover:underline">綁定／檢查</a>
+            {" · "}
+            <a href="/settings" className="text-brand hover:underline">調整 AI 文案設定</a>
+          </p>
+        )}
         {err && <p className="mt-1 text-xs text-danger" role="alert">❌ {err}</p>}
         {variations.length > 0 && (
           <div className="mt-2 space-y-1.5 rounded-xl border border-dashed border-border bg-surface-2/50 p-2">

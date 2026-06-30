@@ -171,18 +171,20 @@ export default async function AdminPage() {
               <div key={m.id} className="flex items-center gap-3 py-2">
                 {m.cloudinary_media_url && m.media_type !== "none" && (
                   m.media_type === "video" ? (
-                    // 影片用 <video> 帶首幀預覽；用 <img> 載影片網址會是空白破圖。referrerPolicy 讓防盜連來源也載得到。
+                    // 影片用 <video> 顯示首幀當縮圖；用 <img> 載影片網址會是空白破圖。
+                    // 純裝飾縮圖：aria-hidden＋tabIndex=-1 從無障礙樹隱藏（免字幕軌要求）。<video> 原生不支援 referrerPolicy。
                     <video
                       src={videoFirstFrameSrc(m.cloudinary_media_url)}
                       muted
                       playsInline
                       preload="metadata"
+                      aria-hidden="true"
+                      tabIndex={-1}
                       className="h-12 w-12 shrink-0 rounded object-cover"
-                      {...{ referrerPolicy: "no-referrer" }}
                     />
                   ) : (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={cloudinaryThumb(m.cloudinary_media_url, 80)} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-12 w-12 shrink-0 rounded object-cover" />
+                    <img src={cloudinaryThumb(m.cloudinary_media_url, 80)} alt="" role="presentation" loading="lazy" referrerPolicy="no-referrer" className="h-12 w-12 shrink-0 rounded object-cover" />
                   )
                 )}
                 <div className="min-w-0 flex-1">

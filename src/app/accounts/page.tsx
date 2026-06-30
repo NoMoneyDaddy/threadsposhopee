@@ -170,6 +170,7 @@ export default async function AccountsPage() {
 
       {user && (
         <div id="setup-media" className="scroll-mt-24 space-y-4">
+          <h2 className="text-sm font-semibold text-ink-2">圖片／影片存放（R2 與 Cloudinary 二擇一即可）</h2>
           <MediaHostCompare />
           <R2Form
             bound={r2Bound}

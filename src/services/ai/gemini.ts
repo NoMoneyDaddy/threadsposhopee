@@ -55,7 +55,11 @@ export function mediaFitsInline(byteLength: number, max = MAX_INLINE_MEDIA_BYTES
 export function geminiErrorMessage(e: unknown, fallback: string): string {
   const m = e instanceof Error ? e.message : typeof e === "string" ? e : "";
   if (/無 Gemini 金鑰/.test(m)) return "尚未綁定 Gemini 金鑰，請先到帳號管理綁定";
-  if (/\b429\b|RESOURCE_EXHAUSTED|quota/i.test(m)) return "Gemini 配額已用盡（免費層有每分鐘／每日上限），請等幾分鐘再試，或到帳號管理確認金鑰方案";
+  if (/\b429\b|RESOURCE_EXHAUSTED|quota/i.test(m)) {
+    // 命中 flash 但非 flash-lite＝用的是每日免費額度很低的 2.5 Flash → 直接建議改用 Flash-Lite（額度高很多）。
+    if (/gemini[\w.\-]*flash(?!-lite)/i.test(m)) return "Gemini 配額用盡：2.5 Flash 免費層每日上限很低，建議到帳號管理改用 Flash-Lite（免費額度高很多），或稍後再試";
+    return "Gemini 配額已用盡（免費層有每分鐘／每日上限），請等幾分鐘再試，或到帳號管理確認金鑰方案";
+  }
   if (/API[_ ]?KEY|\b400\b.*key|\b401\b|\b403\b|PERMISSION_DENIED|UNAUTHENTICATED/i.test(m)) return "Gemini 金鑰無效或無權限，請到帳號管理重新綁定金鑰";
   if (/SAFETY|安全過濾|空內容|BLOCKLIST|PROHIBITED/i.test(m)) return "內容被 Gemini 安全過濾器擋下，換個商品描述或說法再試";
   if (/MAX_TOKENS|截斷/i.test(m)) return "生成被截斷，請縮短商品描述或稍後再試";

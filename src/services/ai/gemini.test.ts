@@ -5,6 +5,9 @@ import { extractGeminiText, buildGenerationConfig, geminiErrorMessage } from "./
 test("geminiErrorMessage：依錯誤類型給具體可行提示，否則回 fallback", () => {
   const fb = "生成失敗，請稍後再試";
   assert.match(geminiErrorMessage(new Error("Gemini 429: RESOURCE_EXHAUSTED quota"), fb), /配額/);
+  // 用 2.5 flash 撞每日上限 → 建議改 Flash-Lite；flash-lite 自己撞上限則不建議再換
+  assert.match(geminiErrorMessage(new Error('Gemini 429: quota model: gemini-2.5-flash'), fb), /Flash-Lite/);
+  assert.doesNotMatch(geminiErrorMessage(new Error('Gemini 429: quota model: gemini-2.5-flash-lite'), fb), /建議.*Flash-Lite/);
   assert.match(geminiErrorMessage(new Error("Gemini 400: API key not valid. API_KEY_INVALID"), fb), /金鑰/);
   assert.match(geminiErrorMessage(new Error("Gemini 生成中止，原因: SAFETY"), fb), /安全過濾/);
   assert.match(geminiErrorMessage(new Error("無 Gemini 金鑰"), fb), /綁定/);

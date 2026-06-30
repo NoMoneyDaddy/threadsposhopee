@@ -45,8 +45,10 @@ export async function generateCopy(
   return { mainText: stripLeadingPreamble(mainText), replyText: ensureExactLink(replyText, input.shopeeShortLink || ""), raw };
 }
 
-// 去掉開頭那種「回話/前言」句（如「收到！這是一篇…」「以下是…」「好的，…」），只有後面還有實際內容時才去，避免吃空。純函式可測。
-const PREAMBLE_RE = /^\s*(?:收到|好的|沒問題|了解|以下(?:是|為)|這(?:是|則)一?[篇則]|這篇是|希望(?:符合|這|對你))[^\n]*\n+/;
+// 去掉開頭那種「回話/前言」句（如「收到！這是一篇貼文…」「以下是為你生成的…」），只有後面還有實際內容時才去。
+// 收緊比對避免誤刪真人開頭：收到/好的/沒問題/了解 需「純語助詞行」或行內含 AI 關鍵字（貼文/文案/撰寫/生成/指令/要求/任務）；
+// 以下是／這是一篇 需含 AI 關鍵字；希望 僅限「希望符合…需求／希望對你…有幫助」。純函式可測。
+const PREAMBLE_RE = /^\s*(?:(?:收到|好的|沒問題|了解)[！!，,：:。\s]*(?:[^\n]*?(?:貼文|文案|撰寫|生成|指令|要求|任務)[^\n]*)?|以下(?:是|為)[^\n]*?(?:貼文|文案|撰寫|生成|指令|要求|任務)[^\n]*|這(?:是|則)一?[篇則][^\n]*?(?:貼文|文案|分享|介紹|說明)[^\n]*|希望(?:符合|對你)[^\n]*?(?:需求|有幫助)[^\n]*)\n+/;
 export function stripLeadingPreamble(text: string): string {
   const stripped = text.replace(PREAMBLE_RE, "").trimStart();
   return stripped.length > 0 ? stripped : text;

@@ -41,8 +41,15 @@ export async function generateCopy(
   // 一則 Threads 主文＋留言約 165 字內，1024 留足緩衝；maxOutputTokens 只是上限，不會多花錢。
   const raw = await generateWithGemini(prompt, input.mediaUrl ?? null, input.mediaType ?? "none", key, prefs.temperature, model, 1024);
   const { mainText, replyText } = splitCopy(raw);
-  // AI 引導語可自由發揮，但分潤網址必須一字不差：強制把留言裡的網址校正回原始連結（防幻覺/竄改/漏字）。
-  return { mainText, replyText: ensureExactLink(replyText, input.shopeeShortLink || ""), raw };
+  // 主文去開頭前言（防模型加「收到！這是一篇…」）；留言強制含原樣分潤連結（防幻覺/竄改/漏字）。
+  return { mainText: stripLeadingPreamble(mainText), replyText: ensureExactLink(replyText, input.shopeeShortLink || ""), raw };
+}
+
+// 去掉開頭那種「回話/前言」句（如「收到！這是一篇…」「以下是…」「好的，…」），只有後面還有實際內容時才去，避免吃空。純函式可測。
+const PREAMBLE_RE = /^\s*(?:收到|好的|沒問題|了解|以下(?:是|為)|這(?:是|則)一?[篇則]|這篇是|希望(?:符合|這|對你))[^\n]*\n+/;
+export function stripLeadingPreamble(text: string): string {
+  const stripped = text.replace(PREAMBLE_RE, "").trimStart();
+  return stripped.length > 0 ? stripped : text;
 }
 
 // 留言內的網址 token：只吃合法 URL 字元（不含中文、空白、括號），避免把網址後面緊貼的中文一起吞掉。
@@ -194,7 +201,9 @@ ${input.sourceText ? `參考內容：${input.sourceText}` : ""}`;
   // 防裸連結（防封）：AI 若沒寫引導段、只回 1 段，linkLine 會變成孤零零的裸網址。
   // 此時降級補上固定引導句，確保留言一定有引導語在連結前。
   const finalLinkLine = link && texts.length <= 1 ? `${pickReplyLeadIn(link)} ${link}` : linkLine;
-  return { ...assembleThread(texts.length ? texts : [input.productName ?? "這個好物"], finalLinkLine), raw };
+  const assembled = assembleThread(texts.length ? texts : [input.productName ?? "這個好物"], finalLinkLine);
+  // 主文去開頭前言（防模型加「收到！這是一篇…」）。
+  return { ...assembled, mainText: stripLeadingPreamble(assembled.mainText), raw };
 }
 
 // Demo 模式：不呼叫外部 API，產出一段示意文案

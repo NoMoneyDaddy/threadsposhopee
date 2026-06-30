@@ -1,6 +1,24 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { assembleThread, generateThreadCopy, ensureExactLink } from "./provider";
+import { assembleThread, generateThreadCopy, ensureExactLink, stripLeadingPreamble } from "./provider";
+
+test("stripLeadingPreamble：去掉開頭的回話/前言段，保留實際內容", () => {
+  const r = stripLeadingPreamble("收到！這是一篇 Threads 貼文，沒有業配感。\n\n早上起床看到這飯糰模具…");
+  assert.equal(r, "早上起床看到這飯糰模具…");
+});
+
+test("stripLeadingPreamble：以下是… 也去掉", () => {
+  assert.equal(stripLeadingPreamble("以下是為你寫的貼文：\n真心推薦這款"), "真心推薦這款");
+});
+
+test("stripLeadingPreamble：正常開頭不誤刪", () => {
+  const normal = "早上起床看到這飯糰模具，超實用\n\n壓一下就成形";
+  assert.equal(stripLeadingPreamble(normal), normal);
+});
+
+test("stripLeadingPreamble：整段都是前言時不吃成空字串", () => {
+  assert.equal(stripLeadingPreamble("收到！"), "收到！");
+});
 
 const SHORT = "https://s.shopee.tw/abc123";
 

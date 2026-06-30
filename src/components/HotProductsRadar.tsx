@@ -30,7 +30,9 @@ export default function HotProductsRadar({ items }: { items: SharedMaterial[] })
               </div>
               <div className="text-[11px] text-ink-3">匯入 {m.import_count}・收藏 {m.favorite_count}</div>
             </div>
-            <ImportSharedButton id={m.id} />
+            <div className="min-w-0">
+              <ImportSharedButton id={m.id} />
+            </div>
           </div>
         ))}
       </div>

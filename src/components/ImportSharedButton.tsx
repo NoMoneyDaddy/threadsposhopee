@@ -30,11 +30,11 @@ export default function ImportSharedButton({ id }: { id: string }) {
   }
 
   return (
-    <div className="flex items-center gap-2">
-      <button onClick={run} disabled={busy} className="btn btn-brand btn-sm">
+    <div className="flex min-w-0 flex-wrap items-center gap-2">
+      <button onClick={run} disabled={busy} className="btn btn-brand btn-sm shrink-0 whitespace-nowrap">
         {busy ? "匯入中…" : "匯入到我的素材"}
       </button>
-      {msg && <span className="text-xs text-ink-2">{msg}</span>}
+      {msg && <span className="min-w-0 break-words text-xs text-ink-2">{msg}</span>}
     </div>
   );
 }

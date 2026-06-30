@@ -106,6 +106,7 @@ export {
   updateDraftStatus,
   reclaimStalePublishing,
   listRepliesDue,
+  listFailedReplies,
   claimReplyForPublish,
   reclaimStaleReplies,
   markReplyPublished,

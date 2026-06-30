@@ -1,5 +1,6 @@
 import type { Draft, ThreadSegment, DraftMedia } from "@/lib/types";
 import { normalizeReplyMedia } from "@/lib/media";
+import { textSimilarity } from "@/lib/text-similarity";
 
 // 主文之後要依序補發的「有效段落鏈」（純函式、可單測）：
 // 優先用 thread_chain；為空時退回單則 reply_text/reply_media（向後相容）。
@@ -60,4 +61,39 @@ export interface ChainStep {
 export function chainStepAt(chain: ThreadSegment[], cursor: number): ChainStep | null {
   if (cursor < 0 || cursor >= chain.length) return null;
   return { segment: chain[cursor], isLast: cursor + 1 >= chain.length, nextCursor: cursor + 1 };
+}
+
+export interface ReplyProgress {
+  done: boolean; // 從 startCursor 起的段落都已（在近期貼文中）確認發出 → 整條完成
+  moved: boolean; // 至少確認了一段（游標有前進）
+  cursor: number; // 確認後的游標
+  lastPostId: string; // 確認到的最後一段貼文 id（串接下一段用）
+}
+
+// 用「自帳號近期貼文」回推串文補發的真實進度（純函式、可單測）：
+// 從 startCursor 起，逐段以文字相似度比對近期貼文（同一 post id 不重複比中），比中就前進游標、更新 lastPostId。
+// 用途：補留言「實際發出了卻被標 failed」時，據此把狀態修正為已發/續發，避免假失敗與重貼。
+// 媒體段（無文字）無法文字比對 → 停在該段（交回 worker/人工），不亂判。
+export function resolveReplyProgress(
+  chain: ThreadSegment[],
+  startCursor: number,
+  startLastPostId: string,
+  recentPosts: { id: string; text: string }[],
+  threshold = 0.7
+): ReplyProgress {
+  let cursor = Math.max(0, startCursor);
+  let lastPostId = startLastPostId;
+  let moved = false;
+  const used = new Set<string>();
+  while (cursor < chain.length) {
+    const segText = chain[cursor]?.text ?? "";
+    if (!segText.trim()) break; // 媒體段無法文字比對 → 停
+    const hit = recentPosts.find((p) => p.id && !used.has(p.id) && p.text && textSimilarity(p.text, segText) >= threshold);
+    if (!hit) break; // 這段確實沒在近期貼文中 → 停（真失敗）
+    used.add(hit.id);
+    lastPostId = hit.id;
+    cursor += 1;
+    moved = true;
+  }
+  return { done: cursor >= chain.length, moved, cursor, lastPostId };
 }

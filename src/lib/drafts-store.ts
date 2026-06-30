@@ -306,6 +306,23 @@ export type ReplyDueDraft = Pick<
   | "thread_cursor"
   | "thread_last_post_id"
 >;
+// 列出「補留言失敗」的草稿（已發主文），供 reconcile 讀回比對：實際發出了卻被標 failed 時修正狀態。
+export async function listFailedReplies(limit = 30): Promise<ReplyDueDraft[]> {
+  if (isDemoMode) {
+    return demo.drafts.filter((d) => d.reply_status === "failed" && d.published_post_id).slice(0, limit) as ReplyDueDraft[];
+  }
+  const sb = getServiceClient()!;
+  const { data, error } = await sb
+    .from("drafts")
+    .select("id, owner_id, threads_account_id, published_post_id, reply_text, reply_media, thread_chain, thread_cursor, thread_last_post_id")
+    .eq("reply_status", "failed")
+    .not("published_post_id", "is", null)
+    .order("published_at", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(`撈失敗留言失敗：${error.message}`);
+  return (data ?? []) as ReplyDueDraft[];
+}
+
 export async function listRepliesDue(limit = 20): Promise<ReplyDueDraft[]> {
   const nowIso = new Date().toISOString();
   if (isDemoMode) {

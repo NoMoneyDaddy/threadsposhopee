@@ -162,14 +162,22 @@ export default function PipelineBoard({
   // 欄位排序偏好（使用者可在欄頭切換）；存 localStorage 跨工作階段記住。
   const [scheduledSort, setScheduledSort] = useState<"near" | "far">("near"); // near＝最接近發布在上
   const [publishedSort, setPublishedSort] = useState<"new" | "old">("new"); // new＝最新發布在上
+  const [pendingSort, setPendingSort] = useState<"new" | "old">("new"); // 待審素材：抓回時間
+  const [materialSort, setMaterialSort] = useState<"default" | "new" | "old" | "rev_hi" | "rev_lo">("default"); // 素材庫
+  const [draftSort, setDraftSort] = useState<"new" | "old">("new"); // 草稿：建立時間
+  const [attentionSort, setAttentionSort] = useState<"urgent" | "new" | "old">("urgent"); // 需處理：急迫度/時間
   const [accountFilter, setAccountFilter] = useState<string>("all"); // 多帳號：只看某帳號的草稿欄；"all"＝全部
   useEffect(() => {
     try {
       const s = localStorage.getItem("pipeline:sort");
       if (s) {
-        const o = JSON.parse(s) as { scheduled?: string; published?: string };
+        const o = JSON.parse(s) as Record<string, string>;
         if (o.scheduled === "near" || o.scheduled === "far") setScheduledSort(o.scheduled);
         if (o.published === "new" || o.published === "old") setPublishedSort(o.published);
+        if (o.pending === "new" || o.pending === "old") setPendingSort(o.pending);
+        if (["default", "new", "old", "rev_hi", "rev_lo"].includes(o.material)) setMaterialSort(o.material as typeof materialSort);
+        if (o.draft === "new" || o.draft === "old") setDraftSort(o.draft);
+        if (["urgent", "new", "old"].includes(o.attention)) setAttentionSort(o.attention as typeof attentionSort);
       }
     } catch {
       /* 壞資料忽略 */
@@ -177,11 +185,21 @@ export default function PipelineBoard({
   }, []);
   useEffect(() => {
     try {
-      localStorage.setItem("pipeline:sort", JSON.stringify({ scheduled: scheduledSort, published: publishedSort }));
+      localStorage.setItem(
+        "pipeline:sort",
+        JSON.stringify({
+          scheduled: scheduledSort,
+          published: publishedSort,
+          pending: pendingSort,
+          material: materialSort,
+          draft: draftSort,
+          attention: attentionSort
+        })
+      );
     } catch {
       /* 隱私模式等寫入失敗忽略 */
     }
-  }, [scheduledSort, publishedSort]);
+  }, [scheduledSort, publishedSort, pendingSort, materialSort, draftSort, attentionSort]);
 
   // 滑鼠需移動 8px 才算拖曳（否則點按鈕/編輯不會誤觸）；觸控長按 200ms 啟動（手機可拖）。
   // MouseSensor（滑鼠）與 TouchSensor（觸控）分流：避免單一 PointerSensor 在手機上搶走捲動手勢。
@@ -228,11 +246,39 @@ export default function PipelineBoard({
     g.scheduled.sort((a, b) => byTime(a.scheduled_at, b.scheduled_at, scheduledSort === "far"));
     // 已發布：new＝最新發布在上、old＝最早在上。
     g.published.sort((a, b) => byTime(a.published_at, b.published_at, publishedSort === "new"));
-    // 需處理欄分流：最急的「待確認」(needs_verification) 置頂，再「失敗」，最後「已退回」。
-    const attnRank: Record<string, number> = { needs_verification: 0, failed: 1, rejected: 2 };
-    g.attention.sort((a, b) => (attnRank[overrides[a.id] ?? a.status] ?? 9) - (attnRank[overrides[b.id] ?? b.status] ?? 9));
+    // 草稿：依建立時間 new＝最新在上／old＝最早在上。
+    g.drafts.sort((a, b) => byTime(a.created_at, b.created_at, draftSort === "new"));
+    // 需處理欄：urgent＝最急的「待確認」(needs_verification) 置頂→「失敗」→「已退回」；new/old＝依建立時間。
+    if (attentionSort === "urgent") {
+      const attnRank: Record<string, number> = { needs_verification: 0, failed: 1, rejected: 2 };
+      g.attention.sort((a, b) => (attnRank[overrides[a.id] ?? a.status] ?? 9) - (attnRank[overrides[b.id] ?? b.status] ?? 9));
+    } else {
+      g.attention.sort((a, b) => byTime(a.created_at, b.created_at, attentionSort === "new"));
+    }
     return g;
-  }, [drafts, overrides, scheduledSort, publishedSort, accountFilter]);
+  }, [drafts, overrides, scheduledSort, publishedSort, draftSort, attentionSort, accountFilter]);
+
+  // ISO 時間比較（空值沉底）；desc=true 為新→舊。供待審/素材欄排序共用。
+  const cmpIso = (a?: string | null, b?: string | null, desc = false) => {
+    if (!a !== !b) return a ? -1 : 1;
+    if (!a && !b) return 0;
+    const c = (a as string).localeCompare(b as string);
+    return desc ? -c : c;
+  };
+  // 待審素材：依抓回（建立）時間排序。
+  const pendingSorted = useMemo(
+    () => [...pending].sort((a, b) => cmpIso(a.created_at, b.created_at, pendingSort === "new")),
+    [pending, pendingSort]
+  );
+  // 素材庫：default＝沿用頁面預設順序（缺文案優先＋收益）；new/old＝建立時間；rev_hi/rev_lo＝近 30 天分潤收益。
+  const materialsSorted = useMemo(() => {
+    if (materialSort === "default") return materials;
+    const arr = [...materials];
+    const rev = (m: Material) => itemRev[m.item_id]?.commission ?? 0;
+    if (materialSort === "new" || materialSort === "old") arr.sort((a, b) => cmpIso(a.created_at, b.created_at, materialSort === "new"));
+    else arr.sort((a, b) => (materialSort === "rev_hi" ? rev(b) - rev(a) : rev(a) - rev(b)));
+    return arr;
+  }, [materials, materialSort, itemRev]);
 
   async function onDragEnd(e: DragEndEvent) {
     setDragStatus(null);
@@ -405,8 +451,20 @@ export default function PipelineBoard({
             droppable={false}
             active={false}
             emptyHint="目前沒有待審素材。設定爬蟲監看來源後，抓回的貼文會先到這裡等你審核。"
+            headerExtra={
+              <select
+                className="rounded border bg-surface px-1 py-0.5 text-[11px] text-ink-2"
+                value={pendingSort}
+                onChange={(e) => setPendingSort(e.target.value as "new" | "old")}
+                aria-label="待審素材排序"
+                title="排序方式"
+              >
+                <option value="new">最新抓回</option>
+                <option value="old">最早抓回</option>
+              </select>
+            }
           >
-            <PendingMaterialsReview items={pending} accounts={accounts} canShare={canShare} />
+            <PendingMaterialsReview items={pendingSorted} accounts={accounts} canShare={canShare} />
           </Column>
 
           <Column
@@ -418,8 +476,23 @@ export default function PipelineBoard({
             droppable={false}
             active={false}
             emptyHint="素材庫是空的。先到「待審素材」核准入庫，或用上方「＋ 建立素材」貼一個蝦皮連結。"
+            headerExtra={
+              <select
+                className="rounded border bg-surface px-1 py-0.5 text-[11px] text-ink-2"
+                value={materialSort}
+                onChange={(e) => setMaterialSort(e.target.value as typeof materialSort)}
+                aria-label="素材庫排序"
+                title="排序方式"
+              >
+                <option value="default">預設（缺文案優先）</option>
+                <option value="new">最新入庫</option>
+                <option value="old">最早入庫</option>
+                <option value="rev_hi">收益高→低</option>
+                <option value="rev_lo">收益低→高</option>
+              </select>
+            }
           >
-            {materials.map((m) => (
+            {materialsSorted.map((m) => (
               <MaterialCard key={m.id} m={m} accounts={accounts} revenue={itemRev[m.item_id]} cloud={cloud} preset={preset} />
             ))}
           </Column>
@@ -433,6 +506,18 @@ export default function PipelineBoard({
             droppable={false}
             active={false}
             emptyHint="還沒有待審草稿。從「素材庫」某張卡按「再排一篇」，產生的草稿會出現在這裡。"
+            headerExtra={
+              <select
+                className="rounded border bg-surface px-1 py-0.5 text-[11px] text-ink-2"
+                value={draftSort}
+                onChange={(e) => setDraftSort(e.target.value as "new" | "old")}
+                aria-label="草稿排序"
+                title="排序方式"
+              >
+                <option value="new">最新建立</option>
+                <option value="old">最早建立</option>
+              </select>
+            }
           >
             {groups.drafts.map((d) => renderDraft(d, true, true))}
           </Column>
@@ -496,6 +581,19 @@ export default function PipelineBoard({
             droppable
             active={validTarget("attention")}
             emptyHint="沒有需要處理的項目 👍"
+            headerExtra={
+              <select
+                className="rounded border bg-surface px-1 py-0.5 text-[11px] text-ink-2"
+                value={attentionSort}
+                onChange={(e) => setAttentionSort(e.target.value as "urgent" | "new" | "old")}
+                aria-label="需處理排序"
+                title="排序方式"
+              >
+                <option value="urgent">急迫度</option>
+                <option value="new">最新建立</option>
+                <option value="old">最早建立</option>
+              </select>
+            }
           >
             {groups.attention.map((d) => renderDraft(d, true))}
           </Column>

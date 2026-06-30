@@ -131,7 +131,7 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
     { lastPublishedAt: string | null; publishedLast24h: number; accountStatus: string; createdAt: string | null }
   > = {};
   // 每位使用者自訂發文節奏（min gap／每日上限）本輪快取（依 owner）。
-  const pacingPrefsCache: Record<string, { slots: string[]; minGapMinutes: number; maxPerDay: number }> = {};
+  const pacingPrefsCache: Record<string, { slots: string[]; minGapMinutes: number; maxPerDay: number; replyDelayMinMinutes: number; replyDelayJitterMinutes: number }> = {};
   // 觸及自動調速：本輪快取各 owner 是否「近期觸及驟降」（detectReachDrop），是則放慢其節奏。
   const reachSlowByOwner: Record<string, boolean> = {};
   // 商品冷卻：記住本輪已發過的商品（跨帳號），避免同輪／DB 尚未可見時重複放行。
@@ -215,7 +215,9 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
       pacingPrefsCache[ownerKey] = await getPublishPrefs(ownerKey).catch(() => ({
         slots: [],
         minGapMinutes: env.publishMinGapMinutes,
-        maxPerDay: env.publishMaxPerDay
+        maxPerDay: env.publishMaxPerDay,
+        replyDelayMinMinutes: env.replyDelayFloorMinutes,
+        replyDelayJitterMinutes: env.replyDelayJitterMinutes
       }));
     }
     const pp = pacingPrefsCache[ownerKey];
@@ -280,7 +282,7 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
     const hasReply = chain.length > 0;
     // 留言延遲：>0 表示主文先發、留言之後補（防「秒留言」固定行為）。逐則可覆寫。
     const replyDelay = hasReply
-      ? replyDelayMinutes(draft.id, env.replyDelayFloorMinutes, env.replyDelayJitterMinutes, draft.reply_delay_minutes)
+      ? replyDelayMinutes(draft.id, pp.replyDelayMinMinutes, pp.replyDelayJitterMinutes, draft.reply_delay_minutes)
       : 0;
     // 多段串文一律交給 worker 依序補（避免一次爆發＋需要游標進度）；單則沿用「delay 0 即時補」捷徑。
     const deferReply = hasReply && (hasThreadChain(draft) || replyDelay > 0);
@@ -493,6 +495,18 @@ async function publishDueReplies(startTime: number, shard?: ShardOpts): Promise<
     log.warn("撈待補留言失敗", { err: e });
     return out;
   }
+  // 各 owner 自訂留言延遲（保底＋抖動）：依 owner 查一次並快取本輪；未設沿用 env。用於多段串文「下一段」排程。
+  const replyPrefsCache: Record<string, { min: number; jitter: number }> = {};
+  const replyPrefsFor = async (ownerId: string) => {
+    if (!(ownerId in replyPrefsCache)) {
+      const pp = await getPublishPrefs(ownerId).catch(() => null);
+      replyPrefsCache[ownerId] = {
+        min: pp?.replyDelayMinMinutes ?? env.replyDelayFloorMinutes,
+        jitter: pp?.replyDelayJitterMinutes ?? env.replyDelayJitterMinutes
+      };
+    }
+    return replyPrefsCache[ownerId];
+  };
   for (const d of due) {
     if (Date.now() - startTime > 50000) break; // 守住 maxDuration，剩下的下輪再補
     const ownerId = d.owner_id;
@@ -523,8 +537,9 @@ async function publishDueReplies(startTime: number, shard?: ShardOpts): Promise<
       if (step.isLast) {
         await advanceThreadSegment(d.id, ownerId, { lastPostId: segmentPostId, nextCursor: step.nextCursor, done: true });
       } else {
-        // 還有下一段：回到 pending，排下一段的到期時間（沿用留言延遲＋逐段不同抖動），下輪 cron 接續補。
-        const delay = replyDelayMinutes(`${d.id}:${step.nextCursor}`, env.replyDelayFloorMinutes, env.replyDelayJitterMinutes);
+        // 還有下一段：回到 pending，排下一段的到期時間（沿用該 owner 留言延遲＋逐段不同抖動），下輪 cron 接續補。
+        const rp = await replyPrefsFor(ownerId);
+        const delay = replyDelayMinutes(`${d.id}:${step.nextCursor}`, rp.min, rp.jitter);
         const nextDueAt = new Date(Date.now() + delay * 60000).toISOString();
         await advanceThreadSegment(d.id, ownerId, { lastPostId: segmentPostId, nextCursor: step.nextCursor, done: false, nextDueAt });
       }

@@ -471,13 +471,15 @@ export async function getPublishPrefs(ownerId: string): Promise<PublishPrefs> {
   const fallback: PublishPrefs = {
     slots: env.publishSlots.length ? env.publishSlots : ["09:00", "12:30", "20:00"],
     minGapMinutes: env.publishMinGapMinutes,
-    maxPerDay: env.publishMaxPerDay
+    maxPerDay: env.publishMaxPerDay,
+    replyDelayMinMinutes: env.replyDelayFloorMinutes,
+    replyDelayJitterMinutes: env.replyDelayJitterMinutes
   };
   if (isDemoMode) return fallback;
   const sb = getServiceClient()!;
   const { data } = await sb
     .from("profiles")
-    .select("publish_slots, publish_min_gap_minutes, publish_max_per_day")
+    .select("publish_slots, publish_min_gap_minutes, publish_max_per_day, publish_reply_delay_min, publish_reply_delay_jitter")
     .eq("id", ownerId)
     .maybeSingle();
   if (!data) return fallback;
@@ -485,13 +487,16 @@ export async function getPublishPrefs(ownerId: string): Promise<PublishPrefs> {
   return {
     slots: slots.length ? slots : fallback.slots,
     minGapMinutes: data.publish_min_gap_minutes ?? fallback.minGapMinutes,
-    maxPerDay: data.publish_max_per_day ?? fallback.maxPerDay
+    maxPerDay: data.publish_max_per_day ?? fallback.maxPerDay,
+    // NULL＝沿用 env 預設；0＝顯式「立即/無抖動」（?? 正確保留 0）
+    replyDelayMinMinutes: data.publish_reply_delay_min ?? fallback.replyDelayMinMinutes,
+    replyDelayJitterMinutes: data.publish_reply_delay_jitter ?? fallback.replyDelayJitterMinutes
   };
 }
 
 export async function setPublishPrefs(
   ownerId: string,
-  prefs: { slots: string[]; minGapMinutes: number | null; maxPerDay: number | null }
+  prefs: { slots: string[]; minGapMinutes: number | null; maxPerDay: number | null; replyDelayMin: number | null; replyDelayJitter: number | null }
 ): Promise<void> {
   if (isDemoMode) return;
   const sb = getServiceClient()!;
@@ -500,7 +505,9 @@ export async function setPublishPrefs(
       id: ownerId,
       publish_slots: prefs.slots.length ? prefs.slots.join(",") : null,
       publish_min_gap_minutes: prefs.minGapMinutes,
-      publish_max_per_day: prefs.maxPerDay
+      publish_max_per_day: prefs.maxPerDay,
+      publish_reply_delay_min: prefs.replyDelayMin,
+      publish_reply_delay_jitter: prefs.replyDelayJitter
     },
     { onConflict: "id" }
   );

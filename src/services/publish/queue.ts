@@ -45,8 +45,7 @@ import { resolveSponsorOwnerCreds, buildSponsorLinkForAccount, cleanProductUrlFr
 import { log } from "@/lib/logger";
 import { normalizeDraftMedia, normalizeReplyMedia } from "@/lib/media";
 import { shardOf, circuitOpen, nextPacingSkipReason, reachAdjustedPacing } from "@/services/publish/cadence";
-import { getEngagementCached } from "@/services/threads/engagement";
-import { detectReachDrop } from "@/services/threads/reach";
+import { getReachDropCached } from "@/services/threads/engagement";
 import { replyDelayMinutes } from "@/services/publish/reply-timing";
 import { effectiveChain, chainStepAt, hasThreadChain } from "@/services/publish/thread-chain";
 import { sendAlert, sendUserAlert } from "@/lib/notify";
@@ -157,15 +156,14 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
   const sponsorOwnerCreds =
     sponsorCfg.enabled && !isDemoMode && sponsorOwnerId ? await resolveSponsorOwnerCreds(sponsorOwnerId).catch(() => null) : null;
 
-  // 觸及自動調速：本輪「先並行」預抓各 owner 的觸及驟降訊號，避免在發文主迴圈內逐一序列 await
-  // 在快取失效時累積耗時、吃掉 50s 預算而截斷本輪。factor=1（關閉）則完全不查；失敗/樣本不足視為無驟降。
+  // 觸及自動調速：本輪「先並行」預抓各 owner 的觸及驟降訊號（getReachDropCached 為布林快取、含負向，
+  // 30 分 TTL → 不會每輪重打逐篇 insights API），避免在發文主迴圈內逐一序列 await 吃掉 50s 預算。
+  // factor=1（關閉）則完全不查；查詢失敗/樣本不足視為無驟降（getReachDropCached 內已降級）。
   if (env.publishReachSlowdownFactor > 1) {
     const owners = Array.from(new Set(drafts.map((d) => d.owner_id).filter((o): o is string => Boolean(o))));
     await Promise.all(
       owners.map(async (o) => {
-        const hasSignal = await getEngagementCached(o)
-          .then((e) => detectReachDrop(e.posts).hasSignal)
-          .catch(() => false);
+        const hasSignal = await getReachDropCached(o).catch(() => false);
         reachSlowByOwner[o] = hasSignal;
         if (hasSignal) log.info("觸及偏低，自動放慢發文節奏", { ownerId: o, factor: env.publishReachSlowdownFactor });
       })

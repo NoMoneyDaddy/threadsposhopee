@@ -1,6 +1,7 @@
 // 彙整最近貼文的 Threads 互動數據：逐帳號 token 查每篇 insights，加總並依觀看數排序。
 import { listRecentPublishedPosts, listThreadsAccountTokens, getCachedJson, setCachedJson } from "@/lib/store";
 import { getPostInsights, type PostInsights } from "./insights";
+import { detectReachDrop } from "./reach";
 
 export interface PostEngagement extends PostInsights {
   id: string;
@@ -136,4 +137,19 @@ export async function getBestHours(ownerId: string, minSamples = 3): Promise<num
   const eng = await getEngagementCached(ownerId).catch(() => null);
   if (!eng || eng.fetched < minSamples) return [];
   return bestPostingTimes(eng.posts).byHour.map((b) => b.key);
+}
+
+// 快取「是否觸及驟降」布林（含 false／無資料），短 TTL。
+// getEngagementCached 刻意不快取空結果（fetched=0），若直接在發文佇列每輪呼叫，
+// 「無 insights 資料」的 owner 會每輪重打 insights API（額度／DB 浪費，且結果恆為 false）。
+// 故另存一顆布林快取（含負向結果），讓發文熱路徑大多只讀便宜的布林、不重抓逐篇 insights。
+export async function getReachDropCached(ownerId: string, maxAgeMs = 30 * 60_000): Promise<boolean> {
+  if (!ownerId) return false;
+  const key = `reachdrop:${ownerId}`;
+  const cached = await getCachedJson<{ v: boolean }>(key, maxAgeMs).catch(() => null);
+  if (cached) return Boolean(cached.v);
+  const eng = await getEngagementCached(ownerId).catch(() => null);
+  const v = eng ? detectReachDrop(eng.posts).hasSignal : false;
+  await setCachedJson(key, { v }).catch(() => {});
+  return v;
 }

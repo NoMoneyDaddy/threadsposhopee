@@ -19,7 +19,7 @@ test("ANTI_AI_SLOP_RULES：收進 blader/humanizer 高訊號 pattern 與具體 b
   assert.ok(ANTI_AI_SLOP_RULES.includes("假範圍"), "應含假範圍（從X到Y）");
   assert.ok(ANTI_AI_SLOP_RULES.includes("製造假張力"), "應含戲劇性短句/對話腔開場");
   assert.match(ANTI_AI_SLOP_RULES, /短句.*長句|長句.*短句/); // 具體句長落差（burstiness）
-  assert.match(ANTI_AI_SLOP_RULES, /整段都這調調|成簇/); // 成簇才算 tell，避免過度約束
+  assert.match(ANTI_AI_SLOP_RULES, /整段都這調調/); // 避免過度約束，整段都這調調才算
 });
 
 test("buildCopyPrompt：含去 AI 腔規則＋輸出格式（正文／留言區）＋分潤連結", () => {

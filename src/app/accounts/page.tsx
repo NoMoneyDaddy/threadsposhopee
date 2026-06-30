@@ -143,7 +143,7 @@ export default async function AccountsPage() {
                       <ToggleButton endpoint={`/api/accounts/threads/${a.id}`} body={{ status: "paused" }} label="⏸ 暫停排程" />
                     )}
                     <RenameAccountButton endpoint={`/api/accounts/threads/${a.id}`} current={a.label} />
-                    <DeleteButton endpoint={`/api/accounts/threads/${a.id}`} />
+                    <DeleteButton endpoint={`/api/accounts/threads/${a.id}`} confirm="確定刪除這個 Threads 發文帳號？此帳號的排程草稿將無法發出，已發布的貼文不會被下架。此動作無法復原。" />
                   </div>
                 </div>
               );

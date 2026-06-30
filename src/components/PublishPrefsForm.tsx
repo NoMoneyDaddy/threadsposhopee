@@ -100,7 +100,7 @@ export default function PublishPrefsForm({
                 onClick={() => toggleSlot(t)}
                 aria-pressed={on}
                 className={
-                  "rounded-md border px-1 py-1 text-xs tabular-nums " +
+                  "flex min-h-9 items-center justify-center rounded-md border px-1 text-xs tabular-nums " +
                   (on ? "border-brand bg-brand text-white" : "text-ink-2 hover:bg-surface-2")
                 }
               >

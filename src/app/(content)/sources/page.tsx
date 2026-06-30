@@ -28,7 +28,7 @@ export default async function SourcesPage() {
       <div className="space-y-3 rounded-2xl border border-dashed p-10 text-center text-ink-2">
         <p>抓文生素材需要你自己的 Apify 金鑰（抓取靠它，費用也算在你的 Apify 帳號）。</p>
         <p>
-          <a href="/accounts#setup-apify" className="text-brand underline">
+          <a href="/accounts#setup-apify" className="btn btn-brand inline-flex">
             前往帳號管理綁定 Apify 金鑰
           </a>
         </p>

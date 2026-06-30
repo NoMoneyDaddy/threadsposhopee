@@ -35,7 +35,10 @@ function AccountsHealth({ rows }: { rows: DashboardData["accountsHealth"] }) {
   const text: Record<string, string> = { ok: "text-ink-2", warn: "text-amber-700", error: "text-red-600" };
   return (
     <div className="card p-5">
-      <h2 className="mb-3 font-semibold">帳號健康</h2>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h2 className="font-semibold">帳號健康</h2>
+        <Link href="/accounts" className="shrink-0 text-xs text-brand hover:underline">管理 →</Link>
+      </div>
       <ul className="space-y-2">
         {rows.map((r) => (
           <li key={r.label} className="flex items-center gap-2 text-sm">

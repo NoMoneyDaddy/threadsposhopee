@@ -157,6 +157,9 @@ function DraftCard({
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   };
   const [schedTime, setSchedTime] = useState(toLocalInput(draft.scheduled_at));
+  // datetime min 只能在 client 端算：直接在 render 用 new Date() 會讓 SSR 與 hydration 值不一致。
+  const [nowLocal, setNowLocal] = useState("");
+  useEffect(() => setNowLocal(toLocalInput(new Date().toISOString())), []);
 
   // 父層資料（router.refresh / 背景更新）變動時同步本地狀態。編輯中不覆蓋使用者輸入的 content。
   useEffect(() => {
@@ -487,12 +490,14 @@ function DraftCard({
               {busy === "publish" ? "發布中…" : "立即發布"}
             </button>
           )}
-          <button disabled={!!busy} onClick={() => { setContent(draftToContent(draft)); setEditing(true); }} className="rounded border px-3 py-2 text-xs hover:bg-surface-2">
+          {/* 發布中（publishing）代表發文程序正與 Threads 通訊，編輯/退回會與之競態 → 停用；
+              「重試」維持可用，它是「卡住的 publishing」唯一的復原路徑（見 drafts/action retry）。 */}
+          <button disabled={!!busy || draft.status === "publishing"} onClick={() => { setContent(draftToContent(draft)); setEditing(true); }} className="rounded border px-3 py-2 text-xs hover:bg-surface-2 disabled:opacity-50">
             編輯
           </button>
           {/* 退回是核心分流動作（→需處理），提到常駐層、不再埋在「更多」；加確認避免誤觸。 */}
           <button
-            disabled={!!busy}
+            disabled={!!busy || draft.status === "publishing"}
             onClick={() => {
               if (confirm("確定退回這則草稿？會移到「需處理」，不再自動發布。")) call("reject");
             }}
@@ -618,7 +623,7 @@ function DraftCard({
             type="datetime-local"
             className="rounded border px-2 py-1"
             value={schedTime}
-            min={toLocalInput(new Date().toISOString())}
+            min={nowLocal || undefined}
             onChange={(e) => setSchedTime(e.target.value)}
             disabled={!!busy}
           />

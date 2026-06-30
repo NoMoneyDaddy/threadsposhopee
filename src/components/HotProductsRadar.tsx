@@ -19,7 +19,7 @@ export default function HotProductsRadar({ items }: { items: SharedMaterial[] })
             <span className="w-5 shrink-0 text-center text-sm font-bold tabular-nums text-ink-3">{i + 1}</span>
             {m.cloudinary_media_url && m.media_type !== "none" ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={cloudinaryThumb(m.cloudinary_media_url, 96)} alt="" loading="lazy" className="h-11 w-11 shrink-0 rounded object-cover" />
+              <img src={cloudinaryThumb(m.cloudinary_media_url, 96)} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-11 w-11 shrink-0 rounded object-cover" />
             ) : (
               <span className="grid h-11 w-11 shrink-0 place-items-center rounded bg-surface-2 text-ink-3">🛒</span>
             )}

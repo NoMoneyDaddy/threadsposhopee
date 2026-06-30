@@ -59,6 +59,8 @@ export type PublishedPostRef = {
   published_post_id: string;
   threads_account_id: string | null;
   published_at: string | null;
+  // 'published' 代表本人 2/n 分潤留言已成功補發到主貼文 → 主貼文 replies 含這 1 則自己的留言（成效需扣除）。
+  reply_status: string | null;
 };
 export async function listRecentPublishedPosts(ownerId: string, limit = 15): Promise<PublishedPostRef[]> {
   if (isDemoMode) {
@@ -71,13 +73,14 @@ export async function listRecentPublishedPosts(ownerId: string, limit = 15): Pro
         product_name: d.product_name ?? null,
         published_post_id: d.published_post_id as string,
         threads_account_id: d.threads_account_id ?? null,
-        published_at: d.published_at ?? d.created_at
+        published_at: d.published_at ?? d.created_at,
+        reply_status: d.reply_status ?? null
       }));
   }
   const sb = getServiceClient()!;
   const { data } = await sb
     .from("drafts")
-    .select("id, product_name, published_post_id, threads_account_id, published_at")
+    .select("id, product_name, published_post_id, threads_account_id, published_at, reply_status")
     .eq("owner_id", ownerId)
     .eq("status", "published")
     .not("published_post_id", "is", null)

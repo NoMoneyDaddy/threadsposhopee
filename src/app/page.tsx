@@ -60,6 +60,9 @@ export default async function DashboardPage() {
 
       {steps.length > 0 && <SetupGuide steps={steps} />}
 
+      {/* 卡片依實用度排序：操作核心（心跳/倒數/待審/帳號健康/排隊/需注意）優先 → 摘要 → 探索 → 成就（最末）。 */}
+      <LiveDashboard />
+
       {weekly && (
         <a href="/insights?days=7" className="card block p-4 transition-colors hover:border-brand/40">
           <div className="mb-2 flex items-baseline justify-between">
@@ -83,11 +86,10 @@ export default async function DashboardPage() {
         </a>
       )}
 
+      {user && <HotProductsRadar items={hot} viewerId={user.id} />}
+
+      {/* 成就：娛樂性高、操作性低 → 固定置於最下方。 */}
       {user && <AchievementsCard streak={streak} achievements={achievements} />}
-
-      {user && <HotProductsRadar items={hot} />}
-
-      <LiveDashboard />
     </div>
   );
 }

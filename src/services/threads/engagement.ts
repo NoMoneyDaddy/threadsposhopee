@@ -46,6 +46,14 @@ function tpeParts(iso: string): { hour: number; weekday: number } | null {
   return { hour, weekday };
 }
 
+// 扣除「本人補發的 2/n 分潤留言」：reply_status==='published' 才代表該則已實際發到主貼文，
+// Threads 的 replies 會把它算進去 → 減 1（floor 0）。多段串文中只有 2/n 直接回主貼文（3/n+ 接續在前一段下），
+// 故主貼文 replies 固定只含 1 則本人留言，扣 1 即可。純函式可測。
+export function ownReplyAdjustedReplies(rawReplies: number, replyStatus: string | null | undefined): number {
+  if (replyStatus !== "published") return rawReplies;
+  return Math.max(0, rawReplies - 1);
+}
+
 export function bestPostingTimes(posts: { publishedAt: string | null; views: number }[]): BestTimes {
   const hour = new Map<number, { sum: number; n: number }>();
   const wday = new Map<number, { sum: number; n: number }>();
@@ -94,7 +102,8 @@ export async function getEngagement(ownerId: string, limit = 15): Promise<Engage
       if (!token) return null;
       const ins = await getPostInsights(p.published_post_id, token);
       if (!ins) return null;
-      return { id: p.id, productName: p.product_name, publishedAt: p.published_at, ...ins };
+      // 扣除本人補的 2/n 分潤留言（見 ownReplyAdjustedReplies）。
+      return { id: p.id, productName: p.product_name, publishedAt: p.published_at, ...ins, replies: ownReplyAdjustedReplies(ins.replies, p.reply_status) };
     })
   );
   const got = results.filter((x): x is PostEngagement => x !== null);

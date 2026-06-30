@@ -207,6 +207,7 @@ function EngagementSection({ e }: { e: EngagementSummary }) {
         <h2 className="section-title">Threads 互動成效</h2>
         <span className="text-xs text-ink-2">最近 {e.sampled} 篇，{e.fetched} 篇有數據</span>
       </div>
+      <p className="mb-3 text-[11px] text-ink-3">「留言」已自動扣除你自己補發的 2/n 分潤連結留言，較接近真實他人互動。</p>
       <div className="mb-4 grid grid-cols-3 gap-2 sm:grid-cols-6">
         {cards.map((c) => (
           <div key={c.label} className="rounded-xl bg-surface-2 p-2 text-center">

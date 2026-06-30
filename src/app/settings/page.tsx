@@ -47,6 +47,17 @@ export default async function SettingsPage() {
         <p className="text-sm text-ink-2">發文節奏、重發上限、文案風格與各種通知都在這裡。連接帳號與綁定金鑰請到 <Link href="/accounts" className="text-brand underline">帳號管理</Link>。</p>
       </div>
 
+      {/* 卡片依實用度排序：發文策略（每天最影響成效）→ 文案風格 → 會員暱稱 → 通知群（多為一次性設定）→ 管理員專屬。 */}
+      {(publishPrefs || repostLimits) && (
+        <section className="space-y-4">
+          <h2 className="text-sm font-semibold text-ink-2">發文策略（節奏與重發上限）</h2>
+          {publishPrefs && <PublishPrefsForm initial={publishPrefs} />}
+          {repostLimits && <RepostLimitsForm initial={repostLimits} />}
+        </section>
+      )}
+
+      <CopyPrefsForm initial={copyPrefs} />
+
       <DisplayNameForm initial={displayName} />
 
       <div id="setup-notify" className="scroll-mt-24 space-y-4">
@@ -57,16 +68,6 @@ export default async function SettingsPage() {
       {env.vapidPublicKey && <PushToggle vapidPublicKey={env.vapidPublicKey} />}
 
       {notifyPrefs && <NotifyPrefsForm initial={notifyPrefs} />}
-
-      {(publishPrefs || repostLimits) && (
-        <section className="space-y-4">
-          <h2 className="text-sm font-semibold text-ink-2">發文策略（節奏與重發上限）</h2>
-          {publishPrefs && <PublishPrefsForm initial={publishPrefs} />}
-          {repostLimits && <RepostLimitsForm initial={repostLimits} />}
-        </section>
-      )}
-
-      <CopyPrefsForm initial={copyPrefs} />
 
       {user.isOwner && (
         <details className="card p-5">

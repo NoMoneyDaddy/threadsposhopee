@@ -542,10 +542,10 @@ function DraftCard({
         </div>
       )}
 
-      {/* 佇列中草稿可改排程時間（手動微調發布時段） */}
+      {/* 佇列中草稿可改排程時間（手動微調發布時段）：做成明顯小區塊，不埋在卡片最底 */}
       {draft.status === "approved" && draft.scheduled_at && !editing && (
-        <div className="mt-2 flex flex-wrap items-center gap-2 border-t pt-2 text-xs text-ink-2">
-          <label htmlFor={`sched-${draft.id}`}>排程：</label>
+        <div className="mt-2 flex flex-wrap items-center gap-2 rounded-xl bg-surface-2 p-2 text-xs text-ink-2">
+          <label htmlFor={`sched-${draft.id}`} className="font-medium">📅 發布時間：</label>
           <input
             id={`sched-${draft.id}`}
             type="datetime-local"

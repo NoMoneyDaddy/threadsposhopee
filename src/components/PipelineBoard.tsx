@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   DndContext,
@@ -20,6 +20,7 @@ import PendingMaterialsReview from "@/components/PendingMaterialsReview";
 import SelfComposeForm from "@/components/SelfComposeForm";
 import CheckLinksButton from "@/components/CheckLinksButton";
 import BulkRepostButton from "@/components/BulkRepostButton";
+import BulkDraftBar from "@/components/BulkDraftBar";
 import RetryFailedBar from "@/components/RetryFailedBar";
 import type { Draft, Material, ThreadsAccount } from "@/lib/types";
 import type { ItemRevenue } from "@/services/shopee/report";
@@ -142,6 +143,7 @@ export default function PipelineBoard({
   const [overrides, setOverrides] = useState<Record<string, DraftStatus>>({});
   const [dragStatus, setDragStatus] = useState<DraftStatus | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set()); // 草稿批次選取
   // 欄位排序偏好（使用者可在欄頭切換）；存 localStorage 跨工作階段記住。
   const [scheduledSort, setScheduledSort] = useState<"near" | "far">("near"); // near＝最接近發布在上
   const [publishedSort, setPublishedSort] = useState<"new" | "old">("new"); // new＝最新發布在上
@@ -208,6 +210,9 @@ export default function PipelineBoard({
     g.scheduled.sort((a, b) => byTime(a.scheduled_at, b.scheduled_at, scheduledSort === "far"));
     // 已發布：new＝最新發布在上、old＝最早在上。
     g.published.sort((a, b) => byTime(a.published_at, b.published_at, publishedSort === "new"));
+    // 需處理欄分流：最急的「待確認」(needs_verification) 置頂，再「失敗」，最後「已退回」。
+    const attnRank: Record<string, number> = { needs_verification: 0, failed: 1, rejected: 2 };
+    g.attention.sort((a, b) => (attnRank[overrides[a.id] ?? a.status] ?? 9) - (attnRank[overrides[b.id] ?? b.status] ?? 9));
     return g;
   }, [drafts, overrides, scheduledSort, publishedSort]);
 
@@ -246,7 +251,22 @@ export default function PipelineBoard({
   // 發布失敗的草稿 → 一鍵全部重排（沿用既有 RetryFailedBar）。
   const failedIds = useMemo(() => drafts.filter((d) => (overrides[d.id] ?? d.status) === "failed").map((d) => d.id), [drafts, overrides]);
 
-  const renderDraft = (d: Draft, draggable: boolean) => {
+  // 草稿批次操作：勾選待審草稿 → 用既有 BulkDraftBar 一次核准/加佇列/退回/刪除。
+  const toggleSelect = useCallback((id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+  // 只保留仍在「草稿」狀態且被勾選的 id（避免狀態已變動的殘留選取）。
+  const selectedDraftIds = useMemo(
+    () => groups.drafts.filter((d) => selected.has(d.id)).map((d) => d.id),
+    [groups.drafts, selected]
+  );
+
+  const renderDraft = (d: Draft, draggable: boolean, selectable = false) => {
     const card = (
       <DraftCard
         draft={d}
@@ -255,9 +275,9 @@ export default function PipelineBoard({
         sponsorEnabled={sponsor?.enabled ?? false}
         cloud={cloud}
         preset={preset}
-        selectable={false}
-        selected={false}
-        onToggleSelect={() => {}}
+        selectable={selectable}
+        selected={selected.has(d.id)}
+        onToggleSelect={toggleSelect}
         isSponsorPick={
           Boolean(sponsor?.enabled) && !!d.threads_account_id && sponsor?.pickByAccount?.[d.threads_account_id] === d.id
         }
@@ -297,6 +317,7 @@ export default function PipelineBoard({
       {composing && <SelfComposeForm threadsAccounts={accounts} cloud={cloud} preset={preset} />}
       {creatingMaterial && <MaterialCreateForm cloud={cloud} preset={preset} />}
       {failedIds.length > 0 && <RetryFailedBar failedIds={failedIds} />}
+      {selectedDraftIds.length > 0 && <BulkDraftBar draftIds={selectedDraftIds} />}
       {err && <p className="text-sm text-danger" role="alert">❌ {err}</p>}
 
       <p className="text-xs text-ink-3">👉 左右滑動切換欄位：待審素材 → 素材庫 → 草稿 → 已排程 → 已發布 → 需處理</p>
@@ -318,8 +339,8 @@ export default function PipelineBoard({
             ))}
           </Column>
 
-          <Column id="draft" title="📝 草稿" hint="AI 文案待審：拖到「已排程」即核准" count={groups.drafts.length} accent="" droppable={false} active={false}>
-            {groups.drafts.map((d) => renderDraft(d, true))}
+          <Column id="draft" title="📝 草稿" hint="AI 文案待審：勾選可批次核准，或拖到「已排程」即核准" count={groups.drafts.length} accent="" droppable={false} active={false}>
+            {groups.drafts.map((d) => renderDraft(d, true, true))}
           </Column>
 
           <Column

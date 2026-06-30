@@ -40,3 +40,20 @@ test("導覽列「工作台」可切換到工作台頁", async ({ page }) => {
   await expect(page).toHaveURL(/\/pipeline$/);
   await expect(page.getByRole("heading", { name: "工作台", level: 1 })).toBeVisible();
 });
+
+test("情景：首頁「去工作台發文」CTA 直達工作台（減少來回）", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("link", { name: /去工作台/ }).click();
+  await expect(page).toHaveURL(/\/pipeline$/);
+});
+
+test("情景：工作台次導覽可一鍵進「行事曆」", async ({ page }) => {
+  await page.goto("/pipeline");
+  await page.getByRole("link", { name: "行事曆", exact: true }).click();
+  await expect(page).toHaveURL(/\/calendar$/);
+});
+
+test("情景：帳號管理含發文帳號綁定錨點（就地深連結可達）", async ({ page }) => {
+  await page.goto("/accounts");
+  await expect(page.locator("#setup-threads")).toHaveCount(1);
+});

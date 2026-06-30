@@ -21,6 +21,11 @@ export async function register() {
   const { schedulerTick } = await import("@/services/scheduler/tick");
 
   log.info("內建排程啟動", { everyMinutes: minutes });
-  // 啟動後先等一輪，避免部署/冷啟動瞬間爭用；之後每 N 分一次。
+  // 啟動後短延遲（≤30 秒，讓 server 先就緒）就先跑一次，之後才每 N 分一次。
+  // 為何不「等一整個間隔」：每次重新部署都會重置 setInterval 計時器；若自動/頻繁重部署的間距
+  // 比排程間隔還短，/api/cron/all 會遲遲不跑甚至停擺。先跑一次把重部署的損失壓到 ~30 秒內。
+  // 安全：schedulerTick 有重入防護、/api/cron/all 有分布式鎖＋每日原子守門，多實例/重啟皆不重複。
+  const initialDelayMs = Math.min(minutes * 60_000, 30_000);
+  setTimeout(() => void schedulerTick(), initialDelayMs);
   setInterval(() => void schedulerTick(), minutes * 60_000);
 }

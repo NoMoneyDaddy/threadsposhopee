@@ -39,7 +39,7 @@ export default function RepostButton({
       // 指向結果所在欄位：新草稿會出現在另一欄（手機需橫向滑），明說去哪看避免「動作完成但結果在視野外」。
       const base =
         action === "queue"
-          ? `✅ 已排入佇列（${slot}），請看右側「已排程」欄`
+          ? `✅ 已排入佇列${slot ? `（${slot}）` : ""}，請看右側「已排程」欄`
           : "✅ 已產生草稿，請看「草稿」欄";
       setMsg(json.note ? `${base}；${json.note}` : base);
       router.refresh();

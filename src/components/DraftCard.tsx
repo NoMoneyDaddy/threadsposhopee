@@ -600,7 +600,10 @@ function DraftCard({
             disabled={!!busy || !schedTime || schedTime === toLocalInput(draft.scheduled_at)}
             onClick={() => {
               const t = new Date(schedTime);
-              if (Number.isNaN(t.getTime())) return setMsg("時間格式錯誤");
+              if (Number.isNaN(t.getTime())) {
+                setMsgOk(false); // 否則前一次成功留下的 msgOk=true 會讓此錯誤顯示成綠色
+                return setMsg("時間格式錯誤");
+              }
               call("reschedule", { scheduled_at: t.toISOString() });
             }}
             className="rounded border px-3 py-1 text-brand hover:bg-orange-50 disabled:opacity-50"

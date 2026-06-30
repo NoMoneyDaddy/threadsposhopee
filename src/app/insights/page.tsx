@@ -7,6 +7,7 @@ import { detectReachDrop } from "@/services/threads/reach";
 import { getCurrentUser } from "@/lib/auth";
 import { isDemoMode } from "@/lib/env";
 import { INSIGHTS_PERIODS as PERIODS, resolveInsightsRange } from "@/lib/insights-range";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -283,9 +284,9 @@ function BestTimesSection({ e }: { e: EngagementSummary }) {
       {/* 把分析接回行動：到工作台再排一篇時勾「最佳時段」即自動套用，避免使用者得自己記時間回去手排。 */}
       <p className="mt-3 text-xs text-ink-3">
         想自動套用？到{" "}
-        <a href="/pipeline" className="text-brand underline hover:opacity-80">
+        <Link href="/pipeline" className="text-brand underline hover:opacity-80">
           工作台
-        </a>{" "}
+        </Link>{" "}
         從素材「再排一篇」時勾選「最佳時段」，系統會自動挑這些高觸及時段排程。
       </p>
     </section>

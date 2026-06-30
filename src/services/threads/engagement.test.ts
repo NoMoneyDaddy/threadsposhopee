@@ -1,6 +1,20 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { bestPostingTimes, insightsHintKind } from "./engagement";
+import { bestPostingTimes, insightsHintKind, ownReplyAdjustedReplies } from "./engagement";
+
+test("ownReplyAdjustedReplies：留言已補發（published）→ 扣 1，floor 0", () => {
+  assert.equal(ownReplyAdjustedReplies(3, "published"), 2);
+  assert.equal(ownReplyAdjustedReplies(1, "published"), 0);
+  assert.equal(ownReplyAdjustedReplies(0, "published"), 0); // 不會變負
+});
+
+test("ownReplyAdjustedReplies：未補發/pending/failed/none/null → 不扣", () => {
+  assert.equal(ownReplyAdjustedReplies(3, "pending"), 3);
+  assert.equal(ownReplyAdjustedReplies(3, "failed"), 3);
+  assert.equal(ownReplyAdjustedReplies(3, "none"), 3);
+  assert.equal(ownReplyAdjustedReplies(3, null), 3);
+  assert.equal(ownReplyAdjustedReplies(3, undefined), 3);
+});
 
 // 2024-01-01 是週一。UTC 01:00 = Asia/Taipei 09:00（+8）。
 test("bestPostingTimes：依台北時段分桶並算平均、由高到低排序", () => {

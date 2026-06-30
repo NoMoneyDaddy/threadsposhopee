@@ -1,10 +1,32 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { assembleThread, generateThreadCopy, ensureExactLink, stripLeadingPreamble } from "./provider";
+import { assembleThread, generateThreadCopy, ensureExactLink, stripLeadingPreamble, parseThreadSegments } from "./provider";
+
+test("parseThreadSegments：靠 [n] 段號標記擷取，丟掉標記前的前言", () => {
+  assert.deepEqual(parseThreadSegments("好，這就來幫你寫一篇貼文！\n[1] 主文內容\n[2] 連結引導語", 3), ["主文內容", "連結引導語"]);
+});
+
+test("parseThreadSegments：【n】全形與多行內容都支援", () => {
+  assert.deepEqual(parseThreadSegments("【1】第一段\n還有第二行\n【2】收尾", 3), ["第一段\n還有第二行", "收尾"]);
+});
+
+test("parseThreadSegments：純數字標記 1.／1、／1) 也支援", () => {
+  assert.deepEqual(parseThreadSegments("1. 第一段\n2、第二段\n3) 第三段", 3), ["第一段", "第二段", "第三段"]);
+});
+
+test("parseThreadSegments：沒有段號標記 → 退回 === 切分（相容）", () => {
+  assert.deepEqual(parseThreadSegments("甲\n===\n乙", 3), ["甲", "乙"]);
+});
+
+test("parseThreadSegments：取前 n 段", () => {
+  assert.deepEqual(parseThreadSegments("[1] a\n[2] b\n[3] c", 2), ["a", "b"]);
+});
 
 test("stripLeadingPreamble：去掉開頭的回話/前言段，保留實際內容", () => {
-  const r = stripLeadingPreamble("收到！這是一篇 Threads 貼文，沒有業配感。\n\n早上起床看到這飯糰模具…");
-  assert.equal(r, "早上起床看到這飯糰模具…");
+  assert.equal(stripLeadingPreamble("收到！這是一篇 Threads 貼文，沒有業配感。\n\n早上起床看到這飯糰模具…"), "早上起床看到這飯糰模具…");
+  // 「好，這就來幫你寫一篇…」這種寫作動作型前言
+  assert.equal(stripLeadingPreamble("好，這就來幫你寫一篇 Threads 貼文！\n\n捏飯糰捏到手黏黏"), "捏飯糰捏到手黏黏");
+  assert.equal(stripLeadingPreamble("好的，這是為你撰寫的文案：\n真心推薦"), "真心推薦");
 });
 
 test("stripLeadingPreamble：以下是… 也去掉", () => {

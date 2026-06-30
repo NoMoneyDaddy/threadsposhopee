@@ -8,7 +8,8 @@ import type { ThreadsAccount } from "@/lib/types";
 export default function BulkRepostButton({ threadsAccounts }: { threadsAccounts: ThreadsAccount[] }) {
   const router = useRouter();
   const [accId, setAccId] = useState(threadsAccounts[0]?.id ?? "");
-  const [bestTime, setBestTime] = useState(false);
+  // 智慧時段預設開：整批依成效最佳時段排程並分散（資料不足自動退回預設時段）。
+  const [bestTime, setBestTime] = useState(true);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -55,9 +56,9 @@ export default function BulkRepostButton({ threadsAccounts }: { threadsAccounts:
           ))}
         </select>
       )}
-      <label className="flex items-center gap-1 text-xs text-ink-2" title="進佇列時依成效挑該帳號高觸及時段（資料不足則用預設時段）">
+      <label className="flex items-center gap-1 text-xs text-ink-2" title="預設開：依該帳號成效挑高觸及時段並分散一整天（資料不足自動退回預設時段）">
         <input type="checkbox" checked={bestTime} onChange={(e) => setBestTime(e.target.checked)} disabled={busy} />
-        最佳時段
+        智慧時段（依成效）
       </label>
       <button
         onClick={run}

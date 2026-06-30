@@ -3,11 +3,11 @@ import {
   getMaterial,
   createDraft,
   updateDraftStatus,
-  userOwnsThreadsAccount,
-  getPublishPrefs
+  userOwnsThreadsAccount
 } from "@/lib/store";
 import { getMediaProvider, uploadMediaWith, type MediaProvider } from "@/services/media/upload";
-import { withNextSlot, nextOpenSlot } from "@/services/publish/slots";
+import { withNextSlot } from "@/services/publish/slots";
+import { resolveSchedulePicker } from "@/services/publish/smart-schedule";
 import { assertSafePublicUrl } from "@/lib/url-guard";
 import { getCurrentUser } from "@/lib/auth";
 import { publishDraftNow } from "@/services/publish/publish-draft";
@@ -282,11 +282,10 @@ export async function POST(req: Request) {
     let draft;
     let queuedSlot: string | null = null;
     if (action === "queue") {
-      // 自動排進下一個空時段（使用者自訂時段優先）；併發撞格時 withNextSlot 會重算重試
-      const prefs = await getPublishPrefs(user.id).catch(() => null);
-      const slots = prefs?.slots;
-      const pacing = { gapMinutes: prefs?.minGapMinutes, maxPerDay: prefs?.maxPerDay };
-      draft = await withNextSlot(user.id, (slot) => make(slot), 5, (taken) => nextOpenSlot(taken, Date.now(), 30, slots, pacing));
+      // 預設依「成效最佳時段（分散）」自動排進下一個空時段；成效不足 → 退回使用者自訂／系統預設時段。
+      // 併發撞格時 withNextSlot 會重算重試。
+      const { pick } = await resolveSchedulePicker(user.id, true);
+      draft = await withNextSlot(user.id, (slot) => make(slot), 5, pick);
       if (!draft) return NextResponse.json({ ok: false, error: "未來 30 天的時段都排滿了" }, { status: 409 });
       queuedSlot = draft.scheduled_at ?? null;
     } else if (action === "schedule") {

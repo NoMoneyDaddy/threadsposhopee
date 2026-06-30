@@ -15,7 +15,8 @@ export default function RepostButton({
   const [busy, setBusy] = useState<string | null>(null);
   const [accId, setAccId] = useState(threadsAccounts[0]?.id ?? "");
   const [vary, setVary] = useState(false);
-  const [bestTime, setBestTime] = useState(false);
+  // 智慧時段預設開：依該帳號成效最佳時段排程（資料不足自動退回預設時段）。取消＝改用固定預設時段。
+  const [bestTime, setBestTime] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
 
   async function repost(action: "draft" | "queue") {
@@ -84,13 +85,13 @@ export default function RepostButton({
         <input type="checkbox" checked={vary} onChange={(e) => setVary(e.target.checked)} disabled={!!busy} />
         重寫文案
       </label>
-      <label className="flex items-center gap-1 text-xs text-ink-2" title="進佇列時依成效挑該帳號高觸及時段（資料不足則用預設時段）">
+      <label className="flex items-center gap-1 text-xs text-ink-2" title="預設開：依該帳號成效挑高觸及時段並分散一整天（資料不足自動退回預設時段）">
         <input type="checkbox" checked={bestTime} onChange={(e) => setBestTime(e.target.checked)} disabled={!!busy} />
-        最佳時段
+        智慧時段（依成效）
       </label>
       {/* 手機沒有 hover tooltip，補一行常駐說明 */}
       <span className="w-full text-[11px] leading-tight text-ink-3">
-        「重寫文案」＝用 AI 依你的客製化設定重新生成（不勾＝沿用素材現有文案）；「最佳時段」＝進佇列時挑該帳號高觸及時段。
+        「重寫文案」＝用 AI 依你的客製化設定重新生成（不勾＝沿用素材現有文案）；「智慧時段」預設開＝依成效挑高觸及時段並分散一整天（取消＝用固定預設時段）。
       </span>
       {msg && (
         <span

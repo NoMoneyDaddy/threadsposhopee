@@ -1,6 +1,6 @@
-// 內建排程（選用）：在常駐型主機（如 Zeabur 的 next start）讓 app 自己定時跑總排程，
-// 免設外部 cron。serverless（Vercel）不會常駐 → 此機制不啟動，仍用外部 cron。
-// 以 INTERNAL_SCHEDULER=true 開啟；分布式鎖確保多實例不重複發文。
+// 內建排程：在常駐型主機（如 Zeabur 的 next start）讓 app 自己定時跑總排程，免設外部 cron。
+// 預設開啟（opt-out）：常駐部署一上線就自動發文，零額外設定；分布式鎖確保多實例不重複發文。
+// serverless（Vercel）不常駐、此機制不適用 → 設 INTERNAL_SCHEDULER=false 關閉，改用外部 cron。
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
 
@@ -13,7 +13,7 @@ export async function register() {
     log.warn("環境設定提醒", { issue });
   }
 
-  if (process.env.INTERNAL_SCHEDULER !== "true") return;
+  if (process.env.INTERNAL_SCHEDULER === "false") return; // 預設開啟；明確設 false 才關（serverless）
 
   // parseInt + isFinite：避免非數字 env（如 "abc"）變 NaN 使 setInterval 近乎無延遲狂跑。
   const parsed = parseInt(process.env.INTERNAL_SCHEDULER_MINUTES || "15", 10);

@@ -20,7 +20,8 @@ export default async function PipelinePage() {
     listThreadsAccounts(ownerId),
     user ? getMediaProvider(ownerId) : Promise.resolve({ kind: "none" as const }),
     // 已排程草稿的「預計自動發文時間＋原因」（間隔等待／每日上限…）：讓使用者一眼看到何時會發、為何還沒發。
-    user && !isDemoMode ? getPublishPlan(ownerId).catch(() => []) : Promise.resolve([])
+    // getPublishPlan/listApprovedDraftsForPlan/getAccountPublishState 皆已支援 demo，故 demo 也載入。
+    user || isDemoMode ? getPublishPlan(ownerId).catch(() => []) : Promise.resolve([])
   ]);
   const cc = provider.kind === "cloudinary" ? provider.creds : null;
   const publishPlan = Object.fromEntries(plan.map((r) => [r.id, { etaIso: r.etaIso, reason: r.reason }]));

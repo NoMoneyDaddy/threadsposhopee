@@ -340,7 +340,7 @@ export default function PostEditor({
         replyText={allInMain ? "" : value.replyText}
         media={allInMain ? [...value.mainMedia, ...value.replyMedia] : value.mainMedia}
         replyMedia={allInMain ? [] : value.replyMedia}
-        extraSegments={value.extraSegments}
+        extraSegments={allInMain ? [] : value.extraSegments}
       />
     </div>
   );

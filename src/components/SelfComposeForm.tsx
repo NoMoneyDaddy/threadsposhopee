@@ -79,17 +79,27 @@ export default function SelfComposeForm({
     }
     // 正文與留言（＝串文 2/2）在 Threads 都有 500 字上限；非草稿先擋，避免發布時才失敗
     if (action !== "draft") {
-      if ([...mainText].length > THREADS_LIMIT) {
-        setMsg(`正文超過 ${THREADS_LIMIT} 字上限，請先精簡`);
-        return;
-      }
-      if ([...replyText].length > THREADS_LIMIT) {
-        setMsg(`留言區超過 ${THREADS_LIMIT} 字上限，請先精簡`);
-        return;
-      }
-      if (extraSegments.some((s) => [...(s.text ?? "")].length > THREADS_LIMIT)) {
-        setMsg(`有串文段落超過 ${THREADS_LIMIT} 字上限，請先精簡`);
-        return;
+      if (postMode === "all_in_main") {
+        // 單篇發布：留言會併入主文，須驗「合併後」總字數（與發布層 [主文,留言].join("\n\n") 一致），
+        // 否則各自 <500 但合併 >500 會在發到 Threads 時才失敗。
+        const combined = [mainText, replyText].map((s) => s.trim()).filter(Boolean).join("\n\n");
+        if ([...combined].length > THREADS_LIMIT) {
+          setMsg(`合併後的主文超過 ${THREADS_LIMIT} 字上限，請先精簡`);
+          return;
+        }
+      } else {
+        if ([...mainText].length > THREADS_LIMIT) {
+          setMsg(`正文超過 ${THREADS_LIMIT} 字上限，請先精簡`);
+          return;
+        }
+        if ([...replyText].length > THREADS_LIMIT) {
+          setMsg(`留言區超過 ${THREADS_LIMIT} 字上限，請先精簡`);
+          return;
+        }
+        if (extraSegments.some((s) => [...(s.text ?? "")].length > THREADS_LIMIT)) {
+          setMsg(`有串文段落超過 ${THREADS_LIMIT} 字上限，請先精簡`);
+          return;
+        }
       }
     }
     // 串文段落須有內容（文字或媒體），避免送出空段落

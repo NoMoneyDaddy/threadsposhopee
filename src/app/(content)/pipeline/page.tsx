@@ -22,11 +22,15 @@ export default async function PipelinePage() {
   ]);
   const cc = provider.kind === "cloudinary" ? provider.creds : null;
 
-  // 成效回灌：賺錢素材排前並標收益（與素材頁一致）。
+  // 排序：先把「還沒文案」的素材置頂（方便優先補文案編輯），同組內再依成效（賺錢素材排前）。
   let itemRev: Record<string, ItemRevenue> = {};
   if (!isDemoMode) itemRev = await getItemRevenueMap(ownerId, 30).catch(() => ({}));
   const revOf = (itemId: string) => itemRev[itemId]?.commission ?? 0;
-  const materials = [...materialsRaw].sort((a, b) => revOf(b.item_id) - revOf(a.item_id));
+  const hasCopy = (m: (typeof materialsRaw)[number]) => Boolean(m.main_text && m.main_text.trim());
+  const materials = [...materialsRaw].sort((a, b) => {
+    if (hasCopy(a) !== hasCopy(b)) return hasCopy(a) ? 1 : -1; // 沒文案的排前
+    return revOf(b.item_id) - revOf(a.item_id);
+  });
 
   // 草稿卡：帳號身分（頭像/暱稱）＋未指定帳號退回第一個帳號。
   const accountMeta = Object.fromEntries(

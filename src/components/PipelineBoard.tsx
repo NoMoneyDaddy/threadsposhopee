@@ -128,6 +128,7 @@ export default function PipelineBoard({
   accountMeta = {},
   defaultAccount,
   sponsor,
+  publishPlan = {},
   cloud = null,
   preset = null
 }: {
@@ -139,6 +140,8 @@ export default function PipelineBoard({
   accountMeta?: Record<string, AccountMeta>;
   defaultAccount?: AccountMeta;
   sponsor?: { enabled: boolean; pickByAccount: Record<string, string> };
+  // 已排程草稿 → 預計自動發文 ETA＋原因（來自 getPublishPlan）。
+  publishPlan?: Record<string, { etaIso: string | null; reason: string }>;
   cloud?: string | null;
   preset?: string | null;
 }) {
@@ -285,6 +288,7 @@ export default function PipelineBoard({
     const card = (
       <DraftCard
         draft={d}
+        plan={publishPlan[d.id]}
         account={d.threads_account_id ? accountMeta[d.threads_account_id] : undefined}
         fallbackAccount={defaultAccount}
         sponsorEnabled={sponsor?.enabled ?? false}

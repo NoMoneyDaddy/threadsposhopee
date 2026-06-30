@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { gapJitterMinutes, effectiveGapMinutes, planAccountQueue, shardOf, circuitOpen, nextPacingSkipReason, reachAdjustedPacing } from "./cadence";
+import { gapJitterMinutes, effectiveGapMinutes, planAccountQueue, shardOf, circuitOpen, nextPacingSkipReason, reachAdjustedPacing, projectToCronTick } from "./cadence";
 
 const NOW = Date.parse("2026-06-20T00:00:00Z");
 const basePacing = {
@@ -214,4 +214,30 @@ test("reachAdjustedPacing：factor<=1（關閉）→ 原值不變", () => {
 
 test("reachAdjustedPacing：每日上限至少 1（不會被除成 0）", () => {
   assert.deepEqual(reachAdjustedPacing({ minGapMinutes: 120, maxPerDay: 1 }, true, 3), { minGapMinutes: 360, maxPerDay: 1 });
+});
+
+const CRON = 15 * 60_000;
+const LAST = Date.parse("2026-06-20T12:00:00Z"); // 心跳相位錨
+
+test("projectToCronTick：無 lastCron → 原樣回傳（無法推相位）", () => {
+  const eta = LAST + 7 * 60_000;
+  assert.equal(projectToCronTick(eta, null, CRON), eta);
+  assert.equal(projectToCronTick(eta, NaN, CRON), eta);
+  assert.equal(projectToCronTick(eta, LAST, 0), eta); // interval 無效
+});
+
+test("projectToCronTick：eta 落在兩個 tick 之間 → 進位到下一個 tick", () => {
+  // 12:07 → 下一個 cron（12:15）
+  assert.equal(projectToCronTick(LAST + 7 * 60_000, LAST, CRON), LAST + CRON);
+  // 12:20 → 12:30
+  assert.equal(projectToCronTick(LAST + 20 * 60_000, LAST, CRON), LAST + 2 * CRON);
+});
+
+test("projectToCronTick：eta 正好在 tick 上 → 不變", () => {
+  assert.equal(projectToCronTick(LAST + 2 * CRON, LAST, CRON), LAST + 2 * CRON);
+});
+
+test("projectToCronTick：eta 已逾期（<=上次心跳）→ 排到下一輪", () => {
+  assert.equal(projectToCronTick(LAST - 5 * 60_000, LAST, CRON), LAST + CRON);
+  assert.equal(projectToCronTick(LAST, LAST, CRON), LAST + CRON);
 });

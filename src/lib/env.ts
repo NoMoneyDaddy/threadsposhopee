@@ -70,6 +70,10 @@ export const env = {
   // 0 = 立即（向後相容）。逐則可用 draft.reply_delay_minutes 覆寫。
   replyDelayFloorMinutes: parseInt(process.env.REPLY_DELAY_MIN_MINUTES || "0", 10), // 留言延遲「保底」分鐘
   replyDelayJitterMinutes: parseInt(process.env.REPLY_DELAY_JITTER_MINUTES || "0", 10), // 保底之上的隨機抖動上限（分）
+  // 排程器（cron）執行間隔（分）：worker 只在 cron 醒來那刻送出，用來把儀表板「預計發文時間」
+  // 對齊到下一個 cron tick，讓預估更貼近實際送出。應與部署平台（如 Zeabur）設定的 cron 週期一致。
+  // 預設 15（與建議設定相同）；夾到 [1,1440]，非法輸入回 15。
+  cronIntervalMinutes: clampInt(process.env.PUBLISH_CRON_INTERVAL_MINUTES, 15, 1, 1440),
   // 「加入佇列」用的每日發文時段（Asia/Taipei，HH:MM，逗號分隔）
   publishSlots: (process.env.PUBLISH_SLOTS || "09:00,12:30,20:00")
     .split(",")

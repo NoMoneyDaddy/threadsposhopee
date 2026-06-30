@@ -30,7 +30,7 @@ export default function SiteHeader({
   user,
   isDemo
 }: {
-  user: { email: string | null; isOwner: boolean } | null;
+  user: { email: string | null; isOwner: boolean; displayName?: string | null } | null;
   isDemo: boolean;
 }) {
   const pathname = usePathname() ?? "";
@@ -40,8 +40,9 @@ export default function SiteHeader({
 
   const userMeta = user && (
     <>
-      {/* translate="no"：email 是識別字，避免 Google 翻譯把它包成可點的虛線 token（看起來像超連結） */}
-      <span translate="no" className="max-w-[12rem] truncate">{user.email}</span>
+      {/* 優先顯示會員暱稱（display_name），未設則顯示 email。 */}
+      {/* translate="no"：避免 Google 翻譯把識別字包成可點的虛線 token（看起來像超連結） */}
+      <span translate="no" className="max-w-[12rem] truncate" title={user.email ?? undefined}>{user.displayName || user.email}</span>
       {user.isOwner ? (
         <span className="badge-brand">管理者</span>
       ) : (

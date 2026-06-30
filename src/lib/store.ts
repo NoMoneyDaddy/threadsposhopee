@@ -189,6 +189,9 @@ export {
   getBioSettings,
   setBioSettings,
   normalizeBioHandle,
+  getDisplayName,
+  setDisplayName,
+  normalizeDisplayName,
   getSponsorRewardMode,
   setSponsorRewardMode,
   type SponsorRewardMode

@@ -3,7 +3,8 @@ import {
   getPublishPrefs,
   getNotifyPrefs,
   getRepostLimits,
-  getUserTelegramChatId
+  getUserTelegramChatId,
+  getDisplayName
 } from "@/lib/store";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
@@ -16,6 +17,7 @@ import RepostLimitsForm from "@/components/RepostLimitsForm";
 import NotifyPrefsForm from "@/components/NotifyPrefsForm";
 import PushToggle from "@/components/PushToggle";
 import TelegramForm from "@/components/TelegramForm";
+import DisplayNameForm from "@/components/DisplayNameForm";
 import TelegramWebhookSetup from "@/components/TelegramWebhookSetup";
 import SponsorConfigForm from "@/components/SponsorConfigForm";
 
@@ -26,14 +28,15 @@ export default async function SettingsPage() {
   const user = await getCurrentUser();
   if (!user) return <div className="text-center text-sm text-red-500">請先登入。</div>;
 
-  const [copyPrefs, publishPrefs, repostLimits, notifyPrefs, telegramChatId, sponsor] =
+  const [copyPrefs, publishPrefs, repostLimits, notifyPrefs, telegramChatId, sponsor, displayName] =
     await Promise.all([
       getCopyPrefs(user.id),
       getPublishPrefs(user.id),
       getRepostLimits(user.id),
       getNotifyPrefs(user.id),
       getUserTelegramChatId(user.id),
-      getSponsorConfig()
+      getSponsorConfig(),
+      getDisplayName(user.id).catch(() => null)
     ]);
   const telegramBound = Boolean(telegramChatId);
 
@@ -43,6 +46,8 @@ export default async function SettingsPage() {
         <h1 className="text-2xl font-bold">設定</h1>
         <p className="text-sm text-ink-2">發文節奏、重發上限、文案風格與各種通知都在這裡。連接帳號與綁定金鑰請到 <Link href="/accounts" className="text-brand underline">帳號管理</Link>。</p>
       </div>
+
+      <DisplayNameForm initial={displayName} />
 
       <div id="setup-notify" className="scroll-mt-24 space-y-4">
         <TelegramForm bound={telegramBound} botConfigured={!isDemoMode && Boolean(env.telegramBotToken)} />

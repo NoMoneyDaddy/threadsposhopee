@@ -287,7 +287,7 @@ export async function listOwnersWithNotify(limit = 500): Promise<string[]> {
 }
 
 // ── 貢獻排行榜 ────────────────────────────────────────────
-export type Contributor = { owner_id: string; score: number; bio_handle: string | null };
+export type Contributor = { owner_id: string; score: number; bio_handle: string | null; display_name: string | null };
 export async function listTopContributors(limit = 10): Promise<Contributor[]> {
   if (isDemoMode) return [];
   const sb = getServiceClient()!;

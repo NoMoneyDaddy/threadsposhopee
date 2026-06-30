@@ -392,6 +392,42 @@ export function normalizeBioHandle(input: string | null | undefined): string | n
   return /^[a-z0-9_-]{3,30}$/.test(h) ? h : null;
 }
 
+// ── 會員平台暱稱（display_name）：站內顯示用名稱（header／貢獻排行榜），可含中文與空白。
+// 與 bio_handle（公開 link-in-bio 代稱、僅英數）不同。
+// 正規化：移除控制字元、壓縮連續空白、去頭尾空白、依「字元（code point）」上限 24（避免切壞表情符號）；
+// 空字串視為清除（null）。
+export function normalizeDisplayName(input: string | null | undefined): string | null {
+  const cleaned = (input ?? "")
+    .replace(/[\u0000-\u001f\u007f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const sliced = Array.from(cleaned).slice(0, 24).join("");
+  return sliced.length > 0 ? sliced : null;
+}
+
+export async function getDisplayName(ownerId: string): Promise<string | null> {
+  if (isDemoMode) return null;
+  const sb = getServiceClient();
+  if (!sb) return null;
+  const { data, error } = await sb.from("profiles").select("display_name").eq("id", ownerId).maybeSingle();
+  if (error) {
+    // 不擋頁面：暱稱只是顯示用，讀取失敗（含欄位未遷移）記警告並退回 null（顯示 email）。
+    log.warn("讀取會員暱稱失敗", { ownerId, err: error.message });
+    return null;
+  }
+  return data?.display_name ?? null;
+}
+
+// 設定／清除暱稱（傳 null 或空字串＝清除）。寫入前一律過 normalizeDisplayName。
+export async function setDisplayName(ownerId: string, name: string | null): Promise<string | null> {
+  const clean = normalizeDisplayName(name);
+  if (isDemoMode) return clean;
+  const sb = getServiceClient()!;
+  const { error } = await sb.from("profiles").upsert({ id: ownerId, display_name: clean }, { onConflict: "id" });
+  if (error) throw new Error(`儲存暱稱失敗：${error.message}`);
+  return clean;
+}
+
 export async function getBioSettings(ownerId: string): Promise<{ handle: string | null; title: string | null }> {
   if (isDemoMode) return { handle: null, title: null };
   const sb = getServiceClient()!;

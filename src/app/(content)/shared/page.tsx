@@ -77,7 +77,7 @@ export default async function SharedPage() {
                 <span className="flex items-center gap-2">
                   <span className="w-5 tabular-nums text-ink-3">#{i + 1}</span>
                   <span aria-hidden>{contributionBadge(c.score).emoji}</span>
-                  <span className="text-ink">{c.bio_handle ? `@${c.bio_handle}` : `會員#${c.owner_id.slice(0, 4)}`}</span>
+                  <span className="text-ink" translate="no">{c.display_name || (c.bio_handle ? `@${c.bio_handle}` : `會員#${c.owner_id.slice(0, 4)}`)}</span>
                 </span>
                 <span className="tabular-nums text-ink-2">{c.score}</span>
               </li>

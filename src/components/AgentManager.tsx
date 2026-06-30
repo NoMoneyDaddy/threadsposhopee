@@ -13,6 +13,9 @@ interface Agent {
   name: string;
   domain: string;
   domains: string[];
+  tone: string;
+  source_mode: string;
+  search_query: string;
   enabled: boolean;
   last_run_at: string | null;
   use_redirect: boolean;
@@ -40,6 +43,37 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
   const [msg, setMsg] = useState<string | null>(null);
   // 列表區（立即跑一篇）的提示獨立於建立表單，避免顯示在「建立部落客」按鈕下方（不直覺）。
   const [runMsg, setRunMsg] = useState<string | null>(null);
+  // 編輯中的部落客 id（null＝新增模式）。表單同時用於新增與編輯。
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  function resetForm() {
+    setEditingId(null);
+    setName("");
+    setDomains([AI_DOMAINS[0].id]);
+    setSourceMode("rss");
+    setSearchQuery("");
+    setTone("");
+    setCustomTone(false);
+    setAccountId("");
+    setUseRedirect(false);
+    setAutoPublish(false);
+  }
+
+  // 載入既有部落客到表單進行編輯（捲到表單頂端方便操作）。
+  function startEdit(a: Agent) {
+    setEditingId(a.id);
+    setName(a.name);
+    setDomains(a.domains?.length ? a.domains : [a.domain]);
+    setSourceMode(a.source_mode === "threads_search" ? "threads_search" : "rss");
+    setSearchQuery(a.search_query ?? "");
+    setTone(a.tone ?? "");
+    setCustomTone(Boolean(a.tone) && !TONE_PRESETS.includes(a.tone));
+    setAccountId(a.threads_account_id ?? "");
+    setUseRedirect(a.use_redirect);
+    setAutoPublish(a.auto_publish);
+    setMsg(null);
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
   async function api(url: string, method: string, body?: unknown) {
     const res = await fetch(url, {
@@ -50,12 +84,12 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
     return res.json();
   }
 
-  async function create(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy("create");
     setMsg(null);
     try {
-      const r = await api("/api/agents", "POST", {
+      const payload = {
         name,
         domains,
         source_mode: sourceMode,
@@ -64,14 +98,12 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
         threads_account_id: accountId || null,
         use_redirect: useRedirect,
         auto_publish: autoPublish
-      });
+      };
+      const r = editingId
+        ? await api(`/api/agents/${editingId}`, "PATCH", payload)
+        : await api("/api/agents", "POST", payload);
       if (!r.ok) throw new Error(r.error);
-      setName("");
-      setTone("");
-      setCustomTone(false); // 一併重置，避免表單卡在「自訂…」模式（下筆送出空 tone）
-      setSearchQuery("");
-      setSourceMode("rss");
-      setAutoPublish(false);
+      resetForm();
       router.refresh();
     } catch (e) {
       setMsg(e instanceof Error ? e.message : String(e));
@@ -133,8 +165,8 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
 
   return (
     <div className="space-y-6">
-      <form onSubmit={create} className="card-p space-y-3">
-        <h2 className="section-title">新增部落客</h2>
+      <form onSubmit={submit} className="card-p space-y-3">
+        <h2 className="section-title">{editingId ? "編輯部落客" : "新增部落客"}</h2>
         <div>
           <label className="label" htmlFor="ag-name">名稱</label>
           <input id="ag-name" className="input" required value={name} onChange={(e) => setName(e.target.value)} placeholder="例：科技宅阿哲" />
@@ -272,10 +304,17 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
             <FieldHint>預設關閉：部落客產文一律進草稿待你審核，核准後才發布。可隨時於下方清單調整。</FieldHint>
           )}
         </div>
-        <button type="submit" disabled={busy === "create"} className="btn btn-brand">
-          {busy === "create" ? "建立中…" : "建立部落客"}
-        </button>
-        {msg && <p className="text-sm text-ink-2">{msg}</p>}
+        <div className="flex items-center gap-2">
+          <button type="submit" disabled={busy === "create"} className="btn btn-brand">
+            {busy === "create" ? "儲存中…" : editingId ? "儲存變更" : "建立部落客"}
+          </button>
+          {editingId && (
+            <button type="button" onClick={resetForm} disabled={busy === "create"} className="btn btn-ghost btn-sm">
+              取消編輯
+            </button>
+          )}
+        </div>
+        {msg && <p className="text-sm text-danger">{msg}</p>}
       </form>
 
       <section className="rounded-2xl border bg-surface p-5">
@@ -321,6 +360,7 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
+                  <button disabled={!!busy} onClick={() => startEdit(a)} className="btn btn-outline btn-sm">編輯</button>
                   <button disabled={!!busy} onClick={() => runNow(a)} className="btn btn-outline btn-sm">立即跑一篇</button>
                   <button disabled={!!busy} onClick={() => toggleAuto(a)} className="btn btn-sm btn-ghost" title="切換免審直接排程">
                     {a.auto_publish ? "改回待審" : "改免審直發"}

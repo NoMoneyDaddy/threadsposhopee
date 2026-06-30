@@ -75,6 +75,8 @@ function DraftCard({
     };
   };
   const [content, setContent] = useState<PostContent>(() => draftToContent(draft));
+  // 留言延遲（分）：逐則覆寫，空＝用全域預設。與發文頁一致由 <PostEditor> 顯示輸入。
+  const [replyDelay, setReplyDelay] = useState(draft.reply_delay_minutes != null ? String(draft.reply_delay_minutes) : "");
   const [msg, setMsg] = useState<string | null>(null);
   const [compliance, setCompliance] = useState<{ risk: string; advice: string } | null>(null);
   const [variants, setVariants] = useState<{ mainText: string; replyText: string }[] | null>(null);
@@ -293,6 +295,8 @@ function DraftCard({
             cloud={cloud}
             preset={preset}
             accountLabel={previewAccount?.label}
+            replyDelay={replyDelay}
+            onReplyDelayChange={setReplyDelay}
             threadContext={{ productName: draft.product_name, affiliateLink: draft.shopee_short_link, sourceText: draft.main_text }}
             onAutosave={autosaveDraft}
           />
@@ -303,6 +307,7 @@ function DraftCard({
                 call("edit", {
                   main_text: content.mainText,
                   reply_text: content.replyText,
+                  reply_delay_minutes: replyDelay.trim() === "" ? null : Number(replyDelay),
                   media: content.mainMedia.map(({ url, type }) => ({ url, type })),
                   reply_media: content.replyMedia.map(({ url, type }) => ({ url, type })),
                   // 多段串文：有 3/n+ 時送完整鏈（[0]＝留言）；無則送空陣列（後端清鏈，沿用 reply_*）。

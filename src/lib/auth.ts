@@ -3,7 +3,8 @@ import { cookies } from "next/headers";
 
 // React 的「每請求」去重 cache 只在 Next server 端的 react-server build 提供；
 // 純 Node（單元測試以 tsx 載入的 react）沒有 cache → 退回 identity（不去重，行為仍正確）。
-const cache: <T extends (...args: never[]) => unknown>(fn: T) => T =
+// 簽名保留各呼叫端的參數與回傳型別（未來帶參數的函式也能共用此去重），不用 any。
+const cache: <A extends unknown[], R>(fn: (...args: A) => R) => (...args: A) => R =
   (React.cache as typeof cache | undefined) ?? ((fn) => fn);
 import { getSessionClient } from "@/lib/supabase/clients";
 import { log } from "@/lib/logger";

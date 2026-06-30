@@ -3,6 +3,7 @@ import { runPublishQueue } from "@/services/publish/queue";
 import { refreshExpiringTokens } from "@/services/threads/refresh";
 import { refreshThreadsProfiles } from "@/services/threads/profile-refresh";
 import { reconcileNeedsVerification } from "@/services/threads/reconcile";
+import { reconcileFailedReplies } from "@/services/threads/reply-reconcile";
 import { checkAffiliateLinks } from "@/services/materials/linkcheck";
 import { runEvergreen } from "@/services/materials/evergreen";
 import { buildDailyDigest } from "@/services/digest/daily";
@@ -65,6 +66,11 @@ export async function runCronAll(now: Date = new Date()): Promise<Record<string,
       key: "reconcile",
       run: reconcileNeedsVerification, // 發後讀回比對：確定已發出的「待確認」自動標 published（不自動重發）
       warn: (r) => (r?.resolved ? `✅ 自動確認 ${r.resolved} 則已發布（原待確認）` : null)
+    },
+    {
+      key: "reconcileReplies",
+      run: reconcileFailedReplies, // 補留言假失敗讀回修正：實際已發卻被標 failed → 自動改 published/續發（不重貼）
+      warn: (r) => (r?.resolved || r?.advanced ? `✅ 留言補發自動修正 ${(r.resolved ?? 0) + (r.advanced ?? 0)} 則（讀回確認已發）` : null)
     },
     {
       // 非同步抓取：推進使用者啟動的 Apify run（完成就抓 dataset 入庫）。關頁也會由此跑完。

@@ -1,6 +1,50 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { effectiveChain, chainStepAt, hasThreadChain } from "./thread-chain";
+import { effectiveChain, chainStepAt, hasThreadChain, resolveReplyProgress } from "./thread-chain";
+
+const seg = (text: string) => ({ text, media: [] });
+
+test("resolveReplyProgress：單則留言確實已發 → done（修正假失敗）", () => {
+  const chain = [seg("連結放這 https://s.shopee.tw/ABC 有人也踩過雷嗎")];
+  const posts = [{ id: "p9", text: "連結放這 https://s.shopee.tw/ABC 有人也踩過雷嗎" }];
+  const r = resolveReplyProgress(chain, 0, "main1", posts);
+  assert.equal(r.done, true);
+  assert.equal(r.moved, true);
+  assert.equal(r.lastPostId, "p9");
+  assert.equal(r.cursor, 1);
+});
+
+test("resolveReplyProgress：近期貼文沒有這則 → 不動（真失敗，留人工）", () => {
+  const chain = [seg("連結放這 https://s.shopee.tw/ABC")];
+  const posts = [{ id: "p1", text: "完全不相關的貼文內容" }];
+  const r = resolveReplyProgress(chain, 0, "main1", posts);
+  assert.equal(r.done, false);
+  assert.equal(r.moved, false);
+  assert.equal(r.lastPostId, "main1");
+  assert.equal(r.cursor, 0);
+});
+
+test("resolveReplyProgress：多段——前段已發、後段未發 → 推進到未發段（不重貼）", () => {
+  const chain = [seg("第二段 2/3 內容文字"), seg("第三段 3/3 內容文字")];
+  const posts = [{ id: "p2", text: "第二段 2/3 內容文字" }]; // 只有第二段發出
+  const r = resolveReplyProgress(chain, 0, "main1", posts);
+  assert.equal(r.done, false); // 還有第三段沒發
+  assert.equal(r.moved, true);
+  assert.equal(r.cursor, 1); // 推進到第三段
+  assert.equal(r.lastPostId, "p2");
+});
+
+test("resolveReplyProgress：多段全部已發 → done", () => {
+  const chain = [seg("第二段 2/3 內容文字"), seg("第三段 3/3 內容文字")];
+  const posts = [
+    { id: "p2", text: "第二段 2/3 內容文字" },
+    { id: "p3", text: "第三段 3/3 內容文字" }
+  ];
+  const r = resolveReplyProgress(chain, 0, "main1", posts);
+  assert.equal(r.done, true);
+  assert.equal(r.cursor, 2);
+  assert.equal(r.lastPostId, "p3");
+});
 
 test("優先採用 thread_chain，過濾空段落", () => {
   const chain = effectiveChain({

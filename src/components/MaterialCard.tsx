@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef } from "react";
 import RepostButton from "@/components/RepostButton";
 import MaterialRefreshLinkButton from "@/components/MaterialRefreshLinkButton";
 import MaterialCopyEditor from "@/components/MaterialCopyEditor";
@@ -27,6 +28,8 @@ export default function MaterialCard({
   cloud?: string | null;
   preset?: string | null;
 }) {
+  // 文案編輯器把「存檔並收合」掛在這個 ref 上；「再排一篇」按下時先呼叫它，用最新文案重排。
+  const flushEditor = useRef<(() => Promise<void>) | null>(null);
   return (
     <div className="flex flex-col rounded-2xl border bg-surface p-4">
       <div className="mb-1 flex items-center justify-between gap-2">
@@ -78,8 +81,8 @@ export default function MaterialCard({
         </div>
       )}
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <RepostButton materialId={m.id} threadsAccounts={accounts} />
-        <MaterialCopyEditor material={m} accountLabel={accounts[0]?.label} cloud={cloud} preset={preset} />
+        <RepostButton materialId={m.id} threadsAccounts={accounts} beforeRepost={() => flushEditor.current?.() ?? Promise.resolve()} />
+        <MaterialCopyEditor material={m} accountLabel={accounts[0]?.label} cloud={cloud} preset={preset} registerFlush={(fn) => { flushEditor.current = fn; }} />
         <MaterialRefreshLinkButton materialId={m.id} />
         <EvergreenToggle materialId={m.id} initial={Boolean(m.evergreen)} />
         <ShareToggle materialId={m.id} initial={Boolean(m.shared)} />

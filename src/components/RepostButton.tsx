@@ -6,10 +6,13 @@ import type { ThreadsAccount } from "@/lib/types";
 
 export default function RepostButton({
   materialId,
-  threadsAccounts
+  threadsAccounts,
+  beforeRepost
 }: {
   materialId: string;
   threadsAccounts: ThreadsAccount[];
+  // 重排前的前置動作（如：把展開中的文案編輯器存檔並收合）。拋錯則中止重排。
+  beforeRepost?: () => Promise<void>;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
@@ -27,6 +30,8 @@ export default function RepostButton({
     setBusy(action);
     setMsg(null);
     try {
+      // 先把展開中的編輯器存檔並收合（若有），確保重排用到的是最新文案。
+      if (beforeRepost) await beforeRepost();
       const res = await fetch("/api/materials/repost", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

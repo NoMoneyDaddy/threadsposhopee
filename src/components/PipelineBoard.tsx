@@ -20,6 +20,7 @@ import PendingMaterialsReview from "@/components/PendingMaterialsReview";
 import SelfComposeForm from "@/components/SelfComposeForm";
 import CheckLinksButton from "@/components/CheckLinksButton";
 import BulkRepostButton from "@/components/BulkRepostButton";
+import BulkEvergreenButton from "@/components/BulkEvergreenButton";
 import BulkDraftBar from "@/components/BulkDraftBar";
 import RetryFailedBar from "@/components/RetryFailedBar";
 import type { Draft, Material, ThreadsAccount } from "@/lib/types";
@@ -130,7 +131,8 @@ export default function PipelineBoard({
   sponsor,
   publishPlan = {},
   cloud = null,
-  preset = null
+  preset = null,
+  canShare = false
 }: {
   pending: Material[];
   materials: Material[];
@@ -144,6 +146,8 @@ export default function PipelineBoard({
   publishPlan?: Record<string, { etaIso: string | null; reason: string }>;
   cloud?: string | null;
   preset?: string | null;
+  // 共享庫是否開放：開放才顯示待審素材的「入庫並分享」與素材庫的批次分享動作。
+  canShare?: boolean;
 }) {
   const router = useRouter();
   const [composing, setComposing] = useState(false);
@@ -334,6 +338,7 @@ export default function PipelineBoard({
         {/* 分隔：左側為「新建」動作，右側為「批次/維護」動作，避免維護鈕和主要建立 CTA 混在一起 */}
         <span className="mx-1 hidden h-6 w-px self-center bg-border sm:block" aria-hidden="true" />
         <BulkRepostButton threadsAccounts={accounts} />
+        <BulkEvergreenButton />
         <CheckLinksButton />
       </div>
       <p className="text-xs text-ink-3">直接打字發文／排程，或從素材庫「再排一篇」。草稿卡可拖曳變更狀態。</p>
@@ -401,7 +406,7 @@ export default function PipelineBoard({
             active={false}
             emptyHint="目前沒有待審素材。設定爬蟲監看來源後，抓回的貼文會先到這裡等你審核。"
           >
-            <PendingMaterialsReview items={pending} accounts={accounts} />
+            <PendingMaterialsReview items={pending} accounts={accounts} canShare={canShare} />
           </Column>
 
           <Column

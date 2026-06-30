@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import PostEditor, { type PostContent } from "@/components/PostEditor";
 import { splitMaterialMedia, mergeToMaterialMedia } from "@/lib/material-media";
@@ -23,18 +23,26 @@ export default function MaterialCopyEditor({
   material,
   accountLabel,
   cloud = null,
-  preset = null
+  preset = null,
+  registerFlush
 }: {
   material: Material;
   accountLabel?: string;
   cloud?: string | null;
   preset?: string | null;
+  // 讓兄弟元件（再排一篇）在動作前先把編輯器內容存檔並收合，避免用到舊文案。未開啟時為 no-op。
+  registerFlush?: (fn: (() => Promise<void>) | null) => void;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [content, setContent] = useState<PostContent>(() => materialToContent(material));
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  // flush 由父層在事件當下呼叫，需讀「最新」的 open／content（closure 會抓到舊值），故用 ref 同步。
+  const openRef = useRef(open);
+  openRef.current = open;
+  const contentRef = useRef(content);
+  contentRef.current = content;
 
   // 元件關閉時仍 mounted；父層 router.refresh() 帶回新 material 時同步（避免再次開啟看到舊內容）。
   // 編輯中（open）不覆蓋使用者輸入。
@@ -58,6 +66,21 @@ export default function MaterialCopyEditor({
     const json = await res.json().catch(() => null);
     if (!res.ok || !json?.ok) throw new Error("autosave failed");
   }
+
+  // 對外註冊「存檔並收合」：父層在「再排一篇」前呼叫，把剛生成/編輯的文案先落地再重排。
+  // 未開啟＝no-op；存檔失敗則拋出，由父層中止重排（避免用到尚未存檔的舊文案）。
+  useEffect(() => {
+    if (!registerFlush) return;
+    registerFlush(async () => {
+      if (!openRef.current) return;
+      await autosave(contentRef.current);
+      setOpen(false);
+      router.refresh();
+    });
+    return () => registerFlush(null);
+    // 僅需在掛載/卸載時註冊一次；flush 內部以 ref 取最新狀態。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [registerFlush, material.id]);
 
   async function save() {
     setBusy(true);

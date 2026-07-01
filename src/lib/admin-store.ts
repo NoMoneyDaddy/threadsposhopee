@@ -176,6 +176,31 @@ export async function listRecentSponsorRecords(limit = 50): Promise<SponsorRecor
     .slice(0, limit);
 }
 
+// 贊助文份額彙總（owner 限定）：平台份額（走平台連結＝管理員收益來源）vs 貢獻者自賺，含違規/下架統計。
+// 僅顯示給管理員；一般使用者頁只顯示自己的紀錄，看不到全站/平台總額。
+export interface SponsorShareSummary {
+  total: number;
+  platform: number; // 走平台連結（管理員收益）
+  contributor: number; // 貢獻者自賺（own_link）
+  violated: number;
+  deleted: number;
+}
+export async function getSponsorShareSummary(): Promise<SponsorShareSummary> {
+  const empty: SponsorShareSummary = { total: 0, platform: 0, contributor: 0, violated: 0, deleted: 0 };
+  if (isDemoMode) return empty;
+  const actor = await getRealUser();
+  if (!actor?.isPlatformOwner) throw new Error("forbidden: 僅限管理者");
+  const entries = await listAllSponsorRecords();
+  const out = { ...empty, total: entries.length };
+  for (const { rec } of entries) {
+    if (rec.ownLink) out.contributor++;
+    else out.platform++;
+    if (rec.violated) out.violated++;
+    if (rec.deleted) out.deleted++;
+  }
+  return out;
+}
+
 // 依 email 找使用者 id（管理員賦予身份組用；分頁掃描）。
 export async function resolveUserIdByEmail(email: string): Promise<string | null> {
   if (isDemoMode) return null;

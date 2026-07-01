@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
-import { getAdminStats, getFeatureFlags, listSharedForReview, listTopContributors, isPublishPaused, getHeartbeat, listUsersOverview, listThreadsAccountsStatus, listRecentSponsorRecords, type ThreadsAccountStatusRow } from "@/lib/store";
+import { getAdminStats, getFeatureFlags, listSharedForReview, listTopContributors, isPublishPaused, getHeartbeat, listUsersOverview, listThreadsAccountsStatus, listRecentSponsorRecords, getSponsorShareSummary, type ThreadsAccountStatusRow } from "@/lib/store";
+import { getSponsorBlocklist } from "@/lib/sponsor";
 import { contributionBadge } from "@/lib/roles";
 import { isDemoMode } from "@/lib/env";
 import { cronHeartbeatStatus } from "@/lib/cron-status";
@@ -50,14 +51,16 @@ export default async function AdminPage() {
   if (!user) redirect("/login?next=/admin");
   if (!user.isOwner) redirect("/");
 
-  const [stats, flags, queue, leaders, users, accountStatus, sponsorRecords] = await Promise.all([
+  const [stats, flags, queue, leaders, users, accountStatus, sponsorRecords, sponsorSummary, sponsorBlocked] = await Promise.all([
     getAdminStats().catch(() => null),
     getFeatureFlags(),
     listSharedForReview(100).catch(() => []),
     listTopContributors(10).catch(() => []),
     listUsersOverview().catch(() => null),
     listThreadsAccountsStatus().catch(() => null),
-    listRecentSponsorRecords(50).catch(() => null)
+    listRecentSponsorRecords(50).catch(() => null),
+    getSponsorShareSummary().catch(() => undefined),
+    getSponsorBlocklist().catch(() => [])
   ]);
   const accountViews = accountStatus ? accountStatus.map((r) => toAccountStatusView(r, Date.now())) : null;
   // 共享素材審核用：owner_id → email 對照（顯示擁有者，便於辨識來源/追責）。
@@ -134,7 +137,7 @@ export default async function AdminPage() {
 
       {!isDemoMode &&
         (sponsorRecords ? (
-          <AdminSponsorPanel records={sponsorRecords} />
+          <AdminSponsorPanel records={sponsorRecords} summary={sponsorSummary} blockedIds={sponsorBlocked} />
         ) : (
           <div className="card p-4 text-sm text-amber-600">⚠️ 贊助文紀錄讀取失敗，請稍後重整。</div>
         ))}

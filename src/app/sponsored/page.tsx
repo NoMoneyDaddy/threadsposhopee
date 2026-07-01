@@ -102,6 +102,14 @@ export default function SponsoredPage() {
         </p>
       </Section>
 
+      <Section title="內容責任與防護">
+        <p>
+          贊助文的<strong className="text-ink">文字內容仍是你自己的</strong>，請遵守平台與蝦皮規範。系統會對
+          <strong className="text-ink">明顯違規/高風險內容</strong>（成人、賭博、詐騙等）<strong className="text-ink">自動略過贊助</strong>
+          （不套平台連結），管理員也可將濫用帳號<strong className="text-ink">排除贊助</strong>，以保護平台與大家的分潤帳號不被連累檢舉。
+        </p>
+      </Section>
+
       <Section title="範圍與變更">
         <p>管理者本人的帳號不適用本規則。本規則以本頁最新版本為準。</p>
       </Section>

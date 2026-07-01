@@ -36,11 +36,13 @@ import {
   appendSponsorRecord,
   getSponsorPick,
   getSponsorOptOutUntil,
+  getSponsorBlocklist,
   shouldSponsor,
   swapAffiliateLink,
   taipeiParts,
   type SponsorPick
 } from "@/lib/sponsor";
+import { isRiskySponsorContent } from "@/services/publish/sponsor-content";
 import { sponsorQuota } from "@/services/publish/sponsor-quota";
 import { resolveSponsorOwnerCreds, buildSponsorLinkForAccount, cleanProductUrlFromDraft } from "@/services/sponsor/link";
 import { log } from "@/lib/logger";
@@ -148,6 +150,9 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
   // 台北當日零點 ISO（Asia/Taipei 恆為 +08:00，無 DST）：算「今天」已發篇數的下界。
   const sponsorTodaySinceIso = new Date(`${sponsorTaipei.date}T00:00:00+08:00`).toISOString();
   const sponsorOwnerId = sponsorCfg.enabled && !isDemoMode ? await getOwnerUserId().catch(() => null) : null;
+  // 管理員贊助黑名單（濫用/高風險帳號永久排除贊助）：整輪取一次。
+  const sponsorBlocklist =
+    sponsorCfg.enabled && !isDemoMode ? new Set(await getSponsorBlocklist().catch(() => [])) : new Set<string>();
   const sponsorCountCache: Record<string, number> = {}; // accId -> 今天已發贊助文篇數
   const sponsorPostedTodayCache: Record<string, number> = {}; // accId -> 今天（此帳號）已發布篇數（比例配額用）
   // 自賺資格＋自己的金鑰資源（依 owner 快取）：超額 slot 用貢獻者自己的分潤連結。
@@ -314,8 +319,10 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
         sponsorRewardCache[oid] = { score, mode };
       }
       const reward = draft.owner_id ? sponsorRewardCache[draft.owner_id] : undefined;
-      // owner 帳號或臨時禁用 → 完全略過；其餘一律套用（貢獻越高抽越少，但平台保底永不歸零）。
-      if (!isOwnerAccount && !sponsorOptOutCache[accId]) {
+      // 略過贊助的情況：owner 帳號、臨時禁用、管理員黑名單、或內容命中風險關鍵字（不把平台連結放上去，
+      // 避免違規內容拖累平台分潤帳號被檢舉）。其餘一律套用（貢獻越高抽越少，平台保底永不歸零）。
+      const riskyContent = isRiskySponsorContent(draft.main_text);
+      if (!isOwnerAccount && !sponsorOptOutCache[accId] && !sponsorBlocklist.has(accId) && !riskyContent) {
         // 比例配額：依該帳號「當日實際自發篇數（含這篇）」換算 max(保底, floor(篇數/perPosts))；
         // 低頻者（當日 < minPostsForFloor 篇）配額為 0 不被抽；貢獻越高 perPosts 越大（抽越少）。
         if (!(accId in sponsorCountCache)) {

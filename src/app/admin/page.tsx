@@ -184,7 +184,10 @@ export default async function AdminPage() {
                         aria-hidden="true"
                         tabIndex={-1}
                         className="h-20 w-20 rounded-lg border object-cover"
-                      />
+                      >
+                        {/* 無聲首幀預覽（點擊開原始媒體），補空字幕軌滿足 WCAG 1.2.2。 */}
+                        <track kind="captions" />
+                      </video>
                     ) : (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={cloudinaryThumb(m.cloudinary_media_url, 160)} alt="" role="presentation" loading="lazy" referrerPolicy="no-referrer" className="h-20 w-20 rounded-lg border object-cover" />

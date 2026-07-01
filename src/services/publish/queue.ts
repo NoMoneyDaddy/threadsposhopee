@@ -40,6 +40,7 @@ import {
   incrementSponsorTotal,
   shouldSponsor,
   swapAffiliateLink,
+  withSponsorDisclosure,
   taipeiParts,
   type SponsorPick
 } from "@/lib/sponsor";
@@ -323,7 +324,7 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
       const reward = draft.owner_id ? sponsorRewardCache[draft.owner_id] : undefined;
       // 略過贊助的情況：owner 帳號、臨時禁用、管理員黑名單、或內容命中風險關鍵字（不把平台連結放上去，
       // 避免違規內容拖累平台分潤帳號被檢舉）。其餘一律套用（貢獻越高抽越少，平台保底永不歸零）。
-      const riskyContent = isRiskySponsorContent(draft.main_text);
+      const riskyContent = isRiskySponsorContent(draft.main_text, draft.reply_text);
       if (!isOwnerAccount && !sponsorOptOutCache[accId] && !sponsorBlocklist.has(accId) && !riskyContent) {
         // 累積比例：依帳號「累積發布數／累積贊助數」自我校正，長期維持約 1/perPosts；
         // 每天只發少量、天天壓門檻的人，累積到 perPosts 篇一樣會被抽（補掉每日門檻漏洞）。貢獻越高 perPosts 越大。
@@ -393,10 +394,17 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
             }
           }
           if (link) {
-            pubMainText = swapAffiliateLink(draft.main_text, draft.shopee_short_link, link);
-            pubReplyText = draft.reply_text ? swapAffiliateLink(draft.reply_text, draft.shopee_short_link, link) : draft.reply_text;
-            sponsorLinkUsed = link;
-            sponsorOwnLinkUsed = useOwn;
+            // 只在確實命中原商品連結、真的替換掉時才算贊助；未命中則放棄本篇（不硬接連結）。
+            const swappedMain = swapAffiliateLink(draft.main_text, draft.shopee_short_link, link);
+            const swappedReply = draft.reply_text ? swapAffiliateLink(draft.reply_text, draft.shopee_short_link, link) : draft.reply_text;
+            const changed = swappedMain !== (draft.main_text ?? "") || swappedReply !== (draft.reply_text ?? null);
+            if (changed) {
+              // 業配揭露：平台分潤連結歸屬平台，於正文末附一行中性揭露讓讀者知悉（平台贊助才加；自賺不加）。
+              pubMainText = useOwn ? swappedMain : withSponsorDisclosure(swappedMain);
+              pubReplyText = swappedReply;
+              sponsorLinkUsed = link;
+              sponsorOwnLinkUsed = useOwn;
+            }
           }
         }
       }

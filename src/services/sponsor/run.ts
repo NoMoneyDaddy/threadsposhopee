@@ -52,8 +52,15 @@ export async function verifySponsorPosts(): Promise<{ checked: number; violation
       const strikeKey = `sponsor_strikes:${accountId}`;
       if (ok) {
         await updateSponsorRecordAt(accountId, date, index, { ...rec, verified: true });
-        // 通過則清零累計違規（寬鬆：給機會重新累積）
-        await setCachedJson(strikeKey, []).catch(() => {});
+        // 通過則衰減「一筆最舊違規」而非一次全清：寬鬆給改過機會，但反覆竄改者的加權分
+        // 仍能穩定累積到門檻（避免穿插合規篇即永遠歸零、竄改零成本的漏洞）。
+        const now = Date.now();
+        const prevArr = (await getCachedJson<number[]>(strikeKey, STRIKE_WINDOW_MS).catch(() => [])) ?? [];
+        const inWindow = (Array.isArray(prevArr) ? prevArr : [])
+          .filter((t) => now - t < STRIKE_WINDOW_MS)
+          .sort((a, b) => a - b);
+        inWindow.shift(); // 移除最舊一筆（近期違規保留、仍會累積）
+        await setCachedJson(strikeKey, inWindow).catch(() => {});
       } else {
         out.violations++;
         await updateSponsorRecordAt(accountId, date, index, { ...rec, verified: true, violated: true });

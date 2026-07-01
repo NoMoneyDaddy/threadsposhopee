@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { normalizeSponsorConfig, inOffPeak, swapAffiliateLink, shouldSponsor, taipeiParts } from "./sponsor";
+import { normalizeSponsorConfig, inOffPeak, swapAffiliateLink, shouldSponsor, taipeiParts, withSponsorDisclosure, SPONSOR_DISCLOSURE } from "./sponsor";
 
 test("inOffPeak: [start,end) 半開區間", () => {
   assert.equal(inOffPeak(2, 2, 5), true);
@@ -9,10 +9,22 @@ test("inOffPeak: [start,end) 半開區間", () => {
   assert.equal(inOffPeak(1, 2, 5), false);
 });
 
-test("swapAffiliateLink: 有舊連結就替換，沒有就補在結尾", () => {
+test("swapAffiliateLink: 有舊連結就替換；找不到就原文不動（不再 append）", () => {
   assert.equal(swapAffiliateLink("買這個 https://s.shopee.tw/me 讚", "https://s.shopee.tw/me", "https://s.shopee.tw/plat"), "買這個 https://s.shopee.tw/plat 讚");
-  assert.equal(swapAffiliateLink("純文字", null, "https://s.shopee.tw/plat"), "純文字\nhttps://s.shopee.tw/plat");
+  // 找不到原連結 → 原文不動（呼叫端據此放棄贊助，不硬接連結）
+  assert.equal(swapAffiliateLink("純文字", null, "https://s.shopee.tw/plat"), "純文字");
+  assert.equal(swapAffiliateLink("沒有商品連結的貼文", "https://s.shopee.tw/notfound", "https://s.shopee.tw/plat"), "沒有商品連結的貼文");
   assert.equal(swapAffiliateLink("", null, "https://s.shopee.tw/plat"), "");
+});
+
+test("withSponsorDisclosure: 附上揭露、重複不疊加、逼近字數上限則略過", () => {
+  const t = "好用保溫瓶 https://s.shopee.tw/plat";
+  assert.ok(withSponsorDisclosure(t).includes(SPONSOR_DISCLOSURE));
+  // 已含揭露 → 不重複附加
+  assert.equal(withSponsorDisclosure(withSponsorDisclosure(t)), withSponsorDisclosure(t));
+  // 逼近 500 字上限 → 原文不動（連結替換仍在，只是不加揭露）
+  const long = "字".repeat(495);
+  assert.equal(withSponsorDisclosure(long), long);
 });
 
 test("shouldSponsor: 比例制——啟用＋非owner＋未達配額即贊助（不再限時段）", () => {

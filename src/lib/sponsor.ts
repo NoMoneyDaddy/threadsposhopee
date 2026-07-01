@@ -72,11 +72,26 @@ export function inOffPeak(hour: number, start: number, end: number): boolean {
 }
 
 // 把文字中的舊分潤連結替換為平台贊助連結。舊連結不存在時：有內容就在結尾補上平台連結。
+// 就地替換：只在文中確實含 oldLink 時替換；找不到就「原文不動」回傳（不再 append）。
+// 避免把平台分潤連結硬接到不含商品連結的文末（雙連結/錯置且使用者站內看不到）。
+// 呼叫端據「回傳是否與原文不同」判定 swap 是否真的發生，未發生就放棄本篇贊助。
 export function swapAffiliateLink(text: string | null | undefined, oldLink: string | null | undefined, sponsorLink: string): string {
   const t = text ?? "";
   if (oldLink && t.includes(oldLink)) return t.split(oldLink).join(sponsorLink);
-  if (!t.trim()) return t;
-  return `${t}\n${sponsorLink}`;
+  return t;
+}
+
+// 贊助文業配揭露：被判為贊助文（平台就地換成平台分潤連結）時，於正文末附一行中性揭露，
+// 讓 Threads 讀者也知悉此則含平台分潤連結（公平法/FTC 業配揭露）。極短以免撐爆字數。
+export const SPONSOR_DISCLOSURE = "（本則含平台分潤連結）";
+const THREADS_MAX_CHARS = 500;
+export function withSponsorDisclosure(text: string | null | undefined): string {
+  const t = text ?? "";
+  if (t.includes(SPONSOR_DISCLOSURE)) return t;
+  const suffix = `\n\n${SPONSOR_DISCLOSURE}`;
+  // 逼近字數上限時略過揭露（連結替換仍生效），避免超出 Threads 500 字導致發文失敗。
+  if (t.length + suffix.length > THREADS_MAX_CHARS) return t;
+  return `${t}${suffix}`;
 }
 
 // 該不該把這篇當成贊助文（就地換連結）：
@@ -336,23 +351,76 @@ export async function listAllSponsorRecords(): Promise<SponsorRecordEntry[]> {
   return out;
 }
 
+// 驗證只需最近幾天的未驗證紀錄（發出滿 minAgeMs、通常數小時內就會被驗掉）；
+// 更舊的未驗證多為讀不到/放棄的殘留，交由每日清理處理，不必每輪全掃。
+const VERIFY_LOOKBACK_DAYS = 7;
+
+function dateNDaysAgo(days: number): string {
+  return new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
+}
+
 // 撈出「尚未驗證、且已發出超過 minAgeMs」的贊助紀錄（給驗證排程用）。逐列展開陣列、附 index。
+// 分頁掃描避免 PostgREST 1000 列上限靜默截斷（舊紀錄漏驗）；並只取近 VERIFY_LOOKBACK_DAYS 天。
 export async function listSponsorRecordsToVerify(minAgeMs: number): Promise<SponsorRecordEntry[]> {
   if (isDemoMode) return [];
   const sb = getServiceClient()!;
-  const { data } = await sb.from("app_state").select("key,value").like("key", "sponsor:rec:%");
   const out: SponsorRecordEntry[] = [];
-  for (const row of data ?? []) {
-    const m = /^sponsor:rec:(.+):(\d{4}-\d{2}-\d{2})$/.exec(row.key);
-    if (!m) continue;
-    const recs = parseRecords(row.value);
-    recs.forEach((rec, index) => {
-      if (rec.verified) return;
-      if (Date.now() - new Date(rec.at).getTime() < minAgeMs) return;
-      out.push({ accountId: m[1], date: m[2], index, rec });
-    });
+  const since = dateNDaysAgo(VERIFY_LOOKBACK_DAYS);
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await sb
+      .from("app_state")
+      .select("key,value")
+      .like("key", "sponsor:rec:%")
+      .range(from, from + PAGE - 1);
+    if (error) throw new Error(`讀取待驗贊助紀錄失敗：${error.message}`);
+    const rows = data ?? [];
+    for (const row of rows) {
+      const m = /^sponsor:rec:(.+):(\d{4}-\d{2}-\d{2})$/.exec(row.key);
+      if (!m) continue;
+      if (m[2] < since) continue; // 只驗近 N 天（日期字串可直接字典序比較）
+      const recs = parseRecords(row.value);
+      recs.forEach((rec, index) => {
+        if (rec.verified) return;
+        if (Date.now() - new Date(rec.at).getTime() < minAgeMs) return;
+        out.push({ accountId: m[1], date: m[2], index, rec });
+      });
+    }
+    if (rows.length < PAGE) break;
   }
   return out;
+}
+
+// 每日清理：刪除 retentionDays 天前的贊助紀錄列（sponsor:rec:<accId>:<date>），
+// 避免 app_state 無限增長拖慢同表的鎖/心跳與全表掃描。驗證早已完成、僅供歷史，過保留期即可清。
+export async function cleanupOldSponsorRecords(retentionDays = 90): Promise<{ deleted: number }> {
+  if (isDemoMode) return { deleted: 0 };
+  const sb = getServiceClient()!;
+  const cutoff = dateNDaysAgo(retentionDays);
+  const stale: string[] = [];
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await sb
+      .from("app_state")
+      .select("key")
+      .like("key", "sponsor:rec:%")
+      .range(from, from + PAGE - 1);
+    if (error) throw new Error(`掃描待清理贊助紀錄失敗：${error.message}`);
+    const rows = data ?? [];
+    for (const row of rows) {
+      const m = /^sponsor:rec:.+:(\d{4}-\d{2}-\d{2})$/.exec(row.key as string);
+      if (m && m[1] < cutoff) stale.push(row.key as string);
+    }
+    if (rows.length < PAGE) break;
+  }
+  let deleted = 0;
+  for (let i = 0; i < stale.length; i += PAGE) {
+    const chunk = stale.slice(i, i + PAGE);
+    const { error } = await sb.from("app_state").delete().in("key", chunk);
+    if (error) throw new Error(`清理贊助紀錄失敗：${error.message}`);
+    deleted += chunk.length;
+  }
+  return { deleted };
 }
 
 // 正規化＋驗證輸入（小時界線＋贊助 sub_id 多格）。贊助文連結改為「就地改寫各篇貼文的商品連結」，

@@ -13,3 +13,14 @@ test("isRiskySponsorContent：一般商品文→false；空值→false", () => {
   assert.equal(isRiskySponsorContent(""), false);
   assert.equal(isRiskySponsorContent(null), false);
 });
+
+test("isRiskySponsorContent：夾空白/全形變體也命中（正規化）", () => {
+  assert.equal(isRiskySponsorContent("賭 博 網 站"), true);
+  assert.equal(isRiskySponsorContent("娛　樂　城"), true); // 全形空白
+  assert.equal(isRiskySponsorContent("ＡＶ女優"), true); // 全形
+});
+
+test("isRiskySponsorContent：正文乾淨但留言違規也命中（多段檢查）", () => {
+  assert.equal(isRiskySponsorContent("好用保溫瓶", "留言：加賴看娛樂城"), true);
+  assert.equal(isRiskySponsorContent("好用保溫瓶", "留言：連結在下面"), false);
+});

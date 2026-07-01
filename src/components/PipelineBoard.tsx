@@ -398,7 +398,16 @@ export default function PipelineBoard({
       <p className="text-xs text-ink-3">直接打字發文／排程，或從素材庫「再排一篇」。草稿卡可拖曳變更狀態。</p>
 
       {composing && <SelfComposeForm threadsAccounts={accounts} cloud={cloud} preset={preset} />}
-      {creatingMaterial && <MaterialCreateForm cloud={cloud} preset={preset} />}
+      {creatingMaterial && (
+        <>
+          {canShare && defaultShare && (
+            <p className="mb-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700" role="note">
+              ℹ️ 目前設定為「新素材自動公開分享到共享庫」（只分享商品名／圖／文案／原始連結，<b>不含你的分潤連結</b>）。不想公開可到<b>設定</b>關閉，或建立後於素材卡取消分享。
+            </p>
+          )}
+          <MaterialCreateForm cloud={cloud} preset={preset} />
+        </>
+      )}
       {failedIds.length > 0 && <RetryFailedBar failedIds={failedIds} />}
       {selectedDraftIds.length > 0 && <BulkDraftBar draftIds={selectedDraftIds} />}
       {err && <p className="text-sm text-danger" role="alert">❌ {err}</p>}

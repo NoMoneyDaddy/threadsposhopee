@@ -551,7 +551,9 @@ export async function getSharedMaterial(id: string): Promise<SharedMaterial | nu
   return (data as SharedMaterial) ?? null;
 }
 
-// 使用者分享到共享庫的素材數（給 give-to-get 匯入額度用）。
+// 使用者「有效分享」數（給 give-to-get 匯入額度用）。
+// 只計「別人真的匯入過（import_count>0）且未被下架」的分享——避免用大量垃圾/假素材灌分享數
+// 刷穿匯入額度（give-to-get 的初衷是先真的貢獻、才拿更多）。與 0065 貢獻分數「重質」口徑一致。
 export async function countSharedByOwner(ownerId: string): Promise<number> {
   if (isDemoMode) return 0;
   const sb = getServiceClient()!;
@@ -559,7 +561,9 @@ export async function countSharedByOwner(ownerId: string): Promise<number> {
     .from("materials")
     .select("id", { count: "exact", head: true })
     .eq("owner_id", ownerId)
-    .eq("shared", true);
+    .eq("shared", true)
+    .neq("review_status", "removed")
+    .gt("import_count", 0);
   return count ?? 0;
 }
 

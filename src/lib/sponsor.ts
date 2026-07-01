@@ -331,25 +331,6 @@ export async function listSponsorRecordsForOwner(ownerId: string, limit = 50): P
     .slice(0, limit);
 }
 
-// 全站近期贊助文（透明化）：讓所有登入者了解「哪些貼文被作為平台贊助文」。
-// 只回傳公開安全欄位（發文時間、貼文連結、驗證狀態）；排除自賺（ownLink，非平台贊助）與已刪除；
-// 不含 owner 身分。時間新→舊、限 limit 筆。
-export interface PublicSponsorPost {
-  postId: string;
-  link: string;
-  at: string;
-  verified: boolean;
-}
-export async function listRecentSponsorPostsPublic(limit = 30): Promise<PublicSponsorPost[]> {
-  if (isDemoMode) return [];
-  const all = await listAllSponsorRecords().catch(() => [] as SponsorRecordEntry[]);
-  return all
-    .filter((e) => !e.rec.ownLink && !e.rec.deleted)
-    .sort((a, b) => (b.rec.at ?? "").localeCompare(a.rec.at ?? ""))
-    .slice(0, limit)
-    .map((e) => ({ postId: e.rec.postId, link: e.rec.link, at: e.rec.at, verified: Boolean(e.rec.verified) }));
-}
-
 // 管理頁用：撈出所有贊助紀錄（不論驗證狀態），分頁避免 1000 列截斷；逐列展開陣列、附 index。
 export async function listAllSponsorRecords(): Promise<SponsorRecordEntry[]> {
   if (isDemoMode) return [];

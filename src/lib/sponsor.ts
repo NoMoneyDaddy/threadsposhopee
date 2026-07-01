@@ -183,6 +183,32 @@ export async function getSponsorPickMap(accountIds: string[]): Promise<Record<st
   return out;
 }
 
+// ── 管理員贊助黑名單（app_state：key=sponsor:blocked:<accId>）──────
+// 管理員可把濫用/高風險帳號永久排除贊助。改「每帳號一列」而非單一 JSON 陣列，
+// 避免讀-改-寫整個陣列的併發競態（各帳號各自 upsert/delete，互不干擾）。
+function blockedKey(accountId: string): string {
+  return `sponsor:blocked:${accountId}`;
+}
+
+export async function getSponsorBlocklist(): Promise<string[]> {
+  if (isDemoMode) return [];
+  const sb = getServiceClient()!;
+  const { data } = await sb.from("app_state").select("key").like("key", "sponsor:blocked:%").limit(1000);
+  return (data ?? []).map((r) => (r.key as string).slice("sponsor:blocked:".length)).filter(Boolean);
+}
+
+export async function setSponsorBlocked(accountId: string, blocked: boolean): Promise<void> {
+  if (isDemoMode) return;
+  const sb = getServiceClient()!;
+  if (blocked) {
+    await sb
+      .from("app_state")
+      .upsert({ key: blockedKey(accountId), value: "1", updated_at: new Date().toISOString() }, { onConflict: "key" });
+  } else {
+    await sb.from("app_state").delete().eq("key", blockedKey(accountId));
+  }
+}
+
 // ── 每日贊助紀錄（app_state：key=sponsor:rec:<accId>:<date>）──────
 export interface SponsorRecord {
   postId: string;

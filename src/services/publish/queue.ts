@@ -337,11 +337,16 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
             : -1;
         }
         if (!(accId in sponsorTotalCache)) {
-          sponsorTotalCache[accId] = await getSponsorTotal(accId).catch(() => 0);
+          sponsorTotalCache[accId] = await getSponsorTotal(accId).catch((e: unknown) => {
+            // 算不出累積贊助數 → 保守降級為 -1（本篇不抽），避免誤判成 0 而超額抽成；不靜默吞錯。
+            log.warn("取得累積贊助數失敗，本篇略過贊助配額", { accId, err: e });
+            return -1;
+          });
         }
         const effectivePerPosts = contributionAdjustedPerPosts(sponsorCfg.perPosts, reward?.score ?? 0);
         const cumulativeAllows =
           sponsorPublishedCache[accId] >= 0 &&
+          sponsorTotalCache[accId] >= 0 &&
           shouldSponsorCumulative(sponsorPublishedCache[accId], sponsorTotalCache[accId], effectivePerPosts);
         if (!(accId in sponsorPickCache)) {
           sponsorPickCache[accId] = await getSponsorPick(accId).catch(() => null);
@@ -426,7 +431,8 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
       // 贊助文發布成功 → 累積贊助數 +1（持久化＋本輪快取），並追加紀錄供驗證；DB 草稿原文未動＝自動還原。
       if (sponsorLinkUsed) {
         if (accId in sponsorTotalCache) sponsorTotalCache[accId] += 1;
-        await incrementSponsorTotal(accId).catch((e) => log.warn("累加贊助累積數失敗", { accId, err: e }));
+        // 傳入本輪快取已累加的最新值，省 incrementSponsorTotal 內的一次 SELECT。
+        await incrementSponsorTotal(accId, sponsorTotalCache[accId]).catch((e) => log.warn("累加贊助累積數失敗", { accId, err: e }));
         await appendSponsorRecord(accId, sponsorTaipei.date, {
           postId,
           link: sponsorLinkUsed,

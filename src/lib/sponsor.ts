@@ -261,14 +261,15 @@ export async function getSponsorTotal(accountId: string): Promise<number> {
   const n = data?.value ? parseInt(data.value, 10) : 0;
   return Number.isFinite(n) ? n : 0;
 }
-// 原子累加（RPC 難以對 app_state 泛用，改讀-加-寫；同帳號同輪序列化發文，競態極低）。
-export async function incrementSponsorTotal(accountId: string): Promise<void> {
+// 累加（RPC 難以對 app_state 泛用，改讀-加-寫；同帳號同輪序列化發文，競態極低）。
+// newValue：呼叫端若已在本輪快取算出最新累積值，直接傳入以省一次 SELECT roundtrip。
+export async function incrementSponsorTotal(accountId: string, newValue?: number): Promise<void> {
   if (isDemoMode) return;
   const sb = getServiceClient()!;
-  const cur = await getSponsorTotal(accountId);
+  const val = newValue !== undefined ? newValue : (await getSponsorTotal(accountId)) + 1;
   await sb
     .from("app_state")
-    .upsert({ key: totalKey(accountId), value: String(cur + 1), updated_at: new Date().toISOString() }, { onConflict: "key" });
+    .upsert({ key: totalKey(accountId), value: String(val), updated_at: new Date().toISOString() }, { onConflict: "key" });
 }
 
 // 追加一筆當日贊助紀錄（讀現有陣列 → push → 寫回）。

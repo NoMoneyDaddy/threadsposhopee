@@ -81,7 +81,8 @@ export default function SponsoredPage() {
         </p>
         <p>
           <strong className="text-ink">永久「完全不抽」的配套</strong>：該帳號原本應分擔的贊助文份額，會<strong className="text-ink">自動轉由你的其他帳號代為分擔</strong>
-          （平台的整體份額不因單一帳號永久退出而歸零）。若你只有一個帳號、又設永久完全不抽，等於暫無帳號可分擔，恢復或新增帳號後才會補上。
+          （平台的整體份額不因單一帳號永久退出而歸零）。<strong className="text-ink">若其他帳號也沒發文/低頻、遲遲無法分擔，累積到上限時，該永久禁用帳號會「恢復被抽」以補還</strong>
+          （並通知你）——確保平台一定收得到、不被永久搭便車；要停止，請讓其他帳號正常發文分擔，或改為「只抽一半」。
         </p>
       </Section>
 

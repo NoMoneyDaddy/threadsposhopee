@@ -144,7 +144,8 @@ export default async function InsightsPage({
 function RankCard({ title, rows, empty }: { title: string; rows: { name: string; count: number }[]; empty: string }) {
   const max = Math.max(1, ...rows.map((r) => r.count));
   return (
-    <section className="rounded-2xl border bg-surface p-5">
+    // min-w-0：作為 grid/flex 子項時允許收縮，內部 truncate 才生效（否則長商品名撐爆版面）。
+    <section className="min-w-0 rounded-2xl border bg-surface p-5">
       <h2 className="section-title mb-3">{title}</h2>
       {rows.length === 0 ? (
         <p className="text-sm text-ink-3">{empty}</p>
@@ -371,7 +372,8 @@ function RevenueSection({ r }: { r: AffiliateRevenue }) {
 function RevenueRank({ title, rows }: { title: string; rows: { name: string; value: number; sub: string }[] }) {
   const max = Math.max(1, ...rows.map((r) => r.value));
   return (
-    <section className="rounded-2xl border bg-surface p-5">
+    // min-w-0：作為 grid/flex 子項時允許收縮，內部 truncate 才生效（否則長商品名撐爆版面）。
+    <section className="min-w-0 rounded-2xl border bg-surface p-5">
       <h2 className="section-title mb-3">{title}</h2>
       {rows.length === 0 ? (
         <p className="text-sm text-ink-3">尚無資料</p>

@@ -18,7 +18,7 @@ export default function HotProductsRadar({ items, viewerId }: { items: SharedMat
         {items.map((m, i) => {
           const isOwn = Boolean(viewerId && m.owner_id && m.owner_id === viewerId);
           return (
-            <div key={m.id} className="flex items-center gap-3 rounded-xl border border-border bg-surface p-2">
+            <div key={m.id} className="flex min-w-0 items-center gap-3 rounded-xl border border-border bg-surface p-2">
               <span className="w-5 shrink-0 text-center text-sm font-bold tabular-nums text-ink-3">{i + 1}</span>
               {m.cloudinary_media_url && m.media_type === "video" ? (
                 // 影片不能塞進 <img>（會變空白方塊）；用 <video> 顯示首幀當縮圖。
@@ -49,7 +49,7 @@ export default function HotProductsRadar({ items, viewerId }: { items: SharedMat
               {isOwn ? (
                 <span className="shrink-0 whitespace-nowrap rounded-full bg-surface-2 px-2 py-0.5 text-[11px] text-ink-3">你的素材</span>
               ) : (
-                <div className="min-w-0">
+                <div className="shrink-0">
                   <ImportSharedButton id={m.id} />
                 </div>
               )}

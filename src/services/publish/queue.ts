@@ -458,7 +458,9 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
               pubReplyText = swappedReply;
               sponsorLinkUsed = link;
               sponsorOwnLinkUsed = useOwn;
-              sponsorFromDebt = decision.fromDebt && !useOwn; // 只有真的用平台連結代抽才算補還欠抽
+              // 代抽補還：他帳號代抽（fromDebt），或 backstop 自我服務——兩者都用平台連結償還 owner 欠抽，
+              // 成功後遞減欠抽；否則自我服務時欠抽永遠清不掉、帳號會被永久抽（Gemini 審查指出）。
+              sponsorFromDebt = (decision.fromDebt || permanentOffSelfService) && !useOwn;
               selfServicedThisPost = permanentOffSelfService; // 永久禁用帳號因欠抽堆積而恢復被抽（backstop）
             }
           }

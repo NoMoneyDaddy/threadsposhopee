@@ -354,10 +354,40 @@ export async function getProductPublishedCounts(): Promise<Map<string, number>> 
   return map;
 }
 
-// 共享素材熱度分數＝全站熱門（被匯入數）＋全站實際成效（被發布數，權重較高）。純函式可測。
-export function sharedRankScore(m: SharedMaterial, publishedByProduct?: Map<string, number>): number {
-  const published = publishedByProduct?.get(`${m.shop_id}:${m.item_id}`) ?? 0;
-  return Math.max(0, m.import_count) + Math.max(0, published) * 3;
+export interface ProductEngagement {
+  views: number;
+  likes: number;
+}
+
+// 全站每商品互動加總（views/likes）；排序加分用，查詢失敗回空 Map（不擋列表）。
+export async function getProductEngagement(): Promise<Map<string, ProductEngagement>> {
+  if (isDemoMode) return new Map();
+  const sb = getServiceClient()!;
+  const { data, error } = await sb.rpc("product_engagement");
+  if (error) return new Map();
+  const map = new Map<string, ProductEngagement>();
+  for (const r of (data ?? []) as { shop_id: string; item_id: string; views: number; likes: number }[]) {
+    map.set(`${r.shop_id}:${r.item_id}`, { views: Number(r.views) || 0, likes: Number(r.likes) || 0 });
+  }
+  return map;
+}
+
+// 共享素材熱度分數＝全站熱門（被匯入）＋全站實際成效（被發布數）＋發文互動（views/likes，取對數避免大帳號壟斷）。純函式可測。
+export function sharedRankScore(
+  m: SharedMaterial,
+  publishedByProduct?: Map<string, number>,
+  engagementByProduct?: Map<string, ProductEngagement>
+): number {
+  const key = `${m.shop_id}:${m.item_id}`;
+  const published = publishedByProduct?.get(key) ?? 0;
+  const eng = engagementByProduct?.get(key);
+  const importScore = Math.max(0, m.import_count);
+  const publishedScore = Math.max(0, published) * 3;
+  // 對數縮放：view/like 絕對值差異大，用 log10 平滑，避免單一大帳號洗版榜單。
+  const engScore = eng
+    ? Math.round(Math.log10(1 + Math.max(0, eng.views))) * 4 + Math.round(Math.log10(1 + Math.max(0, eng.likes))) * 4
+    : 0;
+  return importScore + publishedScore + engScore;
 }
 
 // 列出公共池（排除瀏覽者自己的、排除已下架；不含分潤連結）。
@@ -366,7 +396,7 @@ export async function listSharedMaterials(viewerOwnerId: string, limit = 60): Pr
   if (isDemoMode) return [];
   const sb = getServiceClient()!;
   // 先以匯入數多抓候選（去重＋成效加權前），讓同商品的多筆不會佔滿名額。
-  const [{ data }, published] = await Promise.all([
+  const [{ data }, published, engagement] = await Promise.all([
     sb
       .from("materials")
       .select(SHARED_COLS)
@@ -377,11 +407,54 @@ export async function listSharedMaterials(viewerOwnerId: string, limit = 60): Pr
       .order("import_count", { ascending: false })
       .order("created_at", { ascending: false })
       .limit(limit * 4),
-    getProductPublishedCounts()
+    getProductPublishedCounts(),
+    getProductEngagement()
   ]);
   const rows = (data ?? []) as SharedMaterial[];
-  rows.sort((a, b) => sharedRankScore(b, published) - sharedRankScore(a, published));
+  rows.sort((a, b) => sharedRankScore(b, published, engagement) - sharedRankScore(a, published, engagement));
   return dedupeSharedByProduct(rows).slice(0, limit);
+}
+
+// ── 發文成效（post_metrics）：cron 回填、排序彙總用 ──────
+export interface PostNeedingMetrics {
+  draft_id: string;
+  owner_id: string | null;
+  threads_account_id: string | null;
+  published_post_id: string;
+  shop_id: string;
+  item_id: string;
+}
+export async function listPublishedPostsNeedingMetrics(limit: number, staleIso: string, sinceIso: string): Promise<PostNeedingMetrics[]> {
+  if (isDemoMode) return [];
+  const sb = getServiceClient()!;
+  const { data, error } = await sb.rpc("published_posts_needing_metrics", { p_limit: limit, p_stale: staleIso, p_since: sinceIso });
+  if (error) throw new Error(`列出待回填成效貼文失敗：${error.message}`);
+  return (data ?? []) as PostNeedingMetrics[];
+}
+
+export async function upsertPostMetric(input: {
+  draftId: string;
+  ownerId: string | null;
+  shopId: string;
+  itemId: string;
+  views: number;
+  likes: number;
+}): Promise<void> {
+  if (isDemoMode) return;
+  const sb = getServiceClient()!;
+  const { error } = await sb.from("post_metrics").upsert(
+    {
+      draft_id: input.draftId,
+      owner_id: input.ownerId,
+      shop_id: input.shopId,
+      item_id: input.itemId,
+      views: Math.max(0, Math.round(input.views)),
+      likes: Math.max(0, Math.round(input.likes)),
+      fetched_at: new Date().toISOString()
+    },
+    { onConflict: "draft_id" }
+  );
+  if (error) throw new Error(`寫入發文成效失敗：${error.message}`);
 }
 
 // 我分享的：目前 shared=true 的「自己」素材（含被匯入/收藏/審核/連結狀態），新→舊。供共享庫「我分享的」分頁。
@@ -445,7 +518,7 @@ export async function listFavoritedIds(ownerId: string, ids: string[]): Promise<
 export async function listHotProducts(limit = 12): Promise<SharedMaterial[]> {
   if (isDemoMode) return [];
   const sb = getServiceClient()!;
-  const [{ data }, published] = await Promise.all([
+  const [{ data }, published, engagement] = await Promise.all([
     sb
       .from("materials")
       .select(SHARED_COLS)
@@ -454,10 +527,11 @@ export async function listHotProducts(limit = 12): Promise<SharedMaterial[]> {
       .neq("review_status", "removed")
       .order("import_count", { ascending: false })
       .limit(limit * 4),
-    getProductPublishedCounts()
+    getProductPublishedCounts(),
+    getProductEngagement()
   ]);
   const rows = (data ?? []) as SharedMaterial[];
-  rows.sort((a, b) => sharedRankScore(b, published) - sharedRankScore(a, published));
+  rows.sort((a, b) => sharedRankScore(b, published, engagement) - sharedRankScore(a, published, engagement));
   return dedupeSharedByProduct(rows).slice(0, limit);
 }
 

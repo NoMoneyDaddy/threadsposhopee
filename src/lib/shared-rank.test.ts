@@ -41,3 +41,11 @@ test("sharedRankScore：未給 map 或負值安全處理", () => {
   assert.equal(sharedRankScore(row("1", "1", 3)), 3);
   assert.equal(sharedRankScore(row("1", "1", -5)), 0);
 });
+
+test("sharedRankScore：發文互動(views/likes)以對數加權併入", () => {
+  const eng = new Map([["9:9", { views: 10000, likes: 100 }]]);
+  // 匯入 2 ＋ log10(1+10000)≈4 ×4 ＝16 ＋ log10(1+100)≈2 ×4 ＝8 → 2+16+8=26
+  assert.equal(sharedRankScore(row("9", "9", 2), undefined, eng), 26);
+  // 無互動資料：不影響（只算匯入）
+  assert.equal(sharedRankScore(row("9", "9", 2), undefined, new Map()), 2);
+});

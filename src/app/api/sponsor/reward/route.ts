@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { log } from "@/lib/logger";
 import { setSponsorRewardMode, getContributionScore } from "@/lib/store";
-import { isSponsorExempt } from "@/lib/contribution";
+import { canOwnLink } from "@/lib/contribution";
 import { getCurrentUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -18,8 +18,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "mode 必須為 exempt 或 own_link" }, { status: 400 });
     }
     const score = await getContributionScore(user.id).catch(() => 0);
-    if (!isSponsorExempt(score)) {
-      return NextResponse.json({ ok: false, error: "貢獻分數未達門檻，尚不能設定回饋方式" }, { status: 403 });
+    if (!canOwnLink(score)) {
+      return NextResponse.json({ ok: false, error: "貢獻分數未達頂級門檻，尚不能設定回饋方式" }, { status: 403 });
     }
     await setSponsorRewardMode(user.id, mode);
     return NextResponse.json({ ok: true, mode });

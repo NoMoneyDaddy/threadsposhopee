@@ -4,11 +4,16 @@ import {
   getNotifyPrefs,
   getRepostLimits,
   getUserTelegramChatId,
-  getDisplayName
+  getDisplayName,
+  getDefaultShareMaterials,
+  getFeatureFlags
 } from "@/lib/store";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
-import { getSponsorConfig } from "@/lib/sponsor";
+import { getSponsorConfig, countSponsorToday, getSponsorOptOutUntil, listSponsorRecordsForOwner, taipeiParts } from "@/lib/sponsor";
+import { listThreadsAccounts } from "@/lib/accounts-store";
+import SponsorOptOutForm, { type SponsorAccountRow } from "@/components/SponsorOptOutForm";
+import MySponsorPostsCard, { type MySponsorPostRow } from "@/components/MySponsorPostsCard";
 import { env, isDemoMode } from "@/lib/env";
 import CopyPrefsForm from "@/components/CopyPrefsForm";
 import { buildCopyPromptPreview } from "@/services/ai/humanizer";
@@ -20,6 +25,7 @@ import TelegramForm from "@/components/TelegramForm";
 import DisplayNameForm from "@/components/DisplayNameForm";
 import TelegramWebhookSetup from "@/components/TelegramWebhookSetup";
 import SponsorConfigForm from "@/components/SponsorConfigForm";
+import DefaultShareForm from "@/components/DefaultShareForm";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +34,7 @@ export default async function SettingsPage() {
   const user = await getCurrentUser();
   if (!user) return <div className="text-center text-sm text-red-500">請先登入。</div>;
 
-  const [copyPrefs, publishPrefs, repostLimits, notifyPrefs, telegramChatId, sponsor, displayName] =
+  const [copyPrefs, publishPrefs, repostLimits, notifyPrefs, telegramChatId, sponsor, displayName, defaultShare, flags] =
     await Promise.all([
       getCopyPrefs(user.id),
       getPublishPrefs(user.id),
@@ -36,9 +42,49 @@ export default async function SettingsPage() {
       getNotifyPrefs(user.id),
       getUserTelegramChatId(user.id),
       getSponsorConfig(),
-      getDisplayName(user.id).catch(() => null)
+      getDisplayName(user.id).catch(() => null),
+      getDefaultShareMaterials(user.id).catch(() => true),
+      getFeatureFlags().catch(() => null)
     ]);
   const telegramBound = Boolean(telegramChatId);
+
+  // 贊助文透明化（非 owner 且已啟用）：各帳號今日已當贊助文篇數＋臨時禁用狀態，以及完整贊助文紀錄。
+  let sponsorAccounts: SponsorAccountRow[] = [];
+  let mySponsorPosts: MySponsorPostRow[] = [];
+  if (sponsor.enabled && !user.isOwner && !isDemoMode) {
+    const today = taipeiParts().date;
+    const accts = await listThreadsAccounts(user.id).catch(() => []);
+    sponsorAccounts = await Promise.all(
+      accts.map(async (a) => ({
+        id: a.id,
+        label: a.label,
+        usedToday: await countSponsorToday(a.id, today).catch(() => 0),
+        optOutUntil: await getSponsorOptOutUntil(a.id).catch(() => null)
+      }))
+    );
+    const labelById = new Map(accts.map((a) => [a.id, a.label]));
+    const records = await listSponsorRecordsForOwner(user.id, 50).catch(() => []);
+    mySponsorPosts = records.map((e) => {
+      const rec = e.rec;
+      const status = rec.ownLink
+        ? { label: "自賺（自己連結）", tone: "text-ink-3" }
+        : rec.deleted
+          ? { label: "已下架（不計違規）", tone: "text-ink-3" }
+          : rec.violated
+            ? { label: "連結被移除/竄改", tone: "text-red-600" }
+            : rec.verified
+              ? { label: "已驗證", tone: "text-green-600" }
+              : { label: "待驗證", tone: "text-amber-600" };
+      return {
+        accountLabel: labelById.get(e.accountId) ?? e.accountId,
+        postId: rec.postId,
+        link: rec.link,
+        atText: new Date(rec.at).toLocaleString("zh-TW", { timeZone: "Asia/Taipei", dateStyle: "short", timeStyle: "short" }),
+        statusLabel: status.label,
+        statusTone: status.tone
+      };
+    });
+  }
 
   return (
     <div className="space-y-6">
@@ -57,6 +103,9 @@ export default async function SettingsPage() {
       )}
 
       <CopyPrefsForm initial={copyPrefs} />
+
+      {/* 共享庫開放時才顯示「新素材預設分享」開關（否則設定無意義）。 */}
+      {flags?.shared && <DefaultShareForm initial={defaultShare} />}
 
       <DisplayNameForm initial={displayName} />
 
@@ -83,13 +132,8 @@ export default async function SettingsPage() {
 
       {user.isOwner && <SponsorConfigForm initial={sponsor} />}
 
-      {!user.isOwner && sponsor.enabled && (
-        <div className="rounded-2xl border border-border bg-surface-2 p-3 text-sm text-ink-2">
-          ℹ️ 免費使用：你的每個發文帳號每天會有 1 篇於冷門時段（{sponsor.offPeakStart}–{sponsor.offPeakEnd} 時）以平台分潤連結發布，
-          系統會事前標示、發後還原你的連結。詳見{" "}
-          <Link href="/sponsored" className="text-brand underline">《贊助文規則》</Link>。
-        </div>
-      )}
+      {!user.isOwner && sponsor.enabled && <SponsorOptOutForm accounts={sponsorAccounts} />}
+      {!user.isOwner && sponsor.enabled && <MySponsorPostsCard rows={mySponsorPosts} />}
     </div>
   );
 }

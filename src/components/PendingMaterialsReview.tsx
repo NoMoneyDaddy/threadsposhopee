@@ -43,18 +43,22 @@ function MediaThumb({ m }: { m: DraftMedia }) {
 }
 
 // 單筆待審素材卡：預覽全部媒體＋逐張標記用途（主文／留言／都用，即時保存），再決定入庫／丟棄。
+type IntakeKind = "approve" | "discard" | "approveSchedule" | "approveShare" | "approveNoShare";
+
 function PendingMaterialCard({
   m,
   busy,
   canSchedule,
   canShare,
+  defaultShare,
   onAct
 }: {
   m: Material;
   busy: boolean;
   canSchedule: boolean;
   canShare: boolean;
-  onAct: (id: string, kind: "approve" | "discard" | "approveSchedule" | "approveShare") => void;
+  defaultShare: boolean;
+  onAct: (id: string, kind: IntakeKind) => void;
 }) {
   const [media, setMedia] = useState<DraftMedia[]>(() => normalizeDraftMedia(m).map((x) => ({ ...x, slot: x.slot ?? "main" })));
   const [slotErr, setSlotErr] = useState<string | null>(null);
@@ -131,10 +135,10 @@ function PendingMaterialCard({
           type="button"
           onClick={() => onAct(m.id, "approve")}
           disabled={busy || saving}
-          title={saving ? "媒體用途儲存中…" : "只入庫，之後再到素材庫排程"}
+          title={saving ? "媒體用途儲存中…" : canShare && defaultShare ? "入庫並依你的預設分享到共享庫（不含分潤連結）" : "只入庫，之後再到素材庫排程"}
           className="rounded-xl bg-brand px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
         >
-          {busy ? "處理中…" : "✅ 只入庫"}
+          {busy ? "處理中…" : canShare && defaultShare ? "✅ 入庫並分享" : "✅ 只入庫"}
         </button>
         {canSchedule && (
           <button
@@ -147,15 +151,16 @@ function PendingMaterialCard({
             {busy ? "處理中…" : "✅ 核准並排程"}
           </button>
         )}
+        {/* 次要按鈕＝主按鈕的相反分享動作，讓使用者可逐筆覆寫預設。 */}
         {canShare && (
           <button
             type="button"
-            onClick={() => onAct(m.id, "approveShare")}
+            onClick={() => onAct(m.id, defaultShare ? "approveNoShare" : "approveShare")}
             disabled={busy || saving}
-            title="入庫並同時分享商品到共享庫（不含你的分潤連結）"
+            title={defaultShare ? "只入庫、不分享到共享庫" : "入庫並同時分享商品到共享庫（不含你的分潤連結）"}
             className="rounded-xl border border-info/50 px-3 py-1.5 text-sm font-medium text-info hover:bg-sky-50 disabled:opacity-50"
           >
-            {busy ? "處理中…" : "✅ 入庫並分享"}
+            {busy ? "處理中…" : defaultShare ? "✅ 只入庫（不分享）" : "✅ 入庫並分享"}
           </button>
         )}
         <button
@@ -176,11 +181,13 @@ function PendingMaterialCard({
 export default function PendingMaterialsReview({
   items,
   accounts = [],
-  canShare = false
+  canShare = false,
+  defaultShare = false
 }: {
   items: Material[];
   accounts?: ThreadsAccount[];
   canShare?: boolean;
+  defaultShare?: boolean;
 }) {
   const router = useRouter();
   // 用 Set 追蹤每筆獨立的處理中狀態：避免快速連點多筆時，單一 busyId 互相覆蓋造成按鈕提早解禁（race）。
@@ -191,7 +198,7 @@ export default function PendingMaterialsReview({
   const [accId, setAccId] = useState(accounts[0]?.id ?? "");
   const canSchedule = accounts.length > 0;
 
-  async function act(id: string, kind: "approve" | "discard" | "approveSchedule" | "approveShare") {
+  async function act(id: string, kind: IntakeKind) {
     setBusyIds((prev) => new Set(prev).add(id));
     setErr(null);
     try {
@@ -200,8 +207,13 @@ export default function PendingMaterialsReview({
         const json = await res.json().catch(() => null);
         if (!res.ok || !json?.ok) throw new Error(typeof json?.error === "string" && json.error ? json.error : `操作失敗（HTTP ${res.status}）`);
       } else {
-        // 入庫（核准）
-        const res = await fetch(`/api/materials/${id}/intake`, { method: "POST" });
+        // 入庫（核准）：分享由 kind 決定——approveShare=強制分享、approveNoShare=不分享、其餘＝依預設。
+        const share = kind === "approveShare" ? true : kind === "approveNoShare" ? false : defaultShare;
+        const res = await fetch(`/api/materials/${id}/intake`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ share })
+        });
         const json = await res.json().catch(() => null);
         if (!res.ok || !json?.ok) throw new Error(typeof json?.error === "string" && json.error ? json.error : `入庫失敗（HTTP ${res.status}）`);
         // 核准並排程：入庫後直接排進下一個空時段（省去再到素材庫「再排一篇」）。
@@ -223,23 +235,7 @@ export default function PendingMaterialsReview({
             throw scheduleErr;
           }
         }
-        // 入庫並分享：入庫後把商品分享進共享庫（不含分潤連結）。入庫已成功，
-        // 故分享失敗也標記完成＋刷新（避免重複入庫）；失敗訊息照樣提示（可到素材庫手動分享）。
-        if (kind === "approveShare") {
-          try {
-            const r2 = await fetch("/api/materials/share", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ material_id: id, on: true })
-            });
-            const j2 = await r2.json().catch(() => null);
-            if (!r2.ok || !j2?.ok) throw new Error(typeof j2?.error === "string" && j2.error ? j2.error : `已入庫，但分享失敗（HTTP ${r2.status}）；可到素材庫手動分享`);
-          } catch (shareErr) {
-            setDoneIds((prev) => new Set(prev).add(id));
-            router.refresh();
-            throw shareErr;
-          }
-        }
+        // 分享由入庫 API 一併處理（body.share），不需再單獨呼叫 /share。
       }
       setDoneIds((prev) => new Set(prev).add(id)); // 成功 → 立即隱藏該筆，刷新前不可再操作
       router.refresh();
@@ -278,7 +274,7 @@ export default function PendingMaterialsReview({
       )}
       <div className="space-y-3">
         {visible.map((m) => (
-          <PendingMaterialCard key={m.id} m={m} busy={busyIds.has(m.id)} canSchedule={canSchedule} canShare={canShare} onAct={act} />
+          <PendingMaterialCard key={m.id} m={m} busy={busyIds.has(m.id)} canSchedule={canSchedule} canShare={canShare} defaultShare={defaultShare} onAct={act} />
         ))}
       </div>
       {err && <p className="text-xs text-danger" role="alert">{err}</p>}

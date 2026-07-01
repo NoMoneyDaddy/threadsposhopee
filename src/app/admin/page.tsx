@@ -60,6 +60,8 @@ export default async function AdminPage() {
     listRecentSponsorRecords(50).catch(() => null)
   ]);
   const accountViews = accountStatus ? accountStatus.map((r) => toAccountStatusView(r, Date.now())) : null;
+  // 共享素材審核用：owner_id → email 對照（顯示擁有者，便於辨識來源/追責）。
+  const ownerEmailById = new Map((users ?? []).map((u) => [u.id, u.email]));
 
   // 發文急停／心跳是 owner 控制台的關鍵狀態：讀取失敗不可偽裝成「未暫停／未啟用」，
   // 改以 null 表「未知（讀取失敗）」並在面板明確標示，避免誤判系統真實狀態。
@@ -206,6 +208,10 @@ export default async function AdminPage() {
                     <div className="text-xs text-warn">⚠️ 無商品連結</div>
                   )}
                   {m.main_text && <p className="line-clamp-2 whitespace-pre-wrap text-xs text-ink-2">{m.main_text}</p>}
+                  <div className="truncate text-xs text-ink-3" translate="no" title={(m.owner_id && ownerEmailById.get(m.owner_id)) || m.owner_id || ""}>
+                    {/* email 解析不到（使用者清單載入失敗等）時退回 owner_id，仍可追溯來源。 */}
+                    👤 擁有者：{(m.owner_id && ownerEmailById.get(m.owner_id)) || m.owner_id || "（未知）"}
+                  </div>
                   <div className="text-xs text-ink-3">
                     {(m.media_type && m.media_type !== "none" ? (m.media_type === "video" ? "🎬 影片" : "🖼️ 圖片") : "無媒體")}・匯入 {m.import_count}・收藏 {m.favorite_count}
                     {m.review_status === "removed" && <span className="ml-1 text-warn">・已下架</span>}

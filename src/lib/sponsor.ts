@@ -134,6 +134,37 @@ export async function setSponsorPick(accountId: string, pick: SponsorPick | null
     .upsert({ key: pickKey(accountId), value: JSON.stringify(pick), updated_at: new Date().toISOString() }, { onConflict: "key" });
 }
 
+// ── 帳號臨時禁用贊助文（app_state：key=sponsor:optout:<accId>，值＝到期 ISO）──────
+// 用途：活動檔期/商業合作期間，讓某帳號暫時不套贊助文；到期自動恢復（無需完全暫停發文）。
+function optOutKey(accountId: string): string {
+  return `sponsor:optout:${accountId}`;
+}
+
+// 回傳到期 ISO（仍在生效中）；已過期或未設回 null。
+export async function getSponsorOptOutUntil(accountId: string): Promise<string | null> {
+  if (isDemoMode) return null;
+  const sb = getServiceClient()!;
+  const { data } = await sb.from("app_state").select("value").eq("key", optOutKey(accountId)).maybeSingle();
+  const until = data?.value ?? null;
+  if (!until) return null;
+  const t = Date.parse(until);
+  if (!Number.isFinite(t) || t <= Date.now()) return null; // 過期＝視同未設
+  return until;
+}
+
+// 設定/清除：untilIso 為 null 或過去時間＝清除（恢復贊助）。
+export async function setSponsorOptOut(accountId: string, untilIso: string | null): Promise<void> {
+  if (isDemoMode) return;
+  const sb = getServiceClient()!;
+  if (!untilIso || Date.parse(untilIso) <= Date.now()) {
+    await sb.from("app_state").delete().eq("key", optOutKey(accountId));
+    return;
+  }
+  await sb
+    .from("app_state")
+    .upsert({ key: optOutKey(accountId), value: untilIso, updated_at: new Date().toISOString() }, { onConflict: "key" });
+}
+
 // 批次取多帳號的自選（草稿頁標示用）：回傳 accountId -> draftId。
 export async function getSponsorPickMap(accountIds: string[]): Promise<Record<string, string>> {
   const out: Record<string, string> = {};
@@ -160,6 +191,7 @@ export interface SponsorRecord {
   at: string;
   verified?: boolean;
   violated?: boolean;
+  deleted?: boolean; // 貼文已被使用者刪除/隱藏：視為正當下架（如蝦皮政策變動），不計違規
   ownLink?: boolean; // 高貢獻者選「換自己連結」：此篇用其自有分潤連結，非平台贊助，不納入違規驗證
 }
 
@@ -219,6 +251,16 @@ export interface SponsorRecordEntry {
   date: string;
   index: number; // 當日陣列中的位置（驗證寫回用）
   rec: SponsorRecord;
+}
+
+// 使用者自己的贊助紀錄（透明化）：依 rec.ownerId 過濾、時間新→舊，供「我的贊助文」資訊卡。
+export async function listSponsorRecordsForOwner(ownerId: string, limit = 50): Promise<SponsorRecordEntry[]> {
+  if (isDemoMode) return [];
+  const all = await listAllSponsorRecords().catch(() => [] as SponsorRecordEntry[]);
+  return all
+    .filter((e) => e.rec.ownerId === ownerId)
+    .sort((a, b) => (b.rec.at ?? "").localeCompare(a.rec.at ?? ""))
+    .slice(0, limit);
 }
 
 // 管理頁用：撈出所有贊助紀錄（不論驗證狀態），分頁避免 1000 列截斷；逐列展開陣列、附 index。

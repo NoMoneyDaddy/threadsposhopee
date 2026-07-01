@@ -44,7 +44,7 @@ export default function HotProductsRadar({ items, viewerId }: { items: SharedMat
                   {isTopMaterial(m.import_count, m.favorite_count) && <span className="mr-1" title="頂級素材">🔥</span>}
                   {m.product_name ?? "（商品）"}
                 </div>
-                <div className="text-[11px] text-ink-3">匯入 {m.import_count}・收藏 {m.favorite_count}</div>
+                <div className="text-[11px] text-ink-3">被匯入 {m.import_count}</div>
               </div>
               {isOwn ? (
                 <span className="shrink-0 whitespace-nowrap rounded-full bg-surface-2 px-2 py-0.5 text-[11px] text-ink-3">你的素材</span>

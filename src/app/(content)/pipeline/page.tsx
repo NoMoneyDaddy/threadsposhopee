@@ -1,11 +1,11 @@
 import PipelineBoard from "@/components/PipelineBoard";
 import AccountsOverview, { type AccountOverviewRow } from "@/components/AccountsOverview";
-import { listDrafts, listMaterials, listPendingMaterials, listThreadsAccounts, getPublishPlan, getFeatureFlags } from "@/lib/store";
+import { listDrafts, listMaterials, listPendingMaterials, listThreadsAccounts, getPublishPlan, getFeatureFlags, getDefaultShareMaterials } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
 import { taipeiDateStr } from "@/lib/streak";
 import { isDemoMode } from "@/lib/env";
 import { getMediaProvider } from "@/services/media/upload";
-import { getSponsorConfig, getSponsorPickMap } from "@/lib/sponsor";
+import { getSponsorConfig, getSponsorPickMap, listSponsorRecordsForOwner } from "@/lib/sponsor";
 import { getItemRevenueMap, type ItemRevenue } from "@/services/shopee/report";
 
 export const dynamic = "force-dynamic";
@@ -73,8 +73,12 @@ export default async function PipelinePage() {
   const sponsorEnabled = sponsorCfg.enabled && !!user && !user.isOwner;
   const pickByAccount = sponsorEnabled ? await getSponsorPickMap(accounts.map((a) => a.id)) : {};
 
-  // 共享庫是否開放：開放才在待審素材顯示「入庫並分享」。
+  // 共享庫是否開放：開放才在待審素材顯示「入庫並分享」。開放時再讀「新素材預設分享」設定。
   const flags = user ? await getFeatureFlags().catch(() => null) : null;
+  const defaultShare = user && flags?.shared ? await getDefaultShareMaterials(user.id).catch(() => true) : false;
+  // 已實際成為贊助文的貼文（供已發布草稿卡標記）；owner 帳號不適用贊助文，通常為空。
+  const sponsoredPostIds =
+    user && sponsorEnabled ? (await listSponsorRecordsForOwner(user.id).catch(() => [])).map((e) => e.rec.postId) : [];
 
   return (
     <div className="space-y-4">
@@ -98,6 +102,8 @@ export default async function PipelinePage() {
         cloud={cc?.cloud ?? null}
         preset={cc?.preset ?? null}
         canShare={Boolean(flags?.shared)}
+        defaultShare={defaultShare}
+        sponsoredPostIds={sponsoredPostIds}
       />
     </div>
   );

@@ -1,19 +1,55 @@
-// 共享素材貢獻分數與獎勵門檻：貢獻分數＝自己分享的素材被別人匯入的總次數。
-// 兩級獎勵（皆刻意調高，避免太易取得）：
-//   免贊助（exempt，較易）< 自賺 own_link（較難，連結換成自己的、自己賺分潤）。
+// 共享素材貢獻分數與獎勵：一套「四級階梯」同時當榮譽徽章與贊助回饋（避免兩套門檻造成混淆）。
+// 分數（DB get_contribution_score，重質）＝被匯入次數×3 ＋ 優質素材（被匯入≥3 的分享素材）×5 ＋ 資料紅利。
 // 純常數／函式，可測。
-export const SPONSOR_EXEMPT_CONTRIBUTION = 20; // 免每日贊助文門檻（原 5 調高）
-export const OWN_LINK_CONTRIBUTION = 60; // 自賺（換自己連結）門檻：比免贊助更難
+
+// 平台保底上限：即使頂級貢獻者，平台仍至少「每 SPONSOR_MAX_PER_POSTS 篇抽 1 篇」（抽成永不歸零）。
+export const SPONSOR_MAX_PER_POSTS = 60;
+
+export interface ContribTier {
+  min: number; // 達此分數即進此級
+  key: string;
+  label: string;
+  emoji: string;
+  perPostsMultiplier: number; // 贊助抽成：基礎 perPosts × 此倍數（越大＝抽越少）
+  ownLink: boolean; // 是否解鎖「換自己連結自賺」
+}
+
+// 四級階梯（由低到高）。倍數以基礎 6 為例＝ 6／12／30／60 篇抽 1（頂級即平台保底）。
+export const CONTRIB_TIERS: ContribTier[] = [
+  { min: 0, key: "rookie", label: "新手", emoji: "🌱", perPostsMultiplier: 1, ownLink: false },
+  { min: 15, key: "contributor", label: "貢獻者", emoji: "✨", perPostsMultiplier: 2, ownLink: false },
+  { min: 40, key: "high", label: "高貢獻", emoji: "🏅", perPostsMultiplier: 5, ownLink: false },
+  { min: 100, key: "elite", label: "頂級", emoji: "👑", perPostsMultiplier: 10, ownLink: true }
+];
+
+// 相容常數：貢獻者起步門檻（回饋開始有感）、自賺（頂級）門檻。
+export const SPONSOR_EXEMPT_CONTRIBUTION = 15;
+export const OWN_LINK_CONTRIBUTION = 100;
+
+// 目前所在級（達到的最高階）。
+export function contribTier(score: number): ContribTier {
+  let cur = CONTRIB_TIERS[0];
+  for (const t of CONTRIB_TIERS) if (score >= t.min) cur = t;
+  return cur;
+}
+
+// 下一級（尚未達最高級時），供進度卡顯示「還差幾分」。
+export function nextContribTier(score: number): ContribTier | null {
+  return CONTRIB_TIERS.find((t) => t.min > score) ?? null;
+}
 
 export function isSponsorExempt(contributionScore: number): boolean {
   return contributionScore >= SPONSOR_EXEMPT_CONTRIBUTION;
 }
 
-// 自賺（own_link）資格：門檻更高，刻意讓「換成自己連結賺分潤」較難取得。
+// 自賺（own_link）資格＝已達頂級。
 export function canOwnLink(contributionScore: number): boolean {
-  return contributionScore >= OWN_LINK_CONTRIBUTION;
+  return contribTier(contributionScore).ownLink;
 }
 
-// 貢獻分數 = 被匯入次數 + 分享素材篇數 + 資料貢獻紅利（皆權重 1）。
-// 計算統一在 DB（migration 0042 的 get_contribution_score／top_contributors），不在 TS 重算，避免雙算。
-// 等級顯示沿用 roles.ts 的勳章階梯（contributionBadge），不另立一套。
+// 依貢獻階梯放寬抽成：perPosts × 該級倍數（分段、好懂），封頂 SPONSOR_MAX_PER_POSTS（平台保底、永不歸零）。純函式可測。
+export function contributionAdjustedPerPosts(perPosts: number, contributionScore: number): number {
+  if (!Number.isFinite(perPosts) || perPosts <= 0) return perPosts;
+  const mult = contribTier(contributionScore).perPostsMultiplier;
+  return Math.max(1, Math.min(SPONSOR_MAX_PER_POSTS, Math.round(perPosts * mult)));
+}

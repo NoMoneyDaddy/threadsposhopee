@@ -81,6 +81,11 @@ export async function POST(req: Request) {
     }
   }
   if (action === "edit") {
+    // 發布後鎖定原文：已發布／發布中的貼文不可再改文案（貼文已送出，改 DB 原文也無意義，
+    // 且會破壞贊助文「發後驗證比對」）。要調整請直接在 Threads 上管理該貼文。
+    if (draft.status === "published" || draft.status === "publishing") {
+      return NextResponse.json({ ok: false, error: "已發布的貼文無法再編輯文案；如需調整請直接到 Threads 管理該貼文" }, { status: 409 });
+    }
     const mainText = typeof body.main_text === "string" ? body.main_text : draft.main_text;
     const replyText = typeof body.reply_text === "string" ? body.reply_text : draft.reply_text;
     const patch: Partial<Draft> = { main_text: mainText, reply_text: replyText };

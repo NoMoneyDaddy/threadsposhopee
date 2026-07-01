@@ -155,11 +155,13 @@ export async function listRecentSponsorRecords(limit = 50): Promise<SponsorRecor
       const atMs = Date.parse(e.rec.at);
       const status = e.rec.ownLink
         ? { statusLabel: "自有連結", statusTone: "text-ink-3" }
-        : e.rec.violated
-          ? { statusLabel: "違規", statusTone: "text-red-600" }
-          : e.rec.verified
-            ? { statusLabel: "已驗證", statusTone: "text-green-600" }
-            : { statusLabel: "待驗證", statusTone: "text-amber-600" };
+        : e.rec.deleted
+          ? { statusLabel: "已下架", statusTone: "text-ink-3" }
+          : e.rec.violated
+            ? { statusLabel: "違規", statusTone: "text-red-600" }
+            : e.rec.verified
+              ? { statusLabel: "已驗證", statusTone: "text-green-600" }
+              : { statusLabel: "待驗證", statusTone: "text-amber-600" };
       return {
         accountId: e.accountId,
         ownerEmail: e.rec.ownerId ? emailById.get(e.rec.ownerId) ?? null : null,

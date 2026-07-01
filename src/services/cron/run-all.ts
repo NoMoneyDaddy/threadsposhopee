@@ -4,6 +4,7 @@ import { refreshExpiringTokens } from "@/services/threads/refresh";
 import { refreshThreadsProfiles } from "@/services/threads/profile-refresh";
 import { reconcileNeedsVerification } from "@/services/threads/reconcile";
 import { reconcileFailedReplies } from "@/services/threads/reply-reconcile";
+import { refreshPostMetrics } from "@/services/threads/post-metrics";
 import { checkAffiliateLinks } from "@/services/materials/linkcheck";
 import { runEvergreen } from "@/services/materials/evergreen";
 import { buildDailyDigest } from "@/services/digest/daily";
@@ -76,6 +77,11 @@ export async function runCronAll(now: Date = new Date()): Promise<Record<string,
       // 非同步抓取：推進使用者啟動的 Apify run（完成就抓 dataset 入庫）。關頁也會由此跑完。
       key: "scrapeRuns",
       run: () => pollActiveScrapeRuns()
+    },
+    {
+      // 發文成效回填：分批抓已發布貼文的 views/likes（30 天內、24h 沒更新者），供共享排序加權。
+      key: "postMetrics",
+      run: refreshPostMetrics
     }
   ];
   // 每天展期一次（UTC 03 時；onceDaily 保證該日只跑一次，與 cron 頻率無關）

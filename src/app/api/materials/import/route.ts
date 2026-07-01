@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { log } from "@/lib/logger";
-import { getSharedMaterial, incrementImportCount, findMaterial, getFeatureFlags } from "@/lib/store";
+import { getSharedMaterial, incrementImportCount, findMaterial, getFeatureFlags, countSharedByOwner, getImportsUsed, incrementImportsUsed } from "@/lib/store";
 import { resolveMaterialFromUrl } from "@/services/materials/fromUrl";
+import { importAllowance } from "@/lib/import-allowance";
 import { getCurrentUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -31,10 +32,28 @@ export async function POST(req: Request) {
 
     // 防重複刷分：匯入者已擁有該商品則不再累加分享者貢獻（仍重產/更新自己的素材）。
     const alreadyHad = await findMaterial(shared.shop_id, shared.item_id, user.id).catch(() => null);
+
+    // 匯入額度（give-to-get）：初始只能匯入基礎額度，多分享素材解鎖更多。owner 不限；已擁有的商品重匯不計額度。
+    if (!user.isOwner && !alreadyHad) {
+      const [sharedCount, used] = await Promise.all([
+        countSharedByOwner(user.id).catch(() => 0),
+        getImportsUsed(user.id).catch(() => 0)
+      ]);
+      const allowance = importAllowance(sharedCount);
+      if (used >= allowance) {
+        return NextResponse.json(
+          { ok: false, error: `匯入額度已用完（${used}/${allowance}）。到素材庫把商品「分享到共享庫」可解鎖更多匯入額度。` },
+          { status: 403 }
+        );
+      }
+    }
     // 用匯入者自己的金鑰重產分潤連結，並用匯入者自己的 Gemini「重新生成」文案（有金鑰才生成、沒金鑰留空）。
     // 不逐字沿用分享者文案：避免不同使用者文案相同（被判洗版/降觸及）。
     const { material, notes } = await resolveMaterialFromUrl(shared.clean_product_url, user, true);
-    if (!alreadyHad) await incrementImportCount(id).catch(() => {});
+    if (!alreadyHad) {
+      await incrementImportCount(id).catch(() => {}); // 累加分享者貢獻
+      if (!user.isOwner) await incrementImportsUsed(user.id).catch(() => {}); // 扣匯入額度
+    }
 
     return NextResponse.json({ ok: true, materialId: material.id, notes });
   } catch (e) {

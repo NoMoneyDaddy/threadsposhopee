@@ -132,7 +132,9 @@ export default function PipelineBoard({
   publishPlan = {},
   cloud = null,
   preset = null,
-  canShare = false
+  canShare = false,
+  defaultShare = false,
+  sponsoredPostIds = []
 }: {
   pending: Material[];
   materials: Material[];
@@ -148,6 +150,10 @@ export default function PipelineBoard({
   preset?: string | null;
   // 共享庫是否開放：開放才顯示待審素材的「入庫並分享」與素材庫的批次分享動作。
   canShare?: boolean;
+  // 新素材預設分享：待審素材主要入庫按鈕依此顯示「入庫並分享／只入庫」。
+  defaultShare?: boolean;
+  // 已實際成為贊助文的貼文 id 集合（published_post_id）：已發布草稿卡標「已作為贊助文」。
+  sponsoredPostIds?: string[];
 }) {
   const router = useRouter();
   const [composing, setComposing] = useState(false);
@@ -337,11 +343,13 @@ export default function PipelineBoard({
     [groups.drafts, selected]
   );
 
+  const sponsoredSet = useMemo(() => new Set(sponsoredPostIds), [sponsoredPostIds]);
   const renderDraft = (d: Draft, draggable: boolean, selectable = false) => {
     const card = (
       <DraftCard
         draft={d}
         plan={publishPlan[d.id]}
+        wasSponsored={Boolean(d.published_post_id && sponsoredSet.has(d.published_post_id))}
         account={d.threads_account_id ? accountMeta[d.threads_account_id] : undefined}
         fallbackAccount={defaultAccount}
         sponsorEnabled={sponsor?.enabled ?? false}
@@ -464,7 +472,7 @@ export default function PipelineBoard({
               </select>
             }
           >
-            <PendingMaterialsReview items={pendingSorted} accounts={accounts} canShare={canShare} />
+            <PendingMaterialsReview items={pendingSorted} accounts={accounts} canShare={canShare} defaultShare={defaultShare} />
           </Column>
 
           <Column

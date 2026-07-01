@@ -211,6 +211,24 @@ export async function setAutoReviveLinks(ownerId: string, enabled: boolean): Pro
   if (error) throw new Error(`儲存 auto_revive_links 失敗：${error.message}`);
 }
 
+// 新素材是否預設分享到共享庫（不含分潤連結）。預設 true（開）：查無設定即回 true。
+export async function getDefaultShareMaterials(ownerId: string): Promise<boolean> {
+  if (isDemoMode) return false; // demo 不分享，避免記憶體資料被當公共池
+  const sb = getServiceClient()!;
+  const { data, error } = await sb.from("profiles").select("default_share_materials").eq("id", ownerId).maybeSingle();
+  if (error) throw new Error(`讀取 default_share_materials 失敗：${error.message}`);
+  return data?.default_share_materials ?? true; // 未設定（null/無列）＝預設開
+}
+
+export async function setDefaultShareMaterials(ownerId: string, enabled: boolean): Promise<void> {
+  if (isDemoMode) return;
+  const sb = getServiceClient()!;
+  const { error } = await sb
+    .from("profiles")
+    .upsert({ id: ownerId, default_share_materials: enabled }, { onConflict: "id" });
+  if (error) throw new Error(`儲存 default_share_materials 失敗：${error.message}`);
+}
+
 // 使用者自訂分潤 subId（套用到 API 短連結與 an_redir 長連結）。非機密，明文存。
 export async function getShopeeSubId(ownerId: string): Promise<string | null> {
   if (isDemoMode) return null;

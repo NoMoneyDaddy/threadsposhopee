@@ -15,12 +15,12 @@ export type Badge = {
 };
 
 // 貢獻分數階梯（由低到高；取「達到的最高階」當主勳章）。
+// 與 contribution.ts 的 CONTRIB_TIERS 對齊＝同一套（徽章＝贊助回饋級），避免兩套門檻造成混淆。
 const TIERS: { min: number; badge: Badge }[] = [
   { min: 0, badge: { key: "rookie", label: "新手", emoji: "🌱", tone: "neutral" } },
-  { min: 1, badge: { key: "contributor", label: "貢獻者", emoji: "✨", tone: "brand" } },
-  // 勳章階梯為「榮譽顯示」，與獎勵門檻（contribution.ts）脫鉤、各自獨立。
-  { min: 5, badge: { key: "high", label: "高貢獻者", emoji: "🏅", tone: "success" } },
-  { min: 20, badge: { key: "elite", label: "頂級貢獻者", emoji: "👑", tone: "warn" } }
+  { min: 15, badge: { key: "contributor", label: "貢獻者", emoji: "✨", tone: "brand" } },
+  { min: 40, badge: { key: "high", label: "高貢獻者", emoji: "🏅", tone: "success" } },
+  { min: 100, badge: { key: "elite", label: "頂級貢獻者", emoji: "👑", tone: "warn" } }
 ];
 
 // 取貢獻分數對應的主勳章（達到的最高階）。

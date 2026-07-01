@@ -10,9 +10,10 @@ import {
 } from "@/lib/store";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
-import { getSponsorConfig, countSponsorToday, getSponsorOptOutUntil, taipeiParts } from "@/lib/sponsor";
+import { getSponsorConfig, countSponsorToday, getSponsorOptOutUntil, listSponsorRecordsForOwner, taipeiParts } from "@/lib/sponsor";
 import { listThreadsAccounts } from "@/lib/accounts-store";
 import SponsorOptOutForm, { type SponsorAccountRow } from "@/components/SponsorOptOutForm";
+import MySponsorPostsCard, { type MySponsorPostRow } from "@/components/MySponsorPostsCard";
 import { env, isDemoMode } from "@/lib/env";
 import CopyPrefsForm from "@/components/CopyPrefsForm";
 import { buildCopyPromptPreview } from "@/services/ai/humanizer";
@@ -47,8 +48,9 @@ export default async function SettingsPage() {
     ]);
   const telegramBound = Boolean(telegramChatId);
 
-  // 贊助文透明化（非 owner 且已啟用）：列出各帳號今日已當贊助文篇數＋臨時禁用狀態。
+  // 贊助文透明化（非 owner 且已啟用）：各帳號今日已當贊助文篇數＋臨時禁用狀態，以及完整贊助文紀錄。
   let sponsorAccounts: SponsorAccountRow[] = [];
+  let mySponsorPosts: MySponsorPostRow[] = [];
   if (sponsor.enabled && !user.isOwner && !isDemoMode) {
     const today = taipeiParts().date;
     const accts = await listThreadsAccounts(user.id).catch(() => []);
@@ -60,6 +62,26 @@ export default async function SettingsPage() {
         optOutUntil: await getSponsorOptOutUntil(a.id).catch(() => null)
       }))
     );
+    const labelById = new Map(accts.map((a) => [a.id, a.label]));
+    const records = await listSponsorRecordsForOwner(user.id, 50).catch(() => []);
+    mySponsorPosts = records.map((e) => {
+      const rec = e.rec;
+      const status = rec.ownLink
+        ? { label: "自賺（自己連結）", tone: "text-ink-3" }
+        : rec.violated
+          ? { label: "連結被移除/竄改", tone: "text-red-600" }
+          : rec.verified
+            ? { label: "已驗證", tone: "text-green-600" }
+            : { label: "待驗證", tone: "text-amber-600" };
+      return {
+        accountLabel: labelById.get(e.accountId) ?? e.accountId,
+        postId: rec.postId,
+        link: rec.link,
+        atText: new Date(rec.at).toLocaleString("zh-TW", { timeZone: "Asia/Taipei", dateStyle: "short", timeStyle: "short" }),
+        statusLabel: status.label,
+        statusTone: status.tone
+      };
+    });
   }
 
   return (
@@ -109,6 +131,7 @@ export default async function SettingsPage() {
       {user.isOwner && <SponsorConfigForm initial={sponsor} />}
 
       {!user.isOwner && sponsor.enabled && <SponsorOptOutForm accounts={sponsorAccounts} />}
+      {!user.isOwner && sponsor.enabled && <MySponsorPostsCard rows={mySponsorPosts} />}
     </div>
   );
 }

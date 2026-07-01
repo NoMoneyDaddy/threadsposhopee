@@ -252,6 +252,16 @@ export interface SponsorRecordEntry {
   rec: SponsorRecord;
 }
 
+// 使用者自己的贊助紀錄（透明化）：依 rec.ownerId 過濾、時間新→舊，供「我的贊助文」資訊卡。
+export async function listSponsorRecordsForOwner(ownerId: string, limit = 50): Promise<SponsorRecordEntry[]> {
+  if (isDemoMode) return [];
+  const all = await listAllSponsorRecords().catch(() => [] as SponsorRecordEntry[]);
+  return all
+    .filter((e) => e.rec.ownerId === ownerId)
+    .sort((a, b) => (b.rec.at ?? "").localeCompare(a.rec.at ?? ""))
+    .slice(0, limit);
+}
+
 // 管理頁用：撈出所有贊助紀錄（不論驗證狀態），分頁避免 1000 列截斷；逐列展開陣列、附 index。
 export async function listAllSponsorRecords(): Promise<SponsorRecordEntry[]> {
   if (isDemoMode) return [];

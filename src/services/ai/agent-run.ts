@@ -27,6 +27,7 @@ import { log } from "@/lib/logger";
 const SEEN_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
 const TITLE_SIM_THRESHOLD = 0.6;
 const RUN_GUARD_MS = 20 * 60 * 60 * 1000; // 每代理人每日約一次
+const AGENT_FAIL_BACKOFF_MS = 2 * 60 * 60 * 1000; // 執行失敗後的重試退避（約 2h，避免每輪重試風暴）
 
 // 來源去重鍵：連結正規化後 SHA-1。純函式。
 export function sourceHash(link: string): string {
@@ -273,18 +274,23 @@ export async function runAiAgents(now = Date.now()): Promise<{ ran: number; crea
   for (const agent of agents) {
     if (agent.last_run_at && now - new Date(agent.last_run_at).getTime() < RUN_GUARD_MS) continue;
     out.ran++;
+    // 無論成功或失敗都要推進 last_run_at（在 finally 寫入），否則失敗的代理人會每輪 cron 重跑
+    // → 重試風暴、燒使用者 Gemini 額度、排擠同輪其他代理人。失敗改用較短退避（約 2h 後重試），
+    // 兼顧「暫時性故障能自我復原」與「壞掉的代理人不狂燒」。
+    let markIso = new Date(now).toISOString();
     try {
       const key = await getGeminiKey(agent.owner_id);
       if (!key) {
         log.warn("代理人無 Gemini 金鑰，略過", { agentId: agent.id });
-        await setAgentLastRun(agent.id); // 仍標記，避免每輪重試
-        continue;
+        continue; // finally 會標記
       }
       const r = await runAgentOnce(agent, key);
       if (r.ok) out.created++;
-      await setAgentLastRun(agent.id);
     } catch (e) {
       log.warn("代理人執行失敗", { agentId: agent.id, err: e instanceof Error ? e.message : e });
+      markIso = new Date(now - RUN_GUARD_MS + AGENT_FAIL_BACKOFF_MS).toISOString(); // 失敗：約 2h 後才重試
+    } finally {
+      await setAgentLastRun(agent.id, markIso).catch((e) => log.warn("寫入 last_run_at 失敗", { agentId: agent.id, err: e }));
     }
   }
   return out;

@@ -526,6 +526,21 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
     }
   }
 
+  // 平台級健康彙總告警：多帳號同時失敗或成功率驟降＝可能 Threads 全域故障/大規模風控，
+  // 匯總成單一高優先告警，便於第一時間分辨「個別 token 過期」vs「系統性事件」（個別斷路器另有告警）。
+  const attempted = result.published.length + result.failed.length + (result.needsVerification?.length ?? 0);
+  if (attempted >= 5) {
+    const rate = result.published.length / attempted;
+    const brokenAccounts = alertedBroken.size;
+    if (rate < 0.5 || brokenAccounts >= 3) {
+      await sendAlert(
+        `🚨 發文健康警示：本輪嘗試 ${attempted} 篇、成功率 ${Math.round(rate * 100)}%、觸發斷路器帳號 ${brokenAccounts} 個` +
+          (result.needsVerification?.length ? `、待確認 ${result.needsVerification.length} 篇` : "") +
+          "。可能為 Threads 全域故障或大規模風控，請儘速檢查。"
+      ).catch(() => {});
+    }
+  }
+
   // 延遲留言補發：撈「到期待補」的，逐則補上 2/2 留言。整個 run 在分布式鎖內，無併發。
   result.replies = await publishDueReplies(startTime, shard);
   return result;

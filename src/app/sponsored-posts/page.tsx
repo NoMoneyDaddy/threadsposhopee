@@ -17,7 +17,8 @@ export default async function SponsoredPostsPage() {
 
   const accts = await listThreadsAccounts(user.id).catch(() => []);
   const labelById = new Map(accts.map((a) => [a.id, a.label]));
-  const records = await listSponsorRecordsForOwner(user.id, 200).catch(() => []);
+  // owner 的帳號不會被抽（自家帳號略過贊助），紀錄恆為空 → 直接短路，免去 listSponsorRecordsForOwner 的全表掃描（Gemini 審查指出）。
+  const records = user.isOwner ? [] : await listSponsorRecordsForOwner(user.id, 200).catch(() => []);
 
   const toRow = (e: (typeof records)[number]): MySponsorPostRow => {
     const status = sponsorRecordStatus(e.rec);

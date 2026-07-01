@@ -137,9 +137,10 @@ export default async function SettingsPage() {
           intro="近期紀錄（被抽＋自賺混合）。完整清單、被抽／自賺分開檢視請見專頁。"
         />
       )}
-      {!user.isOwner && sponsor.enabled && (
+      {sponsor.enabled && (
         <p className="text-sm">
           <Link href="/sponsored-posts" className="text-brand underline">查看我的贊助文完整紀錄（被抽／自賺分開）→</Link>
+          {user.isOwner && <span className="ml-2 text-xs text-ink-3">（你是管理者，自家帳號不會被抽，此頁通常為空）</span>}
         </p>
       )}
     </div>

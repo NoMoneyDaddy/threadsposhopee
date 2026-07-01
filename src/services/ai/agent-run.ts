@@ -29,9 +29,42 @@ const TITLE_SIM_THRESHOLD = 0.6;
 const RUN_GUARD_MS = 20 * 60 * 60 * 1000; // 每代理人每日約一次
 const AGENT_FAIL_BACKOFF_MS = 2 * 60 * 60 * 1000; // 執行失敗後的重試退避（約 2h，避免每輪重試風暴）
 
+// 追蹤參數（去除後不影響指向的同一篇文章）：utm_*、gclid、fbclid、mc_*、igshid、ref/ref_src、si…
+const TRACKING_PARAM_RE = /^(utm_|mc_)|^(gclid|fbclid|igshid|ref|ref_src|si|spm|scm)$/i;
+
+// 連結正規化：解開 Google News RSS 轉址、host 轉小寫、去追蹤參數、去尾斜線、去錨點。
+// 讓同一篇文章在不同查詢/來源下的網址收斂成同一鍵，避免重複產文。純函式可測。
+export function normalizeSourceUrl(link: string): string {
+  const raw = (link ?? "").trim();
+  if (!raw) return "";
+  try {
+    let u = new URL(raw);
+    // Google News RSS 常以 ?url=<實際文章> 轉址，取出實際目標再正規化。
+    if (/(^|\.)news\.google\.com$/i.test(u.hostname)) {
+      const target = u.searchParams.get("url");
+      if (target) {
+        try {
+          u = new URL(target);
+        } catch {
+          /* 保留原 URL */
+        }
+      }
+    }
+    u.hostname = u.hostname.toLowerCase();
+    u.hash = "";
+    const keep = new URLSearchParams();
+    for (const [k, v] of u.searchParams) if (!TRACKING_PARAM_RE.test(k)) keep.set(k, v);
+    u.search = keep.toString();
+    u.pathname = u.pathname.replace(/\/+$/, "") || "/"; // 去尾斜線（根路徑保留 /）
+    return u.toString();
+  } catch {
+    return raw;
+  }
+}
+
 // 來源去重鍵：連結正規化後 SHA-1。純函式。
 export function sourceHash(link: string): string {
-  return createHash("sha1").update(link.trim()).digest("hex");
+  return createHash("sha1").update(normalizeSourceUrl(link)).digest("hex");
 }
 
 // 組短連結來源網址（純函式可測）：貼文會發到 Threads，連結須為絕對網址。
@@ -127,7 +160,7 @@ async function fetchThreadsSearchItems(agent: AiAgent): Promise<RssItem[]> {
 function dedupeByLink(items: RssItem[]): RssItem[] {
   const seen = new Set<string>();
   return items.filter((it) => {
-    const key = it.link.trim();
+    const key = normalizeSourceUrl(it.link);
     if (!key || seen.has(key)) return false;
     seen.add(key);
     return true;

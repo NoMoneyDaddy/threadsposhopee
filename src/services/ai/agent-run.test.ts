@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { sourceHash, buildAgentPrompt, buildShortSourceUrl } from "./agent-run";
+import { sourceHash, buildAgentPrompt, buildShortSourceUrl, normalizeSourceUrl } from "./agent-run";
 import { ANTI_AI_SLOP_RULES } from "./humanizer";
 import type { AiAgent } from "@/lib/agents-store";
 
@@ -8,6 +8,26 @@ test("sourceHash：穩定、忽略前後空白、不同連結不同", () => {
   assert.equal(sourceHash("https://x/a"), sourceHash("  https://x/a  "));
   assert.notEqual(sourceHash("https://x/a"), sourceHash("https://x/b"));
   assert.match(sourceHash("https://x/a"), /^[0-9a-f]{40}$/);
+});
+
+test("normalizeSourceUrl：去追蹤參數/尾斜線/錨點、host 小寫，同篇收斂", () => {
+  const canonical = "https://news.example.com/a";
+  assert.equal(normalizeSourceUrl("https://news.example.com/a/"), canonical);
+  assert.equal(normalizeSourceUrl("https://NEWS.example.com/a#top"), canonical);
+  assert.equal(normalizeSourceUrl("https://news.example.com/a?utm_source=x&gclid=y"), canonical);
+  assert.equal(normalizeSourceUrl("https://news.example.com/a?fbclid=z&id=7"), "https://news.example.com/a?id=7");
+});
+
+test("normalizeSourceUrl：解開 Google News 轉址至實際文章", () => {
+  const target = "https://media.example.com/story?id=1";
+  assert.equal(
+    normalizeSourceUrl(`https://news.google.com/rss/articles/xyz?url=${encodeURIComponent(target)}&hl=zh-TW`),
+    target
+  );
+});
+
+test("sourceHash：追蹤參數/尾斜線變體視為同一來源", () => {
+  assert.equal(sourceHash("https://x.com/a"), sourceHash("https://x.com/a/?utm_medium=rss"));
 });
 
 test("buildShortSourceUrl：有短網域→組絕對短連結（去尾斜線）；無短網域→退回原始連結，絕不出相對路徑", () => {

@@ -249,6 +249,28 @@ export async function countSponsorToday(accountId: string, date: string): Promis
   return (await getSponsorRecords(accountId, date)).length;
 }
 
+// ── 累積贊助數（app_state：key=sponsor:total:<accId>）──────
+// 累積比例判定用：不掃全部每日紀錄（昂貴），改維護一個每帳號累積計數器。
+function totalKey(accountId: string): string {
+  return `sponsor:total:${accountId}`;
+}
+export async function getSponsorTotal(accountId: string): Promise<number> {
+  if (isDemoMode) return 0;
+  const sb = getServiceClient()!;
+  const { data } = await sb.from("app_state").select("value").eq("key", totalKey(accountId)).maybeSingle();
+  const n = data?.value ? parseInt(data.value, 10) : 0;
+  return Number.isFinite(n) ? n : 0;
+}
+// 原子累加（RPC 難以對 app_state 泛用，改讀-加-寫；同帳號同輪序列化發文，競態極低）。
+export async function incrementSponsorTotal(accountId: string): Promise<void> {
+  if (isDemoMode) return;
+  const sb = getServiceClient()!;
+  const cur = await getSponsorTotal(accountId);
+  await sb
+    .from("app_state")
+    .upsert({ key: totalKey(accountId), value: String(cur + 1), updated_at: new Date().toISOString() }, { onConflict: "key" });
+}
+
 // 追加一筆當日贊助紀錄（讀現有陣列 → push → 寫回）。
 export async function appendSponsorRecord(accountId: string, date: string, rec: SponsorRecord): Promise<void> {
   if (isDemoMode) return;

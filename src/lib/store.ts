@@ -134,6 +134,7 @@ export {
   listPublishedDates,
   countPublished,
   countPublishedTodayByAccount,
+  countPublishedByAccount,
   type PublishedPostRef,
   type ReplyDueDraft
 } from "./drafts-store";

@@ -10,7 +10,7 @@ import {
 } from "@/lib/store";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
-import { getSponsorConfig, countSponsorToday, getSponsorOptOut, listSponsorRecordsForOwner, taipeiParts } from "@/lib/sponsor";
+import { getSponsorConfig, countSponsorToday, getSponsorOptOut, listSponsorRecordsForOwner, taipeiParts, formatCommissionRate as fmtCommissionRate, sponsorRecordStatus } from "@/lib/sponsor";
 import { listThreadsAccounts } from "@/lib/accounts-store";
 import SponsorOptOutForm, { type SponsorAccountRow } from "@/components/SponsorOptOutForm";
 import MySponsorPostsCard, { type MySponsorPostRow } from "@/components/MySponsorPostsCard";
@@ -56,7 +56,7 @@ export default async function SettingsPage() {
     const accts = await listThreadsAccounts(user.id).catch(() => []);
     sponsorAccounts = await Promise.all(
       accts.map(async (a) => {
-        const optOut = await getSponsorOptOut(a.id).catch(() => null);
+        const optOut = await getSponsorOptOut(a.threads_user_id).catch(() => null);
         return {
           id: a.id,
           label: a.label,
@@ -71,22 +71,15 @@ export default async function SettingsPage() {
     const records = await listSponsorRecordsForOwner(user.id, 50).catch(() => []);
     mySponsorPosts = records.map((e) => {
       const rec = e.rec;
-      const status = rec.ownLink
-        ? { label: "自賺（自己連結）", tone: "text-ink-3" }
-        : rec.deleted
-          ? { label: "已下架（不計違規）", tone: "text-ink-3" }
-          : rec.violated
-            ? { label: "連結被移除/竄改", tone: "text-red-600" }
-            : rec.verified
-              ? { label: "已驗證", tone: "text-green-600" }
-              : { label: "待驗證", tone: "text-amber-600" };
+      const status = sponsorRecordStatus(rec);
       return {
         accountLabel: labelById.get(e.accountId) ?? e.accountId,
         postId: rec.postId,
         link: rec.link,
         atText: new Date(rec.at).toLocaleString("zh-TW", { timeZone: "Asia/Taipei", dateStyle: "short", timeStyle: "short" }),
         statusLabel: status.label,
-        statusTone: status.tone
+        statusTone: status.tone,
+        rateText: fmtCommissionRate(rec.commissionRate)
       };
     });
   }
@@ -138,7 +131,17 @@ export default async function SettingsPage() {
       {user.isOwner && <SponsorConfigForm initial={sponsor} />}
 
       {!user.isOwner && sponsor.enabled && <SponsorOptOutForm accounts={sponsorAccounts} />}
-      {!user.isOwner && sponsor.enabled && <MySponsorPostsCard rows={mySponsorPosts} />}
+      {!user.isOwner && sponsor.enabled && (
+        <MySponsorPostsCard
+          rows={mySponsorPosts}
+          intro="近期紀錄（被抽＋自賺混合）。完整清單、被抽／自賺分開檢視請見專頁。"
+        />
+      )}
+      {!user.isOwner && sponsor.enabled && (
+        <p className="text-sm">
+          <Link href="/sponsored-posts" className="text-brand underline">查看我的贊助文完整紀錄（被抽／自賺分開）→</Link>
+        </p>
+      )}
     </div>
   );
 }

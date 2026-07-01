@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { log } from "@/lib/logger";
 import { getCurrentUser } from "@/lib/auth";
 import { setSponsorBlocked } from "@/lib/sponsor";
+import { getThreadsUserIdsByAccountIds } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,10 @@ export async function POST(req: Request) {
     const body = (await req.json().catch(() => ({}))) || {};
     const accountId = typeof body.accountId === "string" ? body.accountId.trim() : "";
     if (!accountId) return NextResponse.json({ ok: false, error: "缺少 accountId" }, { status: 400 });
-    await setSponsorBlocked(accountId, body.blocked !== false);
+    // 黑名單綁 threads_user_id（刪帳號重加無法規避）：由 accountId 解析穩定 id。
+    const tuid = (await getThreadsUserIdsByAccountIds([accountId]))[accountId];
+    if (!tuid) return NextResponse.json({ ok: false, error: "帳號不存在" }, { status: 404 });
+    await setSponsorBlocked(tuid, body.blocked !== false);
     return NextResponse.json({ ok: true, blocked: body.blocked !== false });
   } catch (e) {
     log.error("設定贊助黑名單失敗", { err: e });

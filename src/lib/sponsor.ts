@@ -71,6 +71,16 @@ export function inOffPeak(hour: number, start: number, end: number): boolean {
   return hour >= start && hour < end;
 }
 
+// 分潤率字串小數（如 "0.05"）格式化為百分比顯示（"5%"）。無效/空回 null。純函式。
+export function formatCommissionRate(rate: string | null | undefined): string | null {
+  if (rate == null || rate === "") return null;
+  const n = Number(rate);
+  if (!Number.isFinite(n) || n < 0) return null;
+  const pct = n * 100;
+  // 去除多餘小數（5 而非 5.00；5.5 保留）。
+  return `${Number(pct.toFixed(2))}%`;
+}
+
 // 把文字中的舊分潤連結替換為平台贊助連結。舊連結不存在時：有內容就在結尾補上平台連結。
 // 就地替換：只在文中確實含 oldLink 時替換；找不到就「原文不動」回傳（不再 append）。
 // 避免把平台分潤連結硬接到不含商品連結的文末（雙連結/錯置且使用者站內看不到）。
@@ -102,216 +112,278 @@ export function shouldSponsor(opts: {
   return true;
 }
 
-// ── 使用者自選贊助文（app_state：key=sponsor:pick:<accId>）──────
+// ══ 帳號持久贊助狀態（sponsor_account_stats 表，主鍵＝threads_user_id）══════════════════
+// R2-D：由 app_state（以內部 uuid 為鍵）改為專屬表＋穩定的 threads_user_id 為鍵，
+// 讓「刪帳號重加同一 Threads 帳號」無法洗掉黑名單/違規罰則/累積贊助歷史。呼叫端一律傳 threads_user_id。
+export interface SponsorStats {
+  threadsUserId: string;
+  sponsoredCount: number;
+  redistCount: number;
+  blocked: boolean;
+  penaltyFactor: number | null;
+  penaltyUntil: string | null;
+  optout: SponsorOptOutRaw | null;
+  pick: SponsorPick | null;
+}
+interface SponsorStatsRow {
+  threads_user_id: string;
+  sponsored_count: number | null;
+  redist_count: number | null;
+  blocked: boolean | null;
+  penalty_factor: number | string | null;
+  penalty_until: string | null;
+  optout: SponsorOptOutRaw | null;
+  pick: SponsorPick | null;
+}
+const STATS_COLS = "threads_user_id,sponsored_count,redist_count,blocked,penalty_factor,penalty_until,optout,pick";
+
+async function getStatsRow(tuid: string): Promise<SponsorStatsRow | null> {
+  if (isDemoMode || !tuid) return null;
+  const sb = getServiceClient()!;
+  const { data } = await sb.from("sponsor_account_stats").select(STATS_COLS).eq("threads_user_id", tuid).maybeSingle();
+  return (data as SponsorStatsRow | null) ?? null;
+}
+
+// 批次讀多帳號狀態（發文佇列一次載入，省 N 次查詢）。回傳 tuid -> row。
+async function getStatsRows(tuids: string[]): Promise<Map<string, SponsorStatsRow>> {
+  const map = new Map<string, SponsorStatsRow>();
+  const uniq = Array.from(new Set(tuids.filter(Boolean)));
+  if (isDemoMode || uniq.length === 0) return map;
+  const sb = getServiceClient()!;
+  const { data } = await sb.from("sponsor_account_stats").select(STATS_COLS).in("threads_user_id", uniq);
+  for (const row of (data as SponsorStatsRow[] | null) ?? []) map.set(row.threads_user_id, row);
+  return map;
+}
+
+// 更新（upsert）本表指定欄位。null 值以「清除該欄位」語意寫入。
+async function patchStats(tuid: string, patch: Partial<Omit<SponsorStatsRow, "threads_user_id">>): Promise<void> {
+  if (isDemoMode || !tuid) return;
+  const sb = getServiceClient()!;
+  const { error } = await sb
+    .from("sponsor_account_stats")
+    .upsert({ threads_user_id: tuid, ...patch, updated_at: new Date().toISOString() }, { onConflict: "threads_user_id" });
+  if (error) throw new Error(`更新贊助帳號狀態失敗：${error.message}`);
+}
+
+// ── 使用者自選贊助文（sponsor_account_stats.pick）──────
 export interface SponsorPick {
   draftId: string;
   hour: number | null; // 指定發文時段（小時 0–23）；null = 該篇一發即贊助
 }
 
-function pickKey(accountId: string): string {
-  return `sponsor:pick:${accountId}`;
+export async function getSponsorPick(threadsUserId: string): Promise<SponsorPick | null> {
+  const row = await getStatsRow(threadsUserId);
+  return normalizePick(row?.pick);
 }
 
-export async function getSponsorPick(accountId: string): Promise<SponsorPick | null> {
-  if (isDemoMode) return null;
-  const sb = getServiceClient()!;
-  const { data } = await sb.from("app_state").select("value").eq("key", pickKey(accountId)).maybeSingle();
-  if (!data?.value) return null;
-  try {
-    return JSON.parse(data.value) as SponsorPick;
-  } catch {
-    return null;
+function normalizePick(pick: SponsorPick | null | undefined): SponsorPick | null {
+  if (!pick || typeof pick.draftId !== "string" || !pick.draftId) return null;
+  const hour = pick.hour == null ? null : Number(pick.hour);
+  return { draftId: pick.draftId, hour: Number.isInteger(hour) ? (hour as number) : null };
+}
+
+export async function setSponsorPick(threadsUserId: string, pick: SponsorPick | null): Promise<void> {
+  await patchStats(threadsUserId, { pick: pick ? { draftId: pick.draftId, hour: pick.hour } : null });
+}
+
+// 批次取多帳號的自選（草稿頁標示用）：回傳 threadsUserId -> draftId。
+export async function getSponsorPickMap(threadsUserIds: string[]): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  const rows = await getStatsRows(threadsUserIds);
+  for (const [tuid, row] of rows) {
+    const pick = normalizePick(row.pick);
+    if (pick) out[tuid] = pick.draftId;
   }
+  return out;
 }
 
-export async function setSponsorPick(accountId: string, pick: SponsorPick | null): Promise<void> {
-  if (isDemoMode) return;
-  const sb = getServiceClient()!;
-  if (!pick) {
-    await sb.from("app_state").delete().eq("key", pickKey(accountId));
-    return;
-  }
-  await sb
-    .from("app_state")
-    .upsert({ key: pickKey(accountId), value: JSON.stringify(pick), updated_at: new Date().toISOString() }, { onConflict: "key" });
-}
-
-// ── 帳號臨時禁用贊助文（app_state：key=sponsor:optout:<accId>，值＝到期 ISO）──────
+// ── 帳號臨時/永久禁用贊助文（sponsor_account_stats.optout）──────
 // 用途：活動檔期/商業合作期間，讓某帳號暫時不套贊助文；到期自動恢復（無需完全暫停發文）。
-function optOutKey(accountId: string): string {
-  return `sponsor:optout:${accountId}`;
-}
-
-// 禁用模式：off＝期間完全不抽贊助；half＝期間只抽一半（perPosts 加倍，兼顧檔期又不放棄平台收益）。
 export type SponsorOptOutMode = "off" | "half";
+interface SponsorOptOutRaw {
+  until?: string | null;
+  mode?: string;
+  permanent?: boolean;
+}
 export interface SponsorOptOut {
   until: string | null; // permanent 時可為 null
   mode: SponsorOptOutMode;
   permanent: boolean; // 永久禁用（無到期）；配套：mode=off+permanent 的應抽份額轉為 owner 欠抽由其他帳號代抽
 }
 
-// 解析 optout 值：新格式為 JSON {until,mode,permanent}；舊格式為純 ISO 字串（視為 off、非永久）。
-// 回傳仍生效者（永久恆生效；否則需未過期），否則 null。
-function parseOptOut(value: string | null | undefined): SponsorOptOut | null {
-  if (!value) return null;
-  let until: string | null = null;
-  let mode: SponsorOptOutMode = "off";
-  let permanent = false;
-  const trimmed = value.trim();
-  if (trimmed.startsWith("{")) {
-    try {
-      const o = JSON.parse(trimmed) as Partial<SponsorOptOut>;
-      until = o.until ? String(o.until) : null;
-      mode = o.mode === "half" ? "half" : "off";
-      permanent = Boolean(o.permanent);
-    } catch {
-      return null;
-    }
-  } else {
-    until = trimmed; // 舊格式：純 ISO
-  }
+// 解析 optout 值（jsonb 物件；相容舊資料只有 until 的情形）。回傳仍生效者（永久恆生效；否則需未過期），否則 null。
+function parseOptOut(raw: SponsorOptOutRaw | null | undefined): SponsorOptOut | null {
+  if (!raw) return null;
+  const mode: SponsorOptOutMode = raw.mode === "half" ? "half" : "off";
+  const permanent = Boolean(raw.permanent);
   if (permanent) return { until: null, mode, permanent: true }; // 永久恆生效
+  const until = raw.until ? String(raw.until) : null;
   const t = Date.parse(String(until));
   if (!Number.isFinite(t) || t <= Date.now()) return null; // 過期＝視同未設
   return { until, mode, permanent: false };
 }
 
 // 回傳目前生效的禁用設定（含模式/永久）；過期/未設回 null。
-export async function getSponsorOptOut(accountId: string): Promise<SponsorOptOut | null> {
-  if (isDemoMode) return null;
-  const sb = getServiceClient()!;
-  const { data } = await sb.from("app_state").select("value").eq("key", optOutKey(accountId)).maybeSingle();
-  return parseOptOut(data?.value);
+export async function getSponsorOptOut(threadsUserId: string): Promise<SponsorOptOut | null> {
+  const row = await getStatsRow(threadsUserId);
+  return parseOptOut(row?.optout);
 }
 
 // 相容既有呼叫點：只回到期 ISO（永久回固定遠期字串以示「生效中」）。
-export async function getSponsorOptOutUntil(accountId: string): Promise<string | null> {
-  const o = await getSponsorOptOut(accountId);
+export async function getSponsorOptOutUntil(threadsUserId: string): Promise<string | null> {
+  const o = await getSponsorOptOut(threadsUserId);
   if (!o) return null;
   return o.permanent ? "9999-12-31T00:00:00.000Z" : o.until;
 }
 
 // 設定/清除：permanent=true＝永久（忽略 untilIso）；否則 untilIso 為 null/過去＝清除。mode 預設 off。
 export async function setSponsorOptOut(
-  accountId: string,
+  threadsUserId: string,
   untilIso: string | null,
   mode: SponsorOptOutMode = "off",
   permanent = false
 ): Promise<void> {
-  if (isDemoMode) return;
-  const sb = getServiceClient()!;
   if (!permanent && (!untilIso || Date.parse(untilIso) <= Date.now())) {
-    await sb.from("app_state").delete().eq("key", optOutKey(accountId));
+    await patchStats(threadsUserId, { optout: null }); // 清除
     return;
   }
   const payload: SponsorOptOut = permanent ? { until: null, mode, permanent: true } : { until: untilIso, mode, permanent: false };
-  await sb
-    .from("app_state")
-    .upsert({ key: optOutKey(accountId), value: JSON.stringify(payload), updated_at: new Date().toISOString() }, { onConflict: "key" });
+  await patchStats(threadsUserId, { optout: payload });
 }
 
-// ── 違規加重抽成懲罰（app_state：key=sponsor:penalty:<accId>，值＝JSON {until,factor}）──────
+// ── 違規加重抽成懲罰（sponsor_account_stats.penalty_factor/penalty_until）──────
 // 違規（連結被竄改）不再暫停贊助或停帳號（那等於獎勵竄改者、平台還少賺），改為一段期間「加重抽成」：
 // 該帳號 perPosts 除以 factor（抽更多）作為懲罰——有實質代價、且平台反而多賺，正打在動機上。到期自動恢復。
-function penaltyKey(accountId: string): string {
-  return `sponsor:penalty:${accountId}`;
+function activePenalty(factor: number | string | null | undefined, until: string | null | undefined): number {
+  const t = Date.parse(String(until ?? ""));
+  if (!Number.isFinite(t) || t <= Date.now()) return 1; // 過期/未設
+  const f = Number(factor);
+  return Number.isFinite(f) && f >= 1 ? f : 1;
 }
 
 // 目前生效的加重倍數（>=1；1＝無懲罰）。過期/未設回 1。
-export async function getSponsorPenaltyFactor(accountId: string): Promise<number> {
-  if (isDemoMode) return 1;
-  const sb = getServiceClient()!;
-  const { data } = await sb.from("app_state").select("value").eq("key", penaltyKey(accountId)).maybeSingle();
-  if (!data?.value) return 1;
-  try {
-    const o = JSON.parse(data.value) as { until?: string; factor?: number };
-    const t = Date.parse(String(o.until ?? ""));
-    if (!Number.isFinite(t) || t <= Date.now()) return 1; // 過期
-    const f = Number(o.factor);
-    return Number.isFinite(f) && f >= 1 ? f : 1;
-  } catch {
-    return 1;
-  }
+export async function getSponsorPenaltyFactor(threadsUserId: string): Promise<number> {
+  const row = await getStatsRow(threadsUserId);
+  return activePenalty(row?.penalty_factor, row?.penalty_until);
 }
 
 // 設定加重抽成懲罰（factor 倍、到 untilIso）。factor<=1 或無到期＝清除。
-export async function setSponsorPenalty(accountId: string, factor: number, untilIso: string | null): Promise<void> {
-  if (isDemoMode) return;
-  const sb = getServiceClient()!;
+export async function setSponsorPenalty(threadsUserId: string, factor: number, untilIso: string | null): Promise<void> {
   if (!untilIso || Date.parse(untilIso) <= Date.now() || !(factor > 1)) {
-    await sb.from("app_state").delete().eq("key", penaltyKey(accountId));
+    await patchStats(threadsUserId, { penalty_factor: null, penalty_until: null });
     return;
   }
-  await sb
-    .from("app_state")
-    .upsert({ key: penaltyKey(accountId), value: JSON.stringify({ until: untilIso, factor }), updated_at: new Date().toISOString() }, { onConflict: "key" });
+  await patchStats(threadsUserId, { penalty_factor: factor, penalty_until: untilIso });
 }
 
-// 批次取多帳號的自選（草稿頁標示用）：回傳 accountId -> draftId。
-export async function getSponsorPickMap(accountIds: string[]): Promise<Record<string, string>> {
-  const out: Record<string, string> = {};
-  if (isDemoMode || accountIds.length === 0) return out;
-  const sb = getServiceClient()!;
-  const { data } = await sb.from("app_state").select("key,value").in("key", accountIds.map(pickKey));
-  for (const row of data ?? []) {
-    try {
-      const pick = JSON.parse(row.value) as SponsorPick;
-      const accId = row.key.slice("sponsor:pick:".length);
-      if (pick?.draftId) out[accId] = pick.draftId;
-    } catch {
-      // skip
-    }
-  }
-  return out;
-}
-
-// ── 管理員贊助黑名單（app_state：key=sponsor:blocked:<accId>）──────
-// 管理員可把濫用/高風險帳號永久排除贊助。改「每帳號一列」而非單一 JSON 陣列，
-// 避免讀-改-寫整個陣列的併發競態（各帳號各自 upsert/delete，互不干擾）。
-function blockedKey(accountId: string): string {
-  return `sponsor:blocked:${accountId}`;
-}
-
+// ── 管理員贊助黑名單（sponsor_account_stats.blocked）──────
+// 管理員可把濫用/高風險帳號永久排除贊助。改綁 threads_user_id：刪帳號重加無法規避封鎖。
 export async function getSponsorBlocklist(): Promise<string[]> {
   if (isDemoMode) return [];
   const sb = getServiceClient()!;
-  const { data } = await sb.from("app_state").select("key").like("key", "sponsor:blocked:%").limit(1000);
-  return (data ?? []).map((r) => (r.key as string).slice("sponsor:blocked:".length)).filter(Boolean);
+  const { data } = await sb.from("sponsor_account_stats").select("threads_user_id").eq("blocked", true).limit(5000);
+  return (data ?? []).map((r) => r.threads_user_id as string).filter(Boolean);
 }
 
-export async function setSponsorBlocked(accountId: string, blocked: boolean): Promise<void> {
-  if (isDemoMode) return;
+export async function setSponsorBlocked(threadsUserId: string, blocked: boolean): Promise<void> {
+  await patchStats(threadsUserId, { blocked });
+}
+
+// ── 累積贊助數 / 已轉出份額（sponsor_account_stats.sponsored_count / redist_count）──────
+// 累積比例判定用：不掃全部每日紀錄（昂貴），改維護每帳號累積計數器。
+export async function getSponsorTotal(threadsUserId: string): Promise<number> {
+  const row = await getStatsRow(threadsUserId);
+  const n = Number(row?.sponsored_count ?? 0);
+  return Number.isFinite(n) ? n : 0;
+}
+// 原子累加：走 DB 端 bump_sponsor_stat（單次 upsert），消除讀-加-寫的併發覆寫/漂移。回傳累加後新值（demo 回 0）。
+export async function incrementSponsorTotal(threadsUserId: string): Promise<number> {
+  if (isDemoMode || !threadsUserId) return 0;
   const sb = getServiceClient()!;
-  if (blocked) {
-    await sb
-      .from("app_state")
-      .upsert({ key: blockedKey(accountId), value: "1", updated_at: new Date().toISOString() }, { onConflict: "key" });
-  } else {
-    await sb.from("app_state").delete().eq("key", blockedKey(accountId));
-  }
+  const { data, error } = await sb.rpc("bump_sponsor_stat", { p_tuid: threadsUserId, p_sponsored: 1, p_redist: 0 });
+  if (error) throw new Error(`累加贊助累積數失敗：${error.message}`);
+  return typeof data === "number" ? data : 0;
 }
 
-// 帳號刪除時清除該帳號所有贊助文相關 app_state（紀錄/自選/違規/累積計數/禁用/黑名單），
-// 避免刪帳號後殘留孤兒列（違反資料刪除承諾、且永久累積撐大 app_state）。冪等、失敗上拋由呼叫端記錄。
+export async function getSponsorRedist(threadsUserId: string): Promise<number> {
+  const row = await getStatsRow(threadsUserId);
+  const n = Number(row?.redist_count ?? 0);
+  return Number.isFinite(n) ? n : 0;
+}
+export async function incrementSponsorRedist(threadsUserId: string): Promise<number> {
+  if (isDemoMode || !threadsUserId) return 0;
+  const sb = getServiceClient()!;
+  const { error } = await sb.rpc("bump_sponsor_stat", { p_tuid: threadsUserId, p_sponsored: 0, p_redist: 1 });
+  if (error) throw new Error(`累加轉出數失敗：${error.message}`);
+  return 0;
+}
+
+// 批次載入多帳號的贊助狀態（發文佇列決策用）：回傳 threadsUserId -> 正規化後的 SponsorStats。
+export async function getSponsorStatsMap(threadsUserIds: string[]): Promise<Map<string, SponsorStats>> {
+  const out = new Map<string, SponsorStats>();
+  const rows = await getStatsRows(threadsUserIds);
+  for (const [tuid, r] of rows) {
+    out.set(tuid, {
+      threadsUserId: tuid,
+      sponsoredCount: Number(r.sponsored_count ?? 0) || 0,
+      redistCount: Number(r.redist_count ?? 0) || 0,
+      blocked: Boolean(r.blocked),
+      penaltyFactor: r.penalty_factor == null ? null : Number(r.penalty_factor),
+      penaltyUntil: r.penalty_until ?? null,
+      optout: r.optout ?? null,
+      pick: normalizePick(r.pick)
+    });
+  }
+  return out;
+}
+// 從批次結果解析「目前生效」的禁用/罰則（純函式，供佇列免再查 DB）。
+export function statsOptOut(stats: SponsorStats | undefined): SponsorOptOut | null {
+  return parseOptOut(stats?.optout);
+}
+export function statsPenaltyFactor(stats: SponsorStats | undefined): number {
+  return activePenalty(stats?.penaltyFactor ?? null, stats?.penaltyUntil ?? null);
+}
+
+// 帳號刪除時清除「以內部 uuid 為鍵、且非防濫用關鍵」的殘留（每日紀錄、違規時窗計數）。
+// 刻意「不」清除 sponsor_account_stats（黑名單/罰則/累積以 threads_user_id 綁定）：這正是重綁要保留的防規避歷史；
+// 使用者移除再重加同一 Threads 帳號時，封鎖與罰則須延續。真正的資料刪除（Meta 解除授權）走 deleteSponsorStatsByThreadsUserId。
 export async function clearSponsorStateForAccount(accountId: string): Promise<void> {
   if (isDemoMode || !accountId) return;
   const sb = getServiceClient()!;
   await sb.from("app_state").delete().like("key", `sponsor:rec:${accountId}:%`);
-  await sb
-    .from("app_state")
-    .delete()
-    .in("key", [
-      `sponsor:pick:${accountId}`,
-      `sponsor:optout:${accountId}`,
-      `sponsor:blocked:${accountId}`,
-      `sponsor:total:${accountId}`,
-      `sponsor:penalty:${accountId}`,
-      `sponsor:redist:${accountId}`,
-      `sponsor_strikes:${accountId}`
-    ]);
+  await sb.from("app_state").delete().eq("key", `sponsor_strikes:${accountId}`);
+}
+
+// Meta 解除授權／資料刪除回呼：真正抹除該 Threads 使用者的贊助持久狀態（合規）。冪等。
+export async function deleteSponsorStatsByThreadsUserId(threadsUserId: string): Promise<void> {
+  if (isDemoMode || !threadsUserId) return;
+  const sb = getServiceClient()!;
+  await sb.from("sponsor_account_stats").delete().eq("threads_user_id", threadsUserId);
+}
+
+// ── 跨帳號轉嫁：owner 欠抽債務（永久禁用配套；以 owner 為鍵，仍存 app_state）──────
+// 永久「完全不抽」帳號的應抽份額 → 累加到 owner 欠抽（redebt）；由其他帳號代抽時遞減。走原子 RPC 避免併發漂移。
+function ownerDebtKey(ownerId: string): string {
+  return `sponsor:redebt:${ownerId}`;
+}
+export async function getOwnerSponsorDebt(ownerId: string): Promise<number> {
+  if (isDemoMode || !ownerId) return 0;
+  const sb = getServiceClient()!;
+  const { data } = await sb.from("app_state").select("value").eq("key", ownerDebtKey(ownerId)).maybeSingle();
+  const n = data?.value ? parseInt(data.value, 10) : 0;
+  return Number.isFinite(n) ? Math.max(0, n) : 0; // 夾在 0 以上
+}
+// delta 可為負（代抽補還時 -1）；回傳新值（不夾）。
+export async function adjustOwnerSponsorDebt(ownerId: string, delta: number): Promise<number> {
+  if (isDemoMode || !ownerId) return 0;
+  const sb = getServiceClient()!;
+  const { data, error } = await sb.rpc("increment_app_state_int", { p_key: ownerDebtKey(ownerId), p_delta: delta });
+  if (error) throw new Error(`調整 owner 欠抽失敗：${error.message}`);
+  return typeof data === "number" ? data : 0;
 }
 
 // ── 每日贊助紀錄（app_state：key=sponsor:rec:<accId>:<date>）──────
+// 時序資料、已有保留期清理、非防濫用關鍵，仍以內部 accId 為鍵留在 app_state。
 export interface SponsorRecord {
   postId: string;
   link: string;
@@ -321,10 +393,20 @@ export interface SponsorRecord {
   violated?: boolean;
   deleted?: boolean; // 貼文已被使用者刪除/隱藏：視為正當下架（如蝦皮政策變動），不計違規
   ownLink?: boolean; // 高貢獻者選「換自己連結」：此篇用其自有分潤連結，非平台贊助，不納入違規驗證
+  commissionRate?: string | null; // 贊助當下該商品的蝦皮分潤率快照（字串小數，如 "0.05"＝5%）；隨時間變動故記快照
 }
 
 function recKey(accountId: string, date: string): string {
   return `sponsor:rec:${accountId}:${date}`;
+}
+
+// 一筆贊助紀錄的顯示狀態（純函式，供「我的贊助文」頁與設定卡片共用，避免文案/色調漂移）。
+export function sponsorRecordStatus(rec: SponsorRecord): { label: string; tone: string } {
+  if (rec.ownLink) return { label: "自賺（自己連結）", tone: "text-ink-3" };
+  if (rec.deleted) return { label: "已下架（不計違規）", tone: "text-ink-3" };
+  if (rec.violated) return { label: "連結被移除/竄改", tone: "text-red-600" };
+  if (rec.verified) return { label: "已驗證", tone: "text-green-600" };
+  return { label: "待驗證", tone: "text-amber-600" };
 }
 
 // 每日多篇贊助文：同一 (帳號,日期) 下可有多篇（依每日配額）。
@@ -349,67 +431,6 @@ export async function getSponsorRecords(accountId: string, date: string): Promis
 // 今日已發贊助文篇數（配額閘門用）。
 export async function countSponsorToday(accountId: string, date: string): Promise<number> {
   return (await getSponsorRecords(accountId, date)).length;
-}
-
-// ── 累積贊助數（app_state：key=sponsor:total:<accId>）──────
-// 累積比例判定用：不掃全部每日紀錄（昂貴），改維護一個每帳號累積計數器。
-function totalKey(accountId: string): string {
-  return `sponsor:total:${accountId}`;
-}
-export async function getSponsorTotal(accountId: string): Promise<number> {
-  if (isDemoMode) return 0;
-  const sb = getServiceClient()!;
-  const { data } = await sb.from("app_state").select("value").eq("key", totalKey(accountId)).maybeSingle();
-  const n = data?.value ? parseInt(data.value, 10) : 0;
-  return Number.isFinite(n) ? n : 0;
-}
-// 原子累加：走 DB 端 increment_app_state_int（單次 upsert），消除讀-加-寫的併發覆寫/漂移，
-// 且單一 roundtrip（不需先 SELECT）。回傳累加後新值（demo 回 0）。
-export async function incrementSponsorTotal(accountId: string): Promise<number> {
-  if (isDemoMode) return 0;
-  const sb = getServiceClient()!;
-  const { data, error } = await sb.rpc("increment_app_state_int", { p_key: totalKey(accountId), p_delta: 1 });
-  if (error) throw new Error(`累加贊助累積數失敗：${error.message}`);
-  return typeof data === "number" ? data : 0;
-}
-
-// ── 跨帳號轉嫁：owner 欠抽債務 + 帳號已轉出數（永久禁用配套）──────
-// 永久「完全不抽」帳號的應抽份額 → 累加到 owner 欠抽（redebt）；由其他帳號代抽時遞減。
-// 皆走原子 RPC，避免併發漂移。
-function ownerDebtKey(ownerId: string): string {
-  return `sponsor:redebt:${ownerId}`;
-}
-function redistKey(accountId: string): string {
-  return `sponsor:redist:${accountId}`;
-}
-export async function getOwnerSponsorDebt(ownerId: string): Promise<number> {
-  if (isDemoMode || !ownerId) return 0;
-  const sb = getServiceClient()!;
-  const { data } = await sb.from("app_state").select("value").eq("key", ownerDebtKey(ownerId)).maybeSingle();
-  const n = data?.value ? parseInt(data.value, 10) : 0;
-  return Number.isFinite(n) ? Math.max(0, n) : 0; // 夾在 0 以上
-}
-// delta 可為負（代抽補還時 -1）；回傳新值（不夾）。
-export async function adjustOwnerSponsorDebt(ownerId: string, delta: number): Promise<number> {
-  if (isDemoMode || !ownerId) return 0;
-  const sb = getServiceClient()!;
-  const { data, error } = await sb.rpc("increment_app_state_int", { p_key: ownerDebtKey(ownerId), p_delta: delta });
-  if (error) throw new Error(`調整 owner 欠抽失敗：${error.message}`);
-  return typeof data === "number" ? data : 0;
-}
-export async function getSponsorRedist(accountId: string): Promise<number> {
-  if (isDemoMode) return 0;
-  const sb = getServiceClient()!;
-  const { data } = await sb.from("app_state").select("value").eq("key", redistKey(accountId)).maybeSingle();
-  const n = data?.value ? parseInt(data.value, 10) : 0;
-  return Number.isFinite(n) ? n : 0;
-}
-export async function incrementSponsorRedist(accountId: string): Promise<number> {
-  if (isDemoMode) return 0;
-  const sb = getServiceClient()!;
-  const { data, error } = await sb.rpc("increment_app_state_int", { p_key: redistKey(accountId), p_delta: 1 });
-  if (error) throw new Error(`累加轉出數失敗：${error.message}`);
-  return typeof data === "number" ? data : 0;
 }
 
 // 追加一筆當日贊助紀錄（讀現有陣列 → push → 寫回）。

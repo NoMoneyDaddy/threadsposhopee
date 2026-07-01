@@ -7,7 +7,7 @@ import { demo } from "./demo-store";
 import { decrypt, encrypt } from "./crypto";
 import { log } from "./logger";
 import { getThreadsAccountLimit } from "./account-limits";
-import { clearSponsorStateForAccount } from "./sponsor";
+import { clearSponsorStateForAccount, deleteSponsorStatsByThreadsUserId } from "./sponsor";
 import type { ThreadsAccount, ShopeeAccount } from "./types";
 
 export async function listThreadsAccounts(ownerId: string): Promise<ThreadsAccount[]> {
@@ -365,7 +365,35 @@ export async function deleteThreadsAccountsByThreadsUserId(threadsUserId: string
       log.warn("清除贊助文 app_state 失敗", { accId: (row as { id: string }).id, err: e })
     );
   }
+  // Meta 解除授權＝真正的資料刪除：連綁在 threads_user_id 的贊助持久狀態（含黑名單/罰則）一併抹除（合規）。
+  // 註：這與「使用者自行移除帳號後重加」不同——後者刻意保留防規避歷史，只有 Meta 強制刪除才全清。
+  await deleteSponsorStatsByThreadsUserId(threadsUserId).catch((e) =>
+    log.warn("清除贊助帳號狀態失敗", { threadsUserId, err: e })
+  );
   return data?.length ?? 0;
+}
+
+// 批次取 accId → threads_user_id 映射（發文佇列贊助決策用；不含 token，輕量）。查不到的 id 不在回傳中。
+export async function getThreadsUserIdsByAccountIds(accountIds: string[]): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  const ids = Array.from(new Set(accountIds.filter(Boolean)));
+  if (ids.length === 0) return out;
+  if (isDemoMode) {
+    // demo：從記憶體帳號對照，否則依賴此函式的 API（黑名單/禁用）在 demo 會誤判「帳號不存在」。
+    for (const id of ids) {
+      const acc = demo.threadsAccounts.find((a) => a.id === id);
+      if (acc?.threads_user_id) out[id] = acc.threads_user_id;
+    }
+    return out;
+  }
+  const sb = getServiceClient()!;
+  const { data, error } = await sb.from("threads_accounts").select("id, threads_user_id").in("id", ids);
+  if (error) throw new Error(`取 threads_user_id 映射失敗：${error.message}`);
+  for (const row of data ?? []) {
+    const r = row as { id: string; threads_user_id: string };
+    if (r.id && r.threads_user_id) out[r.id] = r.threads_user_id;
+  }
+  return out;
 }
 
 export async function deleteThreadsAccount(id: string, ownerId: string): Promise<boolean> {

@@ -25,7 +25,8 @@ import {
   clearAccountCircuit,
   getContributionScore,
   getSponsorRewardMode,
-  countPublishedByAccount
+  countPublishedByAccount,
+  getThreadsUserIdsByAccountIds
 } from "@/lib/store";
 import { canOwnLink, contributionAdjustedPerPosts } from "@/lib/contribution";
 import { publishToThreads, publishReply, PublishUncertainError } from "@/services/threads/publish";
@@ -33,25 +34,23 @@ import { getOwnerUserId } from "@/lib/auth";
 import {
   getSponsorConfig,
   appendSponsorRecord,
-  getSponsorPick,
-  getSponsorOptOut,
-  getSponsorPenaltyFactor,
-  getSponsorBlocklist,
-  getSponsorTotal,
+  getSponsorStatsMap,
+  statsOptOut,
+  statsPenaltyFactor,
   incrementSponsorTotal,
   getOwnerSponsorDebt,
   adjustOwnerSponsorDebt,
-  getSponsorRedist,
   incrementSponsorRedist,
   shouldSponsor,
   swapAffiliateLink,
   taipeiParts,
-  type SponsorPick,
-  type SponsorOptOut
+  type SponsorStats
 } from "@/lib/sponsor";
 import { isRiskySponsorContent } from "@/services/publish/sponsor-content";
 import { shouldSponsorCumulative, ownLinkThisSlot, sponsorWithDebt, shouldAccrueOptOutDebt } from "@/services/publish/sponsor-quota";
 import { resolveSponsorOwnerCreds, buildSponsorLinkForAccount, cleanProductUrlFromDraft } from "@/services/sponsor/link";
+import { getProductInfo } from "@/services/shopee/affiliate";
+import { parseShopeeIds } from "@/services/shopee/expand";
 import { log } from "@/lib/logger";
 import { normalizeDraftMedia, normalizeReplyMedia } from "@/lib/media";
 import { shardOf, circuitOpen, nextPacingSkipReason, reachAdjustedPacing } from "@/services/publish/cadence";
@@ -157,21 +156,28 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
   // 台北當日零點 ISO（Asia/Taipei 恆為 +08:00，無 DST）：算「今天」已發篇數的下界。
   const sponsorTodaySinceIso = new Date(`${sponsorTaipei.date}T00:00:00+08:00`).toISOString();
   const sponsorOwnerId = sponsorCfg.enabled && !isDemoMode ? await getOwnerUserId().catch(() => null) : null;
-  // 管理員贊助黑名單（濫用/高風險帳號永久排除贊助）：整輪取一次。
-  const sponsorBlocklist =
-    sponsorCfg.enabled && !isDemoMode ? new Set(await getSponsorBlocklist().catch(() => [])) : new Set<string>();
+  // R2-D：帳號持久贊助狀態（黑名單/罰則/禁用/自選/累積數）改綁穩定的 threads_user_id 並存專屬表。
+  // 整輪一次批次載入本批草稿涉及的所有帳號狀態（accId→tuid 映射 + tuid→stats），供決策免逐篇查 DB。
+  // 載入失敗＝保守：accToTuid 留空 → tuid 解析不到 → 本輪略過贊助（不誤抽、不崩潰）。
+  let accToTuid: Record<string, string> = {};
+  let sponsorStatsByTuid = new Map<string, SponsorStats>();
+  if (sponsorCfg.enabled && !isDemoMode) {
+    const sponsorAccIds = Array.from(new Set(drafts.map((d) => d.threads_account_id).filter((x): x is string => Boolean(x))));
+    try {
+      accToTuid = await getThreadsUserIdsByAccountIds(sponsorAccIds);
+      sponsorStatsByTuid = await getSponsorStatsMap(Object.values(accToTuid));
+    } catch (e) {
+      log.warn("載入贊助帳號狀態失敗，本輪略過贊助文", { err: e });
+      accToTuid = {};
+    }
+  }
   // 累積比例：依帳號「累積發布數／累積贊助數」自我校正（取代每日門檻，補掉每天壓門檻的漏洞）。
   const sponsorPublishedCache: Record<string, number> = {}; // accId -> 累積已發布篇數（-1＝算不出，保守不抽）
-  const sponsorTotalCache: Record<string, number> = {}; // accId -> 累積已發贊助文數
+  const sponsorTotalCache: Record<string, number> = {}; // accId -> 累積已發贊助文數（seed 自 stats，成功後遞增）
   // 自賺資格＋自己的金鑰資源（依 owner 快取）：超額 slot 用貢獻者自己的分潤連結。
   const sponsorOwnLinkCache: Record<string, { eligible: boolean; creds: Awaited<ReturnType<typeof resolveSponsorOwnerCreds>> | null }> = {};
-  const sponsorPickCache: Record<string, SponsorPick | null> = {}; // accId -> 使用者自選
   // 依 owner 快取貢獻分數＋回饋模式（免贊助豁免＋依貢獻分級抽成用），避免每篇重查。
   const sponsorRewardCache: Record<string, { score: number; mode: "exempt" | "own_link" }> = {};
-  // accId -> 臨時禁用設定（含模式 off/half；到期自動恢復）；null＝未禁用。
-  const sponsorOptOutCache: Record<string, SponsorOptOut | null> = {};
-  // accId -> 違規加重抽成倍數（>=1；1＝無懲罰，到期自動恢復）。
-  const sponsorPenaltyCache: Record<string, number> = {};
   // ownerId -> 目前欠抽（永久完全禁用帳號轉嫁來的份額，由其他帳號代抽補還）；accId -> 已轉出份數。
   const ownerDebtCache: Record<string, number> = {};
   const sponsorRedistCache: Record<string, number> = {};
@@ -201,6 +207,8 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
     if (Date.now() - startTime > 50000) break;
 
     const accId = draft.threads_account_id;
+    // 贊助文計數以穩定的 threads_user_id 為鍵（R2-D）：整輪已批次載入映射，null＝查不到（略過贊助）。
+    const sponsorTuid = accId ? accToTuid[accId] ?? null : null;
     if (!accId) {
       result.skipped.push({ id: draft.id, reason: "未綁定 Threads 帳號" });
       continue;
@@ -322,13 +330,15 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
     let pubMainText = draft.main_text ?? "";
     let pubReplyText = draft.reply_text;
     // AI 部落客（source_agent_id）的貼文一律「就是部落客」：不被選為贊助文、不注入任何分潤連結。
-    if (sponsorCfg.enabled && !isDemoMode && !draft.source_agent_id) {
+    if (sponsorCfg.enabled && !isDemoMode && !draft.source_agent_id && sponsorTuid) {
+      const stats = sponsorStatsByTuid.get(sponsorTuid);
       const isOwnerAccount = Boolean(sponsorOwnerId) && draft.owner_id === sponsorOwnerId;
-      // 帳號臨時禁用贊助文（活動檔期/商業合作，到期自動恢復）：mode=off→整篇略過；mode=half→減半抽成。
-      if (!(accId in sponsorOptOutCache)) {
-        sponsorOptOutCache[accId] = await getSponsorOptOut(accId).catch(() => null);
-      }
-      const optOut = sponsorOptOutCache[accId];
+      // 臨時/永久禁用贊助文（活動檔期/商業合作，到期自動恢復）：mode=off→整篇略過；mode=half→減半抽成。
+      const optOut = statsOptOut(stats);
+      const blocked = Boolean(stats?.blocked); // 管理員黑名單（綁 threads_user_id，刪帳號重加無法規避）
+      // 累積贊助/轉出數 seed 自批次 stats（本輪快取以 accId 為鍵、1:1，成功後遞增）。
+      if (!(accId in sponsorTotalCache)) sponsorTotalCache[accId] = stats?.sponsoredCount ?? 0;
+      if (!(accId in sponsorRedistCache)) sponsorRedistCache[accId] = stats?.redistCount ?? 0;
       // 依 owner 取貢獻分數＋回饋模式（非 owner 帳號才需要）：供「免贊助豁免」與「依貢獻分級抽成」。
       if (draft.owner_id && !isOwnerAccount && !(draft.owner_id in sponsorRewardCache)) {
         const oid = draft.owner_id;
@@ -355,18 +365,15 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
         }
         if ((ownerDebtCache[draft.owner_id] ?? 0) >= OWNER_DEBT_CAP) permanentOffSelfService = true;
       }
-      if (permanentOff && !permanentOffSelfService && !isOwnerAccount && !sponsorBlocklist.has(accId) && draft.owner_id) {
+      if (permanentOff && !permanentOffSelfService && !isOwnerAccount && !blocked && draft.owner_id) {
         if (!(accId in sponsorPublishedCache)) {
           sponsorPublishedCache[accId] = await countPublishedByAccount(accId, draft.owner_id).catch(() => -1);
-        }
-        if (!(accId in sponsorRedistCache)) {
-          sponsorRedistCache[accId] = await getSponsorRedist(accId).catch(() => 0);
         }
         const baseP = contributionAdjustedPerPosts(sponsorCfg.perPosts, reward?.score ?? 0);
         if (sponsorPublishedCache[accId] >= 0 && shouldAccrueOptOutDebt(sponsorPublishedCache[accId], sponsorRedistCache[accId], baseP)) {
           accrueOptOutDebt = true; // 成功發布後把這一篇的應抽份額轉為 owner 欠抽
         }
-      } else if (!isOwnerAccount && (!fullyOptedOut || permanentOffSelfService) && !sponsorBlocklist.has(accId) && !riskyContent) {
+      } else if (!isOwnerAccount && (!fullyOptedOut || permanentOffSelfService) && !blocked && !riskyContent) {
         // 累積比例：依帳號「累積發布數／累積贊助數」自我校正，長期維持約 1/perPosts；
         // 每天只發少量、天天壓門檻的人，累積到 perPosts 篇一樣會被抽（補掉每日門檻漏洞）。貢獻越高 perPosts 越大。
         if (!(accId in sponsorPublishedCache)) {
@@ -378,19 +385,10 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
               })
             : -1;
         }
-        if (!(accId in sponsorTotalCache)) {
-          sponsorTotalCache[accId] = await getSponsorTotal(accId).catch((e: unknown) => {
-            // 算不出累積贊助數 → 保守降級為 -1（本篇不抽），避免誤判成 0 而超額抽成；不靜默吞錯。
-            log.warn("取得累積贊助數失敗，本篇略過贊助配額", { accId, err: e });
-            return -1;
-          });
-        }
         // 基礎（依貢獻分級）→ 違規加重抽成（perPosts 除以 factor，抽更多）→ half 禁用模式（perPosts ×2，抽一半）。
-        if (!(accId in sponsorPenaltyCache)) {
-          sponsorPenaltyCache[accId] = await getSponsorPenaltyFactor(accId).catch(() => 1);
-        }
+        // 累積贊助數（sponsorTotalCache）與罰則倍數皆已由批次 stats seed，無需逐篇查 DB。
         const baserPerPosts = contributionAdjustedPerPosts(sponsorCfg.perPosts, reward?.score ?? 0);
-        const penaltyFactor = sponsorPenaltyCache[accId] || 1;
+        const penaltyFactor = statsPenaltyFactor(stats) || 1;
         const halfMult = optOut?.mode === "half" ? 2 : 1;
         const effectivePerPosts = Math.max(1, Math.round((baserPerPosts / penaltyFactor) * halfMult));
         // owner 欠抽（其他帳號永久禁用轉來的份額）：自身沒到比例時，可代抽補還。
@@ -399,14 +397,11 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
         }
         const ownerDebt = draft.owner_id ? (ownerDebtCache[draft.owner_id] ?? 0) : 0;
         const decision =
-          sponsorPublishedCache[accId] >= 0 && sponsorTotalCache[accId] >= 0
+          sponsorPublishedCache[accId] >= 0
             ? sponsorWithDebt(sponsorPublishedCache[accId], sponsorTotalCache[accId], effectivePerPosts, ownerDebt)
             : { sponsor: false, fromDebt: false };
         const cumulativeAllows = decision.sponsor;
-        if (!(accId in sponsorPickCache)) {
-          sponsorPickCache[accId] = await getSponsorPick(accId).catch(() => null);
-        }
-        const pick = sponsorPickCache[accId];
+        const pick = stats?.pick ?? null;
         if (
           shouldSponsor({
             enabled: sponsorCfg.enabled,
@@ -497,23 +492,41 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
       // 贊助文發布成功 → 累積贊助數 +1（持久化＋本輪快取），並追加紀錄供驗證；DB 草稿原文未動＝自動還原。
       if (sponsorLinkUsed) {
         // 原子累加（DB 為準），並以回傳新值回寫本輪快取；失敗只記 log（偏差方向為少抽、對使用者無害）。
-        const newTotal = await incrementSponsorTotal(accId).catch((e) => {
-          log.warn("累加贊助累積數失敗", { accId, err: e });
-          return null;
-        });
+        const newTotal = sponsorTuid
+          ? await incrementSponsorTotal(sponsorTuid).catch((e) => {
+              log.warn("累加贊助累積數失敗", { accId, err: e });
+              return null;
+            })
+          : null;
         if (newTotal !== null && accId in sponsorTotalCache) sponsorTotalCache[accId] = newTotal;
+        // 分潤率追蹤（R2-D）：快照此篇商品「當下」的蝦皮分潤率（隨時間變動）。best-effort、失敗不影響發文；
+        // 只對平台贊助（非自賺）用 owner 金鑰查一次。
+        let commissionRate: string | null = null;
+        if (!sponsorOwnLinkUsed && sponsorOwnerCreds?.ownerCreds) {
+          try {
+            const cleanUrl = await cleanProductUrlFromDraft(draft);
+            const ids = cleanUrl ? parseShopeeIds(cleanUrl) : null;
+            if (ids) {
+              const info = await getProductInfo(sponsorOwnerCreds.ownerCreds.appId, sponsorOwnerCreds.ownerCreds.secret, ids.shopId, ids.itemId);
+              commissionRate = info?.commissionRate != null ? String(info.commissionRate) : null;
+            }
+          } catch (e) {
+            log.warn("查詢分潤率失敗（不影響發文）", { accId, err: e });
+          }
+        }
         await appendSponsorRecord(accId, sponsorTaipei.date, {
           postId,
           link: sponsorLinkUsed,
           ownerId: draft.owner_id ?? "",
           at: nowIso,
-          ownLink: sponsorOwnLinkUsed || undefined // 自賺連結：驗證/裁罰時略過（非平台分潤）
+          ownLink: sponsorOwnLinkUsed || undefined, // 自賺連結：驗證/裁罰時略過（非平台分潤）
+          commissionRate // 分潤率快照（字串小數，如 "0.05"）；查不到為 null
         }).catch((e) => log.warn("寫入贊助文紀錄失敗", { accId, err: e }));
         // 主動通知使用者「你這篇被作為贊助文」，不再讓人只能事後自己回工作台發現（自賺篇不通知）。
         if (!sponsorOwnLinkUsed && draft.owner_id) {
           await sendUserAlert(
             draft.owner_id,
-            "🔗 你剛發布的一篇貼文已被作為平台贊助文（連結替換為平台分潤連結，其餘內容不變）。可到「設定 → 我的贊助文」查看完整紀錄。",
+            "🔗 你剛發布的一篇貼文已被作為平台贊助文（連結替換為平台分潤連結，其餘內容不變）。可到「我的贊助文」頁（/sponsored-posts）查看完整紀錄。",
             "sponsor_used"
           ).catch(() => {});
         }
@@ -534,8 +547,8 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
       }
 
       // 永久完全禁用帳號：把這一篇的應抽份額轉為 owner 欠抽（+1），由其他帳號後續代抽補還。
-      if (accrueOptOutDebt && draft.owner_id) {
-        await incrementSponsorRedist(accId).catch((e) => log.warn("累加轉出數失敗", { accId, err: e }));
+      if (accrueOptOutDebt && draft.owner_id && sponsorTuid) {
+        await incrementSponsorRedist(sponsorTuid).catch((e) => log.warn("累加轉出數失敗", { accId, err: e }));
         if (accId in sponsorRedistCache) sponsorRedistCache[accId] += 1;
         ownerDebtCache[draft.owner_id] = (ownerDebtCache[draft.owner_id] ?? 0) + 1;
         await adjustOwnerSponsorDebt(draft.owner_id, 1).catch((e) => log.warn("累加 owner 欠抽失敗", { ownerId: draft.owner_id, err: e }));

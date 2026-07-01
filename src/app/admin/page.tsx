@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
-import { getAdminStats, getFeatureFlags, listSharedForReview, listTopContributors, isPublishPaused, getHeartbeat, listUsersOverview, listThreadsAccountsStatus, getSponsorAdminView, type ThreadsAccountStatusRow } from "@/lib/store";
+import { getAdminStats, getFeatureFlags, listSharedForReview, listTopContributors, isPublishPaused, getHeartbeat, listUsersOverview, listThreadsAccountsStatus, getSponsorAdminView, getThreadsUserIdsByAccountIds, type ThreadsAccountStatusRow } from "@/lib/store";
 import { getSponsorBlocklist } from "@/lib/sponsor";
+import { listSuspectedSponsorFarms } from "@/services/sponsor/farm-detect";
 import { contributionBadge } from "@/lib/roles";
 import { isDemoMode } from "@/lib/env";
 import { cronHeartbeatStatus } from "@/lib/cron-status";
@@ -15,6 +16,7 @@ import PublishControlPanel from "@/components/PublishControlPanel";
 import AdminUsersPanel from "@/components/AdminUsersPanel";
 import AdminAccountsPanel, { type AccountStatusView } from "@/components/AdminAccountsPanel";
 import AdminSponsorPanel from "@/components/AdminSponsorPanel";
+import AdminFarmPanel, { type FarmSuspectRow } from "@/components/AdminFarmPanel";
 
 // server 端把帳號狀態列轉成顯示資料（token 到期文案、斷路器剩餘），避免 client 端 Date.now() 造成 hydration 不一致。
 function toAccountStatusView(row: ThreadsAccountStatusRow, nowMs: number): AccountStatusView {
@@ -51,7 +53,7 @@ export default async function AdminPage() {
   if (!user) redirect("/login?next=/admin");
   if (!user.isOwner) redirect("/");
 
-  const [stats, flags, queue, leaders, users, accountStatus, sponsorView, sponsorBlocked] = await Promise.all([
+  const [stats, flags, queue, leaders, users, accountStatus, sponsorView, sponsorBlocked, farmSuspects] = await Promise.all([
     getAdminStats().catch(() => null),
     getFeatureFlags(),
     listSharedForReview(100).catch(() => []),
@@ -59,10 +61,25 @@ export default async function AdminPage() {
     listUsersOverview().catch(() => null),
     listThreadsAccountsStatus().catch(() => null),
     getSponsorAdminView(50).catch(() => null),
-    getSponsorBlocklist().catch(() => [])
+    getSponsorBlocklist().catch(() => []),
+    listSuspectedSponsorFarms(user.id).catch(() => [])
   ]);
   const sponsorRecords = sponsorView?.records ?? null;
   const sponsorSummary = sponsorView?.summary;
+  // 黑名單現以 threads_user_id 為鍵（R2-D 重綁）；面板仍以 accountId 顯示/操作，故把 tuid 黑名單反譯回本批紀錄的 accountId。
+  const recAccIds = Array.from(new Set((sponsorRecords ?? []).map((r) => r.accountId).filter(Boolean)));
+  const accTuidMap = recAccIds.length ? await getThreadsUserIdsByAccountIds(recAccIds).catch(() => ({} as Record<string, string>)) : {};
+  const blockedTuidSet = new Set(sponsorBlocked);
+  const blockedAccIds = recAccIds.filter((id) => blockedTuidSet.has(accTuidMap[id]));
+  // R2-E：疑似多帳號農場（唯讀）；owner_id → email 對照供顯示（查不到 email 就顯示 id 前綴）。
+  const emailByOwnerId = new Map((users ?? []).map((u) => [u.id, u.email]));
+  const farmRows: FarmSuspectRow[] = (farmSuspects ?? []).map((f) => ({
+    ownerEmail: emailByOwnerId.get(f.ownerId) ?? `${f.ownerId.slice(0, 8)}…`,
+    accountCount: f.accountCount,
+    evasiveCount: f.permanentOffCount + f.penalizedCount + f.blockedCount,
+    ownerDebt: f.ownerDebt,
+    reasons: f.reasons
+  }));
   const accountViews = accountStatus ? accountStatus.map((r) => toAccountStatusView(r, Date.now())) : null;
   // 共享素材審核用：owner_id → email 對照（顯示擁有者，便於辨識來源/追責）。
   const ownerEmailById = new Map((users ?? []).map((u) => [u.id, u.email]));
@@ -138,10 +155,12 @@ export default async function AdminPage() {
 
       {!isDemoMode &&
         (sponsorRecords ? (
-          <AdminSponsorPanel records={sponsorRecords} summary={sponsorSummary} blockedIds={sponsorBlocked} />
+          <AdminSponsorPanel records={sponsorRecords} summary={sponsorSummary} blockedIds={blockedAccIds} />
         ) : (
           <div className="card p-4 text-sm text-amber-600">⚠️ 贊助文紀錄讀取失敗，請稍後重整。</div>
         ))}
+
+      {!isDemoMode && <AdminFarmPanel rows={farmRows} />}
 
       <div className="card p-4">
         <h2 className="mb-1 text-lg font-semibold">貢獻排行榜</h2>

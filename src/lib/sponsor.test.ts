@@ -1,6 +1,16 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { normalizeSponsorConfig, inOffPeak, swapAffiliateLink, shouldSponsor, taipeiParts } from "./sponsor";
+import { normalizeSponsorConfig, inOffPeak, swapAffiliateLink, shouldSponsor, taipeiParts, formatCommissionRate } from "./sponsor";
+
+test("formatCommissionRate：小數轉百分比、去多餘小數、無效回 null", () => {
+  assert.equal(formatCommissionRate("0.05"), "5%");
+  assert.equal(formatCommissionRate("0.125"), "12.5%");
+  assert.equal(formatCommissionRate("0"), "0%");
+  assert.equal(formatCommissionRate(null), null);
+  assert.equal(formatCommissionRate(""), null);
+  assert.equal(formatCommissionRate("abc"), null);
+  assert.equal(formatCommissionRate("-0.1"), null);
+});
 
 test("inOffPeak: [start,end) 半開區間", () => {
   assert.equal(inOffPeak(2, 2, 5), true);

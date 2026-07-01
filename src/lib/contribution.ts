@@ -14,6 +14,15 @@ export function canOwnLink(contributionScore: number): boolean {
   return contributionScore >= OWN_LINK_CONTRIBUTION;
 }
 
+// 依貢獻分數放寬抽成：未達免贊助門檻者，分數越高 perPosts 越大（抽越少，越公平）。
+// score 0 → perPosts；score→門檻 → 約 2×perPosts（抽成減半）；達門檻後由 exempt 機制完全免抽。純函式可測。
+export function contributionAdjustedPerPosts(perPosts: number, contributionScore: number): number {
+  if (!Number.isFinite(perPosts) || perPosts <= 0) return perPosts;
+  const s = Math.max(0, Math.min(contributionScore, SPONSOR_EXEMPT_CONTRIBUTION));
+  const factor = 1 + s / SPONSOR_EXEMPT_CONTRIBUTION; // 1 → 2
+  return Math.max(1, Math.round(perPosts * factor));
+}
+
 // 貢獻分數 = 被匯入次數 + 分享素材篇數 + 資料貢獻紅利（皆權重 1）。
 // 計算統一在 DB（migration 0042 的 get_contribution_score／top_contributors），不在 TS 重算，避免雙算。
 // 等級顯示沿用 roles.ts 的勳章階梯（contributionBadge），不另立一套。

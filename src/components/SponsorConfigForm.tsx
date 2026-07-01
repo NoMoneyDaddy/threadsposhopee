@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { fetchWithTimeout } from "@/lib/http";
 import type { SponsorConfig } from "@/lib/sponsor";
 
-// owner 限定：設定贊助文（要替換進待發草稿的平台分潤連結、冷門時段、開關）。
+// owner 限定：設定贊助文（比例制配額＋要套用的贊助 sub_id＋開關）。
+// 貢獻回饋（依貢獻分級抽成、達門檻免贊助/自賺）與帳號臨時禁用皆自動生效，無需在此設定。
 export default function SponsorConfigForm({ initial }: { initial: SponsorConfig }) {
   const router = useRouter();
   const VARS = ["{date}", "{time}", "{platform}", "{account}", "{item}"];
@@ -74,6 +75,7 @@ export default function SponsorConfigForm({ initial }: { initial: SponsorConfig 
         <b>比例制</b>：只在非管理者帳號發布<b>自己的</b>貼文時，依其當日發文量抽取一部分，
         <b>用你的蝦皮金鑰就地改寫該篇的分潤連結</b>（保留原商品、只換分潤歸屬），發後驗證仍在。
         低頻使用者（當日 &lt; 下方門檻篇數）不被抽；<b>不會把管理員內容貼到他人帳號</b>。不需另外設定商品或連結。
+        <b>貢獻越高抽越少</b>（達門檻可免贊助／自賺），使用者也可臨時禁用某帳號——皆自動生效。
         規則見 <a href="/sponsored" className="text-brand underline">《贊助文規則》</a>。
       </p>
       <label className="mb-2 flex items-center gap-2 text-sm">

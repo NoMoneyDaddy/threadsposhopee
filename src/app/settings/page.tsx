@@ -10,7 +10,9 @@ import {
 } from "@/lib/store";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
-import { getSponsorConfig } from "@/lib/sponsor";
+import { getSponsorConfig, countSponsorToday, getSponsorOptOutUntil, taipeiParts } from "@/lib/sponsor";
+import { listThreadsAccounts } from "@/lib/accounts-store";
+import SponsorOptOutForm, { type SponsorAccountRow } from "@/components/SponsorOptOutForm";
 import { env, isDemoMode } from "@/lib/env";
 import CopyPrefsForm from "@/components/CopyPrefsForm";
 import { buildCopyPromptPreview } from "@/services/ai/humanizer";
@@ -44,6 +46,21 @@ export default async function SettingsPage() {
       getFeatureFlags().catch(() => null)
     ]);
   const telegramBound = Boolean(telegramChatId);
+
+  // 贊助文透明化（非 owner 且已啟用）：列出各帳號今日已當贊助文篇數＋臨時禁用狀態。
+  let sponsorAccounts: SponsorAccountRow[] = [];
+  if (sponsor.enabled && !user.isOwner && !isDemoMode) {
+    const today = taipeiParts().date;
+    const accts = await listThreadsAccounts(user.id).catch(() => []);
+    sponsorAccounts = await Promise.all(
+      accts.map(async (a) => ({
+        id: a.id,
+        label: a.label,
+        usedToday: await countSponsorToday(a.id, today).catch(() => 0),
+        optOutUntil: await getSponsorOptOutUntil(a.id).catch(() => null)
+      }))
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -91,13 +108,7 @@ export default async function SettingsPage() {
 
       {user.isOwner && <SponsorConfigForm initial={sponsor} />}
 
-      {!user.isOwner && sponsor.enabled && (
-        <div className="rounded-2xl border border-border bg-surface-2 p-3 text-sm text-ink-2">
-          ℹ️ 免費使用：你的每個發文帳號每天會有 1 篇於冷門時段（{sponsor.offPeakStart}–{sponsor.offPeakEnd} 時）以平台分潤連結發布，
-          系統會事前標示、發後還原你的連結。詳見{" "}
-          <Link href="/sponsored" className="text-brand underline">《贊助文規則》</Link>。
-        </div>
-      )}
+      {!user.isOwner && sponsor.enabled && <SponsorOptOutForm accounts={sponsorAccounts} />}
     </div>
   );
 }

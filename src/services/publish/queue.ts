@@ -27,7 +27,7 @@ import {
   getSponsorRewardMode,
   countPublishedTodayByAccount
 } from "@/lib/store";
-import { canOwnLink } from "@/lib/contribution";
+import { canOwnLink, isSponsorExempt, contributionAdjustedPerPosts } from "@/lib/contribution";
 import { publishToThreads, publishReply, PublishUncertainError } from "@/services/threads/publish";
 import { getOwnerUserId } from "@/lib/auth";
 import {
@@ -35,6 +35,7 @@ import {
   countSponsorToday,
   appendSponsorRecord,
   getSponsorPick,
+  getSponsorOptOutUntil,
   shouldSponsor,
   swapAffiliateLink,
   taipeiParts,
@@ -152,6 +153,10 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
   // 自賺資格＋自己的金鑰資源（依 owner 快取）：超額 slot 用貢獻者自己的分潤連結。
   const sponsorOwnLinkCache: Record<string, { eligible: boolean; creds: Awaited<ReturnType<typeof resolveSponsorOwnerCreds>> | null }> = {};
   const sponsorPickCache: Record<string, SponsorPick | null> = {}; // accId -> 使用者自選
+  // 依 owner 快取貢獻分數＋回饋模式（免贊助豁免＋依貢獻分級抽成用），避免每篇重查。
+  const sponsorRewardCache: Record<string, { score: number; mode: "exempt" | "own_link" }> = {};
+  // accId -> 是否臨時禁用贊助文（活動檔期等，到期自動恢復）。
+  const sponsorOptOutCache: Record<string, boolean> = {};
   // owner 金鑰資源整輪取一次（金鑰/affiliate_id/自訂 subId）；商品連結改用「每篇貼文自己的」就地改寫。
   const sponsorOwnerCreds =
     sponsorCfg.enabled && !isDemoMode && sponsorOwnerId ? await resolveSponsorOwnerCreds(sponsorOwnerId).catch(() => null) : null;
@@ -294,79 +299,98 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
     let pubReplyText = draft.reply_text;
     // AI 部落客（source_agent_id）的貼文一律「就是部落客」：不被選為贊助文、不注入任何分潤連結。
     if (sponsorCfg.enabled && !isDemoMode && !draft.source_agent_id) {
-      // 比例配額：依該帳號「當日實際自發篇數（含這篇）」換算 max(保底, floor(篇數/perPosts))；
-      // 低頻者（當日 < minPostsForFloor 篇）配額為 0 不被抽。今日已達配額則不再贊助。
-      if (!(accId in sponsorCountCache)) {
-        sponsorCountCache[accId] = await countSponsorToday(accId, sponsorTaipei.date).catch(() => 0);
-      }
-      if (!(accId in sponsorPostedTodayCache)) {
-        sponsorPostedTodayCache[accId] = draft.owner_id
-          ? await countPublishedTodayByAccount(accId, draft.owner_id, sponsorTodaySinceIso).catch((e) => {
-              // 算不出當日發文數時記錄並保守降級為 0（本篇不抽贊助），不靜默吞錯。
-              log.warn("計算當日發文數失敗，本篇略過贊助配額", { accId, err: e });
-              return 0;
-            })
-          : 0;
-      }
-      const sponsorQuotaToday = sponsorQuota(sponsorPostedTodayCache[accId] + 1, {
-        perPosts: sponsorCfg.perPosts,
-        floor: sponsorCfg.floor,
-        minPostsForFloor: sponsorCfg.minPostsForFloor
-      });
       const isOwnerAccount = Boolean(sponsorOwnerId) && draft.owner_id === sponsorOwnerId;
-      if (!(accId in sponsorPickCache)) {
-        sponsorPickCache[accId] = await getSponsorPick(accId).catch(() => null);
+      // 帳號臨時禁用贊助文（活動檔期/商業合作，到期自動恢復）→ 整篇略過。
+      if (!(accId in sponsorOptOutCache)) {
+        sponsorOptOutCache[accId] = Boolean(await getSponsorOptOutUntil(accId).catch(() => null));
       }
-      const pick = sponsorPickCache[accId];
-      if (
-        shouldSponsor({
-          enabled: sponsorCfg.enabled,
-          isOwnerAccount,
-          hour: sponsorTaipei.hour,
-          alreadyDoneToday: sponsorCountCache[accId] >= sponsorQuotaToday,
-          thisDraftId: draft.id,
-          pickDraftId: pick?.draftId ?? null,
-          pickHour: pick?.hour ?? null
-        })
-      ) {
-        // 就地改寫：取「該篇貼文自己的」商品連結，用 owner 金鑰重產成 owner 的分潤連結（平台保本）；
-        // 超額 slot 開放「自賺資格」貢獻者改用自己的金鑰重產（自賺）。無商品連結則略過（不改寫該篇）。
-        // 保底篇數與配額同源（sponsorCfg.floor）：達保底數後的額外贊助才算「超額」可自賺，
-        // 避免租戶把 floor 調大於 1 時第二篇就過早切到 own-link、與配額不一致。
-        const isSurplus = (sponsorCountCache[accId] ?? 0) >= sponsorCfg.floor;
-        const draftCleanUrl = await cleanProductUrlFromDraft(draft).catch(() => null);
-        let link: string | null = null;
-        let useOwn = false;
-        if (draftCleanUrl) {
-          if (isSurplus && draft.owner_id) {
-            const oid = draft.owner_id;
-            if (!(oid in sponsorOwnLinkCache)) {
-              const score = await getContributionScore(oid).catch(() => 0);
-              const mode = await getSponsorRewardMode(oid).catch(() => "exempt" as const);
-              const eligible = mode === "own_link" && canOwnLink(score);
-              const creds = eligible ? await resolveSponsorOwnerCreds(oid).catch(() => null) : null;
-              sponsorOwnLinkCache[oid] = { eligible, creds };
-            }
-            const own = sponsorOwnLinkCache[oid];
-            if (own.eligible && own.creds) {
-              const ownLink = await buildSponsorLinkForAccount({ cleanUrl: draftCleanUrl, ...own.creds }, accId, sponsorCfg.subIds).catch(() => null);
-              if (ownLink) {
-                link = ownLink;
-                useOwn = true;
+      // 依 owner 取貢獻分數＋回饋模式（非 owner 帳號才需要）：供「免贊助豁免」與「依貢獻分級抽成」。
+      if (draft.owner_id && !isOwnerAccount && !(draft.owner_id in sponsorRewardCache)) {
+        const oid = draft.owner_id;
+        const [score, mode] = await Promise.all([
+          getContributionScore(oid).catch(() => 0),
+          getSponsorRewardMode(oid).catch(() => "exempt" as const)
+        ]);
+        sponsorRewardCache[oid] = { score, mode };
+      }
+      const reward = draft.owner_id ? sponsorRewardCache[draft.owner_id] : undefined;
+      // 免贊助豁免：達門檻且選「免每日贊助文」→ 完全不套贊助文（尊重回饋選擇）。
+      const exemptSkip = Boolean(reward && reward.mode === "exempt" && isSponsorExempt(reward.score));
+
+      // owner 帳號、臨時禁用、或已達免贊助豁免 → 完全略過贊助文。
+      if (!isOwnerAccount && !sponsorOptOutCache[accId] && !exemptSkip) {
+        // 比例配額：依該帳號「當日實際自發篇數（含這篇）」換算 max(保底, floor(篇數/perPosts))；
+        // 低頻者（當日 < minPostsForFloor 篇）配額為 0 不被抽；貢獻越高 perPosts 越大（抽越少）。
+        if (!(accId in sponsorCountCache)) {
+          sponsorCountCache[accId] = await countSponsorToday(accId, sponsorTaipei.date).catch(() => 0);
+        }
+        if (!(accId in sponsorPostedTodayCache)) {
+          sponsorPostedTodayCache[accId] = draft.owner_id
+            ? await countPublishedTodayByAccount(accId, draft.owner_id, sponsorTodaySinceIso).catch((e) => {
+                // 算不出當日發文數時記錄並保守降級為 0（本篇不抽贊助），不靜默吞錯。
+                log.warn("計算當日發文數失敗，本篇略過贊助配額", { accId, err: e });
+                return 0;
+              })
+            : 0;
+        }
+        const effectivePerPosts = contributionAdjustedPerPosts(sponsorCfg.perPosts, reward?.score ?? 0);
+        const sponsorQuotaToday = sponsorQuota(sponsorPostedTodayCache[accId] + 1, {
+          perPosts: effectivePerPosts,
+          floor: sponsorCfg.floor,
+          minPostsForFloor: sponsorCfg.minPostsForFloor
+        });
+        if (!(accId in sponsorPickCache)) {
+          sponsorPickCache[accId] = await getSponsorPick(accId).catch(() => null);
+        }
+        const pick = sponsorPickCache[accId];
+        if (
+          shouldSponsor({
+            enabled: sponsorCfg.enabled,
+            isOwnerAccount,
+            hour: sponsorTaipei.hour,
+            alreadyDoneToday: sponsorCountCache[accId] >= sponsorQuotaToday,
+            thisDraftId: draft.id,
+            pickDraftId: pick?.draftId ?? null,
+            pickHour: pick?.hour ?? null
+          })
+        ) {
+          // 就地改寫：取「該篇貼文自己的」商品連結，用 owner 金鑰重產成 owner 的分潤連結（平台保本）；
+          // 超額 slot 開放「自賺資格」貢獻者改用自己的金鑰重產（自賺）。無商品連結則略過（不改寫該篇）。
+          // 保底篇數與配額同源（sponsorCfg.floor）：達保底數後的額外贊助才算「超額」可自賺，
+          // 避免租戶把 floor 調大於 1 時第二篇就過早切到 own-link、與配額不一致。
+          const isSurplus = (sponsorCountCache[accId] ?? 0) >= sponsorCfg.floor;
+          const draftCleanUrl = await cleanProductUrlFromDraft(draft).catch(() => null);
+          let link: string | null = null;
+          let useOwn = false;
+          if (draftCleanUrl) {
+            if (isSurplus && draft.owner_id && reward) {
+              const oid = draft.owner_id;
+              if (!(oid in sponsorOwnLinkCache)) {
+                const eligible = reward.mode === "own_link" && canOwnLink(reward.score);
+                const creds = eligible ? await resolveSponsorOwnerCreds(oid).catch(() => null) : null;
+                sponsorOwnLinkCache[oid] = { eligible, creds };
+              }
+              const own = sponsorOwnLinkCache[oid];
+              if (own.eligible && own.creds) {
+                const ownLink = await buildSponsorLinkForAccount({ cleanUrl: draftCleanUrl, ...own.creds }, accId, sponsorCfg.subIds).catch(() => null);
+                if (ownLink) {
+                  link = ownLink;
+                  useOwn = true;
+                }
               }
             }
+            // 非自賺：用 owner 金鑰把該篇商品重產成 owner 分潤連結，套用 owner 設定的贊助 sub_id。
+            if (!useOwn && sponsorOwnerCreds) {
+              const perAcct = await buildSponsorLinkForAccount({ cleanUrl: draftCleanUrl, ...sponsorOwnerCreds }, accId, sponsorCfg.subIds).catch(() => null);
+              if (perAcct) link = perAcct;
+            }
           }
-          // 非自賺：用 owner 金鑰把該篇商品重產成 owner 分潤連結，套用 owner 設定的贊助 sub_id。
-          if (!useOwn && sponsorOwnerCreds) {
-            const perAcct = await buildSponsorLinkForAccount({ cleanUrl: draftCleanUrl, ...sponsorOwnerCreds }, accId, sponsorCfg.subIds).catch(() => null);
-            if (perAcct) link = perAcct;
+          if (link) {
+            pubMainText = swapAffiliateLink(draft.main_text, draft.shopee_short_link, link);
+            pubReplyText = draft.reply_text ? swapAffiliateLink(draft.reply_text, draft.shopee_short_link, link) : draft.reply_text;
+            sponsorLinkUsed = link;
+            sponsorOwnLinkUsed = useOwn;
           }
-        }
-        if (link) {
-          pubMainText = swapAffiliateLink(draft.main_text, draft.shopee_short_link, link);
-          pubReplyText = draft.reply_text ? swapAffiliateLink(draft.reply_text, draft.shopee_short_link, link) : draft.reply_text;
-          sponsorLinkUsed = link;
-          sponsorOwnLinkUsed = useOwn;
         }
       }
     }

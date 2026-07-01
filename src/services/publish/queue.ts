@@ -175,6 +175,9 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
   // ownerId -> 目前欠抽（永久完全禁用帳號轉嫁來的份額，由其他帳號代抽補還）；accId -> 已轉出份數。
   const ownerDebtCache: Record<string, number> = {};
   const sponsorRedistCache: Record<string, number> = {};
+  // backstop：owner 欠抽堆到此上限（代表其他帳號沒在還）→ 永久完全不抽的帳號本身恢復被抽以服務欠抽。
+  const OWNER_DEBT_CAP = 5;
+  const selfServiceNotified = new Set<string>(); // 已通知過「永久禁用帳號恢復被抽」的 owner（本輪一次）
   // owner 金鑰資源整輪取一次（金鑰/affiliate_id/自訂 subId）；商品連結改用「每篇貼文自己的」就地改寫。
   const sponsorOwnerCreds =
     sponsorCfg.enabled && !isDemoMode && sponsorOwnerId ? await resolveSponsorOwnerCreds(sponsorOwnerId).catch(() => null) : null;
@@ -315,6 +318,7 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
     let sponsorOwnLinkUsed = false; // 此篇是否用「貢獻者自己的」連結（超額 slot 自賺）
     let sponsorFromDebt = false; // 本篇是否為「代其他帳號補還」的平台贊助（成功後遞減 owner 欠抽）
     let accrueOptOutDebt = false; // 本篇（永久完全禁用帳號）成功後是否把應抽份額轉為 owner 欠抽
+    let selfServicedThisPost = false; // 本篇是否為「永久禁用帳號因欠抽堆積而恢復被抽（backstop）」
     let pubMainText = draft.main_text ?? "";
     let pubReplyText = draft.reply_text;
     // AI 部落客（source_agent_id）的貼文一律「就是部落客」：不被選為贊助文、不注入任何分潤連結。
@@ -342,7 +346,16 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
       const fullyOptedOut = optOut?.mode === "off";
       // 永久完全不抽：不換連結，但把「應抽份額」轉為 owner 欠抽，由其他帳號代抽補還（配套：平台不被永久搭便車）。
       const permanentOff = Boolean(optOut?.permanent) && optOut?.mode === "off";
-      if (permanentOff && !isOwnerAccount && !sponsorBlocklist.has(accId) && draft.owner_id) {
+      // backstop：欠抽堆到上限（其他帳號沒在還，或自己與其他帳號都低頻/不發）→ 該帳號本身恢復被抽以服務欠抽，
+      // opt-out 不再被無條件尊重，確保平台一定收得到（避免永久搭便車）。
+      let permanentOffSelfService = false;
+      if (permanentOff && draft.owner_id) {
+        if (!(draft.owner_id in ownerDebtCache)) {
+          ownerDebtCache[draft.owner_id] = await getOwnerSponsorDebt(draft.owner_id).catch(() => 0);
+        }
+        if ((ownerDebtCache[draft.owner_id] ?? 0) >= OWNER_DEBT_CAP) permanentOffSelfService = true;
+      }
+      if (permanentOff && !permanentOffSelfService && !isOwnerAccount && !sponsorBlocklist.has(accId) && draft.owner_id) {
         if (!(accId in sponsorPublishedCache)) {
           sponsorPublishedCache[accId] = await countPublishedByAccount(accId, draft.owner_id).catch(() => -1);
         }
@@ -353,7 +366,7 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
         if (sponsorPublishedCache[accId] >= 0 && shouldAccrueOptOutDebt(sponsorPublishedCache[accId], sponsorRedistCache[accId], baseP)) {
           accrueOptOutDebt = true; // 成功發布後把這一篇的應抽份額轉為 owner 欠抽
         }
-      } else if (!isOwnerAccount && !fullyOptedOut && !sponsorBlocklist.has(accId) && !riskyContent) {
+      } else if (!isOwnerAccount && (!fullyOptedOut || permanentOffSelfService) && !sponsorBlocklist.has(accId) && !riskyContent) {
         // 累積比例：依帳號「累積發布數／累積贊助數」自我校正，長期維持約 1/perPosts；
         // 每天只發少量、天天壓門檻的人，累積到 perPosts 篇一樣會被抽（補掉每日門檻漏洞）。貢獻越高 perPosts 越大。
         if (!(accId in sponsorPublishedCache)) {
@@ -445,7 +458,10 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
               pubReplyText = swappedReply;
               sponsorLinkUsed = link;
               sponsorOwnLinkUsed = useOwn;
-              sponsorFromDebt = decision.fromDebt && !useOwn; // 只有真的用平台連結代抽才算補還欠抽
+              // 代抽補還：他帳號代抽（fromDebt），或 backstop 自我服務——兩者都用平台連結償還 owner 欠抽，
+              // 成功後遞減欠抽；否則自我服務時欠抽永遠清不掉、帳號會被永久抽（Gemini 審查指出）。
+              sponsorFromDebt = (decision.fromDebt || permanentOffSelfService) && !useOwn;
+              selfServicedThisPost = permanentOffSelfService; // 永久禁用帳號因欠抽堆積而恢復被抽（backstop）
             }
           }
         }
@@ -505,6 +521,15 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
         if (sponsorFromDebt && draft.owner_id) {
           ownerDebtCache[draft.owner_id] = Math.max(0, (ownerDebtCache[draft.owner_id] ?? 1) - 1);
           await adjustOwnerSponsorDebt(draft.owner_id, -1).catch((e) => log.warn("遞減 owner 欠抽失敗", { ownerId: draft.owner_id, err: e }));
+        }
+        // backstop 通知：永久禁用帳號因欠抽堆積而恢復被抽（每 owner 本輪通知一次）。
+        if (selfServicedThisPost && draft.owner_id && !selfServiceNotified.has(draft.owner_id)) {
+          selfServiceNotified.add(draft.owner_id);
+          await sendUserAlert(
+            draft.owner_id,
+            "🔁 你有帳號設為「永久完全不抽」，但累積的贊助文份額一直沒有其他帳號代為分擔，已達上限。為維持公平，該帳號已恢復被抽以補還；若要停止，請在其他帳號正常發文分擔，或改為「只抽一半」。",
+            "sponsor_used"
+          ).catch(() => {});
         }
       }
 

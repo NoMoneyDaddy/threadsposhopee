@@ -508,7 +508,7 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
             const ids = cleanUrl ? parseShopeeIds(cleanUrl) : null;
             if (ids) {
               const info = await getProductInfo(sponsorOwnerCreds.ownerCreds.appId, sponsorOwnerCreds.ownerCreds.secret, ids.shopId, ids.itemId);
-              commissionRate = info.commissionRate;
+              commissionRate = info?.commissionRate != null ? String(info.commissionRate) : null;
             }
           } catch (e) {
             log.warn("查詢分潤率失敗（不影響發文）", { accId, err: e });

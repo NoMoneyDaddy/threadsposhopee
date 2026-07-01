@@ -377,7 +377,15 @@ export async function deleteThreadsAccountsByThreadsUserId(threadsUserId: string
 export async function getThreadsUserIdsByAccountIds(accountIds: string[]): Promise<Record<string, string>> {
   const out: Record<string, string> = {};
   const ids = Array.from(new Set(accountIds.filter(Boolean)));
-  if (isDemoMode || ids.length === 0) return out;
+  if (ids.length === 0) return out;
+  if (isDemoMode) {
+    // demo：從記憶體帳號對照，否則依賴此函式的 API（黑名單/禁用）在 demo 會誤判「帳號不存在」。
+    for (const id of ids) {
+      const acc = demo.threadsAccounts.find((a) => a.id === id);
+      if (acc?.threads_user_id) out[id] = acc.threads_user_id;
+    }
+    return out;
+  }
   const sb = getServiceClient()!;
   const { data, error } = await sb.from("threads_accounts").select("id, threads_user_id").in("id", ids);
   if (error) throw new Error(`取 threads_user_id 映射失敗：${error.message}`);

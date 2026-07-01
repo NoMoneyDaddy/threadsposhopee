@@ -45,15 +45,18 @@ export default function SponsoredPage() {
         </p>
       </Section>
 
-      <Section title="依貢獻的回饋">
+      <Section title="依貢獻的回饋（越貢獻越省、還能自賺）">
         <p>
           你在共享庫分享的商品被越多人匯入，<strong className="text-ink">貢獻分數</strong>越高，贊助回饋越好：
         </p>
         <ul className="list-disc space-y-1 pl-5">
-          <li><strong className="text-ink">未達門檻</strong>：貢獻越高，抽取比例<strong className="text-ink">自動遞減</strong>（抽越少）。</li>
-          <li><strong className="text-ink">貢獻達 20</strong>：可在共享庫選擇<strong className="text-ink">「免每日贊助文」</strong>，完全不被抽。</li>
-          <li><strong className="text-ink">貢獻達 60</strong>：可選擇<strong className="text-ink">「換成自己的分潤連結」</strong>——每日保底篇仍走平台（平台保本），超過保底的贊助篇改用你自己的蝦皮連結（分潤歸你）。</li>
+          <li><strong className="text-ink">抽成自動遞減</strong>：貢獻越高，「每幾篇抽 1 篇」的篇數越大（抽越少）。</li>
+          <li><strong className="text-ink">平台保底、永不歸零</strong>：即使頂級貢獻者，平台仍至少<strong className="text-ink">每 60 篇抽 1 篇</strong>維持營運——這也讓機制長久、大家都能持續受惠。</li>
+          <li><strong className="text-ink">貢獻達 60：可換成自己的分潤連結自賺</strong>——保底篇仍走平台（平台保本），超過保底的贊助篇改用你自己的蝦皮連結（分潤歸你）。</li>
         </ul>
+        <p>
+          你的即時進度（分數、目前抽成比例、距離自賺還差幾分）顯示在<strong className="text-ink">共享庫</strong>頁；貢獻排行榜也在同頁，持續鼓勵大家上傳好素材。
+        </p>
       </Section>
 
       <Section title="連結鎖定">

@@ -38,9 +38,9 @@ export default function RewardModeForm({ initial }: { initial: SponsorRewardMode
 
   return (
     <div className="rounded-2xl border bg-surface p-4">
-      <div className="mb-1 text-sm font-medium text-ink">🎁 你的回饋方式</div>
+      <div className="mb-1 text-sm font-medium text-ink">🎁 你的贊助回饋方式</div>
       <p className="mb-3 text-xs text-ink-2">
-        貢獻達門檻可選回饋方式：免贊助需 {SPONSOR_EXEMPT_CONTRIBUTION} 分、連結自賺需 {OWN_LINK_CONTRIBUTION} 分（更難）。
+        貢獻越高，贊助文抽成自動越少（平台保底不歸零）。達 {OWN_LINK_CONTRIBUTION} 分可再選「換成自己連結賺分潤」。
       </p>
       <div className="flex flex-col gap-2 sm:flex-row">
         <button
@@ -49,7 +49,7 @@ export default function RewardModeForm({ initial }: { initial: SponsorRewardMode
           onClick={() => save("exempt")}
           className={`btn flex-1 ${mode === "exempt" ? "btn-brand" : "btn-ghost"}`}
         >
-          免每日贊助文
+          平台連結（依貢獻自動減量）
         </button>
         <button
           type="button"
@@ -57,13 +57,13 @@ export default function RewardModeForm({ initial }: { initial: SponsorRewardMode
           onClick={() => save("own_link")}
           className={`btn flex-1 ${mode === "own_link" ? "btn-brand" : "btn-ghost"}`}
         >
-          照發、但換成我自己的分潤連結
+          換成我自己的分潤連結（自賺）
         </button>
       </div>
       <p className="mt-2 text-xs text-ink-3">
         {mode === "own_link"
-          ? `連結自賺：每日第 1 篇仍走平台（平台保本），超過配額的「超額篇」才換成你自己的蝦皮分潤連結、分潤算你的（需綁蝦皮金鑰，且貢獻達 ${OWN_LINK_CONTRIBUTION} 分）。`
-          : "免贊助：你的帳號不會被排每日平台贊助文。"}
+          ? `連結自賺：保底篇仍走平台（平台保本），超過保底的贊助篇換成你自己的蝦皮分潤連結、分潤算你的（需綁蝦皮金鑰，且貢獻達 ${OWN_LINK_CONTRIBUTION} 分）。`
+          : `平台連結：贊助文用平台分潤連結，且依你的貢獻自動減少抽取比例（貢獻達 ${SPONSOR_EXEMPT_CONTRIBUTION} 分起明顯變少）。`}
       </p>
       {msg && <div className="mt-2 text-xs text-ink-2">{msg}</div>}
     </div>

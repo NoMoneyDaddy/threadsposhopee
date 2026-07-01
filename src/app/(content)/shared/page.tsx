@@ -3,6 +3,8 @@ import EmptyState from "@/components/EmptyState";
 import ImportSharedButton from "@/components/ImportSharedButton";
 import ShareToggle from "@/components/ShareToggle";
 import RewardModeForm from "@/components/RewardModeForm";
+import ContributionRewardCard from "@/components/ContributionRewardCard";
+import { getSponsorConfig } from "@/lib/sponsor";
 import BadgeRow from "@/components/BadgeRow";
 import ReviewButton from "@/components/ReviewButton";
 import {
@@ -55,6 +57,10 @@ export default async function SharedPage({ searchParams }: { searchParams: { tab
     getRoles(user.id).catch(() => []),
     flags.leaderboard ? listTopContributors(5).catch(() => []) : Promise.resolve([])
   ]);
+
+  // 贊助文啟用且非 owner 才顯示貢獻回饋進度卡（owner 帳號不適用贊助文）。
+  const sponsorCfg = !user.isOwner ? await getSponsorConfig().catch(() => null) : null;
+  const showRewardCard = Boolean(sponsorCfg?.enabled);
 
   const exempt = contribution >= SPONSOR_EXEMPT_CONTRIBUTION;
   const reviewer = isReviewer(roles, user.isOwner);
@@ -116,6 +122,7 @@ export default async function SharedPage({ searchParams }: { searchParams: { tab
         </div>
       )}
 
+      {showRewardCard && <ContributionRewardCard score={contribution} basePerPosts={sponsorCfg?.perPosts ?? 6} />}
       {exempt && <RewardModeForm initial={rewardMode} />}
 
       {tab === "mine" ? (

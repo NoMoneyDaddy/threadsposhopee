@@ -27,7 +27,7 @@ import {
   getSponsorRewardMode,
   countPublishedTodayByAccount
 } from "@/lib/store";
-import { canOwnLink, isSponsorExempt, contributionAdjustedPerPosts } from "@/lib/contribution";
+import { canOwnLink, contributionAdjustedPerPosts } from "@/lib/contribution";
 import { publishToThreads, publishReply, PublishUncertainError } from "@/services/threads/publish";
 import { getOwnerUserId } from "@/lib/auth";
 import {
@@ -314,11 +314,8 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
         sponsorRewardCache[oid] = { score, mode };
       }
       const reward = draft.owner_id ? sponsorRewardCache[draft.owner_id] : undefined;
-      // 免贊助豁免：達門檻且選「免每日贊助文」→ 完全不套贊助文（尊重回饋選擇）。
-      const exemptSkip = Boolean(reward && reward.mode === "exempt" && isSponsorExempt(reward.score));
-
-      // owner 帳號、臨時禁用、或已達免贊助豁免 → 完全略過贊助文。
-      if (!isOwnerAccount && !sponsorOptOutCache[accId] && !exemptSkip) {
+      // owner 帳號或臨時禁用 → 完全略過；其餘一律套用（貢獻越高抽越少，但平台保底永不歸零）。
+      if (!isOwnerAccount && !sponsorOptOutCache[accId]) {
         // 比例配額：依該帳號「當日實際自發篇數（含這篇）」換算 max(保底, floor(篇數/perPosts))；
         // 低頻者（當日 < minPostsForFloor 篇）配額為 0 不被抽；貢獻越高 perPosts 越大（抽越少）。
         if (!(accId in sponsorCountCache)) {

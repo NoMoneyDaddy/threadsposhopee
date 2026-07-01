@@ -14,13 +14,17 @@ export function canOwnLink(contributionScore: number): boolean {
   return contributionScore >= OWN_LINK_CONTRIBUTION;
 }
 
-// 依貢獻分數放寬抽成：未達免贊助門檻者，分數越高 perPosts 越大（抽越少，越公平）。
-// score 0 → perPosts；score→門檻 → 約 2×perPosts（抽成減半）；達門檻後由 exempt 機制完全免抽。純函式可測。
+// 平台保底上限：即使頂級貢獻者，平台仍至少「每 SPONSOR_MAX_PER_POSTS 篇抽 1 篇」（抽成永不歸零）。
+// 這保證「全站都高貢獻」時平台仍有穩定基礎收入，同時貢獻越高抽越少、越公平。
+export const SPONSOR_MAX_PER_POSTS = 60;
+
+// 依貢獻分數放寬抽成：分數越高 perPosts 越大（抽越少）。每 SPONSOR_EXEMPT_CONTRIBUTION 分約 +1 倍基礎，
+// 線性成長並封頂於 SPONSOR_MAX_PER_POSTS（永不歸零＝平台保底）。純函式可測。
 export function contributionAdjustedPerPosts(perPosts: number, contributionScore: number): number {
   if (!Number.isFinite(perPosts) || perPosts <= 0) return perPosts;
-  const s = Math.max(0, Math.min(contributionScore, SPONSOR_EXEMPT_CONTRIBUTION));
-  const factor = 1 + s / SPONSOR_EXEMPT_CONTRIBUTION; // 1 → 2
-  return Math.max(1, Math.round(perPosts * factor));
+  const s = Math.max(0, contributionScore);
+  const grown = perPosts * (1 + s / SPONSOR_EXEMPT_CONTRIBUTION);
+  return Math.max(1, Math.min(SPONSOR_MAX_PER_POSTS, Math.round(grown)));
 }
 
 // 貢獻分數 = 被匯入次數 + 分享素材篇數 + 資料貢獻紅利（皆權重 1）。

@@ -3,6 +3,7 @@
 import { getServiceClient } from "./supabase/server";
 import { isDemoMode } from "./env";
 import { assertSafePublicUrl } from "./url-guard";
+import { getRedirectAdUrl } from "./credentials";
 import { randomShortCode } from "./shortcode";
 import { fetchLinkPreview } from "@/services/og/preview";
 import { checkUrlSafety, type SafetyVerdict } from "@/services/safety/safe-browsing";
@@ -159,13 +160,19 @@ const toSafety = (v: unknown): "safe" | "unsafe" | null => (v === "safe" || v ==
 // 依 code 取用（對外公開：中轉頁渲染用，不帶 owner 過濾）。
 // 與 insert 對稱：safety 欄位若尚未遷移（PGRST204）就改用不含 safety 的查詢重試（標章退回 null）；
 // 其餘查詢錯誤照拋——不可被當成「找不到」而誤成 404（呼叫端只在回 null 時才 notFound）。
-export async function getRedirectLinkByCode(code: string): Promise<RedirectLink | null> {
+// 公開中轉頁用：附帶「連結擁有者自訂的廣告跳轉頁」（訪客點繼續時於新分頁開啟；已過 SSRF 守衛，不安全＝null）。
+export type PublicRedirectLink = RedirectLink & { adUrl: string | null };
+
+export async function getRedirectLinkByCode(code: string): Promise<PublicRedirectLink | null> {
   if (isDemoMode) return null;
   const sb = getServiceClient()!;
+  // 多帶 owner_id 以便查該擁有者的廣告頁（LINK_COLS 不含 owner_id，這裡臨時補上）。
   const data = (await selectWithSafetyFallback((withSafety) =>
-    sb.from("redirect_links").select(withSafety ? `${LINK_COLS}, safety` : LINK_COLS).eq("code", code).maybeSingle()
+    sb.from("redirect_links").select(withSafety ? `${LINK_COLS}, owner_id, safety` : `${LINK_COLS}, owner_id`).eq("code", code).maybeSingle()
   )) as unknown as Record<string, unknown> | null;
   if (!data) return null;
+  const ownerId = (data.owner_id as string) ?? "";
+  const adUrl = ownerId ? await getRedirectAdUrl(ownerId).catch(() => null) : null;
   return {
     code: data.code as string,
     sourceUrl: data.source_url as string,
@@ -173,7 +180,8 @@ export async function getRedirectLinkByCode(code: string): Promise<RedirectLink 
     // 公開中轉頁/og:image：讀取時再過一次守衛，連既有列中不安全的 imageUrl 也擋掉。
     imageUrl: safePublicImageUrl(data.image_url as string),
     description: (data.description as string) ?? null,
-    safety: toSafety(data.safety)
+    safety: toSafety(data.safety),
+    adUrl
   };
 }
 

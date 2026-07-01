@@ -112,7 +112,13 @@ export default async function RedirectPage({ params }: { params: { code: string 
               <span aria-hidden className="inline-flex">{safetyBadge.icon}</span>
               {safetyBadge.text}
             </p>
-            <ContinueButton code={link.code} sourceUrl={link.sourceUrl} unsafe={unsafe} seconds={countdownSeconds} />
+            <ContinueButton code={link.code} sourceUrl={link.sourceUrl} unsafe={unsafe} seconds={countdownSeconds} adUrl={link.adUrl} />
+            {/* 有廣告頁時揭露：點繼續會在新分頁開啟廣告、可直接關（drrop/myppt 模式） */}
+            {link.adUrl && (
+              <p className="mt-2 text-[11px] leading-relaxed text-[#5a7d88]">
+                為維持服務免費，點「前往」會在新分頁開啟一則廣告，你可以直接關閉。
+              </p>
+            )}
             {/* 揭露：正規轉址服務，由廣告維運（中性、低調；不偽裝、不誇張） */}
             <p className="mt-3 text-[11px] leading-relaxed text-[#5a7d88]">
               go2read 為你安全中轉到目標頁面，本頁由廣告維護運轉。

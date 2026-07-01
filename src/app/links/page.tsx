@@ -1,7 +1,9 @@
 import { getCurrentUser } from "@/lib/auth";
 import { listRedirectLinks } from "@/lib/redirect-store";
+import { getRedirectAdUrl } from "@/lib/store";
 import RedirectLinkForm from "@/components/RedirectLinkForm";
 import RedirectLinkRow from "@/components/RedirectLinkRow";
+import RedirectAdForm from "@/components/RedirectAdForm";
 import EmptyState from "@/components/EmptyState";
 import SelfBuyNotice from "@/components/SelfBuyNotice";
 
@@ -14,6 +16,7 @@ export default async function LinksPage() {
   // 不吞錯：listRedirectLinks 已刻意在查詢失敗時拋錯（見 redirect-store），
   // 故不可降級成空列表，否則 DB/網路故障會被誤呈現為「還沒有短連結」。
   const links = await listRedirectLinks(user.id);
+  const adUrl = await getRedirectAdUrl(user.id).catch(() => null);
 
   return (
     <div className="space-y-6">
@@ -23,6 +26,8 @@ export default async function LinksPage() {
       </div>
 
       <RedirectLinkForm />
+
+      <RedirectAdForm initialUrl={adUrl} />
 
       <SelfBuyNotice />
 

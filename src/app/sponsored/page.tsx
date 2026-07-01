@@ -45,17 +45,24 @@ export default function SponsoredPage() {
         </p>
       </Section>
 
-      <Section title="依貢獻的回饋（越貢獻越省、還能自賺）">
+      <Section title="貢獻分數怎麼算（重質）">
         <p>
-          你在共享庫分享的商品被越多人匯入，<strong className="text-ink">貢獻分數</strong>越高，贊助回饋越好：
+          分數＝<strong className="text-ink">被匯入次數 ×3</strong>（別人真的把你分享的商品拿去用）＋
+          <strong className="text-ink">優質素材 ×5</strong>（你分享中、被匯入 ≥ 3 次的素材數）＋資料紅利。
+          <strong className="text-ink">不看分享數量、只看被使用的品質</strong>，避免灌水。
         </p>
+      </Section>
+
+      <Section title="四級階梯（徽章＝贊助回饋）">
+        <p>貢獻越高，贊助文抽成越少；達頂級還能換成自己的連結自賺。平台保底永不歸零（見上）。</p>
         <ul className="list-disc space-y-1 pl-5">
-          <li><strong className="text-ink">抽成自動遞減</strong>：貢獻越高，「每幾篇抽 1 篇」的篇數越大（抽越少）。</li>
-          <li><strong className="text-ink">平台保底、永不歸零</strong>：即使頂級貢獻者，平台仍至少<strong className="text-ink">每 60 篇抽 1 篇</strong>維持營運——這也讓機制長久、大家都能持續受惠。</li>
-          <li><strong className="text-ink">貢獻達 60：可換成自己的分潤連結自賺</strong>——保底篇仍走平台（平台保本），超過保底的贊助篇改用你自己的蝦皮連結（分潤歸你）。</li>
+          <li>🌱 <strong className="text-ink">新手（0–14）</strong>：約每 6 篇抽 1。</li>
+          <li>✨ <strong className="text-ink">貢獻者（15–39）</strong>：約每 12 篇抽 1。</li>
+          <li>🏅 <strong className="text-ink">高貢獻（40–99）</strong>：約每 30 篇抽 1。</li>
+          <li>👑 <strong className="text-ink">頂級（100＋）</strong>：每 60 篇抽 1（平台保底）＋可<strong className="text-ink">換成自己連結自賺</strong>（保底篇仍走平台）。</li>
         </ul>
         <p>
-          你的即時進度（分數、目前抽成比例、距離自賺還差幾分）顯示在<strong className="text-ink">共享庫</strong>頁；貢獻排行榜也在同頁，持續鼓勵大家上傳好素材。
+          你的即時進度（目前級別、抽成比例、距下一級還差幾分）顯示在<strong className="text-ink">共享庫</strong>頁；貢獻排行榜也在同頁，持續鼓勵上傳好素材。
         </p>
       </Section>
 

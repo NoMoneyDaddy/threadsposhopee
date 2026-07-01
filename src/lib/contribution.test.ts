@@ -1,31 +1,36 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isSponsorExempt, canOwnLink, contributionAdjustedPerPosts, SPONSOR_EXEMPT_CONTRIBUTION, SPONSOR_MAX_PER_POSTS, OWN_LINK_CONTRIBUTION } from "./contribution";
+import { isSponsorExempt, canOwnLink, contributionAdjustedPerPosts, contribTier, nextContribTier, SPONSOR_EXEMPT_CONTRIBUTION, SPONSOR_MAX_PER_POSTS, OWN_LINK_CONTRIBUTION } from "./contribution";
 
-test("isSponsorExempt：達門檻才免贊助文", () => {
+test("contribTier：四級門檻 0/15/40/100", () => {
+  assert.equal(contribTier(0).key, "rookie");
+  assert.equal(contribTier(14).key, "rookie");
+  assert.equal(contribTier(15).key, "contributor");
+  assert.equal(contribTier(40).key, "high");
+  assert.equal(contribTier(100).key, "elite");
+  assert.equal(contribTier(9999).key, "elite");
+});
+
+test("nextContribTier：回下一級、頂級回 null", () => {
+  assert.equal(nextContribTier(0)?.key, "contributor");
+  assert.equal(nextContribTier(40)?.key, "elite");
+  assert.equal(nextContribTier(100), null);
+});
+
+test("isSponsorExempt / canOwnLink：對齊階梯門檻", () => {
   assert.equal(isSponsorExempt(SPONSOR_EXEMPT_CONTRIBUTION - 1), false);
   assert.equal(isSponsorExempt(SPONSOR_EXEMPT_CONTRIBUTION), true);
-  assert.equal(isSponsorExempt(0), false);
-});
-
-test("canOwnLink：自賺門檻更高於免贊助", () => {
   assert.ok(OWN_LINK_CONTRIBUTION > SPONSOR_EXEMPT_CONTRIBUTION);
   assert.equal(canOwnLink(OWN_LINK_CONTRIBUTION - 1), false);
-  assert.equal(canOwnLink(OWN_LINK_CONTRIBUTION), true);
-  // 達免贊助但未達自賺
-  assert.equal(isSponsorExempt(SPONSOR_EXEMPT_CONTRIBUTION), true);
-  assert.equal(canOwnLink(SPONSOR_EXEMPT_CONTRIBUTION), false);
+  assert.equal(canOwnLink(OWN_LINK_CONTRIBUTION), true); // 頂級才可自賺
 });
 
-test("contributionAdjustedPerPosts：分數越高 perPosts 越大（抽越少），封頂不歸零", () => {
-  assert.equal(contributionAdjustedPerPosts(6, 0), 6); // 無貢獻＝原值
-  assert.equal(contributionAdjustedPerPosts(6, SPONSOR_EXEMPT_CONTRIBUTION), 12); // 20 分約 2×
-  assert.ok(contributionAdjustedPerPosts(6, 10) >= 6 && contributionAdjustedPerPosts(6, 10) <= 12);
-  // 持續成長（不再夾在 2×）：60 分約 4×
-  assert.equal(contributionAdjustedPerPosts(6, 60), 24);
-  // 封頂於 SPONSOR_MAX_PER_POSTS（平台保底、永不歸零）
-  assert.equal(contributionAdjustedPerPosts(6, 999999), SPONSOR_MAX_PER_POSTS);
-  // 邊界：非正 perPosts 原樣回
-  assert.equal(contributionAdjustedPerPosts(0, 5), 0);
+test("contributionAdjustedPerPosts：分段倍數，封頂不歸零", () => {
+  assert.equal(contributionAdjustedPerPosts(6, 0), 6); // 新手＝基礎
+  assert.equal(contributionAdjustedPerPosts(6, 15), 12); // 貢獻者 ×2
+  assert.equal(contributionAdjustedPerPosts(6, 40), 30); // 高貢獻 ×5
+  assert.equal(contributionAdjustedPerPosts(6, 100), SPONSOR_MAX_PER_POSTS); // 頂級 ×10＝封頂 60
+  assert.equal(contributionAdjustedPerPosts(6, 999999), SPONSOR_MAX_PER_POSTS); // 永不歸零
+  assert.equal(contributionAdjustedPerPosts(0, 40), 0); // 非正原樣回
 });
 

@@ -10,20 +10,22 @@ import {
   TOP_MATERIAL_THRESHOLD
 } from "./roles";
 
-test("contributionBadge：取達到的最高階", () => {
+test("contributionBadge：取達到的最高階（四級：0/15/40/100）", () => {
   assert.equal(contributionBadge(0).key, "rookie");
-  assert.equal(contributionBadge(1).key, "contributor");
-  assert.equal(contributionBadge(5).key, "high");
-  assert.equal(contributionBadge(19).key, "high");
-  assert.equal(contributionBadge(20).key, "elite");
+  assert.equal(contributionBadge(14).key, "rookie");
+  assert.equal(contributionBadge(15).key, "contributor");
+  assert.equal(contributionBadge(39).key, "contributor");
+  assert.equal(contributionBadge(40).key, "high");
+  assert.equal(contributionBadge(99).key, "high");
+  assert.equal(contributionBadge(100).key, "elite");
   assert.equal(contributionBadge(999).key, "elite");
 });
 
 test("badgesFor：含貢獻勳章＋手動身份組＋管理員", () => {
   assert.deepEqual(badgesFor({ score: 0 }).map((b) => b.key), ["rookie"]);
-  assert.deepEqual(badgesFor({ score: 5, roles: ["reviewer"] }).map((b) => b.key), ["high", "reviewer"]);
+  assert.deepEqual(badgesFor({ score: 40, roles: ["reviewer"] }).map((b) => b.key), ["high", "reviewer"]);
   assert.deepEqual(
-    badgesFor({ score: 20, roles: ["reviewer"], isOwner: true }).map((b) => b.key),
+    badgesFor({ score: 100, roles: ["reviewer"], isOwner: true }).map((b) => b.key),
     ["elite", "reviewer", "admin"]
   );
 });

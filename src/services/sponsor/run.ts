@@ -15,10 +15,21 @@ const VERIFY_AFTER_MS = 2 * 3600_000; // 發出 2 小時後才驗（給使用者
 // 使用者當日實際自發量計算（見 services/publish/sponsor-quota 與 queue.ts），低頻者不被強抽、
 // 也不再有管理員內容被貼到他人帳號。本檔僅保留發後驗證。
 
-// 違規寬鬆化：單次刪文/竄改不立即暫停，累計達門檻才暫停（容許偶發/誤刪）。
-// 連續驗證通過會清零。strike 以 30 天滾動窗存於 app_state。
+// 違規寬鬆化＋加權：單次竄改不立即暫停，累計「加權分」達門檻才暫停。
+// 加權：近 7 天的違規每次計 2 分、7–30 天每次計 1 分（近期反覆竄改更快觸發、舊違規自然淡出）。
+// strike 以「違規時間戳陣列（30 天滾動窗）」存於 app_state。連結驗證通過即清零。
 const SPONSOR_VIOLATION_LIMIT = 3;
 const STRIKE_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+const STRIKE_RECENT_MS = 7 * 24 * 60 * 60 * 1000;
+
+// 依時間戳陣列算加權違規分（近期權重高）。純函式。
+export function weightedStrikes(timestamps: number[], now: number): number {
+  return timestamps.reduce((sum, t) => {
+    const age = now - t;
+    if (age < 0 || age >= STRIKE_WINDOW_MS) return sum; // 視窗外不計
+    return sum + (age < STRIKE_RECENT_MS ? 2 : 1);
+  }, 0);
+}
 
 export async function verifySponsorPosts(): Promise<{ checked: number; violations: number }> {
   const out = { checked: 0, violations: 0 };
@@ -42,13 +53,15 @@ export async function verifySponsorPosts(): Promise<{ checked: number; violation
       if (ok) {
         await updateSponsorRecordAt(accountId, date, index, { ...rec, verified: true });
         // 通過則清零累計違規（寬鬆：給機會重新累積）
-        await setCachedJson(strikeKey, 0).catch(() => {});
+        await setCachedJson(strikeKey, []).catch(() => {});
       } else {
         out.violations++;
         await updateSponsorRecordAt(accountId, date, index, { ...rec, verified: true, violated: true });
-        const prev = (await getCachedJson<number>(strikeKey, STRIKE_WINDOW_MS).catch(() => 0)) ?? 0;
-        const strikes = prev + 1;
-        await setCachedJson(strikeKey, strikes).catch(() => {});
+        const now = Date.now();
+        const prevArr = (await getCachedJson<number[]>(strikeKey, STRIKE_WINDOW_MS).catch(() => [])) ?? [];
+        const arr = [...(Array.isArray(prevArr) ? prevArr : []).filter((t) => now - t < STRIKE_WINDOW_MS), now];
+        await setCachedJson(strikeKey, arr).catch(() => {});
+        const strikes = weightedStrikes(arr, now); // 加權分（近期權重高）
         if (strikes >= SPONSOR_VIOLATION_LIMIT) {
           // 累計達上限才暫停（恢復走帳號管理手動啟用）
           await setThreadsAccountStatus(accountId, rec.ownerId, "paused").catch((e) =>
@@ -56,14 +69,14 @@ export async function verifySponsorPosts(): Promise<{ checked: number; violation
           );
           await sendUserAlert(
             rec.ownerId,
-            `⚠️ 你的贊助文連結多次（${strikes} 次）被移除或竄改，該帳號發文已暫停。請至帳號管理重新啟用並遵守贊助文規則。`,
+            `⚠️ 你的贊助文連結多次被移除或竄改（近期違規加權已達上限），該帳號發文已暫停。請至帳號管理重新啟用並遵守贊助文規則。`,
             "sponsor_violation"
           ).catch(() => {});
         } else {
           // 未達上限：只提醒、不暫停
           await sendUserAlert(
             rec.ownerId,
-            `🔔 提醒：你的贊助文連結被移除或竄改（第 ${strikes}/${SPONSOR_VIOLATION_LIMIT} 次）。累計達上限才會暫停發文，請遵守贊助文規則。`,
+            `🔔 提醒：你的贊助文連結被移除或竄改（違規加權 ${strikes}/${SPONSOR_VIOLATION_LIMIT}，近期違規權重較高）。達上限才會暫停發文，請遵守贊助文規則。`,
             "sponsor_violation"
           ).catch(() => {});
         }

@@ -19,7 +19,7 @@ import {
 } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
 import { cloudinaryThumb } from "@/lib/img";
-import { SPONSOR_EXEMPT_CONTRIBUTION } from "@/lib/contribution";
+import { canOwnLink, contribTier } from "@/lib/contribution";
 import { badgesFor, isReviewer, contributionBadge, isTopMaterial } from "@/lib/roles";
 
 export const dynamic = "force-dynamic";
@@ -62,7 +62,7 @@ export default async function SharedPage({ searchParams }: { searchParams: { tab
   const sponsorCfg = !user.isOwner ? await getSponsorConfig().catch(() => null) : null;
   const showRewardCard = Boolean(sponsorCfg?.enabled);
 
-  const exempt = contribution >= SPONSOR_EXEMPT_CONTRIBUTION;
+  const tier = contribTier(contribution);
   const reviewer = isReviewer(roles, user.isOwner);
   const myBadges = badgesFor({ score: contribution, roles, isOwner: user.isOwner });
 
@@ -81,11 +81,8 @@ export default async function SharedPage({ searchParams }: { searchParams: { tab
               : "別人分享的商品，按「匯入」會用你自己的蝦皮金鑰重產分潤連結（分潤算你的）。"}
           </p>
         </div>
-        <span
-          className={`badge ${exempt ? "badge-success" : "badge-neutral"}`}
-          title={`你分享的商品被匯入 ${contribution} 次；達 ${SPONSOR_EXEMPT_CONTRIBUTION} 次可享高貢獻回饋`}
-        >
-          🏅 貢獻 {contribution}{exempt ? "（已達門檻）" : `／${SPONSOR_EXEMPT_CONTRIBUTION}`}
+        <span className="badge badge-neutral" title="貢獻分數＝被匯入次數×3＋優質素材×5＋資料紅利；越高贊助抽成越少">
+          {tier.emoji} {tier.label}・貢獻 {contribution}
         </span>
       </div>
 
@@ -123,7 +120,7 @@ export default async function SharedPage({ searchParams }: { searchParams: { tab
       )}
 
       {showRewardCard && <ContributionRewardCard score={contribution} basePerPosts={sponsorCfg?.perPosts ?? 6} />}
-      {exempt && <RewardModeForm initial={rewardMode} />}
+      {showRewardCard && canOwnLink(contribution) && <RewardModeForm initial={rewardMode} />}
 
       {tab === "mine" ? (
         mine.length === 0 ? (

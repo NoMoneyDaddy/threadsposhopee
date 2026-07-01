@@ -142,20 +142,50 @@ function optOutKey(accountId: string): string {
   return `sponsor:optout:${accountId}`;
 }
 
-// 回傳到期 ISO（仍在生效中）；已過期或未設回 null。
-export async function getSponsorOptOutUntil(accountId: string): Promise<string | null> {
+// 禁用模式：off＝期間完全不抽贊助；half＝期間只抽一半（perPosts 加倍，兼顧檔期又不放棄平台收益）。
+export type SponsorOptOutMode = "off" | "half";
+export interface SponsorOptOut {
+  until: string;
+  mode: SponsorOptOutMode;
+}
+
+// 解析 optout 值：新格式為 JSON {until,mode}；舊格式為純 ISO 字串（視為 mode=off）。回傳仍生效者，過期/未設回 null。
+function parseOptOut(value: string | null | undefined): SponsorOptOut | null {
+  if (!value) return null;
+  let until: string;
+  let mode: SponsorOptOutMode = "off";
+  const trimmed = value.trim();
+  if (trimmed.startsWith("{")) {
+    try {
+      const o = JSON.parse(trimmed) as Partial<SponsorOptOut>;
+      until = String(o.until ?? "");
+      mode = o.mode === "half" ? "half" : "off";
+    } catch {
+      return null;
+    }
+  } else {
+    until = trimmed; // 舊格式：純 ISO
+  }
+  const t = Date.parse(until);
+  if (!Number.isFinite(t) || t <= Date.now()) return null; // 過期＝視同未設
+  return { until, mode };
+}
+
+// 回傳目前生效的禁用設定（含模式）；過期/未設回 null。
+export async function getSponsorOptOut(accountId: string): Promise<SponsorOptOut | null> {
   if (isDemoMode) return null;
   const sb = getServiceClient()!;
   const { data } = await sb.from("app_state").select("value").eq("key", optOutKey(accountId)).maybeSingle();
-  const until = data?.value ?? null;
-  if (!until) return null;
-  const t = Date.parse(until);
-  if (!Number.isFinite(t) || t <= Date.now()) return null; // 過期＝視同未設
-  return until;
+  return parseOptOut(data?.value);
 }
 
-// 設定/清除：untilIso 為 null 或過去時間＝清除（恢復贊助）。
-export async function setSponsorOptOut(accountId: string, untilIso: string | null): Promise<void> {
+// 相容既有呼叫點：只回到期 ISO（仍在生效中；含 half 模式也回其到期）。
+export async function getSponsorOptOutUntil(accountId: string): Promise<string | null> {
+  return (await getSponsorOptOut(accountId))?.until ?? null;
+}
+
+// 設定/清除：untilIso 為 null 或過去時間＝清除（恢復正常抽成）。mode 預設 off（完全不抽）。
+export async function setSponsorOptOut(accountId: string, untilIso: string | null, mode: SponsorOptOutMode = "off"): Promise<void> {
   if (isDemoMode) return;
   const sb = getServiceClient()!;
   if (!untilIso || Date.parse(untilIso) <= Date.now()) {
@@ -164,7 +194,47 @@ export async function setSponsorOptOut(accountId: string, untilIso: string | nul
   }
   await sb
     .from("app_state")
-    .upsert({ key: optOutKey(accountId), value: untilIso, updated_at: new Date().toISOString() }, { onConflict: "key" });
+    .upsert(
+      { key: optOutKey(accountId), value: JSON.stringify({ until: untilIso, mode } satisfies SponsorOptOut), updated_at: new Date().toISOString() },
+      { onConflict: "key" }
+    );
+}
+
+// ── 違規加重抽成懲罰（app_state：key=sponsor:penalty:<accId>，值＝JSON {until,factor}）──────
+// 違規（連結被竄改）不再暫停贊助或停帳號（那等於獎勵竄改者、平台還少賺），改為一段期間「加重抽成」：
+// 該帳號 perPosts 除以 factor（抽更多）作為懲罰——有實質代價、且平台反而多賺，正打在動機上。到期自動恢復。
+function penaltyKey(accountId: string): string {
+  return `sponsor:penalty:${accountId}`;
+}
+
+// 目前生效的加重倍數（>=1；1＝無懲罰）。過期/未設回 1。
+export async function getSponsorPenaltyFactor(accountId: string): Promise<number> {
+  if (isDemoMode) return 1;
+  const sb = getServiceClient()!;
+  const { data } = await sb.from("app_state").select("value").eq("key", penaltyKey(accountId)).maybeSingle();
+  if (!data?.value) return 1;
+  try {
+    const o = JSON.parse(data.value) as { until?: string; factor?: number };
+    const t = Date.parse(String(o.until ?? ""));
+    if (!Number.isFinite(t) || t <= Date.now()) return 1; // 過期
+    const f = Number(o.factor);
+    return Number.isFinite(f) && f >= 1 ? f : 1;
+  } catch {
+    return 1;
+  }
+}
+
+// 設定加重抽成懲罰（factor 倍、到 untilIso）。factor<=1 或無到期＝清除。
+export async function setSponsorPenalty(accountId: string, factor: number, untilIso: string | null): Promise<void> {
+  if (isDemoMode) return;
+  const sb = getServiceClient()!;
+  if (!untilIso || Date.parse(untilIso) <= Date.now() || !(factor > 1)) {
+    await sb.from("app_state").delete().eq("key", penaltyKey(accountId));
+    return;
+  }
+  await sb
+    .from("app_state")
+    .upsert({ key: penaltyKey(accountId), value: JSON.stringify({ until: untilIso, factor }), updated_at: new Date().toISOString() }, { onConflict: "key" });
 }
 
 // 批次取多帳號的自選（草稿頁標示用）：回傳 accountId -> draftId。
@@ -225,6 +295,7 @@ export async function clearSponsorStateForAccount(accountId: string): Promise<vo
       `sponsor:optout:${accountId}`,
       `sponsor:blocked:${accountId}`,
       `sponsor:total:${accountId}`,
+      `sponsor:penalty:${accountId}`,
       `sponsor_strikes:${accountId}`
     ]);
 }

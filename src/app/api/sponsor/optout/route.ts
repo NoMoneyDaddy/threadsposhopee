@@ -24,10 +24,12 @@ export async function POST(req: Request) {
       await setSponsorOptOut(accountId, null); // 恢復
       return NextResponse.json({ ok: true, until: null });
     }
+    // mode：off＝期間完全不抽；half＝期間只抽一半（減半，兼顧檔期又不放棄平台收益）。
+    const mode = body.mode === "half" ? "half" : "off";
     const capped = Math.min(Math.floor(days), MAX_DAYS);
     const until = new Date(Date.now() + capped * 86400_000).toISOString();
-    await setSponsorOptOut(accountId, until);
-    return NextResponse.json({ ok: true, until });
+    await setSponsorOptOut(accountId, until, mode);
+    return NextResponse.json({ ok: true, until, mode });
   } catch (e) {
     log.error("設定贊助文臨時禁用失敗", { err: e });
     return NextResponse.json({ ok: false, error: "伺服器暫時無法處理，請稍後再試" }, { status: 500 });

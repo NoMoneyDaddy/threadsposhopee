@@ -62,7 +62,8 @@ export default async function SettingsPage() {
           label: a.label,
           usedToday: await countSponsorToday(a.id, today).catch(() => 0),
           optOutUntil: optOut?.until ?? null,
-          optOutMode: optOut?.mode ?? null
+          optOutMode: optOut?.mode ?? null,
+          optOutPermanent: optOut?.permanent ?? false
         };
       })
     );

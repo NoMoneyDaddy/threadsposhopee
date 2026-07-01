@@ -19,13 +19,20 @@ export async function POST(req: Request) {
     if (!(await userOwnsThreadsAccount(accountId, user.id))) {
       return NextResponse.json({ ok: false, error: "帳號不存在或不屬於你" }, { status: 403 });
     }
+    // mode：off＝完全不抽；half＝只抽一半（減半）。permanent＝永久（無到期）。
+    const mode = body.mode === "half" ? "half" : "off";
+    const permanent = body.permanent === true;
+    if (permanent) {
+      // 配套：永久「完全不抽」的應抽份額會轉為 owner 欠抽、由其他帳號代抽補還（見發文佇列）；
+      // 永久「只抽一半」則持續減半。皆到「恢復」才解除。
+      await setSponsorOptOut(accountId, null, mode, true);
+      return NextResponse.json({ ok: true, until: null, mode, permanent: true });
+    }
     const days = Number(body.days);
     if (!Number.isFinite(days) || days <= 0) {
       await setSponsorOptOut(accountId, null); // 恢復
       return NextResponse.json({ ok: true, until: null });
     }
-    // mode：off＝期間完全不抽；half＝期間只抽一半（減半，兼顧檔期又不放棄平台收益）。
-    const mode = body.mode === "half" ? "half" : "off";
     const capped = Math.min(Math.floor(days), MAX_DAYS);
     const until = new Date(Date.now() + capped * 86400_000).toISOString();
     await setSponsorOptOut(accountId, until, mode);

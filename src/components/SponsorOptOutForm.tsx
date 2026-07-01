@@ -7,8 +7,9 @@ export interface SponsorAccountRow {
   id: string;
   label: string;
   usedToday: number; // 今日已當贊助文篇數
-  optOutUntil: string | null; // 臨時禁用到期 ISO（null＝正常）
+  optOutUntil: string | null; // 臨時禁用到期 ISO（null＝正常或永久）
   optOutMode?: "off" | "half" | null; // 禁用模式：off＝完全不抽、half＝只抽一半
+  optOutPermanent?: boolean; // 永久禁用（無到期）
 }
 
 // 帳號層級的贊助文管理（非 owner）：顯示今日已當贊助文篇數，並可臨時禁用某帳號一段時間（活動檔期用）。
@@ -20,18 +21,29 @@ export default function SponsorOptOutForm({ accounts }: { accounts: SponsorAccou
 
   if (accounts.length === 0) return null;
 
-  async function apply(accountId: string, days: number) {
+  async function apply(accountId: string, days: number, permanent = false) {
     setBusy(accountId);
     setMsg(null);
     try {
+      const active = permanent || days > 0;
       const res = await fetch("/api/sponsor/optout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accountId, days, mode: days > 0 ? mode : undefined })
+        body: JSON.stringify({ accountId, days, permanent, mode: active ? mode : undefined })
       });
       const json = await res.json();
       if (!json.ok) throw new Error(json.error);
-      setMsg(days > 0 ? (mode === "half" ? "✅ 已設定檔期只抽一半" : "✅ 已臨時禁用贊助文") : "✅ 已恢復贊助文");
+      setMsg(
+        !active
+          ? "✅ 已恢復贊助文"
+          : permanent
+            ? mode === "half"
+              ? "✅ 已設定永久只抽一半"
+              : "✅ 已設定永久完全不抽（應抽份額由你其他帳號代抽）"
+            : mode === "half"
+              ? "✅ 已設定檔期只抽一半"
+              : "✅ 已臨時禁用贊助文"
+      );
       router.refresh();
     } catch (e) {
       setMsg(`❌ ${e instanceof Error ? e.message : String(e)}`);
@@ -61,7 +73,7 @@ export default function SponsorOptOutForm({ accounts }: { accounts: SponsorAccou
       </div>
       <ul className="divide-y divide-border">
         {accounts.map((a) => {
-          const paused = Boolean(a.optOutUntil);
+          const paused = Boolean(a.optOutUntil) || Boolean(a.optOutPermanent);
           return (
             <li key={a.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
               <div className="min-w-0">
@@ -69,7 +81,8 @@ export default function SponsorOptOutForm({ accounts }: { accounts: SponsorAccou
                 <span className="ml-2 text-xs text-ink-3">今日已當贊助文 {a.usedToday} 篇</span>
                 {paused && (
                   <span className="ml-2 text-xs text-warn">
-                    ・{a.optOutMode === "half" ? "只抽一半" : "已禁用"}至 {fmt(a.optOutUntil!)}
+                    ・{a.optOutMode === "half" ? "只抽一半" : "完全不抽"}
+                    {a.optOutPermanent ? "（永久）" : `至 ${fmt(a.optOutUntil!)}`}
                   </span>
                 )}
               </div>
@@ -80,12 +93,15 @@ export default function SponsorOptOutForm({ accounts }: { accounts: SponsorAccou
                   </button>
                 ) : (
                   <>
-                    <span className="text-xs text-ink-3">臨時禁用</span>
+                    <span className="text-xs text-ink-3">禁用</span>
                     {[7, 14, 30].map((d) => (
                       <button key={d} type="button" disabled={busy === a.id} onClick={() => apply(a.id, d)} className="rounded border px-2 py-1 text-xs text-ink-2 hover:bg-surface-2 disabled:opacity-50">
                         {d} 天
                       </button>
                     ))}
+                    <button type="button" disabled={busy === a.id} onClick={() => apply(a.id, 0, true)} title="永久禁用；『完全不抽』的應抽份額會由你其他帳號代抽，平台不被永久搭便車" className="rounded border px-2 py-1 text-xs text-ink-2 hover:bg-surface-2 disabled:opacity-50">
+                      永久
+                    </button>
                   </>
                 )}
               </div>

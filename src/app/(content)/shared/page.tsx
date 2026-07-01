@@ -4,7 +4,8 @@ import ImportSharedButton from "@/components/ImportSharedButton";
 import ShareToggle from "@/components/ShareToggle";
 import RewardModeForm from "@/components/RewardModeForm";
 import ContributionRewardCard from "@/components/ContributionRewardCard";
-import { getSponsorConfig } from "@/lib/sponsor";
+import { getSponsorConfig, listRecentSponsorPostsPublic } from "@/lib/sponsor";
+import SiteSponsorPostsCard from "@/components/SiteSponsorPostsCard";
 import BadgeRow from "@/components/BadgeRow";
 import ReviewButton from "@/components/ReviewButton";
 import {
@@ -58,9 +59,17 @@ export default async function SharedPage({ searchParams }: { searchParams: { tab
     flags.leaderboard ? listTopContributors(5).catch(() => []) : Promise.resolve([])
   ]);
 
-  // 贊助文啟用且非 owner 才顯示貢獻回饋進度卡（owner 帳號不適用贊助文）。
-  const sponsorCfg = !user.isOwner ? await getSponsorConfig().catch(() => null) : null;
-  const showRewardCard = Boolean(sponsorCfg?.enabled);
+  // 贊助文設定取一次：驅動貢獻回饋卡（非 owner）與全站贊助文透明列表（所有人）。
+  const sponsorCfg = await getSponsorConfig().catch(() => null);
+  const showRewardCard = Boolean(sponsorCfg?.enabled) && !user.isOwner;
+  // 全站近期贊助文（透明化）：讓所有使用者了解哪些貼文被作為平台贊助文。
+  const sponsorPosts = sponsorCfg?.enabled ? await listRecentSponsorPostsPublic(30).catch(() => []) : [];
+  const sponsorRows = sponsorPosts.map((p) => ({
+    postId: p.postId,
+    link: p.link,
+    verified: p.verified,
+    atText: new Date(p.at).toLocaleString("zh-TW", { timeZone: "Asia/Taipei", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
+  }));
 
   const tier = contribTier(contribution);
   const reviewer = isReviewer(roles, user.isOwner);
@@ -197,6 +206,8 @@ export default async function SharedPage({ searchParams }: { searchParams: { tab
           })}
         </div>
       )}
+
+      {sponsorCfg?.enabled && <SiteSponsorPostsCard rows={sponsorRows} />}
     </div>
   );
 }

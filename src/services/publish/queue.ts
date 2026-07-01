@@ -40,7 +40,6 @@ import {
   incrementSponsorTotal,
   shouldSponsor,
   swapAffiliateLink,
-  withSponsorDisclosure,
   taipeiParts,
   type SponsorPick
 } from "@/lib/sponsor";
@@ -399,8 +398,8 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
             const swappedReply = draft.reply_text ? swapAffiliateLink(draft.reply_text, draft.shopee_short_link, link) : draft.reply_text;
             const changed = swappedMain !== (draft.main_text ?? "") || swappedReply !== (draft.reply_text ?? null);
             if (changed) {
-              // 業配揭露：平台分潤連結歸屬平台，於正文末附一行中性揭露讓讀者知悉（平台贊助才加；自賺不加）。
-              pubMainText = useOwn ? swappedMain : withSponsorDisclosure(swappedMain);
+              // 就地替換連結，其餘文案不動（不在貼文附加任何揭露文字）。
+              pubMainText = swappedMain;
               pubReplyText = swappedReply;
               sponsorLinkUsed = link;
               sponsorOwnLinkUsed = useOwn;
@@ -438,9 +437,12 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
 
       // 贊助文發布成功 → 累積贊助數 +1（持久化＋本輪快取），並追加紀錄供驗證；DB 草稿原文未動＝自動還原。
       if (sponsorLinkUsed) {
-        if (accId in sponsorTotalCache) sponsorTotalCache[accId] += 1;
-        // 傳入本輪快取已累加的最新值，省 incrementSponsorTotal 內的一次 SELECT。
-        await incrementSponsorTotal(accId, sponsorTotalCache[accId]).catch((e) => log.warn("累加贊助累積數失敗", { accId, err: e }));
+        // 原子累加（DB 為準），並以回傳新值回寫本輪快取；失敗只記 log（偏差方向為少抽、對使用者無害）。
+        const newTotal = await incrementSponsorTotal(accId).catch((e) => {
+          log.warn("累加贊助累積數失敗", { accId, err: e });
+          return null;
+        });
+        if (newTotal !== null && accId in sponsorTotalCache) sponsorTotalCache[accId] = newTotal;
         await appendSponsorRecord(accId, sponsorTaipei.date, {
           postId,
           link: sponsorLinkUsed,
@@ -448,6 +450,14 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
           at: nowIso,
           ownLink: sponsorOwnLinkUsed || undefined // 自賺連結：驗證/裁罰時略過（非平台分潤）
         }).catch((e) => log.warn("寫入贊助文紀錄失敗", { accId, err: e }));
+        // 主動通知使用者「你這篇被作為贊助文」，不再讓人只能事後自己回工作台發現（自賺篇不通知）。
+        if (!sponsorOwnLinkUsed && draft.owner_id) {
+          await sendUserAlert(
+            draft.owner_id,
+            "🔗 你剛發布的一篇貼文已被作為平台贊助文（連結替換為平台分潤連結，其餘內容不變）。可到「設定 → 我的贊助文」查看完整紀錄。",
+            "sponsor_used"
+          ).catch(() => {});
+        }
       }
 
       // 延遲留言：標 pending + 到期時間，交給下方的補留言 pass；

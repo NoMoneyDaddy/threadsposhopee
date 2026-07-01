@@ -81,19 +81,6 @@ export function swapAffiliateLink(text: string | null | undefined, oldLink: stri
   return t;
 }
 
-// 贊助文業配揭露：被判為贊助文（平台就地換成平台分潤連結）時，於正文末附一行中性揭露，
-// 讓 Threads 讀者也知悉此則含平台分潤連結（公平法/FTC 業配揭露）。極短以免撐爆字數。
-export const SPONSOR_DISCLOSURE = "（本則含平台分潤連結）";
-const THREADS_MAX_CHARS = 500;
-export function withSponsorDisclosure(text: string | null | undefined): string {
-  const t = text ?? "";
-  if (t.includes(SPONSOR_DISCLOSURE)) return t;
-  const suffix = `\n\n${SPONSOR_DISCLOSURE}`;
-  // 逼近字數上限時略過揭露（連結替換仍生效），避免超出 Threads 500 字導致發文失敗。
-  if (t.length + suffix.length > THREADS_MAX_CHARS) return t;
-  return `${t}${suffix}`;
-}
-
 // 該不該把這篇當成贊助文（就地換連結）：
 // - 啟用、非 owner 帳號、當日尚未達配額（alreadyDoneToday，配額依使用者自身發文量算）為前提。
 // - 使用者自選一篇（pickDraftId）：只認那一篇；有指定時段（pickHour）則限該時，否則一發即贊助。
@@ -224,6 +211,24 @@ export async function setSponsorBlocked(accountId: string, blocked: boolean): Pr
   }
 }
 
+// 帳號刪除時清除該帳號所有贊助文相關 app_state（紀錄/自選/違規/累積計數/禁用/黑名單），
+// 避免刪帳號後殘留孤兒列（違反資料刪除承諾、且永久累積撐大 app_state）。冪等、失敗上拋由呼叫端記錄。
+export async function clearSponsorStateForAccount(accountId: string): Promise<void> {
+  if (isDemoMode || !accountId) return;
+  const sb = getServiceClient()!;
+  await sb.from("app_state").delete().like("key", `sponsor:rec:${accountId}:%`);
+  await sb
+    .from("app_state")
+    .delete()
+    .in("key", [
+      `sponsor:pick:${accountId}`,
+      `sponsor:optout:${accountId}`,
+      `sponsor:blocked:${accountId}`,
+      `sponsor:total:${accountId}`,
+      `sponsor_strikes:${accountId}`
+    ]);
+}
+
 // ── 每日贊助紀錄（app_state：key=sponsor:rec:<accId>:<date>）──────
 export interface SponsorRecord {
   postId: string;
@@ -276,15 +281,14 @@ export async function getSponsorTotal(accountId: string): Promise<number> {
   const n = data?.value ? parseInt(data.value, 10) : 0;
   return Number.isFinite(n) ? n : 0;
 }
-// 累加（RPC 難以對 app_state 泛用，改讀-加-寫；同帳號同輪序列化發文，競態極低）。
-// newValue：呼叫端若已在本輪快取算出最新累積值，直接傳入以省一次 SELECT roundtrip。
-export async function incrementSponsorTotal(accountId: string, newValue?: number): Promise<void> {
-  if (isDemoMode) return;
+// 原子累加：走 DB 端 increment_app_state_int（單次 upsert），消除讀-加-寫的併發覆寫/漂移，
+// 且單一 roundtrip（不需先 SELECT）。回傳累加後新值（demo 回 0）。
+export async function incrementSponsorTotal(accountId: string): Promise<number> {
+  if (isDemoMode) return 0;
   const sb = getServiceClient()!;
-  const val = newValue !== undefined ? newValue : (await getSponsorTotal(accountId)) + 1;
-  await sb
-    .from("app_state")
-    .upsert({ key: totalKey(accountId), value: String(val), updated_at: new Date().toISOString() }, { onConflict: "key" });
+  const { data, error } = await sb.rpc("increment_app_state_int", { p_key: totalKey(accountId), p_delta: 1 });
+  if (error) throw new Error(`累加贊助累積數失敗：${error.message}`);
+  return typeof data === "number" ? data : 0;
 }
 
 // 追加一筆當日贊助紀錄（讀現有陣列 → push → 寫回）。
@@ -325,6 +329,25 @@ export async function listSponsorRecordsForOwner(ownerId: string, limit = 50): P
     .filter((e) => e.rec.ownerId === ownerId)
     .sort((a, b) => (b.rec.at ?? "").localeCompare(a.rec.at ?? ""))
     .slice(0, limit);
+}
+
+// 全站近期贊助文（透明化）：讓所有登入者了解「哪些貼文被作為平台贊助文」。
+// 只回傳公開安全欄位（發文時間、貼文連結、驗證狀態）；排除自賺（ownLink，非平台贊助）與已刪除；
+// 不含 owner 身分。時間新→舊、限 limit 筆。
+export interface PublicSponsorPost {
+  postId: string;
+  link: string;
+  at: string;
+  verified: boolean;
+}
+export async function listRecentSponsorPostsPublic(limit = 30): Promise<PublicSponsorPost[]> {
+  if (isDemoMode) return [];
+  const all = await listAllSponsorRecords().catch(() => [] as SponsorRecordEntry[]);
+  return all
+    .filter((e) => !e.rec.ownLink && !e.rec.deleted)
+    .sort((a, b) => (b.rec.at ?? "").localeCompare(a.rec.at ?? ""))
+    .slice(0, limit)
+    .map((e) => ({ postId: e.rec.postId, link: e.rec.link, at: e.rec.at, verified: Boolean(e.rec.verified) }));
 }
 
 // 管理頁用：撈出所有贊助紀錄（不論驗證狀態），分頁避免 1000 列截斷；逐列展開陣列、附 index。

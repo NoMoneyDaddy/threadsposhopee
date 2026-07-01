@@ -62,14 +62,16 @@ export async function verifySponsorPosts(): Promise<{ checked: number; violation
       if (rec.ownLink) continue; // 高貢獻者用自己連結的贊助文：非平台分潤，不做連結驗證/裁罰
       const creds = await getThreadsCredentials(accountId, rec.ownerId);
       if (!creds) continue; // 帳號已不存在 → 略過（不誤判暫停）
-      const text = await getPostText(rec.postId, creds.accessToken);
-      // 寬鬆處理：整篇被刪/隱藏/讀不到（text===null）＝使用者正當下架（如蝦皮政策變動），
-      // 只記錄、不計違規、不扣 strike；僅「貼文還在但連結被移除/竄改」才算蓄意違規。
-      if (text === null) {
+      const read = await getPostText(rec.postId, creds.accessToken);
+      // 暫時讀不到（token 失效/限流/逾時）→ 不判定、不當下架、不扣分，維持未驗證留待下輪重試，
+      // 避免因帳號 token 不健康就把真竄改誤放（原本 null 一律當下架的漏驗點）。
+      if (read.status === "unreadable") continue;
+      // 貼文確定不存在＝使用者正當下架（如蝦皮政策變動）：只記錄、不計違規、不扣 strike。
+      if (read.status === "deleted") {
         await updateSponsorRecordAt(accountId, date, index, { ...rec, verified: true, deleted: true });
         continue;
       }
-      const ok = linkStillPresent(text, rec.link);
+      const ok = linkStillPresent(read.text, rec.link);
       const strikeKey = `sponsor_strikes:${accountId}`;
       if (ok) {
         await updateSponsorRecordAt(accountId, date, index, { ...rec, verified: true });

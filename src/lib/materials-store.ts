@@ -551,6 +551,33 @@ export async function getSharedMaterial(id: string): Promise<SharedMaterial | nu
   return (data as SharedMaterial) ?? null;
 }
 
+// 使用者分享到共享庫的素材數（給 give-to-get 匯入額度用）。
+export async function countSharedByOwner(ownerId: string): Promise<number> {
+  if (isDemoMode) return 0;
+  const sb = getServiceClient()!;
+  const { count } = await sb
+    .from("materials")
+    .select("id", { count: "exact", head: true })
+    .eq("owner_id", ownerId)
+    .eq("shared", true);
+  return count ?? 0;
+}
+
+// 匯入額度：已用次數（profiles.imports_used）與原子累加。
+export async function getImportsUsed(ownerId: string): Promise<number> {
+  if (isDemoMode) return 0;
+  const sb = getServiceClient()!;
+  const { data } = await sb.from("profiles").select("imports_used").eq("id", ownerId).maybeSingle();
+  return data?.imports_used ?? 0;
+}
+
+export async function incrementImportsUsed(ownerId: string): Promise<void> {
+  if (isDemoMode) return;
+  const sb = getServiceClient()!;
+  const { error } = await sb.rpc("increment_imports_used", { p_owner: ownerId });
+  if (error) throw new Error(`累加匯入次數失敗：${error.message}`);
+}
+
 // 累加被匯入次數（資料庫端原子 +1，避免競態與多次往返）。
 export async function incrementImportCount(id: string): Promise<void> {
   if (isDemoMode) return;

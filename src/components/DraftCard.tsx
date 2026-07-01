@@ -48,6 +48,7 @@ function DraftCard({
   fallbackAccount,
   sponsorEnabled = false,
   isSponsorPick = false,
+  wasSponsored = false,
   cloud = null,
   preset = null,
   selectable = false,
@@ -64,6 +65,7 @@ function DraftCard({
   fallbackAccount?: AccountMeta;
   sponsorEnabled?: boolean;
   isSponsorPick?: boolean;
+  wasSponsored?: boolean; // 已發布且實際成為贊助文（比對發布紀錄）
   cloud?: string | null; // 編輯器媒體上傳用（Cloudinary 直傳）
   preset?: string | null;
   selectable?: boolean;
@@ -289,9 +291,14 @@ function DraftCard({
           <span className="min-w-0 truncate text-sm font-medium text-ink">{draft.product_name ?? "（未知商品）"}</span>
         </span>
         <span className="flex shrink-0 items-center gap-1">
-          {isSponsorPick && (
+          {isSponsorPick && !wasSponsored && (
             <span className="rounded bg-brand/10 px-2 py-0.5 text-xs font-medium text-brand" title="此篇將作為今日贊助文，連結會以平台分潤連結發布">
               ★ 贊助文
+            </span>
+          )}
+          {wasSponsored && (
+            <span className="rounded bg-brand/10 px-2 py-0.5 text-xs font-medium text-brand" title="此篇已作為贊助文發布（以平台分潤連結）">
+              ★ 已作為贊助文
             </span>
           )}
           {account?.label && (

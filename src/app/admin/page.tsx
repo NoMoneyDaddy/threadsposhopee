@@ -209,7 +209,8 @@ export default async function AdminPage() {
                   )}
                   {m.main_text && <p className="line-clamp-2 whitespace-pre-wrap text-xs text-ink-2">{m.main_text}</p>}
                   <div className="truncate text-xs text-ink-3" translate="no" title={(m.owner_id && ownerEmailById.get(m.owner_id)) || m.owner_id || ""}>
-                    👤 擁有者：{(m.owner_id && ownerEmailById.get(m.owner_id)) || "（未知）"}
+                    {/* email 解析不到（使用者清單載入失敗等）時退回 owner_id，仍可追溯來源。 */}
+                    👤 擁有者：{(m.owner_id && ownerEmailById.get(m.owner_id)) || m.owner_id || "（未知）"}
                   </div>
                   <div className="text-xs text-ink-3">
                     {(m.media_type && m.media_type !== "none" ? (m.media_type === "video" ? "🎬 影片" : "🖼️ 圖片") : "無媒體")}・匯入 {m.import_count}・收藏 {m.favorite_count}

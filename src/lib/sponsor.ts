@@ -400,6 +400,15 @@ function recKey(accountId: string, date: string): string {
   return `sponsor:rec:${accountId}:${date}`;
 }
 
+// 一筆贊助紀錄的顯示狀態（純函式，供「我的贊助文」頁與設定卡片共用，避免文案/色調漂移）。
+export function sponsorRecordStatus(rec: SponsorRecord): { label: string; tone: string } {
+  if (rec.ownLink) return { label: "自賺（自己連結）", tone: "text-ink-3" };
+  if (rec.deleted) return { label: "已下架（不計違規）", tone: "text-ink-3" };
+  if (rec.violated) return { label: "連結被移除/竄改", tone: "text-red-600" };
+  if (rec.verified) return { label: "已驗證", tone: "text-green-600" };
+  return { label: "待驗證", tone: "text-amber-600" };
+}
+
 // 每日多篇贊助文：同一 (帳號,日期) 下可有多篇（依每日配額）。
 // 儲存：app_state 單列 value = SponsorRecord[]（舊資料為單一物件，讀取時包成陣列向後相容）。
 function parseRecords(value: string | null | undefined): SponsorRecord[] {

@@ -526,7 +526,7 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
         if (!sponsorOwnLinkUsed && draft.owner_id) {
           await sendUserAlert(
             draft.owner_id,
-            "🔗 你剛發布的一篇貼文已被作為平台贊助文（連結替換為平台分潤連結，其餘內容不變）。可到「設定 → 我的贊助文」查看完整紀錄。",
+            "🔗 你剛發布的一篇貼文已被作為平台贊助文（連結替換為平台分潤連結，其餘內容不變）。可到「我的贊助文」頁（/sponsored-posts）查看完整紀錄。",
             "sponsor_used"
           ).catch(() => {});
         }

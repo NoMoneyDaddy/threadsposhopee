@@ -183,31 +183,30 @@ export async function getSponsorPickMap(accountIds: string[]): Promise<Record<st
   return out;
 }
 
-// ── 管理員贊助黑名單（app_state：key=sponsor_blocklist，值＝accountId 陣列）──────
-// 管理員可把濫用/高風險帳號永久排除贊助（比使用者自己的臨時禁用更高權限）。
-const BLOCKLIST_KEY = "sponsor_blocklist";
+// ── 管理員贊助黑名單（app_state：key=sponsor:blocked:<accId>）──────
+// 管理員可把濫用/高風險帳號永久排除贊助。改「每帳號一列」而非單一 JSON 陣列，
+// 避免讀-改-寫整個陣列的併發競態（各帳號各自 upsert/delete，互不干擾）。
+function blockedKey(accountId: string): string {
+  return `sponsor:blocked:${accountId}`;
+}
 
 export async function getSponsorBlocklist(): Promise<string[]> {
   if (isDemoMode) return [];
   const sb = getServiceClient()!;
-  const { data } = await sb.from("app_state").select("value").eq("key", BLOCKLIST_KEY).maybeSingle();
-  try {
-    const v = data?.value ? JSON.parse(data.value) : [];
-    return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
-  } catch {
-    return [];
-  }
+  const { data } = await sb.from("app_state").select("key").like("key", "sponsor:blocked:%").limit(1000);
+  return (data ?? []).map((r) => (r.key as string).slice("sponsor:blocked:".length)).filter(Boolean);
 }
 
 export async function setSponsorBlocked(accountId: string, blocked: boolean): Promise<void> {
   if (isDemoMode) return;
   const sb = getServiceClient()!;
-  const cur = new Set(await getSponsorBlocklist());
-  if (blocked) cur.add(accountId);
-  else cur.delete(accountId);
-  await sb
-    .from("app_state")
-    .upsert({ key: BLOCKLIST_KEY, value: JSON.stringify([...cur]), updated_at: new Date().toISOString() }, { onConflict: "key" });
+  if (blocked) {
+    await sb
+      .from("app_state")
+      .upsert({ key: blockedKey(accountId), value: "1", updated_at: new Date().toISOString() }, { onConflict: "key" });
+  } else {
+    await sb.from("app_state").delete().eq("key", blockedKey(accountId));
+  }
 }
 
 // ── 每日贊助紀錄（app_state：key=sponsor:rec:<accId>:<date>）──────

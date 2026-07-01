@@ -23,7 +23,8 @@ export default function SponsorBlockButton({ accountId, initialBlocked }: { acco
       const json = await res.json();
       if (!json.ok) throw new Error(json.error);
       router.refresh();
-    } catch {
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "設定失敗，請稍後再試");
       setBlocked(!next);
     } finally {
       setBusy(false);

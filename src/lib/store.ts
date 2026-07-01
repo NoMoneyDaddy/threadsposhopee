@@ -91,7 +91,7 @@ export {
   listUsersOverview,
   listThreadsAccountsStatus,
   listRecentSponsorRecords,
-  getSponsorShareSummary,
+  getSponsorAdminView,
   DEFAULT_FLAGS,
   type FeatureFlags,
   type AdminStats,

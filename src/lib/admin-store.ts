@@ -185,13 +185,8 @@ export interface SponsorShareSummary {
   violated: number;
   deleted: number;
 }
-export async function getSponsorShareSummary(): Promise<SponsorShareSummary> {
-  const empty: SponsorShareSummary = { total: 0, platform: 0, contributor: 0, violated: 0, deleted: 0 };
-  if (isDemoMode) return empty;
-  const actor = await getRealUser();
-  if (!actor?.isPlatformOwner) throw new Error("forbidden: 僅限管理者");
-  const entries = await listAllSponsorRecords();
-  const out = { ...empty, total: entries.length };
+function summarizeSponsor(entries: { rec: { ownLink?: boolean; violated?: boolean; deleted?: boolean } }[]): SponsorShareSummary {
+  const out: SponsorShareSummary = { total: entries.length, platform: 0, contributor: 0, violated: 0, deleted: 0 };
   for (const { rec } of entries) {
     if (rec.ownLink) out.contributor++;
     else out.platform++;
@@ -199,6 +194,50 @@ export async function getSponsorShareSummary(): Promise<SponsorShareSummary> {
     if (rec.deleted) out.deleted++;
   }
   return out;
+}
+
+// 管理頁贊助文總覽：一次 listAllSponsorRecords 同時算出「近期紀錄」與「份額彙總」，
+// 避免 records 與 summary 各自全表掃描造成雙倍負載（owner 限定）。
+export async function getSponsorAdminView(limit = 50): Promise<{ records: SponsorRecordView[]; summary: SponsorShareSummary }> {
+  if (isDemoMode) return { records: [], summary: { total: 0, platform: 0, contributor: 0, violated: 0, deleted: 0 } };
+  const actor = await getRealUser();
+  if (!actor?.isPlatformOwner) throw new Error("forbidden: 僅限管理者");
+  const [users, entries] = await Promise.all([listAllUsers(), listAllSponsorRecords()]);
+  const emailById = new Map<string, string | null>();
+  for (const u of users) emailById.set(u.id, u.email);
+  const fmt = new Intl.DateTimeFormat("zh-TW", {
+    timeZone: "Asia/Taipei",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+  const records = entries
+    .map((e) => {
+      const atMs = Date.parse(e.rec.at);
+      const status = e.rec.ownLink
+        ? { statusLabel: "自有連結", statusTone: "text-ink-3" }
+        : e.rec.deleted
+          ? { statusLabel: "已下架", statusTone: "text-ink-3" }
+          : e.rec.violated
+            ? { statusLabel: "違規", statusTone: "text-red-600" }
+            : e.rec.verified
+              ? { statusLabel: "已驗證", statusTone: "text-green-600" }
+              : { statusLabel: "待驗證", statusTone: "text-amber-600" };
+      return {
+        accountId: e.accountId,
+        ownerEmail: e.rec.ownerId ? emailById.get(e.rec.ownerId) ?? null : null,
+        postId: e.rec.postId,
+        link: e.rec.link,
+        atText: Number.isFinite(atMs) ? fmt.format(atMs) : e.rec.at,
+        atMs: Number.isFinite(atMs) ? atMs : 0,
+        ...status
+      };
+    })
+    .sort((a, b) => b.atMs - a.atMs)
+    .slice(0, limit);
+  return { records, summary: summarizeSponsor(entries) };
 }
 
 // 依 email 找使用者 id（管理員賦予身份組用；分頁掃描）。

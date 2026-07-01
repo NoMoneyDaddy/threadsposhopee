@@ -9,12 +9,14 @@ export default function ContinueButton({
   code,
   sourceUrl,
   unsafe = false,
-  seconds = 5
+  seconds = 5,
+  adUrl = null
 }: {
   code: string;
   sourceUrl: string;
   unsafe?: boolean;
   seconds?: number; // 倒數秒數（由頁面依是否有廣告決定；unsafe 時不倒數）
+  adUrl?: string | null; // 連結擁有者自訂廣告頁：使用者「主動點繼續」時於新分頁開啟（可直接關），本頁續往來源
 }) {
   // unsafe：起始即視為「已取消倒數」，不自動前往，等使用者主動確認。
   const [left, setLeft] = useState(unsafe ? 0 : seconds);
@@ -30,12 +32,21 @@ export default function ContinueButton({
     }
   }, [code]);
 
-  // 使用者主動點「前往」：計一次點擊（continues）＋本頁前往來源。
+  // 使用者主動點「前往」：計一次點擊（continues）＋（有廣告頁則於新分頁開廣告）＋本頁前往來源。
+  // 廣告只在「使用者主動點擊」時開（瀏覽器允許此手勢下的 window.open），倒數自動前往不開廣告（會被擋且非本人意願）。
   function go() {
     if (fired.current) return;
     fired.current = true;
     setNavigating(true);
     hit();
+    if (adUrl) {
+      try {
+        // noopener/noreferrer：新分頁不可反向操控本頁、不外洩 referrer。
+        window.open(adUrl, "_blank", "noopener,noreferrer");
+      } catch {
+        /* 廣告開啟失敗不影響導流 */
+      }
+    }
     window.location.href = sourceUrl;
   }
 
@@ -61,9 +72,12 @@ export default function ContinueButton({
   }
 
   // 倒數歸零自動前往來源（已取消或 unsafe 則不啟動）。自動跳轉不計 continues（非主動點擊）。
+  // 有廣告頁時「不自動前往」：倒數歸零只把按鈕變為可點，等使用者主動點擊才開廣告＋前往
+  //（瀏覽器只在使用者手勢下才允許 window.open 新分頁；自動開會被攔且非本人意願）。
   useEffect(() => {
     if (cancelled || fired.current) return;
     if (left <= 0) {
+      if (adUrl) return; // 有廣告：不自動跳，等點擊
       fired.current = true;
       setNavigating(true);
       window.location.href = sourceUrl;
@@ -73,7 +87,7 @@ export default function ContinueButton({
       if (!fired.current && !cancelled) setLeft((n) => n - 1);
     }, 1000);
     return () => clearTimeout(t);
-  }, [left, cancelled, sourceUrl]);
+  }, [left, cancelled, sourceUrl, adUrl]);
 
   const counting = !cancelled && !unsafe && left > 0;
   const srStatus = navigating ? "前往中…" : counting ? "前往觀看內容" : unsafe ? "確認後前往" : "可前往";

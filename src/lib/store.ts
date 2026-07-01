@@ -191,6 +191,8 @@ export {
   setShopeeSubId,
   getAutoReviveLinks,
   setAutoReviveLinks,
+  getRedirectAdUrl,
+  setRedirectAdUrl,
   getDefaultShareMaterials,
   setDefaultShareMaterials,
   getPublishPrefs,

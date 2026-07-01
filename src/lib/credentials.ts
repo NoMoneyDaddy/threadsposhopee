@@ -9,6 +9,7 @@ import { parseSlots, type PublishPrefs } from "./publish-prefs";
 import { normalizeNotifyPrefs, type NotifyPrefs } from "./notify-prefs";
 import type { RepostLimits } from "./repost-limits";
 import { isAllowedGeminiModel } from "./ai-models";
+import { assertSafePublicUrl } from "./url-guard";
 
 // ── 爬蟲子系統：每個使用者自己綁的 Apify 憑證（owner 用）──────────
 // 取出某使用者的 Apify token + actor（解密）。沒綁則回 null（呼叫端可退回全域 env）。
@@ -193,9 +194,37 @@ export async function setShopeeAffiliateId(ownerId: string, affiliateId: string 
   if (error) throw new Error(`儲存 shopee_affiliate_id 失敗：${error.message}`);
 }
 
+// ── 轉址服務：使用者自訂「廣告跳轉頁」（訪客點自己短連結的中轉頁時，於新分頁開此廣告頁變現）──────
+// 純 URL、非機密，明文存。讀寫皆過 SSRF/協定守衛（不安全一律視為未設，避免公開頁 window.open 到內網/惡意協定）。
+export async function getRedirectAdUrl(ownerId: string): Promise<string | null> {
+  if (isDemoMode || !ownerId) return null;
+  const sb = getServiceClient()!;
+  const { data, error } = await sb.from("profiles").select("redirect_ad_url").eq("id", ownerId).maybeSingle();
+  if (error) throw new Error(`讀取 redirect_ad_url 失敗：${error.message}`);
+  const url = data?.redirect_ad_url as string | null | undefined;
+  if (!url) return null;
+  try {
+    assertSafePublicUrl(url);
+    return url;
+  } catch {
+    return null; // 既存不安全值也擋掉
+  }
+}
+
+// 設定/清除廣告頁。空字串／null＝清除。非安全公開 URL 一律拒絕（回傳錯誤訊息由呼叫端呈現）。
+export async function setRedirectAdUrl(ownerId: string, url: string | null): Promise<void> {
+  if (isDemoMode) return;
+  const trimmed = (url ?? "").trim();
+  if (trimmed) assertSafePublicUrl(trimmed); // 不安全直接拋，呼叫端轉 400
+  const sb = getServiceClient()!;
+  const { error } = await sb
+    .from("profiles")
+    .upsert({ id: ownerId, redirect_ad_url: trimmed || null }, { onConflict: "id" });
+  if (error) throw new Error(`儲存 redirect_ad_url 失敗：${error.message}`);
+}
+
 // 連結失效時是否自動替換為有效分潤連結（用 clean_product_url 重產）。預設關。
-export async function getAutoReviveLinks(ownerId: string): Promise<boolean> {
-  if (isDemoMode) return false;
+export async function getAutoReviveLinks(ownerId: string): Promise<boolean> {  if (isDemoMode) return false;
   const sb = getServiceClient()!;
   const { data, error } = await sb.from("profiles").select("auto_revive_links").eq("id", ownerId).maybeSingle();
   if (error) throw new Error(`讀取 auto_revive_links 失敗：${error.message}`);

@@ -73,7 +73,8 @@ export default async function PipelinePage() {
   // 贊助文：啟用且非 owner 時可標示／自選。
   const sponsorCfg = await getSponsorConfig();
   const sponsorEnabled = sponsorCfg.enabled && !!user && !user.isOwner;
-  const pickByAccount = sponsorEnabled ? await getSponsorPickMap(accounts.map((a) => a.id)) : {};
+  // pickByAccount 以 threads_user_id 為鍵（R2-D 重綁）。
+  const pickByAccount = sponsorEnabled ? await getSponsorPickMap(accounts.map((a) => a.threads_user_id)) : {};
 
   // 共享庫是否開放：開放才在待審素材顯示「入庫並分享」。開放時再讀「新素材預設分享」設定。
   const flags = user ? await getFeatureFlags().catch(() => null) : null;
@@ -90,11 +91,11 @@ export default async function PipelinePage() {
     const perPosts = contributionAdjustedPerPosts(sponsorCfg.perPosts, score);
     const perAccount = await Promise.all(
       accounts.map(async (a) => {
-        if (pickByAccount[a.id]) return null; // 已手動指定
-        if (await getSponsorOptOutUntil(a.id).catch(() => null)) return null; // 臨時禁用中
+        if (pickByAccount[a.threads_user_id]) return null; // 已手動指定
+        if (await getSponsorOptOutUntil(a.threads_user_id).catch(() => null)) return null; // 臨時禁用中
         const [published, total] = await Promise.all([
           countPublishedByAccount(a.id, user.id).catch(() => -1),
-          getSponsorTotal(a.id).catch(() => 0)
+          getSponsorTotal(a.threads_user_id).catch(() => 0)
         ]);
         if (published < 0 || !shouldSponsorCumulative(published, total, perPosts)) return null;
         const next = drafts

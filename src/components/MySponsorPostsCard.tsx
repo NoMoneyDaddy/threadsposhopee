@@ -6,6 +6,7 @@ export interface MySponsorPostRow {
   atText: string;
   statusLabel: string;
   statusTone: string; // CSS class
+  rateText?: string | null; // 分潤率（如 "5%"）；查不到為 null
 }
 
 export default function MySponsorPostsCard({ rows }: { rows: MySponsorPostRow[] }) {
@@ -27,6 +28,7 @@ export default function MySponsorPostsCard({ rows }: { rows: MySponsorPostRow[] 
                 <div className="truncate text-xs text-ink-3">
                   貼文 <span translate="no">{r.postId}</span>・
                   <a href={r.link} target="_blank" rel="noopener noreferrer" className="text-brand hover:underline">連結</a>
+                  {r.rateText ? <span className="ml-1">・分潤率 {r.rateText}</span> : null}
                 </div>
               </div>
               <span className={"shrink-0 text-xs " + r.statusTone}>{r.statusLabel}</span>

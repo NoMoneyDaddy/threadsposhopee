@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
-import { getAdminStats, getFeatureFlags, listSharedForReview, listTopContributors, isPublishPaused, getHeartbeat, listUsersOverview, listThreadsAccountsStatus, getSponsorAdminView, type ThreadsAccountStatusRow } from "@/lib/store";
+import { getAdminStats, getFeatureFlags, listSharedForReview, listTopContributors, isPublishPaused, getHeartbeat, listUsersOverview, listThreadsAccountsStatus, getSponsorAdminView, getThreadsUserIdsByAccountIds, type ThreadsAccountStatusRow } from "@/lib/store";
 import { getSponsorBlocklist } from "@/lib/sponsor";
 import { contributionBadge } from "@/lib/roles";
 import { isDemoMode } from "@/lib/env";
@@ -63,6 +63,11 @@ export default async function AdminPage() {
   ]);
   const sponsorRecords = sponsorView?.records ?? null;
   const sponsorSummary = sponsorView?.summary;
+  // 黑名單現以 threads_user_id 為鍵（R2-D 重綁）；面板仍以 accountId 顯示/操作，故把 tuid 黑名單反譯回本批紀錄的 accountId。
+  const recAccIds = Array.from(new Set((sponsorRecords ?? []).map((r) => r.accountId).filter(Boolean)));
+  const accTuidMap = recAccIds.length ? await getThreadsUserIdsByAccountIds(recAccIds).catch(() => ({} as Record<string, string>)) : {};
+  const blockedTuidSet = new Set(sponsorBlocked);
+  const blockedAccIds = recAccIds.filter((id) => blockedTuidSet.has(accTuidMap[id]));
   const accountViews = accountStatus ? accountStatus.map((r) => toAccountStatusView(r, Date.now())) : null;
   // 共享素材審核用：owner_id → email 對照（顯示擁有者，便於辨識來源/追責）。
   const ownerEmailById = new Map((users ?? []).map((u) => [u.id, u.email]));
@@ -138,7 +143,7 @@ export default async function AdminPage() {
 
       {!isDemoMode &&
         (sponsorRecords ? (
-          <AdminSponsorPanel records={sponsorRecords} summary={sponsorSummary} blockedIds={sponsorBlocked} />
+          <AdminSponsorPanel records={sponsorRecords} summary={sponsorSummary} blockedIds={blockedAccIds} />
         ) : (
           <div className="card p-4 text-sm text-amber-600">⚠️ 贊助文紀錄讀取失敗，請稍後重整。</div>
         ))}

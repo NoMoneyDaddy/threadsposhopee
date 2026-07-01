@@ -110,7 +110,7 @@ export async function verifySponsorPosts(): Promise<{ checked: number; violation
           // 加重抽成懲罰期：帳號照常發文，但接下來 N 天贊助抽成加重（perPosts 除以 factor）。到期自動恢復。
           const factor = strikes >= 5 ? 3 : 2; // 分級：違規越重、抽越兇
           const untilIso = new Date(now + PENALTY_DAYS * 24 * 60 * 60 * 1000).toISOString();
-          await setSponsorPenalty(accountId, factor, untilIso).catch((e) => log.warn("設定加重抽成失敗", { accountId, err: e }));
+          await setSponsorPenalty(creds.threadsUserId, factor, untilIso).catch((e) => log.warn("設定加重抽成失敗", { accountId, err: e }));
           await sendUserAlert(
             rec.ownerId,
             `⚠️ 你的贊助文連結被移除或竄改（違規加權 ${strikes}）。作為懲罰，接下來 ${PENALTY_DAYS} 天贊助抽成將加重約 ${factor} 倍（帳號照常發文，到期自動恢復）；若持續竄改才會暫停帳號。`,

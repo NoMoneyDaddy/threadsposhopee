@@ -165,7 +165,8 @@ export {
   updateThreadsToken,
   updateThreadsAccountProfile,
   markThreadsAccountError,
-  canAddThreadsAccount
+  canAddThreadsAccount,
+  getThreadsUserIdsByAccountIds
 } from "./accounts-store";
 
 // 個人憑證／設定層（profiles 表：Apify/Gemini/Telegram/ShopeeAffiliateId/Cloudinary）

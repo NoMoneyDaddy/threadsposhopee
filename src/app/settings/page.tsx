@@ -10,7 +10,7 @@ import {
 } from "@/lib/store";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
-import { getSponsorConfig, countSponsorToday, getSponsorOptOut, listSponsorRecordsForOwner, taipeiParts } from "@/lib/sponsor";
+import { getSponsorConfig, countSponsorToday, getSponsorOptOut, listSponsorRecordsForOwner, taipeiParts, formatCommissionRate as fmtCommissionRate } from "@/lib/sponsor";
 import { listThreadsAccounts } from "@/lib/accounts-store";
 import SponsorOptOutForm, { type SponsorAccountRow } from "@/components/SponsorOptOutForm";
 import MySponsorPostsCard, { type MySponsorPostRow } from "@/components/MySponsorPostsCard";
@@ -56,7 +56,7 @@ export default async function SettingsPage() {
     const accts = await listThreadsAccounts(user.id).catch(() => []);
     sponsorAccounts = await Promise.all(
       accts.map(async (a) => {
-        const optOut = await getSponsorOptOut(a.id).catch(() => null);
+        const optOut = await getSponsorOptOut(a.threads_user_id).catch(() => null);
         return {
           id: a.id,
           label: a.label,
@@ -86,7 +86,8 @@ export default async function SettingsPage() {
         link: rec.link,
         atText: new Date(rec.at).toLocaleString("zh-TW", { timeZone: "Asia/Taipei", dateStyle: "short", timeStyle: "short" }),
         statusLabel: status.label,
-        statusTone: status.tone
+        statusTone: status.tone,
+        rateText: fmtCommissionRate(rec.commissionRate)
       };
     });
   }

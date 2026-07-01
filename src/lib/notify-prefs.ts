@@ -7,6 +7,7 @@ export const NOTIFY_TYPES = [
   { key: "token_expiring", label: "Token 即將到期／展期失敗" },
   { key: "account_paused", label: "帳號被暫停" },
   { key: "sponsor_violation", label: "贊助文違規" },
+  { key: "sponsor_used", label: "貼文被作為贊助文" },
   { key: "daily_digest", label: "每日成效摘要" },
   { key: "weekly_digest", label: "每週績效摘要" },
   { key: "monthly_digest", label: "每月績效摘要" }

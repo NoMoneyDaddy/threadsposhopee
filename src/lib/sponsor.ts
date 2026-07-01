@@ -72,11 +72,13 @@ export function inOffPeak(hour: number, start: number, end: number): boolean {
 }
 
 // 把文字中的舊分潤連結替換為平台贊助連結。舊連結不存在時：有內容就在結尾補上平台連結。
+// 就地替換：只在文中確實含 oldLink 時替換；找不到就「原文不動」回傳（不再 append）。
+// 避免把平台分潤連結硬接到不含商品連結的文末（雙連結/錯置且使用者站內看不到）。
+// 呼叫端據「回傳是否與原文不同」判定 swap 是否真的發生，未發生就放棄本篇贊助。
 export function swapAffiliateLink(text: string | null | undefined, oldLink: string | null | undefined, sponsorLink: string): string {
   const t = text ?? "";
   if (oldLink && t.includes(oldLink)) return t.split(oldLink).join(sponsorLink);
-  if (!t.trim()) return t;
-  return `${t}\n${sponsorLink}`;
+  return t;
 }
 
 // 該不該把這篇當成贊助文（就地換連結）：
@@ -209,6 +211,24 @@ export async function setSponsorBlocked(accountId: string, blocked: boolean): Pr
   }
 }
 
+// 帳號刪除時清除該帳號所有贊助文相關 app_state（紀錄/自選/違規/累積計數/禁用/黑名單），
+// 避免刪帳號後殘留孤兒列（違反資料刪除承諾、且永久累積撐大 app_state）。冪等、失敗上拋由呼叫端記錄。
+export async function clearSponsorStateForAccount(accountId: string): Promise<void> {
+  if (isDemoMode || !accountId) return;
+  const sb = getServiceClient()!;
+  await sb.from("app_state").delete().like("key", `sponsor:rec:${accountId}:%`);
+  await sb
+    .from("app_state")
+    .delete()
+    .in("key", [
+      `sponsor:pick:${accountId}`,
+      `sponsor:optout:${accountId}`,
+      `sponsor:blocked:${accountId}`,
+      `sponsor:total:${accountId}`,
+      `sponsor_strikes:${accountId}`
+    ]);
+}
+
 // ── 每日贊助紀錄（app_state：key=sponsor:rec:<accId>:<date>）──────
 export interface SponsorRecord {
   postId: string;
@@ -247,6 +267,28 @@ export async function getSponsorRecords(accountId: string, date: string): Promis
 // 今日已發贊助文篇數（配額閘門用）。
 export async function countSponsorToday(accountId: string, date: string): Promise<number> {
   return (await getSponsorRecords(accountId, date)).length;
+}
+
+// ── 累積贊助數（app_state：key=sponsor:total:<accId>）──────
+// 累積比例判定用：不掃全部每日紀錄（昂貴），改維護一個每帳號累積計數器。
+function totalKey(accountId: string): string {
+  return `sponsor:total:${accountId}`;
+}
+export async function getSponsorTotal(accountId: string): Promise<number> {
+  if (isDemoMode) return 0;
+  const sb = getServiceClient()!;
+  const { data } = await sb.from("app_state").select("value").eq("key", totalKey(accountId)).maybeSingle();
+  const n = data?.value ? parseInt(data.value, 10) : 0;
+  return Number.isFinite(n) ? n : 0;
+}
+// 原子累加：走 DB 端 increment_app_state_int（單次 upsert），消除讀-加-寫的併發覆寫/漂移，
+// 且單一 roundtrip（不需先 SELECT）。回傳累加後新值（demo 回 0）。
+export async function incrementSponsorTotal(accountId: string): Promise<number> {
+  if (isDemoMode) return 0;
+  const sb = getServiceClient()!;
+  const { data, error } = await sb.rpc("increment_app_state_int", { p_key: totalKey(accountId), p_delta: 1 });
+  if (error) throw new Error(`累加贊助累積數失敗：${error.message}`);
+  return typeof data === "number" ? data : 0;
 }
 
 // 追加一筆當日贊助紀錄（讀現有陣列 → push → 寫回）。
@@ -313,23 +355,76 @@ export async function listAllSponsorRecords(): Promise<SponsorRecordEntry[]> {
   return out;
 }
 
+// 驗證只需最近幾天的未驗證紀錄（發出滿 minAgeMs、通常數小時內就會被驗掉）；
+// 更舊的未驗證多為讀不到/放棄的殘留，交由每日清理處理，不必每輪全掃。
+const VERIFY_LOOKBACK_DAYS = 7;
+
+function dateNDaysAgo(days: number): string {
+  return new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
+}
+
 // 撈出「尚未驗證、且已發出超過 minAgeMs」的贊助紀錄（給驗證排程用）。逐列展開陣列、附 index。
+// 分頁掃描避免 PostgREST 1000 列上限靜默截斷（舊紀錄漏驗）；並只取近 VERIFY_LOOKBACK_DAYS 天。
 export async function listSponsorRecordsToVerify(minAgeMs: number): Promise<SponsorRecordEntry[]> {
   if (isDemoMode) return [];
   const sb = getServiceClient()!;
-  const { data } = await sb.from("app_state").select("key,value").like("key", "sponsor:rec:%");
   const out: SponsorRecordEntry[] = [];
-  for (const row of data ?? []) {
-    const m = /^sponsor:rec:(.+):(\d{4}-\d{2}-\d{2})$/.exec(row.key);
-    if (!m) continue;
-    const recs = parseRecords(row.value);
-    recs.forEach((rec, index) => {
-      if (rec.verified) return;
-      if (Date.now() - new Date(rec.at).getTime() < minAgeMs) return;
-      out.push({ accountId: m[1], date: m[2], index, rec });
-    });
+  const since = dateNDaysAgo(VERIFY_LOOKBACK_DAYS);
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await sb
+      .from("app_state")
+      .select("key,value")
+      .like("key", "sponsor:rec:%")
+      .range(from, from + PAGE - 1);
+    if (error) throw new Error(`讀取待驗贊助紀錄失敗：${error.message}`);
+    const rows = data ?? [];
+    for (const row of rows) {
+      const m = /^sponsor:rec:(.+):(\d{4}-\d{2}-\d{2})$/.exec(row.key);
+      if (!m) continue;
+      if (m[2] < since) continue; // 只驗近 N 天（日期字串可直接字典序比較）
+      const recs = parseRecords(row.value);
+      recs.forEach((rec, index) => {
+        if (rec.verified) return;
+        if (Date.now() - new Date(rec.at).getTime() < minAgeMs) return;
+        out.push({ accountId: m[1], date: m[2], index, rec });
+      });
+    }
+    if (rows.length < PAGE) break;
   }
   return out;
+}
+
+// 每日清理：刪除 retentionDays 天前的贊助紀錄列（sponsor:rec:<accId>:<date>），
+// 避免 app_state 無限增長拖慢同表的鎖/心跳與全表掃描。驗證早已完成、僅供歷史，過保留期即可清。
+export async function cleanupOldSponsorRecords(retentionDays = 90): Promise<{ deleted: number }> {
+  if (isDemoMode) return { deleted: 0 };
+  const sb = getServiceClient()!;
+  const cutoff = dateNDaysAgo(retentionDays);
+  const stale: string[] = [];
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await sb
+      .from("app_state")
+      .select("key")
+      .like("key", "sponsor:rec:%")
+      .range(from, from + PAGE - 1);
+    if (error) throw new Error(`掃描待清理贊助紀錄失敗：${error.message}`);
+    const rows = data ?? [];
+    for (const row of rows) {
+      const m = /^sponsor:rec:.+:(\d{4}-\d{2}-\d{2})$/.exec(row.key as string);
+      if (m && m[1] < cutoff) stale.push(row.key as string);
+    }
+    if (rows.length < PAGE) break;
+  }
+  let deleted = 0;
+  for (let i = 0; i < stale.length; i += PAGE) {
+    const chunk = stale.slice(i, i + PAGE);
+    const { error } = await sb.from("app_state").delete().in("key", chunk);
+    if (error) throw new Error(`清理贊助紀錄失敗：${error.message}`);
+    deleted += chunk.length;
+  }
+  return { deleted };
 }
 
 // 正規化＋驗證輸入（小時界線＋贊助 sub_id 多格）。贊助文連結改為「就地改寫各篇貼文的商品連結」，

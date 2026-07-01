@@ -10,7 +10,19 @@ const RISKY_PATTERNS: RegExp[] = [
   /私菸|水貨走私|盜版|假貨代購/i
 ];
 
-export function isRiskySponsorContent(text: string | null | undefined): boolean {
-  if (!text) return false;
-  return RISKY_PATTERNS.some((re) => re.test(text));
+// 正規化以擋規避手法：全形→半形、去所有空白（含全形空白）、轉小寫。
+// 讓「賭 博」「娛　樂　城」「１８禁」「ＡＶ」等夾字/全形變體也能命中。
+function normalizeForMatch(text: string): string {
+  return text
+    .replace(/[！-～]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0)) // 全形 ASCII→半形
+    .replace(/\s+/g, "") // 去所有空白（\s 含 　 全形空白）
+    .toLowerCase();
+}
+
+// 檢查多段文字（正文＋留言）：任一段命中原文或正規化後文字即視為風險。
+export function isRiskySponsorContent(...texts: (string | null | undefined)[]): boolean {
+  const joined = texts.filter(Boolean).join("\n");
+  if (!joined.trim()) return false;
+  const norm = normalizeForMatch(joined);
+  return RISKY_PATTERNS.some((re) => re.test(joined) || re.test(norm));
 }

@@ -25,25 +25,26 @@ import {
   clearAccountCircuit,
   getContributionScore,
   getSponsorRewardMode,
-  countPublishedTodayByAccount
+  countPublishedByAccount
 } from "@/lib/store";
 import { canOwnLink, contributionAdjustedPerPosts } from "@/lib/contribution";
 import { publishToThreads, publishReply, PublishUncertainError } from "@/services/threads/publish";
 import { getOwnerUserId } from "@/lib/auth";
 import {
   getSponsorConfig,
-  countSponsorToday,
   appendSponsorRecord,
   getSponsorPick,
   getSponsorOptOutUntil,
   getSponsorBlocklist,
+  getSponsorTotal,
+  incrementSponsorTotal,
   shouldSponsor,
   swapAffiliateLink,
   taipeiParts,
   type SponsorPick
 } from "@/lib/sponsor";
 import { isRiskySponsorContent } from "@/services/publish/sponsor-content";
-import { sponsorQuota } from "@/services/publish/sponsor-quota";
+import { shouldSponsorCumulative, ownLinkThisSlot } from "@/services/publish/sponsor-quota";
 import { resolveSponsorOwnerCreds, buildSponsorLinkForAccount, cleanProductUrlFromDraft } from "@/services/sponsor/link";
 import { log } from "@/lib/logger";
 import { normalizeDraftMedia, normalizeReplyMedia } from "@/lib/media";
@@ -153,8 +154,9 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
   // 管理員贊助黑名單（濫用/高風險帳號永久排除贊助）：整輪取一次。
   const sponsorBlocklist =
     sponsorCfg.enabled && !isDemoMode ? new Set(await getSponsorBlocklist().catch(() => [])) : new Set<string>();
-  const sponsorCountCache: Record<string, number> = {}; // accId -> 今天已發贊助文篇數
-  const sponsorPostedTodayCache: Record<string, number> = {}; // accId -> 今天（此帳號）已發布篇數（比例配額用）
+  // 累積比例：依帳號「累積發布數／累積贊助數」自我校正（取代每日門檻，補掉每天壓門檻的漏洞）。
+  const sponsorPublishedCache: Record<string, number> = {}; // accId -> 累積已發布篇數（-1＝算不出，保守不抽）
+  const sponsorTotalCache: Record<string, number> = {}; // accId -> 累積已發贊助文數
   // 自賺資格＋自己的金鑰資源（依 owner 快取）：超額 slot 用貢獻者自己的分潤連結。
   const sponsorOwnLinkCache: Record<string, { eligible: boolean; creds: Awaited<ReturnType<typeof resolveSponsorOwnerCreds>> | null }> = {};
   const sponsorPickCache: Record<string, SponsorPick | null> = {}; // accId -> 使用者自選
@@ -321,28 +323,31 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
       const reward = draft.owner_id ? sponsorRewardCache[draft.owner_id] : undefined;
       // 略過贊助的情況：owner 帳號、臨時禁用、管理員黑名單、或內容命中風險關鍵字（不把平台連結放上去，
       // 避免違規內容拖累平台分潤帳號被檢舉）。其餘一律套用（貢獻越高抽越少，平台保底永不歸零）。
-      const riskyContent = isRiskySponsorContent(draft.main_text);
+      const riskyContent = isRiskySponsorContent(draft.main_text, draft.reply_text);
       if (!isOwnerAccount && !sponsorOptOutCache[accId] && !sponsorBlocklist.has(accId) && !riskyContent) {
-        // 比例配額：依該帳號「當日實際自發篇數（含這篇）」換算 max(保底, floor(篇數/perPosts))；
-        // 低頻者（當日 < minPostsForFloor 篇）配額為 0 不被抽；貢獻越高 perPosts 越大（抽越少）。
-        if (!(accId in sponsorCountCache)) {
-          sponsorCountCache[accId] = await countSponsorToday(accId, sponsorTaipei.date).catch(() => 0);
-        }
-        if (!(accId in sponsorPostedTodayCache)) {
-          sponsorPostedTodayCache[accId] = draft.owner_id
-            ? await countPublishedTodayByAccount(accId, draft.owner_id, sponsorTodaySinceIso).catch((e) => {
-                // 算不出當日發文數時記錄並保守降級為 0（本篇不抽贊助），不靜默吞錯。
-                log.warn("計算當日發文數失敗，本篇略過贊助配額", { accId, err: e });
-                return 0;
+        // 累積比例：依帳號「累積發布數／累積贊助數」自我校正，長期維持約 1/perPosts；
+        // 每天只發少量、天天壓門檻的人，累積到 perPosts 篇一樣會被抽（補掉每日門檻漏洞）。貢獻越高 perPosts 越大。
+        if (!(accId in sponsorPublishedCache)) {
+          sponsorPublishedCache[accId] = draft.owner_id
+            ? await countPublishedByAccount(accId, draft.owner_id).catch((e: unknown) => {
+                // 算不出累積發文數 → 保守降級為 -1（本篇不抽），不靜默吞錯。
+                log.warn("計算累積發文數失敗，本篇略過贊助配額", { accId, err: e });
+                return -1;
               })
-            : 0;
+            : -1;
+        }
+        if (!(accId in sponsorTotalCache)) {
+          sponsorTotalCache[accId] = await getSponsorTotal(accId).catch((e: unknown) => {
+            // 算不出累積贊助數 → 保守降級為 -1（本篇不抽），避免誤判成 0 而超額抽成；不靜默吞錯。
+            log.warn("取得累積贊助數失敗，本篇略過贊助配額", { accId, err: e });
+            return -1;
+          });
         }
         const effectivePerPosts = contributionAdjustedPerPosts(sponsorCfg.perPosts, reward?.score ?? 0);
-        const sponsorQuotaToday = sponsorQuota(sponsorPostedTodayCache[accId] + 1, {
-          perPosts: effectivePerPosts,
-          floor: sponsorCfg.floor,
-          minPostsForFloor: sponsorCfg.minPostsForFloor
-        });
+        const cumulativeAllows =
+          sponsorPublishedCache[accId] >= 0 &&
+          sponsorTotalCache[accId] >= 0 &&
+          shouldSponsorCumulative(sponsorPublishedCache[accId], sponsorTotalCache[accId], effectivePerPosts);
         if (!(accId in sponsorPickCache)) {
           sponsorPickCache[accId] = await getSponsorPick(accId).catch(() => null);
         }
@@ -352,22 +357,20 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
             enabled: sponsorCfg.enabled,
             isOwnerAccount,
             hour: sponsorTaipei.hour,
-            alreadyDoneToday: sponsorCountCache[accId] >= sponsorQuotaToday,
+            alreadyDoneToday: !cumulativeAllows,
             thisDraftId: draft.id,
             pickDraftId: pick?.draftId ?? null,
             pickHour: pick?.hour ?? null
           })
         ) {
-          // 就地改寫：取「該篇貼文自己的」商品連結，用 owner 金鑰重產成 owner 的分潤連結（平台保本）；
-          // 超額 slot 開放「自賺資格」貢獻者改用自己的金鑰重產（自賺）。無商品連結則略過（不改寫該篇）。
-          // 保底篇數與配額同源（sponsorCfg.floor）：達保底數後的額外贊助才算「超額」可自賺，
-          // 避免租戶把 floor 調大於 1 時第二篇就過早切到 own-link、與配額不一致。
-          const isSurplus = (sponsorCountCache[accId] ?? 0) >= sponsorCfg.floor;
+          // 就地改寫：取「該篇貼文自己的」商品連結。平台/自賺分配以累積贊助序號交錯
+          //（ownLinkThisSlot：偶數序號留平台＝保底不歸零，奇數序號給自賺資格貢獻者），無商品連結則略過。
+          const useOwnSlot = ownLinkThisSlot(sponsorTotalCache[accId]);
           const draftCleanUrl = await cleanProductUrlFromDraft(draft).catch(() => null);
           let link: string | null = null;
           let useOwn = false;
           if (draftCleanUrl) {
-            if (isSurplus && draft.owner_id && reward) {
+            if (useOwnSlot && draft.owner_id && reward) {
               const oid = draft.owner_id;
               if (!(oid in sponsorOwnLinkCache)) {
                 const eligible = reward.mode === "own_link" && canOwnLink(reward.score);
@@ -390,10 +393,17 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
             }
           }
           if (link) {
-            pubMainText = swapAffiliateLink(draft.main_text, draft.shopee_short_link, link);
-            pubReplyText = draft.reply_text ? swapAffiliateLink(draft.reply_text, draft.shopee_short_link, link) : draft.reply_text;
-            sponsorLinkUsed = link;
-            sponsorOwnLinkUsed = useOwn;
+            // 只在確實命中原商品連結、真的替換掉時才算贊助；未命中則放棄本篇（不硬接連結）。
+            const swappedMain = swapAffiliateLink(draft.main_text, draft.shopee_short_link, link);
+            const swappedReply = draft.reply_text ? swapAffiliateLink(draft.reply_text, draft.shopee_short_link, link) : draft.reply_text;
+            const changed = swappedMain !== (draft.main_text ?? "") || swappedReply !== (draft.reply_text ?? null);
+            if (changed) {
+              // 就地替換連結，其餘文案不動（不在貼文附加任何揭露文字）。
+              pubMainText = swappedMain;
+              pubReplyText = swappedReply;
+              sponsorLinkUsed = link;
+              sponsorOwnLinkUsed = useOwn;
+            }
           }
         }
       }
@@ -422,12 +432,17 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
         replyFailedInline = Boolean(res.replyFailed);
       }
 
-      // 本帳號今日自發篇數 +1（比例配額用）：同輪後續同帳號草稿據此遞增，配額隨實際發文量成長。
-      if (accId in sponsorPostedTodayCache) sponsorPostedTodayCache[accId] += 1;
+      // 本帳號累積發布數 +1（累積比例分母）：同輪後續同帳號草稿據此遞增，比例隨實際發文量成長。
+      if (accId in sponsorPublishedCache && sponsorPublishedCache[accId] >= 0) sponsorPublishedCache[accId] += 1;
 
-      // 贊助文發布成功 → 追加當日紀錄（供驗證），DB 草稿原文未動＝自動還原。
+      // 贊助文發布成功 → 累積贊助數 +1（持久化＋本輪快取），並追加紀錄供驗證；DB 草稿原文未動＝自動還原。
       if (sponsorLinkUsed) {
-        sponsorCountCache[accId] = (sponsorCountCache[accId] ?? 0) + 1;
+        // 原子累加（DB 為準），並以回傳新值回寫本輪快取；失敗只記 log（偏差方向為少抽、對使用者無害）。
+        const newTotal = await incrementSponsorTotal(accId).catch((e) => {
+          log.warn("累加贊助累積數失敗", { accId, err: e });
+          return null;
+        });
+        if (newTotal !== null && accId in sponsorTotalCache) sponsorTotalCache[accId] = newTotal;
         await appendSponsorRecord(accId, sponsorTaipei.date, {
           postId,
           link: sponsorLinkUsed,
@@ -435,6 +450,14 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
           at: nowIso,
           ownLink: sponsorOwnLinkUsed || undefined // 自賺連結：驗證/裁罰時略過（非平台分潤）
         }).catch((e) => log.warn("寫入贊助文紀錄失敗", { accId, err: e }));
+        // 主動通知使用者「你這篇被作為贊助文」，不再讓人只能事後自己回工作台發現（自賺篇不通知）。
+        if (!sponsorOwnLinkUsed && draft.owner_id) {
+          await sendUserAlert(
+            draft.owner_id,
+            "🔗 你剛發布的一篇貼文已被作為平台贊助文（連結替換為平台分潤連結，其餘內容不變）。可到「設定 → 我的贊助文」查看完整紀錄。",
+            "sponsor_used"
+          ).catch(() => {});
+        }
       }
 
       // 延遲留言：標 pending + 到期時間，交給下方的補留言 pass；
@@ -500,6 +523,21 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
           "account_paused"
         ).catch(() => {});
       }
+    }
+  }
+
+  // 平台級健康彙總告警：多帳號同時失敗或成功率驟降＝可能 Threads 全域故障/大規模風控，
+  // 匯總成單一高優先告警，便於第一時間分辨「個別 token 過期」vs「系統性事件」（個別斷路器另有告警）。
+  const attempted = result.published.length + result.failed.length + (result.needsVerification?.length ?? 0);
+  if (attempted >= 5) {
+    const rate = result.published.length / attempted;
+    const brokenAccounts = alertedBroken.size;
+    if (rate < 0.5 || brokenAccounts >= 3) {
+      await sendAlert(
+        `🚨 發文健康警示：本輪嘗試 ${attempted} 篇、成功率 ${Math.round(rate * 100)}%、觸發斷路器帳號 ${brokenAccounts} 個` +
+          (result.needsVerification?.length ? `、待確認 ${result.needsVerification.length} 篇` : "") +
+          "。可能為 Threads 全域故障或大規模風控，請儘速檢查。"
+      ).catch(() => {});
     }
   }
 

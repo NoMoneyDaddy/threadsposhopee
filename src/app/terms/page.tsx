@@ -33,8 +33,10 @@ export default function TermsPage() {
 
       <Section title="贊助文">
         <p>
-          免費使用本服務即同意：每個發文帳號（管理者帳號除外）每天會有 1 篇貼文於冷門時段以平台分潤連結發布。
-          系統會於網站介面事前標示，完整規則請見
+          免費使用本服務即同意：發文帳號（管理者帳號除外）在發布你自己的貼文時，系統會依你當日實際發文量
+          <strong className="text-ink">按比例抽取少數幾篇</strong>（約每數篇抽 1 篇、不限時段），把該篇貼文的分潤連結
+          暫時替換為平台的分潤連結，<strong className="text-ink">其餘文案內容不變</strong>；貢獻越高抽越少，平台保底。
+          當日發文量過低者不抽。系統會於網站介面事前標示，完整規則（含比例、貢獻分級、驗證與查詢）請見
           <a href="/sponsored" className="text-brand underline">《贊助文規則》</a>。
         </p>
       </Section>

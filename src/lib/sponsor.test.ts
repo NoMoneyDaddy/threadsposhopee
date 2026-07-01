@@ -9,9 +9,11 @@ test("inOffPeak: [start,end) 半開區間", () => {
   assert.equal(inOffPeak(1, 2, 5), false);
 });
 
-test("swapAffiliateLink: 有舊連結就替換，沒有就補在結尾", () => {
+test("swapAffiliateLink: 有舊連結就替換；找不到就原文不動（不再 append）", () => {
   assert.equal(swapAffiliateLink("買這個 https://s.shopee.tw/me 讚", "https://s.shopee.tw/me", "https://s.shopee.tw/plat"), "買這個 https://s.shopee.tw/plat 讚");
-  assert.equal(swapAffiliateLink("純文字", null, "https://s.shopee.tw/plat"), "純文字\nhttps://s.shopee.tw/plat");
+  // 找不到原連結 → 原文不動（呼叫端據此放棄贊助，不硬接連結）
+  assert.equal(swapAffiliateLink("純文字", null, "https://s.shopee.tw/plat"), "純文字");
+  assert.equal(swapAffiliateLink("沒有商品連結的貼文", "https://s.shopee.tw/notfound", "https://s.shopee.tw/plat"), "沒有商品連結的貼文");
   assert.equal(swapAffiliateLink("", null, "https://s.shopee.tw/plat"), "");
 });
 

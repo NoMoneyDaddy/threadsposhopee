@@ -88,10 +88,11 @@ export async function listEnabledAiAgentsAll(): Promise<AiAgent[]> {
   return (data ?? []) as AiAgent[];
 }
 
-export async function setAgentLastRun(id: string): Promise<void> {
+// atIso：要寫入的 last_run_at（預設 now）。失敗退避時可傳入較早的時戳，讓守門提早放行重試。
+export async function setAgentLastRun(id: string, atIso?: string): Promise<void> {
   if (isDemoMode) return;
   const sb = getServiceClient()!;
-  await sb.from("ai_agents").update({ last_run_at: new Date().toISOString() }).eq("id", id);
+  await sb.from("ai_agents").update({ last_run_at: atIso ?? new Date().toISOString() }).eq("id", id);
 }
 
 // ── 去重記錄 ──

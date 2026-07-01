@@ -12,6 +12,8 @@ import { buildPeriodicDigest } from "@/services/digest/periodic";
 import { broadcastWeeklyDigests } from "@/services/digest/weekly-broadcast";
 import type { NotifyType } from "@/lib/notify-prefs";
 import { verifySponsorPosts } from "@/services/sponsor/run";
+import { cleanupOldSponsorRecords } from "@/lib/sponsor";
+import { checkSchemaDrift } from "@/lib/schema-check";
 import { runAiAgents } from "@/services/ai/agent-run";
 import { pollActiveScrapeRuns } from "@/services/scraper/async-scrape";
 import { cleanupExpiredBindTokens } from "@/lib/telegram-bind";
@@ -91,6 +93,10 @@ export async function runCronAll(now: Date = new Date()): Promise<Record<string,
     steps.push({ key: "refreshProfiles", run: onceDaily("refreshProfiles", refreshThreadsProfiles), warn: (r) => (r?.failed ? `⚠️ 頭像刷新 ${r.failed} 個失敗` : null) });
     // 順手清掉過期未消費的 Telegram 綁定碼（10 分鐘 TTL，殘留量極小，每日清即可）。
     steps.push({ key: "cleanupBindTokens", run: onceDaily("cleanupBindTokens", cleanupExpiredBindTokens) });
+    // 清理 90 天前的贊助紀錄，避免 app_state 無限增長拖慢鎖/心跳與驗證掃描。
+    steps.push({ key: "cleanupSponsorRecords", run: onceDaily("cleanupSponsorRecords", () => cleanupOldSponsorRecords(90)), warn: (r) => (r?.deleted ? `🧹 清理贊助紀錄 ${r.deleted} 列` : null) });
+    // Migration 漏套偵測：探測近期 migration 應存在的欄位/RPC，缺漏即告警（漏套 → 執行期 500 前移為可見警示）。
+    steps.push({ key: "schemaDrift", run: onceDaily("schemaDrift", checkSchemaDrift), warn: (r) => (r && r.ok === false ? `🧬 資料庫 schema 疑似漏套 migration：${(r.missing ?? []).join("、")}` : null) });
   }
   // 每週一健檢一次（UTC 04 時）
   if (dow === 1 && h === 4) {

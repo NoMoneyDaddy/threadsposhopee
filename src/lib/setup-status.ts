@@ -45,10 +45,10 @@ export async function getSetupSteps(user: AppUser): Promise<SetupStep[]> {
     },
     {
       key: "gemini",
-      title: "綁定你自己的 AI 金鑰（Gemini）",
-      desc: "AI 文案只會用你自己綁的 Gemini 金鑰，不與他人共用。",
+      title: "綁定 AI 金鑰（Gemini，選填）",
+      desc: "只在要用 AI 產文案時才需要（用你自己綁的金鑰，不與他人共用）。想手動打字或直接貼現成文案發文，可先跳過。",
       done: gem,
-      required: true,
+      required: false,
       href: "/accounts#setup-gemini"
     },
     {

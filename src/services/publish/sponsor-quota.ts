@@ -23,3 +23,20 @@ export function sponsorQuota(postCount: number, opts: SponsorQuotaOpts = {}): nu
   const byVolume = Math.floor(postCount / perPosts);
   return Math.max(floor, byVolume);
 }
+
+// ── 累積比例（取代每日門檻，補掉「每天壓在門檻下就永遠免抽」的漏洞）──────
+// 依帳號「累積發文數」自我校正：這篇是否該當贊助文＝目前累積贊助數 < 依累積發文數應有的目標數。
+// 例（perPosts=6）：累積發到第 6 篇才抽第 1 篇；第 12 篇抽第 2 篇…長期維持約 1/perPosts。
+// 每天只發 2 篇的人，累積幾天到 6 篇一樣會被抽 → 不再有每日門檻漏洞。純函式可測。
+export function shouldSponsorCumulative(publishedBefore: number, sponsoredTotal: number, perPosts: number): boolean {
+  if (!Number.isFinite(perPosts) || perPosts <= 0) return false;
+  const target = Math.floor((Math.max(0, publishedBefore) + 1) / perPosts); // +1＝含這篇
+  return Math.max(0, sponsoredTotal) < target;
+}
+
+// own-link 使用者的贊助 slot 是否走「自己連結」自賺：以累積贊助序號交錯，偶數序號留給平台
+// （保障平台永遠拿到約一半、不歸零），奇數序號給貢獻者自賺。純函式可測。
+export function ownLinkThisSlot(sponsoredTotalBefore: number): boolean {
+  return Math.max(0, sponsoredTotalBefore) % 2 === 1;
+}
+

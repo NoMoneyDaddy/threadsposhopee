@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { sponsorQuota } from "./sponsor-quota";
+import { sponsorQuota, shouldSponsorCumulative, ownLinkThisSlot } from "./sponsor-quota";
 
 test("sponsorQuota：預設 perPosts=6, floor=1", () => {
   assert.equal(sponsorQuota(0), 0);
@@ -38,4 +38,25 @@ test("sponsorQuota：非法輸入回 0", () => {
   assert.equal(sponsorQuota(-3), 0);
   assert.equal(sponsorQuota(Number.NaN), 0);
   assert.equal(sponsorQuota(6, { perPosts: 0 }), 0);
+});
+
+test("shouldSponsorCumulative：累積到第 perPosts 篇才抽，維持約 1/perPosts", () => {
+  // perPosts=6：前 5 篇不抽（publishedBefore 0..4），第 6 篇（before=5）抽
+  for (let before = 0; before < 5; before++) assert.equal(shouldSponsorCumulative(before, 0, 6), false);
+  assert.equal(shouldSponsorCumulative(5, 0, 6), true); // 第 6 篇 → 抽
+  assert.equal(shouldSponsorCumulative(11, 1, 6), true); // 第 12 篇、已抽 1 → 再抽
+  assert.equal(shouldSponsorCumulative(6, 1, 6), false); // 第 7 篇、已抽 1 → 不抽
+});
+
+test("shouldSponsorCumulative：每天壓門檻下也逃不掉（累積計）", () => {
+  // 每天發 2 篇、都不抽？累積到第 6 篇仍會抽（不因每日重置而逃過）
+  assert.equal(shouldSponsorCumulative(5, 0, 6), true);
+  assert.equal(shouldSponsorCumulative(0, 0, 0), false); // 非法 perPosts
+});
+
+test("ownLinkThisSlot：偶數序號留平台、奇數自賺（平台保底不歸零）", () => {
+  assert.equal(ownLinkThisSlot(0), false); // 第 1 個贊助 → 平台
+  assert.equal(ownLinkThisSlot(1), true); // 第 2 個 → 自賺
+  assert.equal(ownLinkThisSlot(2), false);
+  assert.equal(ownLinkThisSlot(3), true);
 });

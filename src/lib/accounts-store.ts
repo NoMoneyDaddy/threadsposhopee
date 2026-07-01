@@ -7,6 +7,7 @@ import { demo } from "./demo-store";
 import { decrypt, encrypt } from "./crypto";
 import { log } from "./logger";
 import { getThreadsAccountLimit } from "./account-limits";
+import { clearSponsorStateForAccount } from "./sponsor";
 import type { ThreadsAccount, ShopeeAccount } from "./types";
 
 export async function listThreadsAccounts(ownerId: string): Promise<ThreadsAccount[]> {
@@ -358,6 +359,12 @@ export async function deleteThreadsAccountsByThreadsUserId(threadsUserId: string
     .eq("threads_user_id", threadsUserId)
     .select("id");
   if (error) throw error;
+  // 清除各被刪帳號的贊助文 app_state（無 FK，不會隨帳號列 cascade）；失敗僅記錄。
+  for (const row of data ?? []) {
+    await clearSponsorStateForAccount((row as { id: string }).id).catch((e) =>
+      log.warn("清除贊助文 app_state 失敗", { accId: (row as { id: string }).id, err: e })
+    );
+  }
   return data?.length ?? 0;
 }
 
@@ -377,6 +384,10 @@ export async function deleteThreadsAccount(id: string, ownerId: string): Promise
     .select("id")
     .maybeSingle();
   if (error) throw error;
+  if (data) {
+    // 清除該帳號的贊助文 app_state（無 FK，不隨帳號 cascade）；失敗僅記錄。
+    await clearSponsorStateForAccount(id).catch((e) => log.warn("清除贊助文 app_state 失敗", { accId: id, err: e }));
+  }
   return Boolean(data);
 }
 
@@ -420,11 +431,9 @@ export async function deleteOwnerAccount(ownerId: string): Promise<void> {
   // （帳號與主資料已移除，殘留不致洩漏且可日後清理）。
   // 註：已發佈到 Threads 的「貼文本身」無法由 API 刪除（無刪文端點），須由使用者自行移除。
   try {
-    // 贊助文 app_state：key-value 表，無 FK，需以先前取得的帳號 id 逐一清。
+    // 贊助文 app_state：key-value 表，無 FK，需以先前取得的帳號 id 逐一清（紀錄/自選/違規/累積/禁用/黑名單）。
     for (const accId of accountIds) {
-      await sb.from("app_state").delete().like("key", `sponsor:rec:${accId}:%`);
-      await sb.from("app_state").delete().eq("key", `sponsor:pick:${accId}`);
-      await sb.from("app_state").delete().eq("key", `sponsor_strikes:${accId}`);
+      await clearSponsorStateForAccount(accId);
     }
     // material_favorites.owner_id 無 FK：使用者收藏「別人」素材的列不會隨自己素材的 cascade 一起刪。
     await sb.from("material_favorites").delete().eq("owner_id", ownerId);

@@ -624,6 +624,20 @@ export async function countPublished(ownerId: string): Promise<number> {
   return count ?? 0;
 }
 
+// 帳號累積（全時）已發布篇數：供贊助文「累積比例」判定（取代每日門檻，補掉每天壓門檻的漏洞）。
+export async function countPublishedByAccount(accountId: string, ownerId: string): Promise<number> {
+  if (isDemoMode) return 0;
+  const sb = getServiceClient()!;
+  const { count, error } = await sb
+    .from("drafts")
+    .select("*", { count: "exact", head: true })
+    .eq("owner_id", ownerId)
+    .eq("threads_account_id", accountId)
+    .eq("status", "published");
+  if (error) throw new Error(`countPublishedByAccount 失敗：${error.message}`);
+  return count ?? 0;
+}
+
 // 贊助文比例制用：某帳號「今天（sinceIso 之後）已發布」篇數（count head，輕量）。
 // 用於依使用者自身實際發文量決定贊助配額（低頻者不被強抽）。
 export async function countPublishedTodayByAccount(accountId: string, ownerId: string, sinceIso: string): Promise<number> {

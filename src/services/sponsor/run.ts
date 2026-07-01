@@ -22,6 +22,27 @@ const SPONSOR_VIOLATION_LIMIT = 3;
 const STRIKE_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 const STRIKE_RECENT_MS = 7 * 24 * 60 * 60 * 1000;
 
+// 取連結的穩定短碼（最後一段路徑），供「連結是否仍在」的寬鬆比對。純函式。
+export function shortCodeOf(link: string): string {
+  const base = link.split(/[?#]/)[0]; // 去查詢字串/錨點
+  try {
+    const u = new URL(base);
+    return (u.pathname.split("/").filter(Boolean).pop() ?? "").trim();
+  } catch {
+    return (base.split("/").filter(Boolean).pop() ?? "").trim();
+  }
+}
+
+// 驗證用寬鬆比對：判斷平台分潤連結是否仍存在於貼文，減少誤判為竄改。
+// 只要「短碼」仍在文中即算保留——容忍尾斜線/查詢字串/協定/短連結自然失效重導等外觀差異
+// （使用者沒動我們的連結，就不該被判違規）；僅短碼整個被移除/換掉才算蓄意竄改。純函式可測。
+export function linkStillPresent(text: string, link: string | null | undefined): boolean {
+  if (!link) return true;
+  if (text.includes(link)) return true;
+  const code = shortCodeOf(link);
+  return code.length >= 4 && text.includes(code);
+}
+
 // 依時間戳陣列算加權違規分（近期權重高）。純函式。
 export function weightedStrikes(timestamps: number[], now: number): number {
   return timestamps.reduce((sum, t) => {
@@ -48,12 +69,19 @@ export async function verifySponsorPosts(): Promise<{ checked: number; violation
         await updateSponsorRecordAt(accountId, date, index, { ...rec, verified: true, deleted: true });
         continue;
       }
-      const ok = rec.link ? text.includes(rec.link) : true;
+      const ok = linkStillPresent(text, rec.link);
       const strikeKey = `sponsor_strikes:${accountId}`;
       if (ok) {
         await updateSponsorRecordAt(accountId, date, index, { ...rec, verified: true });
-        // 通過則清零累計違規（寬鬆：給機會重新累積）
-        await setCachedJson(strikeKey, []).catch(() => {});
+        // 通過則衰減「一筆最舊違規」而非一次全清：寬鬆給改過機會，但反覆竄改者的加權分
+        // 仍能穩定累積到門檻（避免穿插合規篇即永遠歸零、竄改零成本的漏洞）。
+        const now = Date.now();
+        const prevArr = (await getCachedJson<number[]>(strikeKey, STRIKE_WINDOW_MS).catch(() => [])) ?? [];
+        const inWindow = (Array.isArray(prevArr) ? prevArr : [])
+          .filter((t) => now - t < STRIKE_WINDOW_MS)
+          .sort((a, b) => a - b);
+        inWindow.shift(); // 移除最舊一筆（近期違規保留、仍會累積）
+        await setCachedJson(strikeKey, inWindow).catch(() => {});
       } else {
         out.violations++;
         await updateSponsorRecordAt(accountId, date, index, { ...rec, verified: true, violated: true });

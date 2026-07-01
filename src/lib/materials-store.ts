@@ -341,24 +341,47 @@ export async function setMaterialShared(id: string, ownerId: string, on: boolean
 const SHARED_COLS =
   "id, owner_id, shop_id, item_id, product_name, clean_product_url, media_type, cloudinary_media_url, main_text, reply_text, import_count, favorite_count, review_status, affiliate_valid, created_at";
 
+// 全站實際成效：每商品被實際發布的貼文數（key＝`shop:item`）。排序加分用；查詢失敗回空 Map（不擋列表）。
+export async function getProductPublishedCounts(): Promise<Map<string, number>> {
+  if (isDemoMode) return new Map();
+  const sb = getServiceClient()!;
+  const { data, error } = await sb.rpc("product_published_counts");
+  if (error) return new Map();
+  const map = new Map<string, number>();
+  for (const r of (data ?? []) as { shop_id: string; item_id: string; published: number }[]) {
+    map.set(`${r.shop_id}:${r.item_id}`, Number(r.published) || 0);
+  }
+  return map;
+}
+
+// 共享素材熱度分數＝全站熱門（被匯入數）＋全站實際成效（被發布數，權重較高）。純函式可測。
+export function sharedRankScore(m: SharedMaterial, publishedByProduct?: Map<string, number>): number {
+  const published = publishedByProduct?.get(`${m.shop_id}:${m.item_id}`) ?? 0;
+  return Math.max(0, m.import_count) + Math.max(0, published) * 3;
+}
+
 // 列出公共池（排除瀏覽者自己的、排除已下架；不含分潤連結）。
-// 推薦排序：匯入數＋收藏數加權（favorite_count 權重較高）→ 頂級素材優先；再依商品去重。
+// 排序：依「全站熱門程度（被匯入）＋全站實際成效（被發布）」加權分數；再依商品去重。
 export async function listSharedMaterials(viewerOwnerId: string, limit = 60): Promise<SharedMaterial[]> {
   if (isDemoMode) return [];
   const sb = getServiceClient()!;
-  // 多抓一些（去重前），讓同商品的多筆不會佔滿名額。
-  const { data } = await sb
-    .from("materials")
-    .select(SHARED_COLS)
-    .eq("shared", true)
-    .eq("affiliate_valid", true)
-    .neq("review_status", "removed")
-    .neq("owner_id", viewerOwnerId)
-    .order("favorite_count", { ascending: false })
-    .order("import_count", { ascending: false })
-    .order("created_at", { ascending: false })
-    .limit(limit * 3);
-  return dedupeSharedByProduct((data ?? []) as SharedMaterial[]).slice(0, limit);
+  // 先以匯入數多抓候選（去重＋成效加權前），讓同商品的多筆不會佔滿名額。
+  const [{ data }, published] = await Promise.all([
+    sb
+      .from("materials")
+      .select(SHARED_COLS)
+      .eq("shared", true)
+      .eq("affiliate_valid", true)
+      .neq("review_status", "removed")
+      .neq("owner_id", viewerOwnerId)
+      .order("import_count", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(limit * 4),
+    getProductPublishedCounts()
+  ]);
+  const rows = (data ?? []) as SharedMaterial[];
+  rows.sort((a, b) => sharedRankScore(b, published) - sharedRankScore(a, published));
+  return dedupeSharedByProduct(rows).slice(0, limit);
 }
 
 // 我分享的：目前 shared=true 的「自己」素材（含被匯入/收藏/審核/連結狀態），新→舊。供共享庫「我分享的」分頁。
@@ -417,23 +440,24 @@ export async function listFavoritedIds(ownerId: string, ids: string[]): Promise<
   return new Set((data ?? []).map((r) => r.material_id as string));
 }
 
-// 選品雷達：全站（含自己）最熱門的共享商品，依「匯入＋收藏」加權分數排序、再依商品去重。
+// 選品雷達：全站（含自己）最熱門的共享商品，依「全站熱門（被匯入）＋全站實際成效（被發布）」加權排序、再依商品去重。
 // 與 listSharedMaterials 不同：不排除瀏覽者自己（雷達是全站熱度榜，純探索用）。
 export async function listHotProducts(limit = 12): Promise<SharedMaterial[]> {
   if (isDemoMode) return [];
   const sb = getServiceClient()!;
-  const { data } = await sb
-    .from("materials")
-    .select(SHARED_COLS)
-    .eq("shared", true)
-    .eq("affiliate_valid", true)
-    .neq("review_status", "removed")
-    .order("favorite_count", { ascending: false })
-    .order("import_count", { ascending: false })
-    .limit(limit * 4);
+  const [{ data }, published] = await Promise.all([
+    sb
+      .from("materials")
+      .select(SHARED_COLS)
+      .eq("shared", true)
+      .eq("affiliate_valid", true)
+      .neq("review_status", "removed")
+      .order("import_count", { ascending: false })
+      .limit(limit * 4),
+    getProductPublishedCounts()
+  ]);
   const rows = (data ?? []) as SharedMaterial[];
-  const score = (m: SharedMaterial) => Math.max(0, m.import_count) + Math.max(0, m.favorite_count) * 2;
-  rows.sort((a, b) => score(b) - score(a));
+  rows.sort((a, b) => sharedRankScore(b, published) - sharedRankScore(a, published));
   return dedupeSharedByProduct(rows).slice(0, limit);
 }
 
@@ -539,6 +563,38 @@ export async function listMaterialsToCheck(
       shared: Boolean(m.shared),
       commission_rate: m.commission_rate ?? null
     }));
+}
+
+// 更新素材的「原始商品連結」（連同重新解析出的 shop/item）。供連結失效時使用者貼新商品連結修正。
+// 撞唯一鍵（owner+shop+item 已有另一筆）時回傳 "conflict"，由呼叫端提示。成功回 "ok"，找不到回 "notfound"。
+export async function updateMaterialProductLink(
+  id: string,
+  ownerId: string,
+  cleanUrl: string,
+  shopId: string,
+  itemId: string
+): Promise<"ok" | "notfound" | "conflict"> {
+  if (isDemoMode) {
+    const m = demo.materials.find((x) => x.id === id && x.owner_id === ownerId);
+    if (!m) return "notfound";
+    m.clean_product_url = cleanUrl;
+    m.shop_id = shopId;
+    m.item_id = itemId;
+    return "ok";
+  }
+  const sb = getServiceClient()!;
+  const { data, error } = await sb
+    .from("materials")
+    .update({ clean_product_url: cleanUrl, shop_id: shopId, item_id: itemId })
+    .eq("id", id)
+    .eq("owner_id", ownerId)
+    .select("id")
+    .maybeSingle();
+  if (error) {
+    if (error.code === "23505") return "conflict"; // unique (owner,shop,item)
+    throw new Error(`更新商品連結失敗：${error.message}`);
+  }
+  return data ? "ok" : "notfound";
 }
 
 // 重產成功：寫回新短連結＋subId，並把 valid/checked_at 一併更新（單次寫入）。

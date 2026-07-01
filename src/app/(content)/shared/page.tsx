@@ -4,7 +4,6 @@ import ImportSharedButton from "@/components/ImportSharedButton";
 import ShareToggle from "@/components/ShareToggle";
 import RewardModeForm from "@/components/RewardModeForm";
 import BadgeRow from "@/components/BadgeRow";
-import FavoriteButton from "@/components/FavoriteButton";
 import ReviewButton from "@/components/ReviewButton";
 import {
   listSharedMaterials,
@@ -14,7 +13,6 @@ import {
   getFeatureFlags,
   getRoles,
   listTopContributors,
-  listFavoritedIds,
   type SharedMaterial
 } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
@@ -57,9 +55,6 @@ export default async function SharedPage({ searchParams }: { searchParams: { tab
     getRoles(user.id).catch(() => []),
     flags.leaderboard ? listTopContributors(5).catch(() => []) : Promise.resolve([])
   ]);
-  const favorited = flags.favorites
-    ? await listFavoritedIds(user.id, items.map((m) => m.id)).catch(() => new Set<string>())
-    : new Set<string>();
 
   const exempt = contribution >= SPONSOR_EXEMPT_CONTRIBUTION;
   const reviewer = isReviewer(roles, user.isOwner);
@@ -141,7 +136,7 @@ export default async function SharedPage({ searchParams }: { searchParams: { tab
                       {top && <span className="mr-1" title="頂級素材（高匯入＋高收藏）">🔥</span>}
                       {m.product_name ?? "（商品）"}
                     </span>
-                    <span className="shrink-0 rounded bg-surface-2 px-2 py-0.5 text-xs text-ink-2">被匯入 {m.import_count}・收藏 {m.favorite_count}</span>
+                    <span className="shrink-0 rounded bg-surface-2 px-2 py-0.5 text-xs text-ink-2">被匯入 {m.import_count}</span>
                   </div>
                   <MediaPreview m={m} />
                   {m.main_text ? (
@@ -191,7 +186,6 @@ export default async function SharedPage({ searchParams }: { searchParams: { tab
                 )}
                 <div className="mt-3 flex items-center gap-2">
                   <ImportSharedButton id={m.id} />
-                  {flags.favorites && <FavoriteButton id={m.id} initial={favorited.has(m.id)} count={m.favorite_count} />}
                   {reviewer && <ReviewButton id={m.id} status={m.review_status} />}
                 </div>
               </div>

@@ -3,6 +3,7 @@
 import { useRef } from "react";
 import RepostButton from "@/components/RepostButton";
 import MaterialRefreshLinkButton from "@/components/MaterialRefreshLinkButton";
+import MaterialLinkFixer from "@/components/MaterialLinkFixer";
 import MaterialCopyEditor from "@/components/MaterialCopyEditor";
 import EvergreenToggle from "@/components/EvergreenToggle";
 import ShareToggle from "@/components/ShareToggle";
@@ -84,6 +85,9 @@ export default function MaterialCard({
         <RepostButton materialId={m.id} threadsAccounts={accounts} beforeRepost={() => flushEditor.current?.() ?? Promise.resolve()} />
         <MaterialCopyEditor material={m} accountLabel={accounts[0]?.label} cloud={cloud} preset={preset} registerFlush={(fn) => { flushEditor.current = fn; }} />
         <MaterialRefreshLinkButton materialId={m.id} />
+        {!m.affiliate_valid && (
+          <MaterialLinkFixer materialId={m.id} productName={m.product_name ?? null} mediaUrl={m.cloudinary_media_url ?? null} mediaType={m.media_type ?? null} />
+        )}
         <EvergreenToggle materialId={m.id} initial={Boolean(m.evergreen)} />
         <ShareToggle materialId={m.id} initial={Boolean(m.shared)} />
         <DeleteButton

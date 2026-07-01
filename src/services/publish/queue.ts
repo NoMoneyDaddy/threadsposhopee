@@ -34,17 +34,23 @@ import {
   getSponsorConfig,
   appendSponsorRecord,
   getSponsorPick,
-  getSponsorOptOutUntil,
+  getSponsorOptOut,
+  getSponsorPenaltyFactor,
   getSponsorBlocklist,
   getSponsorTotal,
   incrementSponsorTotal,
+  getOwnerSponsorDebt,
+  adjustOwnerSponsorDebt,
+  getSponsorRedist,
+  incrementSponsorRedist,
   shouldSponsor,
   swapAffiliateLink,
   taipeiParts,
-  type SponsorPick
+  type SponsorPick,
+  type SponsorOptOut
 } from "@/lib/sponsor";
 import { isRiskySponsorContent } from "@/services/publish/sponsor-content";
-import { shouldSponsorCumulative, ownLinkThisSlot } from "@/services/publish/sponsor-quota";
+import { shouldSponsorCumulative, ownLinkThisSlot, sponsorWithDebt, shouldAccrueOptOutDebt } from "@/services/publish/sponsor-quota";
 import { resolveSponsorOwnerCreds, buildSponsorLinkForAccount, cleanProductUrlFromDraft } from "@/services/sponsor/link";
 import { log } from "@/lib/logger";
 import { normalizeDraftMedia, normalizeReplyMedia } from "@/lib/media";
@@ -162,8 +168,13 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
   const sponsorPickCache: Record<string, SponsorPick | null> = {}; // accId -> 使用者自選
   // 依 owner 快取貢獻分數＋回饋模式（免贊助豁免＋依貢獻分級抽成用），避免每篇重查。
   const sponsorRewardCache: Record<string, { score: number; mode: "exempt" | "own_link" }> = {};
-  // accId -> 是否臨時禁用贊助文（活動檔期等，到期自動恢復）。
-  const sponsorOptOutCache: Record<string, boolean> = {};
+  // accId -> 臨時禁用設定（含模式 off/half；到期自動恢復）；null＝未禁用。
+  const sponsorOptOutCache: Record<string, SponsorOptOut | null> = {};
+  // accId -> 違規加重抽成倍數（>=1；1＝無懲罰，到期自動恢復）。
+  const sponsorPenaltyCache: Record<string, number> = {};
+  // ownerId -> 目前欠抽（永久完全禁用帳號轉嫁來的份額，由其他帳號代抽補還）；accId -> 已轉出份數。
+  const ownerDebtCache: Record<string, number> = {};
+  const sponsorRedistCache: Record<string, number> = {};
   // owner 金鑰資源整輪取一次（金鑰/affiliate_id/自訂 subId）；商品連結改用「每篇貼文自己的」就地改寫。
   const sponsorOwnerCreds =
     sponsorCfg.enabled && !isDemoMode && sponsorOwnerId ? await resolveSponsorOwnerCreds(sponsorOwnerId).catch(() => null) : null;
@@ -302,15 +313,18 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
     // 贊助文判定：啟用＋非 owner 帳號＋冷門時段＋今天尚未做過 → 就地換連結（DB 原文不動）。
     let sponsorLinkUsed: string | null = null;
     let sponsorOwnLinkUsed = false; // 此篇是否用「貢獻者自己的」連結（超額 slot 自賺）
+    let sponsorFromDebt = false; // 本篇是否為「代其他帳號補還」的平台贊助（成功後遞減 owner 欠抽）
+    let accrueOptOutDebt = false; // 本篇（永久完全禁用帳號）成功後是否把應抽份額轉為 owner 欠抽
     let pubMainText = draft.main_text ?? "";
     let pubReplyText = draft.reply_text;
     // AI 部落客（source_agent_id）的貼文一律「就是部落客」：不被選為贊助文、不注入任何分潤連結。
     if (sponsorCfg.enabled && !isDemoMode && !draft.source_agent_id) {
       const isOwnerAccount = Boolean(sponsorOwnerId) && draft.owner_id === sponsorOwnerId;
-      // 帳號臨時禁用贊助文（活動檔期/商業合作，到期自動恢復）→ 整篇略過。
+      // 帳號臨時禁用贊助文（活動檔期/商業合作，到期自動恢復）：mode=off→整篇略過；mode=half→減半抽成。
       if (!(accId in sponsorOptOutCache)) {
-        sponsorOptOutCache[accId] = Boolean(await getSponsorOptOutUntil(accId).catch(() => null));
+        sponsorOptOutCache[accId] = await getSponsorOptOut(accId).catch(() => null);
       }
+      const optOut = sponsorOptOutCache[accId];
       // 依 owner 取貢獻分數＋回饋模式（非 owner 帳號才需要）：供「免贊助豁免」與「依貢獻分級抽成」。
       if (draft.owner_id && !isOwnerAccount && !(draft.owner_id in sponsorRewardCache)) {
         const oid = draft.owner_id;
@@ -324,7 +338,22 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
       // 略過贊助的情況：owner 帳號、臨時禁用、管理員黑名單、或內容命中風險關鍵字（不把平台連結放上去，
       // 避免違規內容拖累平台分潤帳號被檢舉）。其餘一律套用（貢獻越高抽越少，平台保底永不歸零）。
       const riskyContent = isRiskySponsorContent(draft.main_text, draft.reply_text);
-      if (!isOwnerAccount && !sponsorOptOutCache[accId] && !sponsorBlocklist.has(accId) && !riskyContent) {
+      // mode=off（完全禁用）才整篇略過；half（減半）仍套用、只是抽成減半（見 effectivePerPosts）。
+      const fullyOptedOut = optOut?.mode === "off";
+      // 永久完全不抽：不換連結，但把「應抽份額」轉為 owner 欠抽，由其他帳號代抽補還（配套：平台不被永久搭便車）。
+      const permanentOff = Boolean(optOut?.permanent) && optOut?.mode === "off";
+      if (permanentOff && !isOwnerAccount && !sponsorBlocklist.has(accId) && draft.owner_id) {
+        if (!(accId in sponsorPublishedCache)) {
+          sponsorPublishedCache[accId] = await countPublishedByAccount(accId, draft.owner_id).catch(() => -1);
+        }
+        if (!(accId in sponsorRedistCache)) {
+          sponsorRedistCache[accId] = await getSponsorRedist(accId).catch(() => 0);
+        }
+        const baseP = contributionAdjustedPerPosts(sponsorCfg.perPosts, reward?.score ?? 0);
+        if (sponsorPublishedCache[accId] >= 0 && shouldAccrueOptOutDebt(sponsorPublishedCache[accId], sponsorRedistCache[accId], baseP)) {
+          accrueOptOutDebt = true; // 成功發布後把這一篇的應抽份額轉為 owner 欠抽
+        }
+      } else if (!isOwnerAccount && !fullyOptedOut && !sponsorBlocklist.has(accId) && !riskyContent) {
         // 累積比例：依帳號「累積發布數／累積贊助數」自我校正，長期維持約 1/perPosts；
         // 每天只發少量、天天壓門檻的人，累積到 perPosts 篇一樣會被抽（補掉每日門檻漏洞）。貢獻越高 perPosts 越大。
         if (!(accId in sponsorPublishedCache)) {
@@ -343,11 +372,24 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
             return -1;
           });
         }
-        const effectivePerPosts = contributionAdjustedPerPosts(sponsorCfg.perPosts, reward?.score ?? 0);
-        const cumulativeAllows =
-          sponsorPublishedCache[accId] >= 0 &&
-          sponsorTotalCache[accId] >= 0 &&
-          shouldSponsorCumulative(sponsorPublishedCache[accId], sponsorTotalCache[accId], effectivePerPosts);
+        // 基礎（依貢獻分級）→ 違規加重抽成（perPosts 除以 factor，抽更多）→ half 禁用模式（perPosts ×2，抽一半）。
+        if (!(accId in sponsorPenaltyCache)) {
+          sponsorPenaltyCache[accId] = await getSponsorPenaltyFactor(accId).catch(() => 1);
+        }
+        const baserPerPosts = contributionAdjustedPerPosts(sponsorCfg.perPosts, reward?.score ?? 0);
+        const penaltyFactor = sponsorPenaltyCache[accId] || 1;
+        const halfMult = optOut?.mode === "half" ? 2 : 1;
+        const effectivePerPosts = Math.max(1, Math.round((baserPerPosts / penaltyFactor) * halfMult));
+        // owner 欠抽（其他帳號永久禁用轉來的份額）：自身沒到比例時，可代抽補還。
+        if (draft.owner_id && !(draft.owner_id in ownerDebtCache)) {
+          ownerDebtCache[draft.owner_id] = await getOwnerSponsorDebt(draft.owner_id).catch(() => 0);
+        }
+        const ownerDebt = draft.owner_id ? (ownerDebtCache[draft.owner_id] ?? 0) : 0;
+        const decision =
+          sponsorPublishedCache[accId] >= 0 && sponsorTotalCache[accId] >= 0
+            ? sponsorWithDebt(sponsorPublishedCache[accId], sponsorTotalCache[accId], effectivePerPosts, ownerDebt)
+            : { sponsor: false, fromDebt: false };
+        const cumulativeAllows = decision.sponsor;
         if (!(accId in sponsorPickCache)) {
           sponsorPickCache[accId] = await getSponsorPick(accId).catch(() => null);
         }
@@ -403,6 +445,7 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
               pubReplyText = swappedReply;
               sponsorLinkUsed = link;
               sponsorOwnLinkUsed = useOwn;
+              sponsorFromDebt = decision.fromDebt && !useOwn; // 只有真的用平台連結代抽才算補還欠抽
             }
           }
         }
@@ -458,6 +501,19 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
             "sponsor_used"
           ).catch(() => {});
         }
+        // 代其他帳號補還：本篇是用平台連結代抽的 → owner 欠抽 -1。
+        if (sponsorFromDebt && draft.owner_id) {
+          ownerDebtCache[draft.owner_id] = Math.max(0, (ownerDebtCache[draft.owner_id] ?? 1) - 1);
+          await adjustOwnerSponsorDebt(draft.owner_id, -1).catch((e) => log.warn("遞減 owner 欠抽失敗", { ownerId: draft.owner_id, err: e }));
+        }
+      }
+
+      // 永久完全禁用帳號：把這一篇的應抽份額轉為 owner 欠抽（+1），由其他帳號後續代抽補還。
+      if (accrueOptOutDebt && draft.owner_id) {
+        await incrementSponsorRedist(accId).catch((e) => log.warn("累加轉出數失敗", { accId, err: e }));
+        if (accId in sponsorRedistCache) sponsorRedistCache[accId] += 1;
+        ownerDebtCache[draft.owner_id] = (ownerDebtCache[draft.owner_id] ?? 0) + 1;
+        await adjustOwnerSponsorDebt(draft.owner_id, 1).catch((e) => log.warn("累加 owner 欠抽失敗", { ownerId: draft.owner_id, err: e }));
       }
 
       // 延遲留言：標 pending + 到期時間，交給下方的補留言 pass；

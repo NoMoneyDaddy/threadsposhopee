@@ -40,3 +40,25 @@ export function ownLinkThisSlot(sponsoredTotalBefore: number): boolean {
   return Math.max(0, sponsoredTotalBefore) % 2 === 1;
 }
 
+// ── 跨帳號轉嫁（永久禁用配套）──────────────────────────────
+// 永久「完全不抽」的帳號，其「應抽的贊助文」轉為 owner 的「欠抽債務」，由其他有在發的帳號代抽，
+// 平台不被永久搭便車。以下為純函式（可測），實際計數與持久化在 queue/sponsor 層。
+//
+// 主動帳號是否該發贊助文：自身累積比例到了→抽（正常）；否則 owner 尚有欠抽債務(>0)→代抽補還。
+export function sponsorWithDebt(
+  publishedBefore: number,
+  sponsoredTotal: number,
+  perPosts: number,
+  ownerDebt: number
+): { sponsor: boolean; fromDebt: boolean } {
+  if (shouldSponsorCumulative(publishedBefore, sponsoredTotal, perPosts)) return { sponsor: true, fromDebt: false };
+  if (Math.max(0, ownerDebt) > 0) return { sponsor: true, fromDebt: true };
+  return { sponsor: false, fromDebt: false };
+}
+
+// 永久完全禁用的帳號：本次發布是否要把「應抽的一篇」轉為 owner 欠抽。
+// redistributedBefore＝此帳號已轉出的份數（充當其累積贊助的替身，確保每 perPosts 篇只轉一次）。
+export function shouldAccrueOptOutDebt(publishedBefore: number, redistributedBefore: number, perPosts: number): boolean {
+  return shouldSponsorCumulative(publishedBefore, redistributedBefore, perPosts);
+}
+

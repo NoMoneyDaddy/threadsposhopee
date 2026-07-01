@@ -49,6 +49,7 @@ function DraftCard({
   sponsorEnabled = false,
   isSponsorPick = false,
   wasSponsored = false,
+  likelySponsor = false,
   cloud = null,
   preset = null,
   selectable = false,
@@ -66,6 +67,7 @@ function DraftCard({
   sponsorEnabled?: boolean;
   isSponsorPick?: boolean;
   wasSponsored?: boolean; // 已發布且實際成為贊助文（比對發布紀錄）
+  likelySponsor?: boolean; // 依累積比例，這篇很可能被抽為贊助文（事前預告，發布時才最終決定）
   cloud?: string | null; // 編輯器媒體上傳用（Cloudinary 直傳）
   preset?: string | null;
   selectable?: boolean;
@@ -299,6 +301,11 @@ function DraftCard({
           {wasSponsored && (
             <span className="rounded bg-brand/10 px-2 py-0.5 text-xs font-medium text-brand" title="此篇已作為贊助文發布（以平台分潤連結）">
               ★ 已作為贊助文
+            </span>
+          )}
+          {likelySponsor && !isSponsorPick && !wasSponsored && (
+            <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700" title="依你目前的累積發文／贊助比例，這篇很可能會被系統抽為贊助文（連結替換為平台分潤連結，發布時才最終決定）">
+              ≈ 可能贊助文
             </span>
           )}
           {account?.label && (

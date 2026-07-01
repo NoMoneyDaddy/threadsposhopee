@@ -4,6 +4,7 @@ import { getSharedMaterial, incrementImportCount, findMaterial, getFeatureFlags,
 import { resolveMaterialFromUrl } from "@/services/materials/fromUrl";
 import { importAllowance } from "@/lib/import-allowance";
 import { getCurrentUser } from "@/lib/auth";
+import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -14,6 +15,8 @@ export async function POST(req: Request) {
   try {
     const user = await getCurrentUser();
     if (!user) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+    const rl = await rateLimit("materials_import", user.id, 30, 60_000);
+    if (!rl.ok) return tooManyRequests(rl.retryAfterSec);
     if (!(await getFeatureFlags()).shared) {
       return NextResponse.json({ ok: false, error: "共享庫目前未開放" }, { status: 403 });
     }

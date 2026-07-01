@@ -73,10 +73,15 @@ export default function SponsoredPage() {
         </p>
       </Section>
 
-      <Section title="臨時禁用（活動檔期）">
+      <Section title="禁用與檔期（可臨時或永久）">
         <p>
-          有商業合作或活動檔期時，你可到<strong className="text-ink">「設定 → 贊助文（各帳號）」</strong>把某帳號的贊助文
-          <strong className="text-ink">臨時禁用</strong>一段期間（最長 60 天），到期<strong className="text-ink">自動恢復</strong>——不必完全暫停該帳號發文。
+          有商業合作或活動檔期時，你可到<strong className="text-ink">「設定 → 贊助文（各帳號）」</strong>把某帳號調整為
+          <strong className="text-ink">「完全不抽」</strong>或<strong className="text-ink">「只抽一半」</strong>，可選<strong className="text-ink">臨時（最長 60 天、到期自動恢復）</strong>
+          或<strong className="text-ink">永久</strong>；隨時可手動恢復。
+        </p>
+        <p>
+          <strong className="text-ink">永久「完全不抽」的配套</strong>：該帳號原本應分擔的贊助文份額，會<strong className="text-ink">自動轉由你的其他帳號代為分擔</strong>
+          （平台的整體份額不因單一帳號永久退出而歸零）。若你只有一個帳號、又設永久完全不抽，等於暫無帳號可分擔，恢復或新增帳號後才會補上。
         </p>
       </Section>
 
@@ -94,11 +99,12 @@ export default function SponsoredPage() {
         </p>
       </Section>
 
-      <Section title="驗證與暫停（寬鬆處理）">
+      <Section title="驗證與處罰（寬鬆、分級）">
         <p>
-          系統只驗證<strong className="text-ink">「貼文仍在、但分潤連結被移除或竄改」</strong>這種情況（蓄意違規）。
-          即便如此也寬鬆處理：偶發或單次只<strong className="text-ink">記錄並提醒</strong>，僅在<strong className="text-ink">累計多次</strong>時
-          才暫停該 Threads 帳號的自動發文，恢復走帳號管理的手動啟用。（選「換成自己連結」的自賺篇不在驗證範圍。）
+          系統只驗證<strong className="text-ink">「貼文仍在、但分潤連結被移除或竄改」</strong>這種情況（蓄意違規）；整篇被刪除視為正當下架、不罰。
+          處罰採<strong className="text-ink">分級</strong>：偶發或單次只<strong className="text-ink">記錄並提醒</strong>；累計達門檻進入
+          <strong className="text-ink">加重抽成期（約 14 天，帳號照常發文、到期自動恢復）</strong>；唯有<strong className="text-ink">持續竄改</strong>才會
+          暫停該帳號發文（最後手段，恢復走帳號管理手動啟用）。（選「換成自己連結」的自賺篇不在驗證範圍。）
         </p>
       </Section>
 

@@ -10,7 +10,7 @@ import {
 } from "@/lib/store";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
-import { getSponsorConfig, countSponsorToday, getSponsorOptOutUntil, listSponsorRecordsForOwner, taipeiParts } from "@/lib/sponsor";
+import { getSponsorConfig, countSponsorToday, getSponsorOptOut, listSponsorRecordsForOwner, taipeiParts } from "@/lib/sponsor";
 import { listThreadsAccounts } from "@/lib/accounts-store";
 import SponsorOptOutForm, { type SponsorAccountRow } from "@/components/SponsorOptOutForm";
 import MySponsorPostsCard, { type MySponsorPostRow } from "@/components/MySponsorPostsCard";
@@ -55,12 +55,17 @@ export default async function SettingsPage() {
     const today = taipeiParts().date;
     const accts = await listThreadsAccounts(user.id).catch(() => []);
     sponsorAccounts = await Promise.all(
-      accts.map(async (a) => ({
-        id: a.id,
-        label: a.label,
-        usedToday: await countSponsorToday(a.id, today).catch(() => 0),
-        optOutUntil: await getSponsorOptOutUntil(a.id).catch(() => null)
-      }))
+      accts.map(async (a) => {
+        const optOut = await getSponsorOptOut(a.id).catch(() => null);
+        return {
+          id: a.id,
+          label: a.label,
+          usedToday: await countSponsorToday(a.id, today).catch(() => 0),
+          optOutUntil: optOut?.until ?? null,
+          optOutMode: optOut?.mode ?? null,
+          optOutPermanent: optOut?.permanent ?? false
+        };
+      })
     );
     const labelById = new Map(accts.map((a) => [a.id, a.label]));
     const records = await listSponsorRecordsForOwner(user.id, 50).catch(() => []);

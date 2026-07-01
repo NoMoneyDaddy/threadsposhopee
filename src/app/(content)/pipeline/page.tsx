@@ -1,11 +1,13 @@
 import PipelineBoard from "@/components/PipelineBoard";
 import AccountsOverview, { type AccountOverviewRow } from "@/components/AccountsOverview";
-import { listDrafts, listMaterials, listPendingMaterials, listThreadsAccounts, getPublishPlan, getFeatureFlags, getDefaultShareMaterials } from "@/lib/store";
+import { listDrafts, listMaterials, listPendingMaterials, listThreadsAccounts, getPublishPlan, getFeatureFlags, getDefaultShareMaterials, getContributionScore, countPublishedByAccount } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
 import { taipeiDateStr } from "@/lib/streak";
 import { isDemoMode } from "@/lib/env";
 import { getMediaProvider } from "@/services/media/upload";
-import { getSponsorConfig, getSponsorPickMap, listSponsorRecordsForOwner } from "@/lib/sponsor";
+import { getSponsorConfig, getSponsorPickMap, listSponsorRecordsForOwner, getSponsorTotal, getSponsorOptOutUntil } from "@/lib/sponsor";
+import { contributionAdjustedPerPosts } from "@/lib/contribution";
+import { shouldSponsorCumulative } from "@/services/publish/sponsor-quota";
 import { getItemRevenueMap, type ItemRevenue } from "@/services/shopee/report";
 
 export const dynamic = "force-dynamic";
@@ -80,6 +82,31 @@ export default async function PipelinePage() {
   const sponsoredPostIds =
     user && sponsorEnabled ? (await listSponsorRecordsForOwner(user.id).catch(() => [])).map((e) => e.rec.postId) : [];
 
+  // 事前預告：依帳號「累積發文／贊助比例」預估哪一篇很可能被抽為贊助文（發布時才最終決定）。
+  // 排除已手動指定與臨時禁用的帳號；標在該帳號最早要發的待發草稿上。
+  let likelySponsorIds: string[] = [];
+  if (user && sponsorEnabled) {
+    const score = await getContributionScore(user.id).catch(() => 0);
+    const perPosts = contributionAdjustedPerPosts(sponsorCfg.perPosts, score);
+    const perAccount = await Promise.all(
+      accounts.map(async (a) => {
+        if (pickByAccount[a.id]) return null; // 已手動指定
+        if (await getSponsorOptOutUntil(a.id).catch(() => null)) return null; // 臨時禁用中
+        const [published, total] = await Promise.all([
+          countPublishedByAccount(a.id, user.id).catch(() => -1),
+          getSponsorTotal(a.id).catch(() => 0)
+        ]);
+        if (published < 0 || !shouldSponsorCumulative(published, total, perPosts)) return null;
+        const next = drafts
+          .filter((d) => d.threads_account_id === a.id && d.status === "approved")
+          .map((d) => ({ id: d.id, eta: publishPlan[d.id]?.etaIso ?? "9999" }))
+          .sort((x, y) => x.eta.localeCompare(y.eta))[0];
+        return next?.id ?? null;
+      })
+    );
+    likelySponsorIds = perAccount.filter((x): x is string => Boolean(x));
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -104,6 +131,7 @@ export default async function PipelinePage() {
         canShare={Boolean(flags?.shared)}
         defaultShare={defaultShare}
         sponsoredPostIds={sponsoredPostIds}
+        likelySponsorIds={likelySponsorIds}
       />
     </div>
   );

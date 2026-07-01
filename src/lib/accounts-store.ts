@@ -435,6 +435,8 @@ export async function deleteOwnerAccount(ownerId: string): Promise<void> {
     for (const accId of accountIds) {
       await clearSponsorStateForAccount(accId);
     }
+    // owner 層級的贊助欠抽計數（跨帳號轉嫁）：無 FK，隨帳號刪一併清。
+    await sb.from("app_state").delete().eq("key", `sponsor:redebt:${ownerId}`);
     // material_favorites.owner_id 無 FK：使用者收藏「別人」素材的列不會隨自己素材的 cascade 一起刪。
     await sb.from("material_favorites").delete().eq("owner_id", ownerId);
   } catch (e) {

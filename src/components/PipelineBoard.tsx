@@ -134,7 +134,8 @@ export default function PipelineBoard({
   preset = null,
   canShare = false,
   defaultShare = false,
-  sponsoredPostIds = []
+  sponsoredPostIds = [],
+  likelySponsorIds = []
 }: {
   pending: Material[];
   materials: Material[];
@@ -154,6 +155,8 @@ export default function PipelineBoard({
   defaultShare?: boolean;
   // 已實際成為贊助文的貼文 id 集合（published_post_id）：已發布草稿卡標「已作為贊助文」。
   sponsoredPostIds?: string[];
+  // 依累積比例「下一篇很可能被抽為贊助文」的草稿 id（事前預告，發布時才最終決定）。
+  likelySponsorIds?: string[];
 }) {
   const router = useRouter();
   const [composing, setComposing] = useState(false);
@@ -344,6 +347,7 @@ export default function PipelineBoard({
   );
 
   const sponsoredSet = useMemo(() => new Set(sponsoredPostIds), [sponsoredPostIds]);
+  const likelySponsorSet = useMemo(() => new Set(likelySponsorIds), [likelySponsorIds]);
   const renderDraft = (d: Draft, draggable: boolean, selectable = false) => {
     const card = (
       <DraftCard
@@ -361,6 +365,7 @@ export default function PipelineBoard({
         isSponsorPick={
           Boolean(sponsor?.enabled) && !!d.threads_account_id && sponsor?.pickByAccount?.[d.threads_account_id] === d.id
         }
+        likelySponsor={likelySponsorSet.has(d.id)}
       />
     );
     return draggable ? (

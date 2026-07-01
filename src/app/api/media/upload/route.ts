@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { getMediaProvider, uploadBytesWith } from "@/services/media/upload";
 import { checkUploadFile } from "@/lib/media-mime";
 import { apiError } from "@/lib/api-error";
+import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -13,6 +14,8 @@ export async function POST(req: Request) {
   try {
     const user = await getCurrentUser();
     if (!user) return NextResponse.json({ ok: false, error: "請先登入" }, { status: 401 });
+    const rl = await rateLimit("media_upload", user.id, 60, 60_000);
+    if (!rl.ok) return tooManyRequests(rl.retryAfterSec);
 
     const provider = await getMediaProvider(user.id);
     if (provider.kind === "none") {

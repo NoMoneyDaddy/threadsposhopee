@@ -80,12 +80,18 @@ export default function SponsoredPage() {
         </p>
       </Section>
 
+      <Section title="可自行隱藏／刪除貼文">
+        <p>
+          你在 Threads 的貼文<strong className="text-ink">隨時可自行隱藏或刪除</strong>（例如蝦皮政策變動需臨時下架）——
+          我們不會鎖住你的 Threads 帳號。一般貼文完全不受影響；<strong className="text-ink">贊助文整篇被刪除/隱藏也視為正當下架，只記錄、不計違規</strong>。
+        </p>
+      </Section>
+
       <Section title="驗證與暫停（寬鬆處理）">
         <p>
-          系統會驗證贊助文已成功發布、且其分潤連結未被竄改或刪除。偶發或單次被刪除/更動，
-          系統<strong className="text-ink">只會記錄並提醒</strong>，不會立即暫停；
-          僅在<strong className="text-ink">累計多次違規</strong>時，才會暫停該 Threads 帳號的自動發文，
-          恢復走帳號管理的手動啟用。（選「換成自己連結」的自賺篇不在驗證範圍。）
+          系統只驗證<strong className="text-ink">「貼文仍在、但分潤連結被移除或竄改」</strong>這種情況（蓄意違規）。
+          即便如此也寬鬆處理：偶發或單次只<strong className="text-ink">記錄並提醒</strong>，僅在<strong className="text-ink">累計多次</strong>時
+          才暫停該 Threads 帳號的自動發文，恢復走帳號管理的手動啟用。（選「換成自己連結」的自賺篇不在驗證範圍。）
         </p>
       </Section>
 

@@ -68,11 +68,13 @@ export default async function SettingsPage() {
       const rec = e.rec;
       const status = rec.ownLink
         ? { label: "自賺（自己連結）", tone: "text-ink-3" }
-        : rec.violated
-          ? { label: "連結被移除/竄改", tone: "text-red-600" }
-          : rec.verified
-            ? { label: "已驗證", tone: "text-green-600" }
-            : { label: "待驗證", tone: "text-amber-600" };
+        : rec.deleted
+          ? { label: "已下架（不計違規）", tone: "text-ink-3" }
+          : rec.violated
+            ? { label: "連結被移除/竄改", tone: "text-red-600" }
+            : rec.verified
+              ? { label: "已驗證", tone: "text-green-600" }
+              : { label: "待驗證", tone: "text-amber-600" };
       return {
         accountLabel: labelById.get(e.accountId) ?? e.accountId,
         postId: rec.postId,

@@ -1,5 +1,6 @@
-// 贊助文驗證（功能 B 階段 3）：抓回已發的贊助文，確認平台分潤連結仍在；
-// 被刪除或竄改 → 暫停該 Threads 帳號發文（恢復走帳號管理的手動啟用）。由 /api/cron/all 觸發。
+// 贊助文驗證（功能 B 階段 3）：抓回已發的贊助文，確認平台分潤連結仍在。
+// 寬鬆：整篇被刪/隱藏＝正當下架（不罰）；僅「貼文還在但連結被移除/竄改」才累計違規，
+// 達門檻才暫停該 Threads 帳號發文（恢復走帳號管理的手動啟用）。由 /api/cron/all 觸發。
 import { listSponsorRecordsToVerify, updateSponsorRecordAt } from "@/lib/sponsor";
 import { getThreadsCredentials, setThreadsAccountStatus, getCachedJson, setCachedJson } from "@/lib/store";
 import { getPostText } from "@/services/threads/verify";
@@ -30,8 +31,13 @@ export async function verifySponsorPosts(): Promise<{ checked: number; violation
       const creds = await getThreadsCredentials(accountId, rec.ownerId);
       if (!creds) continue; // 帳號已不存在 → 略過（不誤判暫停）
       const text = await getPostText(rec.postId, creds.accessToken);
-      // text===null 代表貼文被刪/讀不到；否則檢查平台分潤連結是否仍在內文。
-      const ok = text !== null && (rec.link ? text.includes(rec.link) : true);
+      // 寬鬆處理：整篇被刪/隱藏/讀不到（text===null）＝使用者正當下架（如蝦皮政策變動），
+      // 只記錄、不計違規、不扣 strike；僅「貼文還在但連結被移除/竄改」才算蓄意違規。
+      if (text === null) {
+        await updateSponsorRecordAt(accountId, date, index, { ...rec, verified: true, deleted: true });
+        continue;
+      }
+      const ok = rec.link ? text.includes(rec.link) : true;
       const strikeKey = `sponsor_strikes:${accountId}`;
       if (ok) {
         await updateSponsorRecordAt(accountId, date, index, { ...rec, verified: true });

@@ -191,6 +191,7 @@ export interface SponsorRecord {
   at: string;
   verified?: boolean;
   violated?: boolean;
+  deleted?: boolean; // 貼文已被使用者刪除/隱藏：視為正當下架（如蝦皮政策變動），不計違規
   ownLink?: boolean; // 高貢獻者選「換自己連結」：此篇用其自有分潤連結，非平台贊助，不納入違規驗證
 }
 

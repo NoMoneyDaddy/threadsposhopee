@@ -3,6 +3,7 @@ import { runSourcesForOwner } from "@/services/pipeline/run";
 import { getCurrentUser } from "@/lib/auth";
 import { hasApifyCredentials } from "@/lib/store";
 import { isDemoMode } from "@/lib/env";
+import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 // 單次 Apify run-sync 抓取在大量（maxPosts 上看 1000）時可逼近端點 300s 硬上限，故路由上限放到 300s，
@@ -16,6 +17,8 @@ export async function POST(req: Request) {
     const user = await getCurrentUser();
     if (!user) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     if (!user.isOwner) return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
+    const rl = await rateLimit("pipeline_run", user.id, 10, 60_000);
+    if (!rl.ok) return tooManyRequests(rl.retryAfterSec);
     const body = await req.json().catch(() => ({}));
     const force = body?.force === true;
     // 批次逐月：本次抓取的日期區間覆寫（YYYY-MM-DD；格式不符忽略）。只有舊版 igview actor 會吃日期。

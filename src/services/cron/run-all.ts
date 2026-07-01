@@ -14,6 +14,7 @@ import type { NotifyType } from "@/lib/notify-prefs";
 import { verifySponsorPosts } from "@/services/sponsor/run";
 import { cleanupOldSponsorRecords } from "@/lib/sponsor";
 import { checkSchemaDrift } from "@/lib/schema-check";
+import { cleanupRateLimitKeys } from "@/lib/rate-limit";
 import { runAiAgents } from "@/services/ai/agent-run";
 import { pollActiveScrapeRuns } from "@/services/scraper/async-scrape";
 import { cleanupExpiredBindTokens } from "@/lib/telegram-bind";
@@ -97,6 +98,8 @@ export async function runCronAll(now: Date = new Date()): Promise<Record<string,
     steps.push({ key: "cleanupSponsorRecords", run: onceDaily("cleanupSponsorRecords", () => cleanupOldSponsorRecords(90)), warn: (r) => (r?.deleted ? `🧹 清理贊助紀錄 ${r.deleted} 列` : null) });
     // Migration 漏套偵測：探測近期 migration 應存在的欄位/RPC，缺漏即告警（漏套 → 執行期 500 前移為可見警示）。
     steps.push({ key: "schemaDrift", run: onceDaily("schemaDrift", checkSchemaDrift), warn: (r) => (r && r.ok === false ? `🧬 資料庫 schema 疑似漏套 migration：${(r.missing ?? []).join("、")}` : null) });
+    // 清理限流視窗計數（rl:*，分鐘級視窗，隔日全數過期）。
+    steps.push({ key: "cleanupRateLimit", run: onceDaily("cleanupRateLimit", cleanupRateLimitKeys) });
   }
   // 每週一健檢一次（UTC 04 時）
   if (dow === 1 && h === 4) {

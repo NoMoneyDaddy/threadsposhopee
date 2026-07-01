@@ -4,6 +4,7 @@ import { createDraftFromMaterial, getPublishPrefs, userOwnsThreadsAccount } from
 import { withNextSlot, nextOpenSlot } from "@/services/publish/slots";
 import { getCurrentUser } from "@/lib/auth";
 import { isDemoMode } from "@/lib/env";
+import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -15,6 +16,8 @@ export async function POST(req: Request) {
   try {
     const user = await getCurrentUser();
     if (!user) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+    const rl = await rateLimit("compose_batch", user.id, 20, 60_000);
+    if (!rl.ok) return tooManyRequests(rl.retryAfterSec);
 
     const body = await req.json().catch(() => ({}));
     const action = body.action === "queue" ? "queue" : "draft";

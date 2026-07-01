@@ -13,6 +13,9 @@ interface Agent {
   name: string;
   domain: string;
   domains: string[];
+  tone: string;
+  source_mode: string;
+  search_query: string;
   enabled: boolean;
   last_run_at: string | null;
   use_redirect: boolean;
@@ -29,7 +32,7 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
   const router = useRouter();
   const [name, setName] = useState("");
   const [domains, setDomains] = useState<string[]>([AI_DOMAINS[0].id]);
-  const [sourceMode, setSourceMode] = useState<"rss" | "threads_search">("rss");
+  const [sourceMode, setSourceMode] = useState<"rss" | "threads_search" | "web_search">("rss");
   const [searchQuery, setSearchQuery] = useState("");
   const [tone, setTone] = useState("");
   const [customTone, setCustomTone] = useState(false);
@@ -38,6 +41,39 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
   const [autoPublish, setAutoPublish] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  // 列表區（立即跑一篇）的提示獨立於建立表單，避免顯示在「建立部落客」按鈕下方（不直覺）。
+  const [runMsg, setRunMsg] = useState<string | null>(null);
+  // 編輯中的部落客 id（null＝新增模式）。表單同時用於新增與編輯。
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  function resetForm() {
+    setEditingId(null);
+    setName("");
+    setDomains([AI_DOMAINS[0].id]);
+    setSourceMode("rss");
+    setSearchQuery("");
+    setTone("");
+    setCustomTone(false);
+    setAccountId("");
+    setUseRedirect(false);
+    setAutoPublish(false);
+  }
+
+  // 載入既有部落客到表單進行編輯（捲到表單頂端方便操作）。
+  function startEdit(a: Agent) {
+    setEditingId(a.id);
+    setName(a.name);
+    setDomains(a.domains?.length ? a.domains : [a.domain]);
+    setSourceMode(a.source_mode === "threads_search" || a.source_mode === "web_search" ? a.source_mode : "rss");
+    setSearchQuery(a.search_query ?? "");
+    setTone(a.tone ?? "");
+    setCustomTone(Boolean(a.tone) && !TONE_PRESETS.includes(a.tone));
+    setAccountId(a.threads_account_id ?? "");
+    setUseRedirect(a.use_redirect);
+    setAutoPublish(a.auto_publish);
+    setMsg(null);
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
   async function api(url: string, method: string, body?: unknown) {
     const res = await fetch(url, {
@@ -48,12 +84,12 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
     return res.json();
   }
 
-  async function create(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy("create");
     setMsg(null);
     try {
-      const r = await api("/api/agents", "POST", {
+      const payload = {
         name,
         domains,
         source_mode: sourceMode,
@@ -62,14 +98,12 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
         threads_account_id: accountId || null,
         use_redirect: useRedirect,
         auto_publish: autoPublish
-      });
+      };
+      const r = editingId
+        ? await api(`/api/agents/${editingId}`, "PATCH", payload)
+        : await api("/api/agents", "POST", payload);
       if (!r.ok) throw new Error(r.error);
-      setName("");
-      setTone("");
-      setCustomTone(false); // 一併重置，避免表單卡在「自訂…」模式（下筆送出空 tone）
-      setSearchQuery("");
-      setSourceMode("rss");
-      setAutoPublish(false);
+      resetForm();
       router.refresh();
     } catch (e) {
       setMsg(e instanceof Error ? e.message : String(e));
@@ -112,9 +146,9 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
   }
   async function runNow(a: Agent) {
     setBusy(a.id);
-    setMsg(null);
+    setRunMsg(null);
     const r = await api("/api/agents/run", "POST", { id: a.id }).catch(() => ({ ok: false, error: "失敗" }));
-    setMsg(r.ok ? "✅ 已產生 1 篇（依部落客設定進待審草稿或自動排程）。" : `⚠️ ${r.error}`);
+    setRunMsg(r.ok ? "✅ 已產生 1 篇（依部落客設定進待審草稿或自動排程）。" : `⚠️ ${r.error}`);
     router.refresh();
     setBusy(null);
   }
@@ -131,8 +165,8 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
 
   return (
     <div className="space-y-6">
-      <form onSubmit={create} className="card-p space-y-3">
-        <h2 className="section-title">新增部落客</h2>
+      <form onSubmit={submit} className="card-p space-y-3">
+        <h2 className="section-title">{editingId ? "編輯部落客" : "新增部落客"}</h2>
         <div>
           <label className="label" htmlFor="ag-name">名稱</label>
           <input id="ag-name" className="input" required value={name} onChange={(e) => setName(e.target.value)} placeholder="例：科技宅阿哲" />
@@ -163,18 +197,24 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
             id="ag-source"
             className="input"
             value={sourceMode}
-            onChange={(e) => setSourceMode(e.target.value === "threads_search" ? "threads_search" : "rss")}
+            onChange={(e) => {
+              const v = e.target.value;
+              setSourceMode(v === "threads_search" || v === "web_search" ? v : "rss");
+            }}
           >
             <option value="rss">Google News（依領域/關鍵字抓新聞）</option>
+            <option value="web_search">AI 上網搜尋（Gemini 接地全網：各大媒體/自媒體/官方）</option>
             <option value="threads_search">Threads 關鍵字搜尋（抓熱門公開貼文選題）</option>
           </select>
           <FieldHint>
             {sourceMode === "threads_search"
               ? "用你綁定的 Threads 帳號搜尋熱門公開貼文當素材（需該帳號已授權關鍵字搜尋權限）。查詢詞用下方關鍵字，留空則用領域名稱。"
-              : "從 Google News 依領域或自訂關鍵字抓新聞當素材。"}
+              : sourceMode === "web_search"
+                ? "用你的 Gemini 金鑰即時上網搜尋（Google 接地），涵蓋各大新聞媒體、自媒體與官方網站公開資訊；查詢詞用下方關鍵字，留空則用領域名稱。接地無結果會自動退回 Google News。"
+                : "從 Google News 依領域或自訂關鍵字抓新聞當素材。"}
           </FieldHint>
         </div>
-        {(domains.includes("custom") || sourceMode === "threads_search") && (
+        {(domains.includes("custom") || sourceMode === "threads_search" || sourceMode === "web_search") && (
           <div>
             <label className="label" htmlFor="ag-q">
               {domains.includes("custom") ? "自訂主題關鍵字（必填）" : "搜尋關鍵字（選填，留空用領域名稱）"}
@@ -270,14 +310,36 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
             <FieldHint>預設關閉：部落客產文一律進草稿待你審核，核准後才發布。可隨時於下方清單調整。</FieldHint>
           )}
         </div>
-        <button type="submit" disabled={busy === "create"} className="btn btn-brand">
-          {busy === "create" ? "建立中…" : "建立部落客"}
-        </button>
-        {msg && <p className="text-sm text-ink-2">{msg}</p>}
+        <div className="flex items-center gap-2">
+          <button type="submit" disabled={busy === "create"} className="btn btn-brand">
+            {busy === "create" ? "儲存中…" : editingId ? "儲存變更" : "建立部落客"}
+          </button>
+          {editingId && (
+            <button type="button" onClick={resetForm} disabled={busy === "create"} className="btn btn-ghost btn-sm">
+              取消編輯
+            </button>
+          )}
+        </div>
+        {msg && <p className="text-sm text-danger">{msg}</p>}
       </form>
 
       <section className="rounded-2xl border bg-surface p-5">
-        <h2 className="section-title mb-3">我的部落客</h2>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="section-title">我的部落客</h2>
+          {/* 產出去向＋編輯入口：部落客產文進工作台的待審草稿，在那裡用編輯器修改、核准或排程。 */}
+          <a href="/pipeline" className="text-sm text-brand hover:underline">前往工作台編輯產出 →</a>
+        </div>
+        <p className="mb-3 text-xs text-ink-3">
+          部落客產出的貼文會進「工作台」的待審草稿，可在工作台用編輯器修改文案、核准或排程（開「免審直發」則自動排程）。
+        </p>
+        {runMsg && (
+          <p className={"mb-3 text-sm " + (runMsg.startsWith("✅") ? "text-ink-2" : "text-danger")} role="status" aria-live="polite">
+            {runMsg}
+            {runMsg.startsWith("✅") && (
+              <a href="/pipeline" className="ml-1 text-brand hover:underline">去工作台查看/編輯 →</a>
+            )}
+          </p>
+        )}
         {agents.length === 0 ? (
           <p className="text-sm text-ink-3">還沒有部落客。建立後可「立即跑一篇」或開啟每日自動產文（預設進草稿待審）。</p>
         ) : (
@@ -304,6 +366,7 @@ export default function AgentManager({ agents, accounts }: { agents: Agent[]; ac
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
+                  <button disabled={!!busy} onClick={() => startEdit(a)} className="btn btn-outline btn-sm">編輯</button>
                   <button disabled={!!busy} onClick={() => runNow(a)} className="btn btn-outline btn-sm">立即跑一篇</button>
                   <button disabled={!!busy} onClick={() => toggleAuto(a)} className="btn btn-sm btn-ghost" title="切換免審直接排程">
                     {a.auto_publish ? "改回待審" : "改免審直發"}

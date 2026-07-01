@@ -49,6 +49,7 @@ export {
   setAffiliateChecked,
   setMaterialCommission,
   setMaterialEvergreen,
+  setAllMaterialsEvergreen,
   listEvergreenDueAll,
   touchEvergreen,
   isEvergreenDue,

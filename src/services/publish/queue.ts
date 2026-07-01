@@ -292,7 +292,8 @@ async function runPublishQueueLocked(result: PublishResult, shard?: ShardOpts): 
     let sponsorOwnLinkUsed = false; // 此篇是否用「貢獻者自己的」連結（超額 slot 自賺）
     let pubMainText = draft.main_text ?? "";
     let pubReplyText = draft.reply_text;
-    if (sponsorCfg.enabled && !isDemoMode) {
+    // AI 部落客（source_agent_id）的貼文一律「就是部落客」：不被選為贊助文、不注入任何分潤連結。
+    if (sponsorCfg.enabled && !isDemoMode && !draft.source_agent_id) {
       // 比例配額：依該帳號「當日實際自發篇數（含這篇）」換算 max(保底, floor(篇數/perPosts))；
       // 低頻者（當日 < minPostsForFloor 篇）配額為 0 不被抽。今日已達配額則不再贊助。
       if (!(accId in sponsorCountCache)) {

@@ -11,7 +11,7 @@ const TABS: Tab[] = [
   { href: "/pipeline", label: "工作台" }, // 主工作流（待審→素材→草稿→排程→發布）置首
   { href: "/calendar", label: "行事曆" }, // 已排程/已發布的月曆總覽
   { href: "/sources", label: "抓文生素材", ownerOnly: true },
-  { href: "/agents", label: "AI 部落客" },
+  { href: "/agents", label: "AI 部落客", ownerOnly: true },
   { href: "/shared", label: "共享庫" }
 ];
 

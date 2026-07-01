@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { DraftMedia, ThreadSegment } from "@/lib/types";
-import { cloudinaryThumb } from "@/lib/img";
+import { cloudinaryThumb, videoFirstFrameSrc } from "@/lib/img";
 import { buildAfterSegments } from "@/lib/thread-preview";
 
 // Threads 貼文即時預覽（仿 Typefully／Buffer 的所見即所得）。
@@ -88,7 +88,8 @@ export default function ThreadsPreview({
             // eslint-disable-next-line @next/next/no-img-element
             <img key={`${m.url}-${i}`} src={cloudinaryThumb(m.url, 600)} alt="" loading="lazy" className={cls} />
           ) : (
-            <video key={`${m.url}-${i}`} src={m.url} controls className={cls} />
+            // #t=0.001＋preload/muted/playsInline：行動端先渲染首幀當預覽，否則只設 controls 會顯示空白/黑屏。
+            <video key={`${m.url}-${i}`} src={videoFirstFrameSrc(m.url)} controls muted playsInline preload="metadata" className={cls} {...{ referrerPolicy: "no-referrer" }} />
           );
         })}
       </div>

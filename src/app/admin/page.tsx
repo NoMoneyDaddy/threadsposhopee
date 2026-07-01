@@ -5,7 +5,7 @@ import { contributionBadge } from "@/lib/roles";
 import { isDemoMode } from "@/lib/env";
 import { cronHeartbeatStatus } from "@/lib/cron-status";
 import { tokenExpiryState } from "@/lib/token-expiry";
-import { cloudinaryThumb } from "@/lib/img";
+import { cloudinaryThumb, videoFirstFrameSrc } from "@/lib/img";
 import { log } from "@/lib/logger";
 import FeatureFlagsForm from "@/components/FeatureFlagsForm";
 import RoleGrantForm from "@/components/RoleGrantForm";
@@ -162,25 +162,59 @@ export default async function AdminPage() {
 
       <div className="card p-4">
         <h2 className="mb-1 text-lg font-semibold">共享素材審核</h2>
-        <p className="mb-3 text-sm text-ink-2">下架低品質或不當來源；已下架者不再出現在共享庫。</p>
+        <p className="mb-3 text-sm text-ink-2">
+          下架低品質或不當來源；已下架者不再出現在共享庫。請比對「商品連結、媒體、名稱」是否一致（點媒體可看原圖/影片、點連結可開商品頁核對）。
+        </p>
         {queue.length === 0 ? (
           <p className="text-sm text-ink-3">目前沒有共享素材。</p>
         ) : (
           <div className="divide-y divide-border">
             {queue.map((m) => (
-              <div key={m.id} className="flex items-center gap-3 py-2">
-                {m.cloudinary_media_url && m.media_type !== "none" && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={cloudinaryThumb(m.cloudinary_media_url, 80)} alt="" loading="lazy" className="h-12 w-12 shrink-0 rounded object-cover" />
+              <div key={m.id} className="flex items-start gap-3 py-3">
+                {m.cloudinary_media_url && m.media_type !== "none" ? (
+                  // 點媒體開新分頁看原檔，方便核對媒體是否與商品相符。
+                  <a href={m.cloudinary_media_url} target="_blank" rel="noopener noreferrer" className="shrink-0" title="開啟原始媒體核對">
+                    {m.media_type === "video" ? (
+                      // 影片用 <video> 首幀當縮圖；純裝飾：aria-hidden＋tabIndex=-1（免字幕軌要求）。
+                      <video
+                        src={videoFirstFrameSrc(m.cloudinary_media_url)}
+                        muted
+                        playsInline
+                        preload="metadata"
+                        aria-hidden="true"
+                        tabIndex={-1}
+                        className="h-20 w-20 rounded-lg border object-cover"
+                      >
+                        {/* 無聲首幀預覽（點擊開原始媒體），補空字幕軌滿足 WCAG 1.2.2。 */}
+                        <track kind="captions" />
+                      </video>
+                    ) : (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={cloudinaryThumb(m.cloudinary_media_url, 160)} alt="" role="presentation" loading="lazy" referrerPolicy="no-referrer" className="h-20 w-20 rounded-lg border object-cover" />
+                    )}
+                  </a>
+                ) : (
+                  <span className="grid h-20 w-20 shrink-0 place-items-center rounded-lg border bg-surface-2 text-xs text-ink-3">無媒體</span>
                 )}
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium text-ink">{m.product_name ?? "（商品）"}</div>
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="break-words text-sm font-medium text-ink">{m.product_name ?? "（未命名商品）"}</div>
+                  {m.clean_product_url ? (
+                    <a href={m.clean_product_url} target="_blank" rel="noopener noreferrer" className="block truncate text-xs text-brand hover:underline" title={m.clean_product_url}>
+                      🔗 商品連結：{m.clean_product_url}
+                    </a>
+                  ) : (
+                    <div className="text-xs text-warn">⚠️ 無商品連結</div>
+                  )}
+                  {m.main_text && <p className="line-clamp-2 whitespace-pre-wrap text-xs text-ink-2">{m.main_text}</p>}
                   <div className="text-xs text-ink-3">
-                    匯入 {m.import_count}・收藏 {m.favorite_count}
+                    {(m.media_type && m.media_type !== "none" ? (m.media_type === "video" ? "🎬 影片" : "🖼️ 圖片") : "無媒體")}・匯入 {m.import_count}・收藏 {m.favorite_count}
                     {m.review_status === "removed" && <span className="ml-1 text-warn">・已下架</span>}
+                    {m.affiliate_valid === false && <span className="ml-1 text-warn" title="連結健檢判定失效，已自動暫時從共享庫下架；連結復活後自動恢復">・🔗 連結失效（暫時下架）</span>}
                   </div>
                 </div>
-                <ReviewButton id={m.id} status={m.review_status} />
+                <div className="shrink-0">
+                  <ReviewButton id={m.id} status={m.review_status} />
+                </div>
               </div>
             ))}
           </div>

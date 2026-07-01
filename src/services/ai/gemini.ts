@@ -8,8 +8,15 @@ interface GeminiPart {
   text?: string;
   thought?: boolean; // 2.5 thinking 模型的思考片段標記，不應計入輸出
 }
+interface GroundingChunk {
+  web?: { uri?: string; title?: string };
+}
 interface GeminiResponse {
-  candidates?: Array<{ content?: { parts?: GeminiPart[] }; finishReason?: string }>;
+  candidates?: Array<{
+    content?: { parts?: GeminiPart[] };
+    finishReason?: string;
+    groundingMetadata?: { groundingChunks?: GroundingChunk[] };
+  }>;
 }
 
 interface GenerationConfig {
@@ -155,6 +162,52 @@ export async function generateWithGemini(
     log.warn("Gemini 輸出達 maxOutputTokens 上限被截斷", { maxOutputTokens, model: resolvedModel });
   }
   return text;
+}
+
+// 上網搜尋取材（Google 搜尋接地 grounding）：用 Gemini 內建 google_search 工具即時搜尋全網
+//（各大新聞媒體、自媒體、官方網站公開資訊），回傳實際被引用的來源頁（標題＋網址）。
+// 失敗或無接地結果回 []（呼叫端據此降級到 RSS）。需 2.x 系列模型支援 google_search 工具。
+export async function geminiWebSearchSources(
+  query: string,
+  apiKey: string | null | undefined,
+  model?: string | null,
+  limit = 8
+): Promise<{ title: string; link: string }[]> {
+  if (!apiKey) throw new Error("無 Gemini 金鑰");
+  const resolvedModel = model || env.geminiModel;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${resolvedModel}:generateContent?key=${apiKey}`;
+  const prompt =
+    `用繁體中文搜尋「${query}」在台灣最新、最熱門的話題或新聞，` +
+    `涵蓋各大新聞媒體、自媒體與官方網站的公開資訊。條列今天的重點即可（每則一句）。`;
+  const res = await fetchWithRetry(
+    assertSafePublicUrl(url).href,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        tools: [{ google_search: {} }],
+        generationConfig: { temperature: 0.4, maxOutputTokens: 800 }
+      })
+    },
+    30000,
+    2,
+    [500, 503]
+  );
+  if (!res.ok) throw new Error(`Gemini ${res.status}: ${await res.text()}`);
+  const json = (await res.json()) as GeminiResponse;
+  const chunks = json?.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [];
+  const out: { title: string; link: string }[] = [];
+  const seen = new Set<string>();
+  for (const c of chunks) {
+    const link = c?.web?.uri?.trim();
+    const title = c?.web?.title?.trim();
+    if (!link || !title || seen.has(link)) continue;
+    seen.add(link);
+    out.push({ title, link });
+    if (out.length >= limit) break;
+  }
+  return out;
 }
 
 // 純文字生成（無媒體）：給「成效歸因摘要」等非文案用途共用。失敗會拋錯，由呼叫端決定降級。

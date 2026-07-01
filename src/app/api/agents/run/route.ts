@@ -12,6 +12,7 @@ export async function POST(req: Request) {
   try {
     const user = await getCurrentUser();
     if (!user) return NextResponse.json({ ok: false, error: "請先登入" }, { status: 401 });
+    if (!user.isOwner) return NextResponse.json({ ok: false, error: "僅管理員可使用 AI 部落客" }, { status: 403 });
     const body = await req.json().catch(() => ({}));
     const id = typeof body.id === "string" ? body.id : "";
     const agent = id ? await getAiAgent(id, user.id) : null;

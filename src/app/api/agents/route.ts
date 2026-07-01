@@ -13,6 +13,7 @@ export async function POST(req: Request) {
   try {
     const user = await getCurrentUser();
     if (!user) return NextResponse.json({ ok: false, error: "請先登入" }, { status: 401 });
+    if (!user.isOwner) return NextResponse.json({ ok: false, error: "僅管理員可使用 AI 部落客" }, { status: 403 });
 
     const body = (await req.json().catch(() => ({}))) || {}; // 防 JSON 字面 null 致 body.* 拋錯
     const name = typeof body.name === "string" ? body.name.trim() : "";
@@ -32,8 +33,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "自訂主題請填搜尋關鍵字" }, { status: 400 });
     }
 
-    // 取材來源：threads_search＝用 owner Threads token 搜公開貼文；其餘＝RSS（Google News）。
-    const sourceMode = body.source_mode === "threads_search" ? "threads_search" : "rss";
+    // 取材來源：threads_search＝Threads 公開貼文；web_search＝AI 上網搜尋（Google 接地）；其餘＝RSS（Google News）。
+    const sourceMode = body.source_mode === "threads_search" || body.source_mode === "web_search" ? body.source_mode : "rss";
 
     // 免審直接排程需指定發文帳號，否則產出的貼文無帳號可發、會卡住。
     const threadsAccountId =

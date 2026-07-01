@@ -51,6 +51,10 @@ export default async function InsightsPage({
   ]);
   const { revenue, revenueErr } = revResult;
 
+  // 分潤收益的實際起訖日期（台北）：以明確日期區間顯示，比「近 N 天」直覺。
+  const fmtDay = (ms: number) => new Date(ms).toLocaleDateString("zh-TW", { timeZone: "Asia/Taipei", year: "numeric", month: "2-digit", day: "2-digit" });
+  const rangeText = `${fmtDay(startMs)} – ${fmtDay(endMs)}`;
+
   return (
     <div className="space-y-6">
       <div>
@@ -80,7 +84,7 @@ export default async function InsightsPage({
         </div>
       </div>
 
-      {revenue && <RevenueSection r={revenue} />}
+      {revenue && <RevenueSection r={revenue} range={rangeText} />}
       {revenueErr && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700" role="alert">
           分潤收益讀取失敗：{revenueErr}
@@ -144,7 +148,8 @@ export default async function InsightsPage({
 function RankCard({ title, rows, empty }: { title: string; rows: { name: string; count: number }[]; empty: string }) {
   const max = Math.max(1, ...rows.map((r) => r.count));
   return (
-    <section className="rounded-2xl border bg-surface p-5">
+    // min-w-0：作為 grid/flex 子項時允許收縮，內部 truncate 才生效（否則長商品名撐爆版面）。
+    <section className="min-w-0 rounded-2xl border bg-surface p-5">
       <h2 className="section-title mb-3">{title}</h2>
       {rows.length === 0 ? (
         <p className="text-sm text-ink-3">{empty}</p>
@@ -326,17 +331,21 @@ function revenueStatusZh(s: string): string {
   return REVENUE_STATUS_ZH[s.trim().toLowerCase()] ?? s;
 }
 
-function RevenueSection({ r }: { r: AffiliateRevenue }) {
+function RevenueSection({ r, range }: { r: AffiliateRevenue; range: string }) {
   return (
     <div className="space-y-4">
       <section className="rounded-2xl border bg-surface p-5">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="section-title">分潤收益（近 {r.days} 天，Shopee 分潤報表）</h2>
+          <h2 className="section-title">分潤收益</h2>
           <div className="stat-num text-2xl text-brand">{money(r.totalCommission)}</div>
         </div>
-        <div className="mt-1 text-xs text-ink-2">
-          {r.totalConversions} 筆轉換
-          {r.truncated && "（資料量大，僅統計前數頁）"}
+        {/* 日期區間改用明確起訖日期的徽章顯示（比塞在標題括號裡的「近 N 天」直覺）。 */}
+        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-ink-2">
+          <span className="rounded-full bg-surface-2 px-2 py-0.5" title={`近 ${r.days} 天，資料來源：Shopee 分潤報表`}>
+            📅 {range}（近 {r.days} 天）
+          </span>
+          <span>{r.totalConversions} 筆轉換</span>
+          {r.truncated && <span className="text-ink-3">（資料量大，僅統計前數頁）</span>}
         </div>
         <div className="mt-3 flex flex-wrap gap-2 text-xs">
           {r.byStatus.map((s) => (
@@ -371,7 +380,8 @@ function RevenueSection({ r }: { r: AffiliateRevenue }) {
 function RevenueRank({ title, rows }: { title: string; rows: { name: string; value: number; sub: string }[] }) {
   const max = Math.max(1, ...rows.map((r) => r.value));
   return (
-    <section className="rounded-2xl border bg-surface p-5">
+    // min-w-0：作為 grid/flex 子項時允許收縮，內部 truncate 才生效（否則長商品名撐爆版面）。
+    <section className="min-w-0 rounded-2xl border bg-surface p-5">
       <h2 className="section-title mb-3">{title}</h2>
       {rows.length === 0 ? (
         <p className="text-sm text-ink-3">尚無資料</p>

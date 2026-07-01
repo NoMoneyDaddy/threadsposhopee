@@ -1,6 +1,6 @@
 import PipelineBoard from "@/components/PipelineBoard";
 import AccountsOverview, { type AccountOverviewRow } from "@/components/AccountsOverview";
-import { listDrafts, listMaterials, listPendingMaterials, listThreadsAccounts, getPublishPlan } from "@/lib/store";
+import { listDrafts, listMaterials, listPendingMaterials, listThreadsAccounts, getPublishPlan, getFeatureFlags } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
 import { taipeiDateStr } from "@/lib/streak";
 import { isDemoMode } from "@/lib/env";
@@ -73,6 +73,9 @@ export default async function PipelinePage() {
   const sponsorEnabled = sponsorCfg.enabled && !!user && !user.isOwner;
   const pickByAccount = sponsorEnabled ? await getSponsorPickMap(accounts.map((a) => a.id)) : {};
 
+  // 共享庫是否開放：開放才在待審素材顯示「入庫並分享」。
+  const flags = user ? await getFeatureFlags().catch(() => null) : null;
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -94,6 +97,7 @@ export default async function PipelinePage() {
         publishPlan={publishPlan}
         cloud={cc?.cloud ?? null}
         preset={cc?.preset ?? null}
+        canShare={Boolean(flags?.shared)}
       />
     </div>
   );

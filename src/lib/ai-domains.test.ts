@@ -15,8 +15,14 @@ test("googleNewsRss：組出繁中台灣查詢、query 編碼", () => {
   assert.ok(url.includes(encodeURIComponent("科技 3C")));
 });
 
-test("defaultFeedsForDomain：已知領域回一個 feed、未知回空", () => {
-  assert.equal(defaultFeedsForDomain("tech").length, 1);
+test("defaultFeedsForDomain：已知領域回多條聚合 feed（每關鍵字一條）、未知回空", () => {
+  const tech = getAiDomain("tech")!;
+  assert.equal(defaultFeedsForDomain("tech").length, tech.keywords.length);
+  assert.ok(defaultFeedsForDomain("tech").length >= 2); // 多關鍵字聚合
   assert.deepEqual(defaultFeedsForDomain("nope"), []);
   assert.ok(getAiDomain("gossip")?.sensitive);
+});
+
+test("defaultFeedsForDomain：custom 無預設關鍵字 → 回空（改用 search_query）", () => {
+  assert.deepEqual(defaultFeedsForDomain("custom"), []);
 });

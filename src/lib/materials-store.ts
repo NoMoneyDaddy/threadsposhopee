@@ -237,6 +237,29 @@ export async function setMaterialEvergreen(id: string, ownerId: string, on: bool
   return Boolean(data);
 }
 
+// 批次設定常青：把該 owner 已入庫（approved）的素材全部設為 on/off。回傳實際更新筆數。
+export async function setAllMaterialsEvergreen(ownerId: string, on: boolean): Promise<number> {
+  if (isDemoMode) {
+    let n = 0;
+    for (const m of demo.materials) {
+      if (m.owner_id === ownerId && (m.intake_status ?? "approved") === "approved" && m.evergreen !== on) {
+        m.evergreen = on;
+        n++;
+      }
+    }
+    return n;
+  }
+  const sb = getServiceClient()!;
+  const { data, error } = await sb
+    .from("materials")
+    .update({ evergreen: on })
+    .eq("owner_id", ownerId)
+    .eq("intake_status", "approved")
+    .select("id");
+  if (error) throw new Error(`批次更新常青設定失敗：${error.message}`);
+  return (data ?? []).length;
+}
+
 // 背景 worker：跨租戶取「常青且到期」的有效素材（含 owner_id）。僅 cron 呼叫；建草稿時仍以該列 owner_id 為準。
 // defaultDays：未自設間隔的 owner 沿用的系統預設（EVERGREEN_MIN_DAYS）。
 // 每列依該 owner 的 evergreen_interval_days 判斷是否到期（用 RPC，因 PostgREST 無法表達每列不同的時間間隔）。
@@ -275,6 +298,7 @@ export type SharedMaterial = {
   import_count: number;
   favorite_count: number;
   review_status: string | null;
+  affiliate_valid: boolean | null; // 連結是否仍有效；false＝健檢判定失效，已自動暫時下架（連結復活即恢復）
   created_at: string;
 };
 
@@ -311,7 +335,7 @@ export async function setMaterialShared(id: string, ownerId: string, on: boolean
 }
 
 const SHARED_COLS =
-  "id, owner_id, shop_id, item_id, product_name, clean_product_url, media_type, cloudinary_media_url, main_text, reply_text, import_count, favorite_count, review_status, created_at";
+  "id, owner_id, shop_id, item_id, product_name, clean_product_url, media_type, cloudinary_media_url, main_text, reply_text, import_count, favorite_count, review_status, affiliate_valid, created_at";
 
 // 列出公共池（排除瀏覽者自己的、排除已下架；不含分潤連結）。
 // 推薦排序：匯入數＋收藏數加權（favorite_count 權重較高）→ 頂級素材優先；再依商品去重。
@@ -396,6 +420,7 @@ export async function listHotProducts(limit = 12): Promise<SharedMaterial[]> {
 }
 
 // 取一筆共享素材（供匯入：需 clean_product_url；任何登入者可匯入，故不帶 owner 過濾，但必須 shared）。
+// 連結失效（affiliate_valid=false，健檢判定後暫時下架）者一律擋下匯入，與共享庫/雷達列表一致；連結復活即恢復。
 export async function getSharedMaterial(id: string): Promise<SharedMaterial | null> {
   if (isDemoMode) return null;
   const sb = getServiceClient()!;
@@ -404,6 +429,7 @@ export async function getSharedMaterial(id: string): Promise<SharedMaterial | nu
     .select(SHARED_COLS)
     .eq("id", id)
     .eq("shared", true)
+    .eq("affiliate_valid", true)
     .neq("review_status", "removed")
     .maybeSingle();
   return (data as SharedMaterial) ?? null;

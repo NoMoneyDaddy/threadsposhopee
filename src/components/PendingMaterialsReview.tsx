@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Material, DraftMedia, ThreadsAccount } from "@/lib/types";
-import { cloudinaryThumb } from "@/lib/img";
+import { cloudinaryThumb, videoFirstFrameSrc } from "@/lib/img";
 import { normalizeDraftMedia } from "@/lib/media";
 
 const SLOT_OPTS: { v: NonNullable<DraftMedia["slot"]>; label: string }[] = [
@@ -20,7 +20,7 @@ function MediaThumb({ m }: { m: DraftMedia }) {
         // referrerPolicy 不在 React 的 video 型別內，但屬性本身合法且新版瀏覽器支援；
         // 用 ref 直接設 DOM 屬性，讓防盜連的來源影片也載得到（與圖片一致）。
         ref={(el) => el?.setAttribute("referrerpolicy", "no-referrer")}
-        src={m.url}
+        src={videoFirstFrameSrc(m.url)}
         controls
         muted
         playsInline
@@ -47,12 +47,14 @@ function PendingMaterialCard({
   m,
   busy,
   canSchedule,
+  canShare,
   onAct
 }: {
   m: Material;
   busy: boolean;
   canSchedule: boolean;
-  onAct: (id: string, kind: "approve" | "discard" | "approveSchedule") => void;
+  canShare: boolean;
+  onAct: (id: string, kind: "approve" | "discard" | "approveSchedule" | "approveShare") => void;
 }) {
   const [media, setMedia] = useState<DraftMedia[]>(() => normalizeDraftMedia(m).map((x) => ({ ...x, slot: x.slot ?? "main" })));
   const [slotErr, setSlotErr] = useState<string | null>(null);
@@ -145,6 +147,17 @@ function PendingMaterialCard({
             {busy ? "處理中…" : "✅ 核准並排程"}
           </button>
         )}
+        {canShare && (
+          <button
+            type="button"
+            onClick={() => onAct(m.id, "approveShare")}
+            disabled={busy || saving}
+            title="入庫並同時分享商品到共享庫（不含你的分潤連結）"
+            className="rounded-xl border border-info/50 px-3 py-1.5 text-sm font-medium text-info hover:bg-sky-50 disabled:opacity-50"
+          >
+            {busy ? "處理中…" : "✅ 入庫並分享"}
+          </button>
+        )}
         <button
           type="button"
           onClick={() => onAct(m.id, "discard")}
@@ -160,7 +173,15 @@ function PendingMaterialCard({
 
 // 爬蟲產出的「待審素材」逐筆審核：預覽全部媒體＋標記用途，再 ✅ 入庫（核准）或 ❌ 丟棄（刪除）。
 // 入庫 → POST /api/materials/[id]/intake；丟棄 → DELETE /api/materials/[id]；媒體用途 → PATCH /api/materials/[id]。
-export default function PendingMaterialsReview({ items, accounts = [] }: { items: Material[]; accounts?: ThreadsAccount[] }) {
+export default function PendingMaterialsReview({
+  items,
+  accounts = [],
+  canShare = false
+}: {
+  items: Material[];
+  accounts?: ThreadsAccount[];
+  canShare?: boolean;
+}) {
   const router = useRouter();
   // 用 Set 追蹤每筆獨立的處理中狀態：避免快速連點多筆時，單一 busyId 互相覆蓋造成按鈕提早解禁（race）。
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
@@ -170,7 +191,7 @@ export default function PendingMaterialsReview({ items, accounts = [] }: { items
   const [accId, setAccId] = useState(accounts[0]?.id ?? "");
   const canSchedule = accounts.length > 0;
 
-  async function act(id: string, kind: "approve" | "discard" | "approveSchedule") {
+  async function act(id: string, kind: "approve" | "discard" | "approveSchedule" | "approveShare") {
     setBusyIds((prev) => new Set(prev).add(id));
     setErr(null);
     try {
@@ -200,6 +221,23 @@ export default function PendingMaterialsReview({ items, accounts = [] }: { items
             setDoneIds((prev) => new Set(prev).add(id));
             router.refresh();
             throw scheduleErr;
+          }
+        }
+        // 入庫並分享：入庫後把商品分享進共享庫（不含分潤連結）。入庫已成功，
+        // 故分享失敗也標記完成＋刷新（避免重複入庫）；失敗訊息照樣提示（可到素材庫手動分享）。
+        if (kind === "approveShare") {
+          try {
+            const r2 = await fetch("/api/materials/share", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ material_id: id, on: true })
+            });
+            const j2 = await r2.json().catch(() => null);
+            if (!r2.ok || !j2?.ok) throw new Error(typeof j2?.error === "string" && j2.error ? j2.error : `已入庫，但分享失敗（HTTP ${r2.status}）；可到素材庫手動分享`);
+          } catch (shareErr) {
+            setDoneIds((prev) => new Set(prev).add(id));
+            router.refresh();
+            throw shareErr;
           }
         }
       }
@@ -240,7 +278,7 @@ export default function PendingMaterialsReview({ items, accounts = [] }: { items
       )}
       <div className="space-y-3">
         {visible.map((m) => (
-          <PendingMaterialCard key={m.id} m={m} busy={busyIds.has(m.id)} canSchedule={canSchedule} onAct={act} />
+          <PendingMaterialCard key={m.id} m={m} busy={busyIds.has(m.id)} canSchedule={canSchedule} canShare={canShare} onAct={act} />
         ))}
       </div>
       {err && <p className="text-xs text-danger" role="alert">{err}</p>}

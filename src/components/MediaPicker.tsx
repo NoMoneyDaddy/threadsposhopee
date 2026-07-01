@@ -3,7 +3,7 @@
 import { useState, type Dispatch, type SetStateAction } from "react";
 import type { DraftMedia } from "@/lib/types";
 import MediaUpload from "@/components/MediaUpload";
-import { cloudinaryThumb } from "@/lib/img";
+import { cloudinaryThumb, videoFirstFrameSrc } from "@/lib/img";
 
 const input = "w-full rounded-xl border px-3 py-2 text-sm";
 export const MAX_MEDIA = 20; // Threads 單篇輪播上限（對齊後端 MAX_CAROUSEL_ITEMS）
@@ -66,7 +66,7 @@ export default function MediaPicker({
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={cloudinaryThumb(m.url, 160)} alt="" className="h-16 w-16 rounded-lg border object-cover" />
               ) : (
-                <video src={m.url} aria-label={`第 ${i + 1} 個媒體（影片）預覽`} muted playsInline className="h-16 w-16 rounded-lg border object-cover" />
+                <video src={videoFirstFrameSrc(m.url)} aria-label={`第 ${i + 1} 個媒體（影片）預覽`} muted playsInline preload="metadata" className="h-16 w-16 rounded-lg border object-cover" />
               )}
               <button
                 type="button"

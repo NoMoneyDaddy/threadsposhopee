@@ -39,12 +39,16 @@ export function normalizeSourceUrl(link: string): string {
   if (!raw) return "";
   try {
     let u = new URL(raw);
-    // Google News RSS 常以 ?url=<實際文章> 轉址，取出實際目標再正規化。
-    if (/(^|\.)news\.google\.com$/i.test(u.hostname)) {
-      const target = u.searchParams.get("url");
-      if (target) {
+    // Google News RSS 連結格式為 https://news.google.com/rss/articles/<base64>?oc=5，
+    // 實際目標網址以 base64（url-safe）編在 path 最後一段（protobuf 內），非 ?url= 參數。
+    // 盡力解碼取出內嵌的 http(s) 網址；失敗則保留原 URL（降級不拋錯）。
+    if (/(^|\.)news\.google\.com$/i.test(u.hostname) && u.pathname.startsWith("/rss/articles/")) {
+      const seg = u.pathname.split("/").filter(Boolean).pop() ?? "";
+      if (seg) {
         try {
-          u = new URL(target);
+          const decoded = Buffer.from(seg, "base64url").toString("binary");
+          const m = decoded.match(/https?:\/\/[\x21-\x7e]+/); // 取內嵌可列印 ASCII 網址（遇非 ASCII 位元組即止）
+          if (m) u = new URL(m[0]);
         } catch {
           /* 保留原 URL */
         }

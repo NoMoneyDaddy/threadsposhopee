@@ -70,17 +70,21 @@ export async function listPendingMaterials(ownerId: string): Promise<Material[]>
 }
 
 // 核准待審素材（intake_status → 'approved'）。多租戶：以 owner_id 過濾，只改得到自己的。回 true=有更新。
-export async function approveMaterialIntake(id: string, ownerId: string): Promise<boolean> {
+// share：入庫當下是否一併分享到共享庫（依使用者「新素材預設分享」設定；undefined＝不變更）。
+export async function approveMaterialIntake(id: string, ownerId: string, share?: boolean): Promise<boolean> {
   if (isDemoMode) {
     const m = demo.materials.find((x) => x.id === id && x.owner_id === ownerId);
     if (!m) return false;
     m.intake_status = "approved";
+    if (share !== undefined) m.shared = share;
     return true;
   }
   const sb = getServiceClient()!;
+  const patch: Record<string, unknown> = { intake_status: "approved" };
+  if (share !== undefined) patch.shared = share;
   const { data, error } = await sb
     .from("materials")
-    .update({ intake_status: "approved" })
+    .update(patch)
     .eq("id", id)
     .eq("owner_id", ownerId)
     .select("id")
@@ -355,6 +359,20 @@ export async function listSharedMaterials(viewerOwnerId: string, limit = 60): Pr
     .order("created_at", { ascending: false })
     .limit(limit * 3);
   return dedupeSharedByProduct((data ?? []) as SharedMaterial[]).slice(0, limit);
+}
+
+// 我分享的：目前 shared=true 的「自己」素材（含被匯入/收藏/審核/連結狀態），新→舊。供共享庫「我分享的」分頁。
+export async function listMySharedMaterials(ownerId: string, limit = 100): Promise<SharedMaterial[]> {
+  if (isDemoMode) return [];
+  const sb = getServiceClient()!;
+  const { data } = await sb
+    .from("materials")
+    .select(SHARED_COLS)
+    .eq("owner_id", ownerId)
+    .eq("shared", true)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  return (data ?? []) as SharedMaterial[];
 }
 
 // 審核佇列（reviewer/管理員用）：列出所有共享中的素材，含已下架與 pending，最新在前。

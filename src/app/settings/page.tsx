@@ -4,7 +4,9 @@ import {
   getNotifyPrefs,
   getRepostLimits,
   getUserTelegramChatId,
-  getDisplayName
+  getDisplayName,
+  getDefaultShareMaterials,
+  getFeatureFlags
 } from "@/lib/store";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
@@ -20,6 +22,7 @@ import TelegramForm from "@/components/TelegramForm";
 import DisplayNameForm from "@/components/DisplayNameForm";
 import TelegramWebhookSetup from "@/components/TelegramWebhookSetup";
 import SponsorConfigForm from "@/components/SponsorConfigForm";
+import DefaultShareForm from "@/components/DefaultShareForm";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +31,7 @@ export default async function SettingsPage() {
   const user = await getCurrentUser();
   if (!user) return <div className="text-center text-sm text-red-500">請先登入。</div>;
 
-  const [copyPrefs, publishPrefs, repostLimits, notifyPrefs, telegramChatId, sponsor, displayName] =
+  const [copyPrefs, publishPrefs, repostLimits, notifyPrefs, telegramChatId, sponsor, displayName, defaultShare, flags] =
     await Promise.all([
       getCopyPrefs(user.id),
       getPublishPrefs(user.id),
@@ -36,7 +39,9 @@ export default async function SettingsPage() {
       getNotifyPrefs(user.id),
       getUserTelegramChatId(user.id),
       getSponsorConfig(),
-      getDisplayName(user.id).catch(() => null)
+      getDisplayName(user.id).catch(() => null),
+      getDefaultShareMaterials(user.id).catch(() => true),
+      getFeatureFlags().catch(() => null)
     ]);
   const telegramBound = Boolean(telegramChatId);
 
@@ -57,6 +62,9 @@ export default async function SettingsPage() {
       )}
 
       <CopyPrefsForm initial={copyPrefs} />
+
+      {/* 共享庫開放時才顯示「新素材預設分享」開關（否則設定無意義）。 */}
+      {flags?.shared && <DefaultShareForm initial={defaultShare} />}
 
       <DisplayNameForm initial={displayName} />
 

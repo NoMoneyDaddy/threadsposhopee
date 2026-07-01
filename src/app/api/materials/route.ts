@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { resolveMaterialFromUrl } from "@/services/materials/fromUrl";
 import { getCurrentUser } from "@/lib/auth";
+import { getDefaultShareMaterials, setMaterialShared, getFeatureFlags } from "@/lib/store";
+import { log } from "@/lib/logger";
 import type { DraftMedia } from "@/lib/types";
 
 const MAX_MEDIA = 20; // Threads 輪播上限（對齊 MAX_CAROUSEL_ITEMS）
@@ -55,6 +57,18 @@ export async function POST(req: Request) {
         : undefined;
 
     const { material, reused, notes } = await resolveMaterialFromUrl(url, user, body.generate_copy !== false, media, mediaList);
+    // 預設分享：新建立（非沿用既有）的素材，依使用者「新素材預設分享」設定自動分享到共享庫。
+    // 共享庫未開放時略過。既有素材（reused）不動其分享設定。失敗只記 log，不擋素材建立。
+    if (!reused) {
+      try {
+        if ((await getFeatureFlags()).shared && (await getDefaultShareMaterials(user.id))) {
+          await setMaterialShared(material.id, user.id, true);
+          material.shared = true;
+        }
+      } catch (e) {
+        log.warn("套用預設分享失敗", { materialId: material.id, err: e instanceof Error ? e.message : String(e) });
+      }
+    }
     return NextResponse.json({ ok: true, material, reused, notes });
   } catch (e) {
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 500 });

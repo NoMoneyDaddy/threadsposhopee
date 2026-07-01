@@ -132,7 +132,8 @@ export default function PipelineBoard({
   publishPlan = {},
   cloud = null,
   preset = null,
-  canShare = false
+  canShare = false,
+  defaultShare = false
 }: {
   pending: Material[];
   materials: Material[];
@@ -148,6 +149,8 @@ export default function PipelineBoard({
   preset?: string | null;
   // 共享庫是否開放：開放才顯示待審素材的「入庫並分享」與素材庫的批次分享動作。
   canShare?: boolean;
+  // 新素材預設分享：待審素材主要入庫按鈕依此顯示「入庫並分享／只入庫」。
+  defaultShare?: boolean;
 }) {
   const router = useRouter();
   const [composing, setComposing] = useState(false);
@@ -464,7 +467,7 @@ export default function PipelineBoard({
               </select>
             }
           >
-            <PendingMaterialsReview items={pendingSorted} accounts={accounts} canShare={canShare} />
+            <PendingMaterialsReview items={pendingSorted} accounts={accounts} canShare={canShare} defaultShare={defaultShare} />
           </Column>
 
           <Column
